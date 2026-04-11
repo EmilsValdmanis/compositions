@@ -1,7 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/EmilsValdmanis/compositions/backend/internal/game"
+)
 
 func main() {
-	fmt.Println("Hello, from Go!")
+	cards := []game.Card{
+		{Suit: game.Hearts, Rank: game.Ace},
+		{Suit: game.Spades, Rank: game.King},
+		{Suit: game.Diamonds, Rank: game.Ten},
+	}
+
+	fmt.Printf("cards: %+v\n", cards)
 }
