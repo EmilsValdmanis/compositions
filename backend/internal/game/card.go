@@ -28,7 +28,20 @@ const (
 )
 
 type Card struct {
-	Suit    Suit
 	Rank    Rank
+	Suit    Suit
 	isJoker bool
+}
+
+func (c *Card) Points() int {
+	if c.isJoker {
+		return 20
+	} else if c.Rank >= Jack && c.Rank <= King {
+		return 10
+	} else if c.Rank == Ace {
+		return 10
+	} else if c.Rank >= Two && c.Rank <= Ten {
+		return int(c.Rank)
+	}
+	return 0
 }
