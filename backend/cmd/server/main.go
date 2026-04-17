@@ -9,5 +9,7 @@ func main() {
 	gameDeck := game.NewGameDeck()
 	gameDeck.Shuffle()
 
-	fmt.Println(gameDeck)
+	hand := game.NewHand()
+	hand.Draw(gameDeck)
+	fmt.Println(hand)
 }

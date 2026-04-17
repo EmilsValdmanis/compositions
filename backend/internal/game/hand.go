@@ -1,0 +1,19 @@
+package game
+
+type Hand struct {
+	cards []Card
+}
+
+func NewHand() *Hand {
+	return &Hand{cards: []Card{}}
+}
+
+func (h *Hand) Draw(d *Deck) bool {
+	if len(d.cards) == 0 {
+		return false
+	}
+	dc := d.cards[len(d.cards)-1]
+	d.cards = d.cards[:len(d.cards)-1]
+	h.cards = append(h.cards, dc)
+	return true
+}
