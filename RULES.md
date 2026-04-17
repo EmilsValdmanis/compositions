@@ -166,7 +166,7 @@ A composition is a valid set of cards placed on the table.
 
 ### Ace Special Rule
 
-- Counts as **1 point if it is the last card**.
+- Counts as **1 point if it is the last card in hand**.
 - Otherwise counts as **10 points**.
 
 ---

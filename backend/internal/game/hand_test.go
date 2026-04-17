@@ -55,3 +55,56 @@ func TestHandDrawMultiple(t *testing.T) {
 		t.Errorf("deck.cards length = %d; want %d", len(deck.cards), 108-5)
 	}
 }
+
+func TestHandPoints(t *testing.T) {
+	tests := []struct {
+		name     string
+		cards    []Card
+		expected int
+	}{
+		{
+			name:     "ace as last card counts as 1 (Special rule)",
+			cards:    []Card{{Rank: Ace, Suit: Spades}},
+			expected: 1,
+		},
+		{
+			name:     "number cards use face value",
+			cards:    []Card{{Rank: Two}, {Rank: Five}, {Rank: Ten}},
+			expected: 17,
+		},
+		{
+			name:     "joker scores 20",
+			cards:    []Card{{isJoker: true}},
+			expected: 20,
+		},
+		{
+			name:     "two jokers score 40",
+			cards:    []Card{{isJoker: true}, {isJoker: true}},
+			expected: 40,
+		},
+		{
+			name:     "mixed hand",
+			cards:    []Card{{Rank: Ace}, {Rank: Seven}, {Rank: King}, {isJoker: true}},
+			expected: 47, // 10 + 7 + 10 + 20
+		},
+		{
+			name:     "multiple aces all score 10",
+			cards:    []Card{{Rank: Ace}, {Rank: Ace}, {Rank: Ace}},
+			expected: 30,
+		},
+		{
+			name:     "empty hand scores 0",
+			cards:    []Card{},
+			expected: 0,
+		},
+	}
+
+	for _, test := range tests {
+		h := &Hand{cards: test.cards}
+		hp := h.Points()
+
+		if hp != test.expected {
+			t.Errorf("got %d, want %d", hp, test.expected)
+		}
+	}
+}

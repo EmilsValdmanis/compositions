@@ -4,8 +4,8 @@ import "testing"
 
 func TestCardPoints(t *testing.T) {
 	tests := []struct {
-		card Card
-		want int
+		card     Card
+		expected int
 	}{
 		{Card{Rank: Ace, Suit: Spades}, 10},
 		{Card{Rank: Two, Suit: Hearts}, 2},
@@ -26,9 +26,8 @@ func TestCardPoints(t *testing.T) {
 	for _, test := range tests {
 		cp := test.card.Points()
 
-		if cp != test.want {
-			t.Errorf("Points(%v) = %d; want %d", test.card, cp, test.want)
+		if cp != test.expected {
+			t.Errorf("Points(%v) = %d; want %d", test.card, cp, test.expected)
 		}
 	}
 }
-
