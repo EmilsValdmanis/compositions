@@ -30,20 +30,20 @@ const (
 )
 
 type Card struct {
-	Rank    Rank
-	Suit    Suit
+	rank    Rank
+	suit    Suit
 	isJoker bool
 }
 
 func (c *Card) Points() int {
 	if c.isJoker {
 		return 20
-	} else if c.Rank >= Jack && c.Rank <= King {
+	} else if c.rank >= Jack && c.rank <= King {
 		return 10
-	} else if c.Rank == Ace {
+	} else if c.rank == Ace {
 		return 10
-	} else if c.Rank >= Two && c.Rank <= Ten {
-		return int(c.Rank)
+	} else if c.rank >= Two && c.rank <= Ten {
+		return int(c.rank)
 	}
 	return 0
 }
@@ -101,5 +101,5 @@ func (c Card) String() string {
 		return "Joker"
 	}
 
-	return fmt.Sprintf("{Rank: %s, Suit: %s}", c.Rank, c.Suit)
+	return fmt.Sprintf("{Rank: %s, Suit: %s}", c.rank, c.suit)
 }

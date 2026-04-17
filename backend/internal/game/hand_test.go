@@ -64,12 +64,12 @@ func TestHandPoints(t *testing.T) {
 	}{
 		{
 			name:     "ace as last card counts as 1 (Special rule)",
-			cards:    []Card{{Rank: Ace, Suit: Spades}},
+			cards:    []Card{{rank: Ace, suit: Spades}},
 			expected: 1,
 		},
 		{
 			name:     "number cards use face value",
-			cards:    []Card{{Rank: Two}, {Rank: Five}, {Rank: Ten}},
+			cards:    []Card{{rank: Two}, {rank: Five}, {rank: Ten}},
 			expected: 17,
 		},
 		{
@@ -84,12 +84,12 @@ func TestHandPoints(t *testing.T) {
 		},
 		{
 			name:     "mixed hand",
-			cards:    []Card{{Rank: Ace}, {Rank: Seven}, {Rank: King}, {isJoker: true}},
+			cards:    []Card{{rank: Ace}, {rank: Seven}, {rank: King}, {isJoker: true}},
 			expected: 47, // 10 + 7 + 10 + 20
 		},
 		{
 			name:     "multiple aces all score 10",
-			cards:    []Card{{Rank: Ace}, {Rank: Ace}, {Rank: Ace}},
+			cards:    []Card{{rank: Ace}, {rank: Ace}, {rank: Ace}},
 			expected: 30,
 		},
 		{

@@ -19,7 +19,7 @@ func (h *Hand) Draw(d *Deck) bool {
 }
 
 func (h *Hand) Points() int {
-	if len(h.cards) == 1 && h.cards[0].Rank == Ace {
+	if len(h.cards) == 1 && h.cards[0].rank == Ace {
 		return 1
 	}
 

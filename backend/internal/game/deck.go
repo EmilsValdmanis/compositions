@@ -16,7 +16,7 @@ func newDeck() *Deck {
 
 	for suit := Hearts; suit <= Spades; suit++ {
 		for rank := Ace; rank <= King; rank++ {
-			cards = append(cards, Card{Rank: rank, Suit: suit})
+			cards = append(cards, Card{rank: rank, suit: suit})
 		}
 	}
 	cards = append(cards, Card{isJoker: true}, Card{isJoker: true})
