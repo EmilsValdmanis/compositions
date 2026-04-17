@@ -1,6 +1,9 @@
 package game
 
-import "math/rand"
+import (
+	"math/rand"
+	"strings"
+)
 
 type Deck struct {
 	cards []Card
@@ -37,4 +40,18 @@ func (d *Deck) Shuffle() {
 	rand.Shuffle(len(d.cards), func(i, j int) {
 		d.cards[i], d.cards[j] = d.cards[j], d.cards[i]
 	})
+}
+
+func (d *Deck) String() string {
+	var sb strings.Builder
+
+	for i, card := range d.cards {
+		sb.WriteString(card.String())
+
+		if i != len(d.cards)-1 {
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String()
 }

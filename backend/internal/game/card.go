@@ -1,5 +1,7 @@
 package game
 
+import "fmt"
+
 type Suit int
 
 const (
@@ -44,4 +46,60 @@ func (c *Card) Points() int {
 		return int(c.Rank)
 	}
 	return 0
+}
+
+func (r Rank) String() string {
+	switch r {
+	case Ace:
+		return "Ace"
+	case Two:
+		return "Two"
+	case Three:
+		return "Three"
+	case Four:
+		return "Four"
+	case Five:
+		return "Five"
+	case Six:
+		return "Six"
+	case Seven:
+		return "Seven"
+	case Eight:
+		return "Eight"
+	case Nine:
+		return "Nine"
+	case Ten:
+		return "Ten"
+	case Jack:
+		return "Jack"
+	case Queen:
+		return "Queen"
+	case King:
+		return "King"
+	default:
+		return "Unknown"
+	}
+}
+
+func (s Suit) String() string {
+	switch s {
+	case Hearts:
+		return "Hearts"
+	case Diamonds:
+		return "Diamonds"
+	case Clubs:
+		return "Clubs"
+	case Spades:
+		return "Spades"
+	default:
+		return "Unknown"
+	}
+}
+
+func (c Card) String() string {
+	if c.isJoker {
+		return "Joker"
+	}
+
+	return fmt.Sprintf("{Rank: %s, Suit: %s}", c.Rank, c.Suit)
 }
