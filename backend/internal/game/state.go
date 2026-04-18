@@ -1,9 +1,10 @@
 package game
 
 type GameState struct {
-	players     []*Player
-	drawPile    *Deck
-	discardPile *Deck
+	players            []*Player
+	activeCompositions []*Composition
+	drawPile           *Deck
+	discardPile        *Deck
 }
 
 func NewGameState() *GameState {
@@ -12,8 +13,9 @@ func NewGameState() *GameState {
 	deck.Shuffle()
 
 	return &GameState{
-		players:    players,
-		drawPile:   deck,
-		discardPile: &Deck{cards: []Card{}},
+		players:            players,
+		activeCompositions: []*Composition{},
+		drawPile:           deck,
+		discardPile:        &Deck{cards: []Card{}},
 	}
 }

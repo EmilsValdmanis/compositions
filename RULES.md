@@ -99,6 +99,10 @@ A composition is a valid set of cards placed on the table.
 - 3 or more cards.
 - Sequential ranks, for example 5-6-7-8.
 - Same suit.
+- Because the game uses 2 decks, a same-suit run may use one Ace as low and
+  the other Ace as high in the same composition.
+- This means the longest possible same-suit run is a **14-card** complete run:
+  Ace-2-3-4-5-6-7-8-9-10-J-Q-K-Ace.
 
 ### Completed Compositions
 
@@ -109,7 +113,8 @@ A composition is a valid set of cards placed on the table.
 - A composition counts as complete when it contains every required card for
   that pattern, including:
   - all four Ace suits in an Ace set
-  - a full same-suit run covering every rank in that suit
+  - a full same-suit run covering every rank in that suit, from Ace low
+    through Ace high when both Ace copies are used
 - When removed, the completed composition is placed into the **discard pile**,
   and then the player places their normal discard on top to finish the turn.
 
@@ -151,6 +156,8 @@ A composition is a valid set of cards placed on the table.
 - Ace behavior must be determined **contextually**:
   - In sets, it is usually treated as high (10).
   - In low runs such as Ace-2-3, it is treated as 1.
+  - In a complete same-suit run, one Ace may be low and the second Ace of that
+    suit may be high.
 - Validation logic must account for both interpretations.
 
 ---
