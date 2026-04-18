@@ -6,8 +6,8 @@ Short implementation checklist for finishing the game logic.
 - [ ] 2. Implement round setup and dealing: 2 decks, 12 cards each, draw deck creation, and starting discard card. See [Setup](RULES.md#setup) and [Shuffling, Cutting, and Dealing](RULES.md#shuffling-cutting-and-dealing).
 - [ ] 3. Implement the cut-or-tap choice and alternate dealing order rules. See [Shuffling, Cutting, and Dealing](RULES.md#shuffling-cutting-and-dealing).
 - [ ] 4. Implement turn flow: draw, optional play, final discard, and move to next player. See [Turn Structure](RULES.md#turn-structure).
-- [ ] 5. Implement set validation: same rank, 3+ cards, different suits, and duplicate-card handling from the double deck. See [Types of Compositions](RULES.md#types-of-compositions) and [Notes & Edge Cases](RULES.md#notes--edge-cases).
-- [ ] 6. Implement run validation: same suit, 3+ cards, sequential ranks, and duplicate-card handling. See [Types of Compositions](RULES.md#types-of-compositions) and [Notes & Edge Cases](RULES.md#notes--edge-cases).
+- [X] 5. Implement set validation: same rank, 3+ cards, different suits, and duplicate-card handling from the double deck. See [Types of Compositions](RULES.md#types-of-compositions) and [Notes & Edge Cases](RULES.md#notes--edge-cases).
+- [X] 6. Implement run validation: same suit, 3+ cards, sequential ranks, and duplicate-card handling. See [Types of Compositions](RULES.md#types-of-compositions) and [Notes & Edge Cases](RULES.md#notes--edge-cases).
 - [ ] 7. Implement joker usage in sets and runs, including tracking what each joker represents. See [Jokers](RULES.md#jokers).
 - [ ] 8. Implement ace handling in compositions so Ace can be high or low depending on context. See [Aces](RULES.md#aces) and [Ace Special Rule](RULES.md#ace-special-rule).
 - [ ] 9. Implement the 40-point first-play rule so players cannot place cards until they meet it. See [Initial Requirement (40 Points Rule)](RULES.md#initial-requirement-40-points-rule).
