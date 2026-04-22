@@ -12,7 +12,7 @@ func TestHandDraw(t *testing.T) {
 	drew := hand.Draw(deck)
 
 	if !drew {
-		t.Fatal("Draw() returned false; expected true")
+		t.Error("Draw() returned false; expected true")
 	}
 
 	if len(hand.cards) != 1 {
@@ -25,7 +25,7 @@ func TestHandDraw(t *testing.T) {
 }
 
 func TestHandDrawFromEmptyDeck(t *testing.T) {
-	deck := &Deck{cards: []Card{}}
+	deck := &CardPile{cards: []Card{}}
 	hand := NewHand()
 
 	drew := hand.Draw(deck)

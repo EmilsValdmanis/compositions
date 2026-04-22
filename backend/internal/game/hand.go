@@ -8,13 +8,15 @@ func NewHand() *Hand {
 	return &Hand{cards: []Card{}}
 }
 
-func (h *Hand) Draw(d *Deck) bool {
-	if len(d.cards) == 0 {
+const InitialHandSize = 12
+
+func (h *Hand) Draw(cp *CardPile) bool {
+	card, ok := cp.DrawOne()
+	if !ok {
 		return false
 	}
-	dc := d.cards[len(d.cards)-1]
-	d.cards = d.cards[:len(d.cards)-1]
-	h.cards = append(h.cards, dc)
+
+	h.cards = append(h.cards, card)
 	return true
 }
 

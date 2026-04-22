@@ -2,8 +2,8 @@
 
 Short implementation checklist for finishing the game logic.
 
-- [ ] 1. Add core game state types: players, round, turn, table compositions, draw pile, discard pile, current player, and total scores. See [Turn Structure](RULES.md#turn-structure) and [Winning the Game](RULES.md#winning-the-game).
-- [ ] 2. Implement round setup and dealing: 2 decks, 12 cards each, draw deck creation, and starting discard card. See [Setup](RULES.md#setup) and [Shuffling, Cutting, and Dealing](RULES.md#shuffling-cutting-and-dealing).
+- [X] 1. Add core game state types: players, round, turn, table compositions, draw pile, discard pile, and total scores. See [Turn Structure](RULES.md#turn-structure) and [Winning the Game](RULES.md#winning-the-game).
+- [X] 2. Implement round setup and dealing: 2 decks, 12 cards each, draw deck creation, and starting discard card. See [Setup](RULES.md#setup) and [Shuffling, Cutting, and Dealing](RULES.md#shuffling-cutting-and-dealing).
 - [ ] 3. Implement the cut-or-tap choice and alternate dealing order rules. See [Shuffling, Cutting, and Dealing](RULES.md#shuffling-cutting-and-dealing).
 - [ ] 4. Implement turn flow: draw, optional play, final discard, and move to next player. See [Turn Structure](RULES.md#turn-structure).
 - [X] 5. Implement set validation: same rank, 3+ cards, different suits, and duplicate-card handling from the double deck. See [Types of Compositions](RULES.md#types-of-compositions) and [Notes & Edge Cases](RULES.md#notes--edge-cases).

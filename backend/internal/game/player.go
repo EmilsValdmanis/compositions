@@ -1,10 +1,16 @@
 package game
 
+import "github.com/google/uuid"
+
 type Player struct {
-	hand  *Hand
-	score int
+	ID          string
+	hand        *Hand
+	totalPoints int
 }
 
 func NewPlayer() *Player {
-	return &Player{hand: NewHand()}
+	return &Player{
+		ID:   uuid.New().String(),
+		hand: NewHand(),
+	}
 }
