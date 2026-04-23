@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func newTurnTestState() *GameState {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	state.players = []*Player{first, second}
+	state.phase = PhaseInProgress
+	state.turn = Turn{number: 1, playerIndex: 0}
+	state.drawPile = &CardPile{cards: []Card{}}
+	state.discardPile = &CardPile{cards: []Card{}}
+	state.activeCompositions = []*Composition{}
+	return state
+}
+
 func TestNewGameStateDefaults(t *testing.T) {
 	state := NewGameState()
 
@@ -47,16 +60,16 @@ func TestGameStateStartGameDealsHandsAndCreatesDiscardPile(t *testing.T) {
 	second := NewPlayer()
 
 	if err := state.AddPlayer(first); err != nil {
-		t.Errorf("AddPlayer(first) error = %v", err)
+		t.Fatalf("AddPlayer(first) error = %v", err)
 	}
 	if err := state.AddPlayer(second); err != nil {
-		t.Errorf("AddPlayer(second) error = %v", err)
+		t.Fatalf("AddPlayer(second) error = %v", err)
 	}
 
 	err := state.StartGame()
 
 	if err != nil {
-		t.Errorf("StartGame() error = %v", err)
+		t.Fatalf("StartGame() error = %v", err)
 	}
 	if state.phase != PhaseInProgress {
 		t.Errorf("state.phase = %d; want %d", state.phase, PhaseInProgress)
@@ -66,10 +79,10 @@ func TestGameStateStartGameDealsHandsAndCreatesDiscardPile(t *testing.T) {
 	}
 	currentPlayer, err := state.CurrentPlayer()
 	if err != nil {
-		t.Errorf("CurrentPlayer() error = %v", err)
+		t.Fatalf("CurrentPlayer() error = %v", err)
 	}
 	if currentPlayer == nil {
-		t.Error("CurrentPlayer() returned nil")
+		t.Fatal("CurrentPlayer() returned nil")
 	}
 	if len(first.hand.cards) != InitialHandSize {
 		t.Errorf("len(first.hand.cards) = %d; want %d", len(first.hand.cards), InitialHandSize)
@@ -102,5 +115,248 @@ func TestGameStateCurrentPlayerRequiresPlayers(t *testing.T) {
 
 	if !errors.Is(err, ErrNoPlayers) {
 		t.Errorf("CurrentPlayer() error = %v; want %v", err, ErrNoPlayers)
+	}
+}
+
+func TestGameStateDrawFromDeckRequiresGameInProgress(t *testing.T) {
+	state := NewGameState()
+
+	err := state.DrawFromDeck()
+
+	if !errors.Is(err, ErrGameNotInProgress) {
+		t.Errorf("DrawFromDeck() error = %v; want %v", err, ErrGameNotInProgress)
+	}
+}
+
+func TestGameStateDrawFromDeckDrawsCardAndMarksTurn(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+	if err := state.StartGame(); err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+
+	currentPlayer, err := state.CurrentPlayer()
+	if err != nil {
+		t.Fatalf("CurrentPlayer() error = %v", err)
+	}
+	startingHandSize := len(currentPlayer.hand.cards)
+	startingDrawPileSize := len(state.drawPile.cards)
+
+	err = state.DrawFromDeck()
+
+	if err != nil {
+		t.Fatalf("DrawFromDeck() error = %v", err)
+	}
+	if len(currentPlayer.hand.cards) != startingHandSize+1 {
+		t.Errorf("len(currentPlayer.hand.cards) = %d; want %d", len(currentPlayer.hand.cards), startingHandSize+1)
+	}
+	if len(state.drawPile.cards) != startingDrawPileSize-1 {
+		t.Errorf("len(state.drawPile.cards) = %d; want %d", len(state.drawPile.cards), startingDrawPileSize-1)
+	}
+	if !state.turn.hasDrawn {
+		t.Error("state.turn.hasDrawn = false; want true")
+	}
+	if state.turn.number != 1 {
+		t.Errorf("state.turn.number = %d; want 1", state.turn.number)
+	}
+}
+
+func TestGameStateDrawFromDeckRejectsSecondDrawSameTurn(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+	if err := state.StartGame(); err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+	if err := state.DrawFromDeck(); err != nil {
+		t.Fatalf("first DrawFromDeck() error = %v", err)
+	}
+
+	err := state.DrawFromDeck()
+
+	if !errors.Is(err, ErrPlayerAlreadyDrew) {
+		t.Errorf("second DrawFromDeck() error = %v; want %v", err, ErrPlayerAlreadyDrew)
+	}
+}
+
+func TestGameStatePlayCompositionRequiresDrawFirst(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	}
+	comp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayComposition(comp)
+
+	if !errors.Is(err, ErrPlayerHasntDrawn) {
+		t.Errorf("PlayComposition() error = %v; want %v", err, ErrPlayerHasntDrawn)
+	}
+}
+
+func TestGameStatePlayCompositionRejectsNilComposition(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+
+	err := state.PlayComposition(nil)
+
+	if !errors.Is(err, ErrInvalidComposition) {
+		t.Errorf("PlayComposition(nil) error = %v; want %v", err, ErrInvalidComposition)
+	}
+}
+
+func TestGameStatePlayCompositionMovesCardsToActiveCompositions(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+		{rank: King, suit: Spades},
+	}
+	comp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayComposition(comp)
+
+	if err != nil {
+		t.Fatalf("PlayComposition() error = %v", err)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != King || remaining.suit != Spades {
+		t.Errorf("remaining hand card = %+v; want King of Spades", remaining)
+	}
+	if state.activeCompositions[0] != comp {
+		t.Error("active composition was not appended correctly")
+	}
+}
+
+func TestGameStatePlayCompositionRejectsCardsNotInHand(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: King, suit: Spades},
+	}
+	comp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayComposition(comp)
+
+	if !errors.Is(err, ErrCardsNotInHand) {
+		t.Errorf("PlayComposition() error = %v; want %v", err, ErrCardsNotInHand)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Errorf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 3 {
+		t.Errorf("len(state.players[0].hand.cards) = %d; want 3", len(state.players[0].hand.cards))
+	}
+}
+
+func TestGameStateDiscardFromHandRequiresDrawFirst(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hand.cards = []Card{{rank: Ace, suit: Hearts}}
+
+	err := state.DiscardFromHand(0)
+
+	if !errors.Is(err, ErrPlayerHasntDrawn) {
+		t.Errorf("DiscardFromHand() error = %v; want %v", err, ErrPlayerHasntDrawn)
+	}
+}
+
+func TestGameStateDiscardFromHandMovesCardAndAdvancesTurn(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: Ace, suit: Hearts},
+		{rank: King, suit: Spades},
+	}
+	state.players[1].hand.cards = []Card{{rank: Two, suit: Clubs}}
+	startingTurnNumber := state.turn.number
+
+	err := state.DiscardFromHand(1)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	if len(state.discardPile.cards) != 1 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
+	}
+	topDiscard := state.discardPile.cards[0]
+	if topDiscard.rank != King || topDiscard.suit != Spades {
+		t.Errorf("top discard = %+v; want King of Spades", topDiscard)
+	}
+	if state.turn.playerIndex != 1 {
+		t.Errorf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
+	}
+	if state.turn.number != startingTurnNumber+1 {
+		t.Errorf("state.turn.number = %d; want %d", state.turn.number, startingTurnNumber+1)
+	}
+	if state.turn.hasDrawn {
+		t.Error("state.turn.hasDrawn = true; want false")
+	}
+}
+
+func TestGameStateDiscardFromHandRejectsInvalidIndex(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{{rank: Ace, suit: Hearts}}
+
+	err := state.DiscardFromHand(1)
+
+	if !errors.Is(err, ErrRemovingCard) {
+		t.Errorf("DiscardFromHand() error = %v; want %v", err, ErrRemovingCard)
+	}
+	if len(state.discardPile.cards) != 0 {
+		t.Errorf("len(state.discardPile.cards) = %d; want 0", len(state.discardPile.cards))
+	}
+	if state.turn.playerIndex != 0 {
+		t.Errorf("state.turn.playerIndex = %d; want 0", state.turn.playerIndex)
 	}
 }

@@ -33,3 +33,37 @@ func (h *Hand) Points() int {
 
 	return total
 }
+
+func (h *Hand) RemoveAt(index int) (Card, bool) {
+	if index < 0 || index >= len(h.cards) {
+		return Card{}, false
+	}
+	card := h.cards[index]
+	h.cards = append(h.cards[:index], h.cards[index+1:]...)
+
+	return card, true
+}
+
+func (h *Hand) RemoveCards(cards []Card) bool {
+	temp := make([]Card, len(h.cards))
+	copy(temp, h.cards)
+
+	for _, target := range cards {
+		found := false
+
+		for i, card := range temp {
+			if cardsEqual(card, target) {
+				temp = append(temp[:i], temp[i+1:]...)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return false
+		}
+	}
+
+	h.cards = temp
+	return true
+}

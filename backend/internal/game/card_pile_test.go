@@ -8,7 +8,7 @@ func TestCardPileDrawOne(t *testing.T) {
 	card, ok := pile.DrawOne()
 
 	if !ok {
-		t.Error("DrawOne() returned false; expected true")
+		t.Fatal("DrawOne() returned false; expected true")
 	}
 	if card.rank != Ace || card.suit != Hearts {
 		t.Errorf("DrawOne() = %+v; want Ace of Hearts", card)
@@ -37,7 +37,7 @@ func TestCardPileAddToTop(t *testing.T) {
 
 	card, ok := pile.DrawOne()
 	if !ok {
-		t.Error("DrawOne() returned false; expected true")
+		t.Fatal("DrawOne() returned false; expected true")
 	}
 	if card != top {
 		t.Errorf("DrawOne() after AddToTop() = %+v; want %+v", card, top)
