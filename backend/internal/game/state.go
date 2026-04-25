@@ -5,6 +5,18 @@ import (
 	"math/rand"
 )
 
+type GameState struct {
+	players            []*Player
+	activeCompositions []*Composition
+	drawPile           *CardPile
+	discardPile        *CardPile
+	maxPlayers         int
+	phase              GamePhase
+	round              int
+	dealerIndex        int
+	turn               Turn
+}
+
 type GamePhase int
 
 const (
@@ -19,16 +31,12 @@ type Turn struct {
 	hasDrawn    bool
 }
 
-type GameState struct {
-	players            []*Player
-	activeCompositions []*Composition
-	drawPile           *CardPile
-	discardPile        *CardPile
-	maxPlayers         int
-	phase              GamePhase
-	round              int
-	turn               Turn
-}
+type DealTypes int
+
+const (
+	DealRoundRobin = iota
+	DealInBlocks
+)
 
 var (
 	ErrGameInProgress              = errors.New("game already in progress")
@@ -46,6 +54,10 @@ var (
 	ErrCannotTakeDiscardCard       = errors.New("cannot take discard card")
 	ErrRemovingCard                = errors.New("error removing card")
 	ErrCardsNotInHand              = errors.New("one or more cards not in hand")
+	ErrInvalidDealingType          = errors.New("invalid dealing type")
+	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
+	ErrInvalidDealer               = errors.New("invalid dealer")
+	ErrInvalidDealChooser          = errors.New("invalid deal chooser")
 )
 
 func NewGameState() *GameState {
@@ -61,6 +73,7 @@ func NewGameState() *GameState {
 		maxPlayers:         4,
 		phase:              PhaseLobby,
 		round:              1,
+		dealerIndex:        0,
 		turn: Turn{
 			number:      1,
 			playerIndex: 0,
@@ -179,16 +192,28 @@ func (gs *GameState) advanceTurn() {
 	gs.turn.hasDrawn = false
 }
 
-func (gs *GameState) StartGame() error {
+func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, order []int) error {
 	if gs.phase != PhaseLobby {
 		return ErrGameInProgress
 	}
 	if len(gs.players) < 2 {
 		return ErrNotEnoughPlayers
 	}
-	if err := gs.dealInitialHands(); err != nil {
+	if !isValidPlayerIndex(dealerIndex, len(gs.players)) {
+		return ErrInvalidDealer
+	}
+	if chooserIndex != dealChooserIndex(dealerIndex, len(gs.players)) {
+		return ErrInvalidDealChooser
+	}
+
+	if dt == DealInBlocks && order == nil {
+		return ErrInvalidDealingOrder
+	}
+	gs.dealerIndex = dealerIndex
+	if err := gs.dealInitialHands(dt, order); err != nil {
 		return err
 	}
+
 	card, ok := gs.drawPile.DrawOne()
 	if !ok {
 		return ErrNotEnoughCardsInDrawPile
@@ -237,18 +262,78 @@ func (gs *GameState) AddPlayer(p *Player) error {
 	return nil
 }
 
-func (gs *GameState) dealInitialHands() error {
-	required := InitialHandSize * len(gs.players)
-	if len(gs.drawPile.cards) < required {
+func (gs *GameState) dealInitialHands(dt DealTypes, order []int) error {
+	switch dt {
+	case DealRoundRobin:
+		return dealRoundRobin(gs.players, gs.drawPile, gs.dealerIndex)
+	case DealInBlocks:
+		return dealInBlocks(gs.players, gs.drawPile, order)
+	default:
+		return ErrInvalidDealingType
+	}
+}
+
+func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex int) error {
+	required := InitialHandSize * len(players)
+	if len(drawPile.cards) < required {
 		return ErrNotEnoughCardsInDrawPile
+	}
+	if !isValidPlayerIndex(dealerIndex, len(players)) {
+		return ErrInvalidDealer
 	}
 
 	for range InitialHandSize {
-		for _, player := range gs.players {
-			if !player.hand.Draw(gs.drawPile) {
+		for offset := 1; offset <= len(players); offset++ {
+			player := players[(dealerIndex+offset)%len(players)]
+			if !player.hand.Draw(drawPile) {
 				return ErrNotEnoughCardsInDrawPile
 			}
 		}
 	}
 	return nil
+}
+
+func dealInBlocks(players []*Player, drawPile *CardPile, order []int) error {
+	required := InitialHandSize * len(players)
+	if len(drawPile.cards) < required {
+		return ErrNotEnoughCardsInDrawPile
+	}
+	if !validateOrder(order, len(players)) {
+		return ErrInvalidDealingOrder
+	}
+
+	for _, i := range order {
+		player := players[i]
+
+		for range InitialHandSize {
+			if !player.hand.Draw(drawPile) {
+				return ErrNotEnoughCardsInDrawPile
+			}
+		}
+	}
+
+	return nil
+}
+
+func validateOrder(order []int, playerCount int) bool {
+	if len(order) != playerCount {
+		return false
+	}
+
+	seen := make(map[int]bool)
+	for _, i := range order {
+		if i < 0 || i >= playerCount || seen[i] {
+			return false
+		}
+		seen[i] = true
+	}
+	return true
+}
+
+func isValidPlayerIndex(playerIndex, playerCount int) bool {
+	return playerIndex >= 0 && playerIndex < playerCount
+}
+
+func dealChooserIndex(dealerIndex, playerCount int) int {
+	return (dealerIndex - 1 + playerCount) % playerCount
 }

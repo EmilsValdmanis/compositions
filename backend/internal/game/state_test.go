@@ -5,6 +5,11 @@ import (
 	"testing"
 )
 
+const (
+	twoPlayerDealerIndex  = 0
+	twoPlayerChooserIndex = 1
+)
+
 func newTurnTestState() *GameState {
 	state := NewGameState()
 	first := NewPlayer()
@@ -66,7 +71,7 @@ func TestGameStateStartGameDealsHandsAndCreatesDiscardPile(t *testing.T) {
 		t.Fatalf("AddPlayer(second) error = %v", err)
 	}
 
-	err := state.StartGame()
+	err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil)
 
 	if err != nil {
 		t.Fatalf("StartGame() error = %v", err)
@@ -108,6 +113,153 @@ func TestGameStateSelectFirstPlayerRequiresPlayers(t *testing.T) {
 	}
 }
 
+func TestGameStateStartGameRejectsInvalidDealer(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+
+	err := state.StartGame(2, twoPlayerChooserIndex, DealRoundRobin, nil)
+
+	if !errors.Is(err, ErrInvalidDealer) {
+		t.Errorf("StartGame() error = %v; want %v", err, ErrInvalidDealer)
+	}
+}
+
+func TestGameStateStartGameRejectsChooserThatIsNotPreviousPlayer(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	third := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+	if err := state.AddPlayer(third); err != nil {
+		t.Fatalf("AddPlayer(third) error = %v", err)
+	}
+
+	err := state.StartGame(1, 2, DealInBlocks, []int{2, 0, 1})
+
+	if !errors.Is(err, ErrInvalidDealChooser) {
+		t.Errorf("StartGame() error = %v; want %v", err, ErrInvalidDealChooser)
+	}
+}
+
+func TestGameStateStartGameAllowsBlockDealingFromPreviousPlayerChooser(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	third := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+	if err := state.AddPlayer(third); err != nil {
+		t.Fatalf("AddPlayer(third) error = %v", err)
+	}
+
+	err := state.StartGame(1, 0, DealInBlocks, []int{2, 0, 1})
+
+	if err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+	if state.phase != PhaseInProgress {
+		t.Errorf("state.phase = %d; want %d", state.phase, PhaseInProgress)
+	}
+	if len(first.hand.cards) != InitialHandSize {
+		t.Errorf("len(first.hand.cards) = %d; want %d", len(first.hand.cards), InitialHandSize)
+	}
+	if len(second.hand.cards) != InitialHandSize {
+		t.Errorf("len(second.hand.cards) = %d; want %d", len(second.hand.cards), InitialHandSize)
+	}
+	if len(third.hand.cards) != InitialHandSize {
+		t.Errorf("len(third.hand.cards) = %d; want %d", len(third.hand.cards), InitialHandSize)
+	}
+	if len(state.discardPile.cards) != 1 {
+		t.Errorf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
+	}
+}
+
+func TestDealRoundRobinStartsWithNextPlayerClockwiseFromDealer(t *testing.T) {
+	players := []*Player{NewPlayer(), NewPlayer(), NewPlayer()}
+	drawPile := &CardPile{cards: []Card{
+		{rank: Ace, suit: Hearts},
+		{rank: Two, suit: Hearts},
+		{rank: Three, suit: Hearts},
+		{rank: Four, suit: Hearts},
+		{rank: Five, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+		{rank: Ten, suit: Hearts},
+		{rank: Jack, suit: Hearts},
+		{rank: Queen, suit: Hearts},
+		{rank: King, suit: Hearts},
+		{rank: Ace, suit: Diamonds},
+		{rank: Two, suit: Diamonds},
+		{rank: Three, suit: Diamonds},
+		{rank: Four, suit: Diamonds},
+		{rank: Five, suit: Diamonds},
+		{rank: Six, suit: Diamonds},
+		{rank: Seven, suit: Diamonds},
+		{rank: Eight, suit: Diamonds},
+		{rank: Nine, suit: Diamonds},
+		{rank: Ten, suit: Diamonds},
+		{rank: Jack, suit: Diamonds},
+		{rank: Queen, suit: Diamonds},
+		{rank: King, suit: Diamonds},
+		{rank: Ace, suit: Clubs},
+		{rank: Two, suit: Clubs},
+		{rank: Three, suit: Clubs},
+		{rank: Four, suit: Clubs},
+		{rank: Five, suit: Clubs},
+		{rank: Six, suit: Clubs},
+		{rank: Seven, suit: Clubs},
+		{rank: Eight, suit: Clubs},
+		{rank: Nine, suit: Clubs},
+		{rank: Ten, suit: Clubs},
+	}}
+
+	err := dealRoundRobin(players, drawPile, 1)
+
+	if err != nil {
+		t.Fatalf("dealRoundRobin() error = %v", err)
+	}
+	if len(players[2].hand.cards) != InitialHandSize {
+		t.Fatalf("len(players[2].hand.cards) = %d; want %d", len(players[2].hand.cards), InitialHandSize)
+	}
+	if len(players[0].hand.cards) != InitialHandSize {
+		t.Fatalf("len(players[0].hand.cards) = %d; want %d", len(players[0].hand.cards), InitialHandSize)
+	}
+	if len(players[1].hand.cards) != InitialHandSize {
+		t.Fatalf("len(players[1].hand.cards) = %d; want %d", len(players[1].hand.cards), InitialHandSize)
+	}
+
+	if first := players[2].hand.cards[0]; first.rank != Ace || first.suit != Hearts {
+		t.Errorf("players[2].hand.cards[0] = %+v; want Ace of Hearts", first)
+	}
+	if first := players[0].hand.cards[0]; first.rank != Two || first.suit != Hearts {
+		t.Errorf("players[0].hand.cards[0] = %+v; want Two of Hearts", first)
+	}
+	if first := players[1].hand.cards[0]; first.rank != Three || first.suit != Hearts {
+		t.Errorf("players[1].hand.cards[0] = %+v; want Three of Hearts", first)
+	}
+}
+
 func TestGameStateCurrentPlayerRequiresPlayers(t *testing.T) {
 	state := NewGameState()
 
@@ -139,7 +291,7 @@ func TestGameStateDrawFromDeckDrawsCardAndMarksTurn(t *testing.T) {
 	if err := state.AddPlayer(second); err != nil {
 		t.Fatalf("AddPlayer(second) error = %v", err)
 	}
-	if err := state.StartGame(); err != nil {
+	if err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil); err != nil {
 		t.Fatalf("StartGame() error = %v", err)
 	}
 
@@ -180,7 +332,7 @@ func TestGameStateDrawFromDeckRejectsSecondDrawSameTurn(t *testing.T) {
 	if err := state.AddPlayer(second); err != nil {
 		t.Fatalf("AddPlayer(second) error = %v", err)
 	}
-	if err := state.StartGame(); err != nil {
+	if err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil); err != nil {
 		t.Fatalf("StartGame() error = %v", err)
 	}
 	if err := state.DrawFromDeck(); err != nil {
