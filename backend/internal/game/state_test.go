@@ -346,7 +346,7 @@ func TestGameStateDrawFromDeckRejectsSecondDrawSameTurn(t *testing.T) {
 	}
 }
 
-func TestGameStatePlayCompositionRequiresDrawFirst(t *testing.T) {
+func TestGameStatePlayCompositionsRequiresDrawFirst(t *testing.T) {
 	state := newTurnTestState()
 	state.players[0].hand.cards = []Card{
 		{rank: Seven, suit: Hearts},
@@ -362,25 +362,25 @@ func TestGameStatePlayCompositionRequiresDrawFirst(t *testing.T) {
 		t.Fatal("NewSet() returned false; want true")
 	}
 
-	err := state.PlayComposition(comp)
+	err := state.PlayCompositions([]*Composition{comp})
 
 	if !errors.Is(err, ErrPlayerHasntDrawn) {
-		t.Errorf("PlayComposition() error = %v; want %v", err, ErrPlayerHasntDrawn)
+		t.Errorf("PlayCompositions() error = %v; want %v", err, ErrPlayerHasntDrawn)
 	}
 }
 
-func TestGameStatePlayCompositionRejectsNilComposition(t *testing.T) {
+func TestGameStatePlayCompositionsRejectsNilComposition(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
 
-	err := state.PlayComposition(nil)
+	err := state.PlayCompositions([]*Composition{nil})
 
 	if !errors.Is(err, ErrInvalidComposition) {
-		t.Errorf("PlayComposition(nil) error = %v; want %v", err, ErrInvalidComposition)
+		t.Errorf("PlayCompositions(nil) error = %v; want %v", err, ErrInvalidComposition)
 	}
 }
 
-func TestGameStatePlayCompositionMovesCardsToActiveCompositions(t *testing.T) {
+func TestGameStatePlayCompositionsMovesCardsToActiveCompositions(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
 	state.players[0].hand.cards = []Card{
@@ -398,10 +398,10 @@ func TestGameStatePlayCompositionMovesCardsToActiveCompositions(t *testing.T) {
 		t.Fatal("NewSet() returned false; want true")
 	}
 
-	err := state.PlayComposition(comp)
+	err := state.PlayCompositions([]*Composition{comp})
 
 	if err != nil {
-		t.Fatalf("PlayComposition() error = %v", err)
+		t.Fatalf("PlayCompositions() error = %v", err)
 	}
 	if len(state.activeCompositions) != 1 {
 		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
@@ -418,7 +418,59 @@ func TestGameStatePlayCompositionMovesCardsToActiveCompositions(t *testing.T) {
 	}
 }
 
-func TestGameStatePlayCompositionRejectsCardsNotInHand(t *testing.T) {
+func TestGameStatePlayCompositionsPlaysMultipleAtOnce(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+		{rank: Three, suit: Spades},
+		{rank: Four, suit: Spades},
+		{rank: Five, suit: Spades},
+		{rank: King, suit: Hearts},
+	}
+	setComp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	runComp, ok := NewRun([]Card{
+		{rank: Three, suit: Spades},
+		{rank: Four, suit: Spades},
+		{rank: Five, suit: Spades},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	err := state.PlayCompositions([]*Composition{setComp, runComp})
+
+	if err != nil {
+		t.Fatalf("PlayCompositions() error = %v", err)
+	}
+	if len(state.activeCompositions) != 2 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 2", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != King || remaining.suit != Hearts {
+		t.Errorf("remaining hand card = %+v; want King of Hearts", remaining)
+	}
+	if state.activeCompositions[0] != setComp {
+		t.Error("set composition was not appended correctly")
+	}
+	if state.activeCompositions[1] != runComp {
+		t.Error("run composition was not appended correctly")
+	}
+}
+
+func TestGameStatePlayCompositionsRejectsCardsNotInHand(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
 	state.players[0].hand.cards = []Card{
@@ -435,16 +487,57 @@ func TestGameStatePlayCompositionRejectsCardsNotInHand(t *testing.T) {
 		t.Fatal("NewSet() returned false; want true")
 	}
 
-	err := state.PlayComposition(comp)
+	err := state.PlayCompositions([]*Composition{comp})
 
 	if !errors.Is(err, ErrCardsNotInHand) {
-		t.Errorf("PlayComposition() error = %v; want %v", err, ErrCardsNotInHand)
+		t.Errorf("PlayCompositions() error = %v; want %v", err, ErrCardsNotInHand)
 	}
 	if len(state.activeCompositions) != 0 {
 		t.Errorf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
 	}
 	if len(state.players[0].hand.cards) != 3 {
 		t.Errorf("len(state.players[0].hand.cards) = %d; want 3", len(state.players[0].hand.cards))
+	}
+}
+
+func TestGameStatePlayCompositionsDoesNotPartiallyMutateOnFailure(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+		{rank: Three, suit: Spades},
+		{rank: Four, suit: Spades},
+		{rank: King, suit: Hearts},
+	}
+	setComp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	runComp, ok := NewRun([]Card{
+		{rank: Three, suit: Spades},
+		{rank: Four, suit: Spades},
+		{rank: Five, suit: Spades},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	err := state.PlayCompositions([]*Composition{setComp, runComp})
+
+	if !errors.Is(err, ErrCardsNotInHand) {
+		t.Fatalf("PlayCompositions() error = %v; want %v", err, ErrCardsNotInHand)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 6 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 6", len(state.players[0].hand.cards))
 	}
 }
 

@@ -136,18 +136,26 @@ func (gs *GameState) canTakeDiscardNow() bool {
 	return true
 }
 
-func (gs *GameState) PlayComposition(comp *Composition) error {
+func (gs *GameState) PlayCompositions(comps []*Composition) error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress
 	}
 	if !gs.turn.hasDrawn {
 		return ErrPlayerHasntDrawn
 	}
-	if comp == nil {
+	if len(comps) == 0 {
 		return ErrInvalidComposition
 	}
-	if !comp.isValid() {
-		return ErrInvalidComposition
+
+	playedCards := make([]Card, 0)
+	for _, comp := range comps {
+		if comp == nil {
+			return ErrInvalidComposition
+		}
+		if !comp.isValid() {
+			return ErrInvalidComposition
+		}
+		playedCards = append(playedCards, comp.cards...)
 	}
 
 	cp, err := gs.CurrentPlayer()
@@ -155,10 +163,10 @@ func (gs *GameState) PlayComposition(comp *Composition) error {
 		return err
 	}
 
-	if !cp.hand.RemoveCards(comp.cards) {
+	if !cp.hand.RemoveCards(playedCards) {
 		return ErrCardsNotInHand
 	}
-	gs.activeCompositions = append(gs.activeCompositions, comp)
+	gs.activeCompositions = append(gs.activeCompositions, comps...)
 
 	return nil
 }
