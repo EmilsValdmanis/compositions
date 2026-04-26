@@ -126,16 +126,6 @@ func (gs *GameState) DrawFromDiscard() error {
 	return nil
 }
 
-func (gs *GameState) canTakeDiscardNow() bool {
-	// TODO:
-	// it must either:
-	// - create at least 1 valid run in hand
-	// - create at least 1 valid set in hand
-	// and the total for all runs and sets
-	// in player's hand must be >= 40 points
-	return true
-}
-
 func (gs *GameState) PlayCompositions(comps []*Composition) error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress
@@ -192,12 +182,6 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 	gs.discardPile.AddToTop(card)
 	gs.advanceTurn()
 	return nil
-}
-
-func (gs *GameState) advanceTurn() {
-	gs.turn.number++
-	gs.turn.playerIndex = (gs.turn.playerIndex + 1) % len(gs.players)
-	gs.turn.hasDrawn = false
 }
 
 func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, order []int) error {
@@ -268,6 +252,22 @@ func (gs *GameState) AddPlayer(p *Player) error {
 	}
 	gs.players = append(gs.players, p)
 	return nil
+}
+
+func (gs *GameState) advanceTurn() {
+	gs.turn.number++
+	gs.turn.playerIndex = (gs.turn.playerIndex + 1) % len(gs.players)
+	gs.turn.hasDrawn = false
+}
+
+func (gs *GameState) canTakeDiscardNow() bool {
+	// TODO:
+	// it must either:
+	// - create at least 1 valid run in hand
+	// - create at least 1 valid set in hand
+	// and the total for all runs and sets
+	// in player's hand must be >= 40 points
+	return true
 }
 
 func (gs *GameState) dealInitialHands(dt DealTypes, order []int) error {

@@ -6,6 +6,7 @@ type Player struct {
 	ID          string
 	hand        *Hand
 	totalPoints int
+	hasOpened   bool
 }
 
 func NewPlayer() *Player {
