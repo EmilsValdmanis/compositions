@@ -10,6 +10,36 @@ func joker() Card {
 	return Card{isJoker: true}
 }
 
+func expectJokerRepresentation(t *testing.T, comp *Composition, cardIndex int, want Card) {
+	t.Helper()
+
+	got, ok := comp.JokerRepresentation(cardIndex)
+	if !ok {
+		t.Fatalf("JokerRepresentation(%d) returned ok = false; want true", cardIndex)
+	}
+	if !cardsEqual(got, want) {
+		t.Fatalf("JokerRepresentation(%d) = %+v; want %+v", cardIndex, got, want)
+	}
+}
+
+func expectJokerRepresentations(t *testing.T, comp *Composition, cardIndex int, want []Card) {
+	t.Helper()
+
+	got, ok := comp.JokerRepresentations(cardIndex)
+	if !ok {
+		t.Fatalf("JokerRepresentations(%d) returned ok = false; want true", cardIndex)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len(JokerRepresentations(%d)) = %d; want %d", cardIndex, len(got), len(want))
+	}
+
+	for i := range want {
+		if !cardsEqual(got[i], want[i]) {
+			t.Fatalf("JokerRepresentations(%d)[%d] = %+v; want %+v", cardIndex, i, got[i], want[i])
+		}
+	}
+}
+
 func TestNewSet_ValidThreeOfAKind(t *testing.T) {
 	cards := []Card{
 		card(Seven, Hearts),
@@ -73,6 +103,40 @@ func TestNewSet_ValidAllJokersFour(t *testing.T) {
 	if !ok {
 		t.Error("expected valid set of four jokers")
 	}
+}
+
+func TestNewSet_AssignsExactJokerRepresentationWhenOnlyOneSuitIsMissing(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ten, Hearts),
+		card(Ten, Diamonds),
+		card(Ten, Clubs),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 3, card(Ten, Spades))
+}
+
+func TestNewSet_TracksAmbiguousJokerRepresentationWhenMultipleSuitsArePossible(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ten, Hearts),
+		card(Ten, Diamonds),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if _, narrowed := comp.JokerRepresentation(2); narrowed {
+		t.Fatal("JokerRepresentation(2) returned ok = true; want false for ambiguous set joker")
+	}
+
+	expectJokerRepresentations(t, comp, 2, []Card{
+		card(Ten, Clubs),
+		card(Ten, Spades),
+	})
 }
 
 func TestNewSet_InvalidTwoCards(t *testing.T) {
@@ -208,6 +272,58 @@ func TestNewRun_ValidWithJokerExtendingEnd(t *testing.T) {
 	if !ok {
 		t.Error("expected valid run with joker extending at end")
 	}
+}
+
+func TestNewRun_AssignsJokerRepresentationForGap(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Five, Hearts),
+		joker(),
+		card(Seven, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 1, card(Six, Hearts))
+}
+
+func TestNewRun_AssignsJokerRepresentationForAceLowRun(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Ace, Clubs),
+		joker(),
+		card(Three, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 1, card(Two, Clubs))
+}
+
+func TestNewRun_AssignsJokerRepresentationForAceHighRun(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Queen, Diamonds),
+		joker(),
+		card(Ace, Diamonds),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 1, card(King, Diamonds))
+}
+
+func TestNewRun_AssignsJokerRepresentationForExtension(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Five, Clubs),
+		card(Six, Clubs),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 2, card(Seven, Clubs))
 }
 
 func TestNewRun_ValidWithMultipleJokers(t *testing.T) {

@@ -10,13 +10,21 @@ const (
 )
 
 type Composition struct {
-	variant compositionVariant
-	cards   []Card
+	variant              compositionVariant
+	cards                []Card
+	jokerRepresentations map[int][]Card
 }
 
 func NewComposition(cards []Card, variant compositionVariant) (*Composition, bool) {
-	c := &Composition{variant: variant, cards: cards}
+	c := &Composition{
+		variant:              variant,
+		cards:                cards,
+		jokerRepresentations: make(map[int][]Card),
+	}
 	if !c.isValid() {
+		return nil, false
+	}
+	if !c.assignJokers() {
 		return nil, false
 	}
 	return c, true
@@ -108,16 +116,122 @@ func (c *Composition) isValidRun() bool {
 		}
 	}
 
-	return tryFitSequence(realCards, jokerCount, false) || tryFitSequence(realCards, jokerCount, true)
+	_, ok := tryFitSequence(realCards, jokerCount, false)
+	if ok {
+		return true
+	}
+
+	_, ok = tryFitSequence(realCards, jokerCount, true)
+	return ok
 }
 
-func tryFitSequence(realCards []Card, jokerCount int, aceLow bool) bool {
+func (c *Composition) assignJokers() bool {
+	if len(c.cards) == 0 {
+		c.jokerRepresentations = map[int][]Card{}
+		return true
+	}
+
+	switch c.variant {
+	case set:
+		return c.assignSetJokers()
+	case run:
+		return c.assignRunJokers()
+	default:
+		return false
+	}
+}
+
+func (c *Composition) assignSetJokers() bool {
+	jokerIndices := jokerCardIndices(c.cards)
+	c.jokerRepresentations = make(map[int][]Card, len(jokerIndices))
+	if len(jokerIndices) == 0 {
+		return true
+	}
+
+	realCards := nonJokerCards(c.cards)
 	if len(realCards) == 0 {
-		return jokerCount >= 3 && jokerCount <= 14
+		allCards := allNaturalCards()
+		for _, jokerIndex := range jokerIndices {
+			c.jokerRepresentations[jokerIndex] = slices.Clone(allCards)
+		}
+		return true
+	}
+
+	usedSuits := make(map[Suit]bool, len(realCards))
+	for _, realCard := range realCards {
+		usedSuits[realCard.suit] = true
+	}
+
+	options, ok := missingSetCards(realCards[0].rank, usedSuits)
+	if !ok {
+		return false
+	}
+
+	for _, jokerIndex := range jokerIndices {
+		c.jokerRepresentations[jokerIndex] = slices.Clone(options)
+	}
+
+	return true
+}
+
+func (c *Composition) assignRunJokers() bool {
+	jokerIndices := jokerCardIndices(c.cards)
+	c.jokerRepresentations = make(map[int][]Card, len(jokerIndices))
+	if len(jokerIndices) == 0 {
+		return true
+	}
+
+	realCards := nonJokerCards(c.cards)
+	replacements, ok := tryFitSequence(realCards, len(jokerIndices), false)
+	if !ok {
+		replacements, ok = tryFitSequence(realCards, len(jokerIndices), true)
+		if !ok {
+			return false
+		}
+	}
+
+	for i, jokerIndex := range jokerIndices {
+		c.jokerRepresentations[jokerIndex] = []Card{replacements[i]}
+	}
+
+	return true
+}
+
+func missingSetCards(rank Rank, usedSuits map[Suit]bool) ([]Card, bool) {
+	options := make([]Card, 0, 4-len(usedSuits))
+	for _, suit := range []Suit{Hearts, Diamonds, Clubs, Spades} {
+		if usedSuits[suit] {
+			continue
+		}
+		options = append(options, Card{rank: rank, suit: suit})
+	}
+
+	if len(options) == 0 {
+		return nil, false
+	}
+
+	return options, true
+}
+
+func tryFitSequence(realCards []Card, jokerCount int, aceLow bool) ([]Card, bool) {
+	if len(realCards) == 0 {
+		if jokerCount < 3 || jokerCount > 14 {
+			return nil, false
+		}
+
+		replacements := make([]Card, 0, jokerCount)
+		for rank := Ace; len(replacements) < jokerCount && rank <= King; rank++ {
+			replacements = append(replacements, Card{rank: rank, suit: Hearts})
+		}
+		if len(replacements) != jokerCount {
+			return nil, false
+		}
+		return replacements, true
 	}
 
 	ranks := make([]int, len(realCards))
 	aceCount := 0
+	runSuit := realCards[0].suit
 	for _, card := range realCards {
 		if card.rank == Ace {
 			aceCount++
@@ -144,22 +258,96 @@ func tryFitSequence(realCards []Card, jokerCount int, aceLow bool) bool {
 
 	for i := 1; i < len(ranks); i++ {
 		if ranks[i] == ranks[i-1] {
-			return false
+			return nil, false
 		}
 	}
 
-	jokersNeeded := 0
+	replacements := make([]Card, 0, jokerCount)
 	for i := 1; i < len(ranks); i++ {
-		diff := ranks[i] - ranks[i-1]
-		jokersNeeded += diff - 1
+		for rank := ranks[i-1] + 1; rank < ranks[i]; rank++ {
+			replacements = append(replacements, Card{rank: sequenceRankToCardRank(rank), suit: runSuit})
+		}
 	}
 
-	if jokerCount < jokersNeeded {
-		return false
+	if len(replacements) > jokerCount {
+		return nil, false
 	}
 
-	extraJokers := jokerCount - jokersNeeded
-	maxExtension := (ranks[0] - 1) + (14 - ranks[len(ranks)-1])
+	remaining := jokerCount - len(replacements)
+	for rank := ranks[len(ranks)-1] + 1; remaining > 0 && rank <= 14; rank++ {
+		replacements = append(replacements, Card{rank: sequenceRankToCardRank(rank), suit: runSuit})
+		remaining--
+	}
+	for rank := ranks[0] - 1; remaining > 0 && rank >= 1; rank-- {
+		replacements = append(replacements, Card{rank: sequenceRankToCardRank(rank), suit: runSuit})
+		remaining--
+	}
 
-	return extraJokers <= maxExtension
+	if remaining != 0 {
+		return nil, false
+	}
+
+	return replacements, true
+}
+
+func (c *Composition) JokerRepresentation(cardIndex int) (Card, bool) {
+	options, ok := c.JokerRepresentations(cardIndex)
+	if !ok || len(options) != 1 {
+		return Card{}, false
+	}
+
+	return options[0], true
+}
+
+func (c *Composition) JokerRepresentations(cardIndex int) ([]Card, bool) {
+	if cardIndex < 0 || cardIndex >= len(c.cards) {
+		return nil, false
+	}
+	if !c.cards[cardIndex].isJoker {
+		return nil, false
+	}
+
+	options, ok := c.jokerRepresentations[cardIndex]
+	if !ok {
+		return nil, false
+	}
+
+	return slices.Clone(options), true
+}
+
+func jokerCardIndices(cards []Card) []int {
+	indices := make([]int, 0, len(cards))
+	for i, card := range cards {
+		if card.isJoker {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+func nonJokerCards(cards []Card) []Card {
+	realCards := make([]Card, 0, len(cards))
+	for _, card := range cards {
+		if !card.isJoker {
+			realCards = append(realCards, card)
+		}
+	}
+	return realCards
+}
+
+func allNaturalCards() []Card {
+	allCards := make([]Card, 0, 52)
+	for _, suit := range []Suit{Hearts, Diamonds, Clubs, Spades} {
+		for rank := Ace; rank <= King; rank++ {
+			allCards = append(allCards, Card{rank: rank, suit: suit})
+		}
+	}
+	return allCards
+}
+
+func sequenceRankToCardRank(rank int) Rank {
+	if rank == 14 {
+		return Ace
+	}
+	return Rank(rank)
 }
