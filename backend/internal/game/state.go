@@ -38,6 +38,12 @@ type CompositionAddition struct {
 	Cards            []Card
 }
 
+type JokerReclaim struct {
+	CompositionIndex int
+	JokerIndex       int
+	ReplacementCard  Card
+}
+
 const (
 	DealRoundRobin = iota
 	DealInBlocks
@@ -141,18 +147,19 @@ func (gs *GameState) AddToCompositions(additions []CompositionAddition) error {
 	return gs.PlayTable(nil, additions)
 }
 
-func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddition) error {
+func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddition, reclaims ...JokerReclaim) error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress
 	}
 	if !gs.turn.hasDrawn {
 		return ErrPlayerHasntDrawn
 	}
-	if len(comps) == 0 && len(additions) == 0 {
+	if len(comps) == 0 && len(additions) == 0 && len(reclaims) == 0 {
 		return ErrInvalidComposition
 	}
 
 	playedCards := make([]Card, 0)
+	reclaimedCards := make([]Card, 0, len(reclaims))
 	openingPoints := 0
 	for _, comp := range comps {
 		if comp == nil {
@@ -167,6 +174,26 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 
 	updatedCompositions := make([]*Composition, len(gs.activeCompositions))
 	copy(updatedCompositions, gs.activeCompositions)
+	for _, reclaim := range reclaims {
+		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
+			return ErrInvalidComposition
+		}
+
+		target := updatedCompositions[reclaim.CompositionIndex]
+		if target == nil {
+			return ErrInvalidComposition
+		}
+
+		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
+		if !ok {
+			return ErrInvalidComposition
+		}
+
+		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
+		playedCards = append(playedCards, reclaim.ReplacementCard)
+		updatedCompositions[reclaim.CompositionIndex] = updated
+	}
+
 	for _, addition := range additions {
 		if len(addition.Cards) == 0 {
 			return ErrInvalidComposition
@@ -207,9 +234,13 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 		return ErrInitialPointsNotMet
 	}
 
-	if !cp.hand.RemoveCards(playedCards) {
+	nextHand := &Hand{cards: make([]Card, 0, len(cp.hand.cards)+len(reclaimedCards))}
+	nextHand.cards = append(nextHand.cards, cp.hand.cards...)
+	nextHand.cards = append(nextHand.cards, reclaimedCards...)
+	if !nextHand.RemoveCards(playedCards) {
 		return ErrCardsNotInHand
 	}
+	cp.hand.cards = nextHand.cards
 	gs.activeCompositions = updatedCompositions
 	gs.activeCompositions = append(gs.activeCompositions, comps...)
 	cp.hasOpened = true

@@ -165,6 +165,46 @@ func TestNewSet_TracksAmbiguousRepresentationsForMultipleJokers(t *testing.T) {
 	expectJokerRepresentations(t, comp, 3, want)
 }
 
+func TestCompositionReclaimJokerReplacesExactRepresentedRunCard(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Five, Hearts),
+		joker(),
+		card(Seven, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	updated, ok := comp.ReclaimJoker(1, card(Six, Hearts))
+	if !ok {
+		t.Fatal("ReclaimJoker() returned false; want true")
+	}
+	if !comp.cards[1].isJoker {
+		t.Fatal("original composition mutated; joker was removed")
+	}
+	if updated.cards[1].isJoker {
+		t.Fatal("updated composition still has joker at reclaimed index")
+	}
+	if !cardsEqual(updated.cards[1], card(Six, Hearts)) {
+		t.Fatalf("updated.cards[1] = %+v; want Six of Hearts", updated.cards[1])
+	}
+}
+
+func TestCompositionReclaimJokerRejectsAmbiguousSetJoker(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ten, Hearts),
+		card(Ten, Diamonds),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if _, ok := comp.ReclaimJoker(2, card(Ten, Clubs)); ok {
+		t.Fatal("ReclaimJoker() returned true; want false for ambiguous set joker")
+	}
+}
+
 func TestNewSet_InvalidTwoCards(t *testing.T) {
 	cards := []Card{
 		card(Nine, Hearts),

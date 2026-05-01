@@ -854,6 +854,163 @@ func TestGameStateAddToCompositionsDoesNotMutateOnInvalidAddition(t *testing.T) 
 	}
 }
 
+func TestGameStatePlayTableWithReclaimsReturnsJokerToHand(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+
+	base, ok := NewSet([]Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Ten, suit: Diamonds},
+		{rank: Ten, suit: Clubs},
+		{isJoker: true},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Spades},
+		{rank: Two, suit: Clubs},
+	}
+
+	err := state.PlayTable(nil, nil, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       3,
+		ReplacementCard:  Card{rank: Ten, suit: Spades},
+	})
+
+	if err != nil {
+		t.Fatalf("PlayTable() error = %v", err)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if state.activeCompositions[0].cards[3].isJoker {
+		t.Fatal("state.activeCompositions[0].cards[3] is still a joker")
+	}
+	if got := state.activeCompositions[0].cards[3]; got.rank != Ten || got.suit != Spades {
+		t.Fatalf("reclaimed replacement = %+v; want Ten of Spades", got)
+	}
+	if len(state.players[0].hand.cards) != 2 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 2", len(state.players[0].hand.cards))
+	}
+
+	foundTwoClubs := false
+	foundJoker := false
+	for _, handCard := range state.players[0].hand.cards {
+		if handCard.isJoker {
+			foundJoker = true
+		}
+		if handCard.rank == Two && handCard.suit == Clubs {
+			foundTwoClubs = true
+		}
+	}
+	if !foundTwoClubs {
+		t.Fatal("player hand does not contain Two of Clubs after reclaim")
+	}
+	if !foundJoker {
+		t.Fatal("player hand does not contain reclaimed joker")
+	}
+}
+
+func TestGameStatePlayTableWithReclaimsAllowsReusingJokerSameTurn(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+
+	base, ok := NewRun([]Card{
+		{rank: Five, suit: Hearts},
+		{isJoker: true},
+		{rank: Seven, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Six, suit: Hearts},
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: Two, suit: Clubs},
+	}
+
+	setComp, ok := NewSet([]Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{isJoker: true},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayTable([]*Composition{setComp}, nil, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       1,
+		ReplacementCard:  Card{rank: Six, suit: Hearts},
+	})
+
+	if err != nil {
+		t.Fatalf("PlayTable() error = %v", err)
+	}
+	if len(state.activeCompositions) != 2 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 2", len(state.activeCompositions))
+	}
+	if state.activeCompositions[0].cards[1].isJoker {
+		t.Fatal("reclaimed joker was not replaced in base composition")
+	}
+	if got := state.activeCompositions[0].cards[1]; got.rank != Six || got.suit != Hearts {
+		t.Fatalf("state.activeCompositions[0].cards[1] = %+v; want Six of Hearts", got)
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Two || remaining.suit != Clubs {
+		t.Fatalf("remaining hand card = %+v; want Two of Clubs", remaining)
+	}
+}
+
+func TestGameStatePlayTableWithReclaimsRejectsAmbiguousSetJoker(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+
+	base, ok := NewSet([]Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Ten, suit: Diamonds},
+		{isJoker: true},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{{rank: Ten, suit: Clubs}}
+
+	err := state.PlayTable(nil, nil, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       2,
+		ReplacementCard:  Card{rank: Ten, suit: Clubs},
+	})
+
+	if !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("PlayTable() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if !state.activeCompositions[0].cards[2].isJoker {
+		t.Fatal("active composition mutated after invalid reclaim")
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Ten || remaining.suit != Clubs {
+		t.Fatalf("remaining hand card = %+v; want Ten of Clubs", remaining)
+	}
+}
+
 func TestGameStateDiscardFromHandRequiresDrawFirst(t *testing.T) {
 	state := newTurnTestState()
 	state.players[0].hand.cards = []Card{{rank: Ace, suit: Hearts}}

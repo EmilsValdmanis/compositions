@@ -46,6 +46,28 @@ func (c *Composition) WithAddedCards(cards []Card) (*Composition, bool) {
 	return NewComposition(combined, c.variant)
 }
 
+func (c *Composition) ReclaimJoker(cardIndex int, replacement Card) (*Composition, bool) {
+	if cardIndex < 0 || cardIndex >= len(c.cards) {
+		return nil, false
+	}
+	if !c.cards[cardIndex].isJoker || replacement.isJoker {
+		return nil, false
+	}
+
+	representation, ok := c.JokerRepresentation(cardIndex)
+	if !ok {
+		return nil, false
+	}
+	if !cardsEqual(representation, replacement) {
+		return nil, false
+	}
+
+	updatedCards := slices.Clone(c.cards)
+	updatedCards[cardIndex] = replacement
+
+	return NewComposition(updatedCards, c.variant)
+}
+
 func (c *Composition) AddedCardsPoints(cards []Card) (int, bool) {
 	extended, ok := c.WithAddedCards(cards)
 	if !ok {
