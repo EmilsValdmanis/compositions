@@ -64,7 +64,13 @@ Each turn consists of:
 
 2. **Play compositions or add a card to an existing one** (optional)
 
-   - Only allowed if the initial requirement is met.
+   - After a player has already met the initial requirement in an earlier turn,
+     they may freely add valid cards to existing table compositions.
+   - A player who has not yet met the initial requirement may still use
+     additions during their opening turn, but only if that same turn also
+     includes at least one new composition of their own and the total value of
+     all cards they place that turn, counting both new compositions and
+     additions, is at least 40 points.
 
 3. **Discard one card**
 
@@ -79,6 +85,9 @@ Each turn consists of:
 - To place your first compositions, the total points you place on the board
   must be **at least 40 points**.
 - Until this is done, you **cannot play any cards to the table**.
+- Adding only to other table compositions does not satisfy this requirement by
+  itself; your opening turn must include at least one valid new composition of
+  your own.
 
 ---
 

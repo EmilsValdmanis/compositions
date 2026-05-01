@@ -630,6 +630,230 @@ func TestGameStatePlayCompositionsAllowsOpeningAtFortyPoints(t *testing.T) {
 	}
 }
 
+func TestGameStateAddToCompositionsAllowsOpenedPlayerToAddCards(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Jack, suit: Hearts},
+		{rank: Two, suit: Clubs},
+	}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards: []Card{
+			{rank: Ten, suit: Hearts},
+			{rank: Jack, suit: Hearts},
+		},
+	}})
+
+	if err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if len(state.activeCompositions[0].cards) != 5 {
+		t.Fatalf("len(state.activeCompositions[0].cards) = %d; want 5", len(state.activeCompositions[0].cards))
+	}
+	if got := state.activeCompositions[0].Points(); got != 44 {
+		t.Fatalf("state.activeCompositions[0].Points() = %d; want 44", got)
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Two || remaining.suit != Clubs {
+		t.Fatalf("remaining hand card = %+v; want Two of Clubs", remaining)
+	}
+}
+
+func TestGameStatePlayTableAllowsOpeningWithCompositionAndAddition(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+		{rank: Ten, suit: Hearts},
+		{rank: Two, suit: Spades},
+	}
+	setComp, ok := NewSet([]Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayTable([]*Composition{setComp}, []CompositionAddition{{
+		CompositionIndex: 0,
+		Cards: []Card{{rank: Ten, suit: Hearts}},
+	}})
+
+	if err != nil {
+		t.Fatalf("PlayTable() error = %v", err)
+	}
+	if !state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = false; want true")
+	}
+	if len(state.activeCompositions) != 2 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 2", len(state.activeCompositions))
+	}
+	if got := state.activeCompositions[0].Points(); got != 34 {
+		t.Fatalf("state.activeCompositions[0].Points() = %d; want 34", got)
+	}
+	if state.activeCompositions[1] != setComp {
+		t.Fatal("new composition was not appended")
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Two || remaining.suit != Spades {
+		t.Fatalf("remaining hand card = %+v; want Two of Spades", remaining)
+	}
+}
+
+func TestGameStateAddToCompositionsRejectsUnopenedPlayerWithoutOwnComposition(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{{rank: Ten, suit: Hearts}}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards: []Card{{rank: Ten, suit: Hearts}},
+	}})
+
+	if !errors.Is(err, ErrInitialPlayRequiresOwnComp) {
+		t.Fatalf("AddToCompositions() error = %v; want %v", err, ErrInitialPlayRequiresOwnComp)
+	}
+	if state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = true; want false")
+	}
+	if len(state.activeCompositions[0].cards) != 3 {
+		t.Fatalf("len(state.activeCompositions[0].cards) = %d; want 3", len(state.activeCompositions[0].cards))
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+}
+
+func TestGameStatePlayTableRejectsOpeningBelowFortyWithAddition(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Clubs},
+		{rank: Seven, suit: Spades},
+		{rank: Seven, suit: Diamonds},
+		{rank: Ten, suit: Hearts},
+	}
+	setComp, ok := NewSet([]Card{
+		{rank: Seven, suit: Clubs},
+		{rank: Seven, suit: Spades},
+		{rank: Seven, suit: Diamonds},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayTable([]*Composition{setComp}, []CompositionAddition{{
+		CompositionIndex: 0,
+		Cards: []Card{{rank: Ten, suit: Hearts}},
+	}})
+
+	if !errors.Is(err, ErrInitialPointsNotMet) {
+		t.Fatalf("PlayTable() error = %v; want %v", err, ErrInitialPointsNotMet)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if len(state.activeCompositions[0].cards) != 3 {
+		t.Fatalf("len(state.activeCompositions[0].cards) = %d; want 3", len(state.activeCompositions[0].cards))
+	}
+	if len(state.players[0].hand.cards) != 4 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 4", len(state.players[0].hand.cards))
+	}
+}
+
+func TestGameStateAddToCompositionsDoesNotMutateOnInvalidAddition(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Queen, suit: Hearts},
+	}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards: []Card{{rank: Ten, suit: Hearts}},
+	}, {
+		CompositionIndex: 0,
+		Cards: []Card{{rank: Queen, suit: Hearts}},
+	}})
+
+	if !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("AddToCompositions() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if len(state.activeCompositions[0].cards) != 3 {
+		t.Fatalf("len(state.activeCompositions[0].cards) = %d; want 3", len(state.activeCompositions[0].cards))
+	}
+	if len(state.players[0].hand.cards) != 2 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 2", len(state.players[0].hand.cards))
+	}
+}
+
 func TestGameStateDiscardFromHandRequiresDrawFirst(t *testing.T) {
 	state := newTurnTestState()
 	state.players[0].hand.cards = []Card{{rank: Ace, suit: Hearts}}

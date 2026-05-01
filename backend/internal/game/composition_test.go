@@ -643,3 +643,102 @@ func TestCompositionPoints_AceLowRunWithMultipleJokers(t *testing.T) {
 		t.Fatalf("Points() = %d; want 10", got)
 	}
 }
+
+func TestCompositionWithAddedCards_ExtendsSet(t *testing.T) {
+	base, ok := NewSet([]Card{
+		card(Seven, Hearts),
+		card(Seven, Diamonds),
+		card(Seven, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	extended, ok := base.WithAddedCards([]Card{card(Seven, Spades)})
+	if !ok {
+		t.Fatal("WithAddedCards() returned false; want true")
+	}
+
+	if len(extended.cards) != 4 {
+		t.Fatalf("len(extended.cards) = %d; want 4", len(extended.cards))
+	}
+	if got := extended.Points(); got != 28 {
+		t.Fatalf("extended.Points() = %d; want 28", got)
+	}
+}
+
+func TestCompositionWithAddedCards_ExtendsRunWithMultipleCards(t *testing.T) {
+	base, ok := NewRun([]Card{
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	extended, ok := base.WithAddedCards([]Card{card(Eight, Hearts), card(Nine, Hearts)})
+	if !ok {
+		t.Fatal("WithAddedCards() returned false; want true")
+	}
+
+	if len(extended.cards) != 5 {
+		t.Fatalf("len(extended.cards) = %d; want 5", len(extended.cards))
+	}
+	if got := extended.Points(); got != 35 {
+		t.Fatalf("extended.Points() = %d; want 35", got)
+	}
+}
+
+func TestCompositionWithAddedCards_RejectsInvalidAddition(t *testing.T) {
+	base, ok := NewRun([]Card{
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if _, ok := base.WithAddedCards([]Card{card(Nine, Hearts)}); ok {
+		t.Fatal("WithAddedCards() returned true; want false")
+	}
+}
+
+func TestCompositionAddedCardsPoints_UsesContextualAceValue(t *testing.T) {
+	base, ok := NewRun([]Card{
+		card(Two, Clubs),
+		card(Three, Clubs),
+		card(Four, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	got, ok := base.AddedCardsPoints([]Card{card(Ace, Clubs)})
+	if !ok {
+		t.Fatal("AddedCardsPoints() returned false; want true")
+	}
+	if got != 1 {
+		t.Fatalf("AddedCardsPoints() = %d; want 1", got)
+	}
+}
+
+func TestCompositionAddedCardsPoints_UsesRepresentedJokerValue(t *testing.T) {
+	base, ok := NewRun([]Card{
+		card(Queen, Diamonds),
+		card(King, Diamonds),
+		card(Ace, Diamonds),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	got, ok := base.AddedCardsPoints([]Card{joker()})
+	if !ok {
+		t.Fatal("AddedCardsPoints() returned false; want true")
+	}
+	if got != 10 {
+		t.Fatalf("AddedCardsPoints() = %d; want 10", got)
+	}
+}

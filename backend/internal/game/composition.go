@@ -38,6 +38,23 @@ func NewRun(cards []Card) (*Composition, bool) {
 	return NewComposition(cards, run)
 }
 
+func (c *Composition) WithAddedCards(cards []Card) (*Composition, bool) {
+	combined := make([]Card, 0, len(c.cards)+len(cards))
+	combined = append(combined, c.cards...)
+	combined = append(combined, cards...)
+
+	return NewComposition(combined, c.variant)
+}
+
+func (c *Composition) AddedCardsPoints(cards []Card) (int, bool) {
+	extended, ok := c.WithAddedCards(cards)
+	if !ok {
+		return 0, false
+	}
+
+	return extended.Points() - c.Points(), true
+}
+
 func (c *Composition) Points() int {
 	switch c.variant {
 	case set:

@@ -33,6 +33,11 @@ type Turn struct {
 
 type DealTypes int
 
+type CompositionAddition struct {
+	CompositionIndex int
+	Cards            []Card
+}
+
 const (
 	DealRoundRobin = iota
 	DealInBlocks
@@ -55,6 +60,7 @@ var (
 	ErrRemovingCard                = errors.New("error removing card")
 	ErrCardsNotInHand              = errors.New("one or more cards not in hand")
 	ErrInitialPointsNotMet         = errors.New("initial compositions must total at least 40 points")
+	ErrInitialPlayRequiresOwnComp  = errors.New("initial play requires at least one new composition")
 	ErrInvalidDealingType          = errors.New("invalid dealing type")
 	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
 	ErrInvalidDealer               = errors.New("invalid dealer")
@@ -128,17 +134,26 @@ func (gs *GameState) DrawFromDiscard() error {
 }
 
 func (gs *GameState) PlayCompositions(comps []*Composition) error {
+	return gs.PlayTable(comps, nil)
+}
+
+func (gs *GameState) AddToCompositions(additions []CompositionAddition) error {
+	return gs.PlayTable(nil, additions)
+}
+
+func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddition) error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress
 	}
 	if !gs.turn.hasDrawn {
 		return ErrPlayerHasntDrawn
 	}
-	if len(comps) == 0 {
+	if len(comps) == 0 && len(additions) == 0 {
 		return ErrInvalidComposition
 	}
 
 	playedCards := make([]Card, 0)
+	openingPoints := 0
 	for _, comp := range comps {
 		if comp == nil {
 			return ErrInvalidComposition
@@ -147,6 +162,37 @@ func (gs *GameState) PlayCompositions(comps []*Composition) error {
 			return ErrInvalidComposition
 		}
 		playedCards = append(playedCards, comp.cards...)
+		openingPoints += comp.Points()
+	}
+
+	updatedCompositions := make([]*Composition, len(gs.activeCompositions))
+	copy(updatedCompositions, gs.activeCompositions)
+	for _, addition := range additions {
+		if len(addition.Cards) == 0 {
+			return ErrInvalidComposition
+		}
+		if addition.CompositionIndex < 0 || addition.CompositionIndex >= len(updatedCompositions) {
+			return ErrInvalidComposition
+		}
+
+		target := updatedCompositions[addition.CompositionIndex]
+		if target == nil {
+			return ErrInvalidComposition
+		}
+
+		addedPoints, ok := target.AddedCardsPoints(addition.Cards)
+		if !ok {
+			return ErrInvalidComposition
+		}
+
+		extended, ok := target.WithAddedCards(addition.Cards)
+		if !ok {
+			return ErrInvalidComposition
+		}
+
+		updatedCompositions[addition.CompositionIndex] = extended
+		playedCards = append(playedCards, addition.Cards...)
+		openingPoints += addedPoints
 	}
 
 	cp, err := gs.CurrentPlayer()
@@ -154,9 +200,8 @@ func (gs *GameState) PlayCompositions(comps []*Composition) error {
 		return err
 	}
 
-	openingPoints := 0
-	for _, comp := range comps {
-		openingPoints += comp.Points()
+	if !cp.hasOpened && len(comps) == 0 {
+		return ErrInitialPlayRequiresOwnComp
 	}
 	if !cp.hasOpened && openingPoints < 40 {
 		return ErrInitialPointsNotMet
@@ -165,6 +210,7 @@ func (gs *GameState) PlayCompositions(comps []*Composition) error {
 	if !cp.hand.RemoveCards(playedCards) {
 		return ErrCardsNotInHand
 	}
+	gs.activeCompositions = updatedCompositions
 	gs.activeCompositions = append(gs.activeCompositions, comps...)
 	cp.hasOpened = true
 
@@ -277,6 +323,10 @@ func (gs *GameState) canTakeDiscardNow() bool {
 	// - create at least 1 valid set in hand
 	// and the total for all runs and sets
 	// in player's hand must be >= 40 points
+
+	// if they have already opened, they can always take the discard card as long as they can use it:
+	// - to add to an existing run or set on the table
+	// - to create a new run or set in hand
 	return true
 }
 
