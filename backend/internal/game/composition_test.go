@@ -139,6 +139,32 @@ func TestNewSet_TracksAmbiguousJokerRepresentationWhenMultipleSuitsArePossible(t
 	})
 }
 
+func TestNewSet_TracksAmbiguousRepresentationsForMultipleJokers(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ace, Hearts),
+		card(Ace, Diamonds),
+		joker(),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if _, narrowed := comp.JokerRepresentation(2); narrowed {
+		t.Fatal("JokerRepresentation(2) returned ok = true; want false for ambiguous set joker")
+	}
+	if _, narrowed := comp.JokerRepresentation(3); narrowed {
+		t.Fatal("JokerRepresentation(3) returned ok = true; want false for ambiguous set joker")
+	}
+
+	want := []Card{
+		card(Ace, Clubs),
+		card(Ace, Spades),
+	}
+	expectJokerRepresentations(t, comp, 2, want)
+	expectJokerRepresentations(t, comp, 3, want)
+}
+
 func TestNewSet_InvalidTwoCards(t *testing.T) {
 	cards := []Card{
 		card(Nine, Hearts),
@@ -326,6 +352,39 @@ func TestNewRun_AssignsJokerRepresentationForExtension(t *testing.T) {
 	expectJokerRepresentation(t, comp, 2, card(Seven, Clubs))
 }
 
+func TestNewRun_AssignsRepresentationsForMultipleJokersInLongRun(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Four, Hearts),
+		joker(),
+		card(Six, Hearts),
+		joker(),
+		card(Eight, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 1, card(Five, Hearts))
+	expectJokerRepresentation(t, comp, 3, card(Seven, Hearts))
+}
+
+func TestNewRun_AssignsRepresentationsForLongFaceRunWithMultipleJokers(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Nine, Diamonds),
+		card(Ten, Diamonds),
+		joker(),
+		card(Queen, Diamonds),
+		joker(),
+		card(Ace, Diamonds),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, comp, 2, card(Jack, Diamonds))
+	expectJokerRepresentation(t, comp, 4, card(King, Diamonds))
+}
+
 func TestNewRun_ValidWithMultipleJokers(t *testing.T) {
 	cards := []Card{
 		card(Two, Spades),
@@ -488,5 +547,99 @@ func TestNewRun_InvalidFullSuitRunPlusExtraCard(t *testing.T) {
 	_, ok := NewRun(cards)
 	if ok {
 		t.Error("expected invalid: nothing can be added to a complete Ace-low to Ace-high suit run")
+	}
+}
+
+func TestCompositionPoints_SetUsesCompositionValueForJokers(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ten, Hearts),
+		card(Ten, Diamonds),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if got := comp.Points(); got != 30 {
+		t.Fatalf("Points() = %d; want 30", got)
+	}
+}
+
+func TestCompositionPoints_SetWithMultipleJokersUsesSetValue(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ace, Hearts),
+		joker(),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if got := comp.Points(); got != 30 {
+		t.Fatalf("Points() = %d; want 30", got)
+	}
+}
+
+func TestCompositionPoints_RunTreatsAceAsLow(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Ace, Clubs),
+		card(Two, Clubs),
+		card(Three, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if got := comp.Points(); got != 6 {
+		t.Fatalf("Points() = %d; want 6", got)
+	}
+}
+
+func TestCompositionPoints_RunUsesRepresentedJokerValue(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Queen, Diamonds),
+		joker(),
+		card(Ace, Diamonds),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if got := comp.Points(); got != 30 {
+		t.Fatalf("Points() = %d; want 30", got)
+	}
+}
+
+func TestCompositionPoints_LongRunWithMultipleJokers(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Nine, Diamonds),
+		card(Ten, Diamonds),
+		joker(),
+		card(Queen, Diamonds),
+		joker(),
+		card(Ace, Diamonds),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if got := comp.Points(); got != 59 {
+		t.Fatalf("Points() = %d; want 59", got)
+	}
+}
+
+func TestCompositionPoints_AceLowRunWithMultipleJokers(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Ace, Clubs),
+		joker(),
+		joker(),
+		card(Four, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if got := comp.Points(); got != 10 {
+		t.Fatalf("Points() = %d; want 10", got)
 	}
 }

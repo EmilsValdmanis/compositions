@@ -383,6 +383,7 @@ func TestGameStatePlayCompositionsRejectsNilComposition(t *testing.T) {
 func TestGameStatePlayCompositionsMovesCardsToActiveCompositions(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
 	state.players[0].hand.cards = []Card{
 		{rank: Seven, suit: Hearts},
 		{rank: Seven, suit: Diamonds},
@@ -421,6 +422,7 @@ func TestGameStatePlayCompositionsMovesCardsToActiveCompositions(t *testing.T) {
 func TestGameStatePlayCompositionsPlaysMultipleAtOnce(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
 	state.players[0].hand.cards = []Card{
 		{rank: Seven, suit: Hearts},
 		{rank: Seven, suit: Diamonds},
@@ -473,6 +475,7 @@ func TestGameStatePlayCompositionsPlaysMultipleAtOnce(t *testing.T) {
 func TestGameStatePlayCompositionsRejectsCardsNotInHand(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
 	state.players[0].hand.cards = []Card{
 		{rank: Seven, suit: Hearts},
 		{rank: Seven, suit: Diamonds},
@@ -503,6 +506,7 @@ func TestGameStatePlayCompositionsRejectsCardsNotInHand(t *testing.T) {
 func TestGameStatePlayCompositionsDoesNotPartiallyMutateOnFailure(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
 	state.players[0].hand.cards = []Card{
 		{rank: Seven, suit: Hearts},
 		{rank: Seven, suit: Diamonds},
@@ -538,6 +542,91 @@ func TestGameStatePlayCompositionsDoesNotPartiallyMutateOnFailure(t *testing.T) 
 	}
 	if len(state.players[0].hand.cards) != 6 {
 		t.Fatalf("len(state.players[0].hand.cards) = %d; want 6", len(state.players[0].hand.cards))
+	}
+}
+
+func TestGameStatePlayCompositionsRejectsOpeningBelowFortyPoints(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+		{rank: King, suit: Spades},
+	}
+	comp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayCompositions([]*Composition{comp})
+
+	if !errors.Is(err, ErrInitialPointsNotMet) {
+		t.Fatalf("PlayCompositions() error = %v; want %v", err, ErrInitialPointsNotMet)
+	}
+	if state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = true; want false")
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 4 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 4", len(state.players[0].hand.cards))
+	}
+}
+
+func TestGameStatePlayCompositionsAllowsOpeningAtFortyPoints(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+		{rank: Ace, suit: Spades},
+		{rank: Two, suit: Spades},
+		{rank: Three, suit: Spades},
+		{rank: Four, suit: Spades},
+		{rank: Nine, suit: Hearts},
+	}
+	setComp, ok := NewSet([]Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	runComp, ok := NewRun([]Card{
+		{rank: Ace, suit: Spades},
+		{rank: Two, suit: Spades},
+		{rank: Three, suit: Spades},
+		{rank: Four, suit: Spades},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	err := state.PlayCompositions([]*Composition{setComp, runComp})
+
+	if err != nil {
+		t.Fatalf("PlayCompositions() error = %v", err)
+	}
+	if !state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = false; want true")
+	}
+	if len(state.activeCompositions) != 2 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 2", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Nine || remaining.suit != Hearts {
+		t.Fatalf("remaining hand card = %+v; want Nine of Hearts", remaining)
 	}
 }
 

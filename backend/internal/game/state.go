@@ -54,6 +54,7 @@ var (
 	ErrCannotTakeDiscardCard       = errors.New("cannot take discard card")
 	ErrRemovingCard                = errors.New("error removing card")
 	ErrCardsNotInHand              = errors.New("one or more cards not in hand")
+	ErrInitialPointsNotMet         = errors.New("initial compositions must total at least 40 points")
 	ErrInvalidDealingType          = errors.New("invalid dealing type")
 	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
 	ErrInvalidDealer               = errors.New("invalid dealer")
@@ -153,10 +154,19 @@ func (gs *GameState) PlayCompositions(comps []*Composition) error {
 		return err
 	}
 
+	openingPoints := 0
+	for _, comp := range comps {
+		openingPoints += comp.Points()
+	}
+	if !cp.hasOpened && openingPoints < 40 {
+		return ErrInitialPointsNotMet
+	}
+
 	if !cp.hand.RemoveCards(playedCards) {
 		return ErrCardsNotInHand
 	}
 	gs.activeCompositions = append(gs.activeCompositions, comps...)
+	cp.hasOpened = true
 
 	return nil
 }

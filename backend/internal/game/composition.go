@@ -38,6 +38,121 @@ func NewRun(cards []Card) (*Composition, bool) {
 	return NewComposition(cards, run)
 }
 
+func (c *Composition) Points() int {
+	switch c.variant {
+	case set:
+		return c.setPoints()
+	case run:
+		return c.runPoints()
+	default:
+		return 0
+	}
+}
+
+func (c *Composition) setPoints() int {
+	setRank, ok := c.setRank()
+	if !ok {
+		return 0
+	}
+
+	total := 0
+	for i, card := range c.cards {
+		if !card.isJoker {
+			total += rankPoints(card.rank, false)
+			continue
+		}
+
+		representation, ok := c.JokerRepresentation(i)
+		if ok {
+			total += rankPoints(representation.rank, false)
+			continue
+		}
+
+		total += rankPoints(setRank, false)
+	}
+
+	return total
+}
+
+func (c *Composition) setRank() (Rank, bool) {
+	for _, card := range c.cards {
+		if !card.isJoker {
+			return card.rank, true
+		}
+	}
+
+	return Ace, true
+}
+
+func (c *Composition) runPoints() int {
+	realCards := nonJokerCards(c.cards)
+	jokerCount := len(jokerCardIndices(c.cards))
+	best := 0
+
+	for _, aceLow := range []bool{false, true} {
+		replacements, ok := tryFitSequence(realCards, jokerCount, aceLow)
+		if !ok {
+			continue
+		}
+
+		cards := make([]Card, 0, len(realCards)+len(replacements))
+		cards = append(cards, realCards...)
+		cards = append(cards, replacements...)
+
+		total := runCardsPoints(cards, aceLow)
+		if total > best {
+			best = total
+		}
+	}
+
+	return best
+}
+
+func runCardsPoints(cards []Card, aceLow bool) int {
+	aceCount := 0
+	for _, card := range cards {
+		if card.rank == Ace {
+			aceCount++
+		}
+	}
+
+	total := 0
+	aceAssignedLow := false
+	for _, card := range cards {
+		if card.rank != Ace {
+			total += rankPoints(card.rank, false)
+			continue
+		}
+
+		if aceCount == 2 && !aceAssignedLow {
+			total += rankPoints(card.rank, true)
+			aceAssignedLow = true
+			continue
+		}
+
+		total += rankPoints(card.rank, aceLow)
+	}
+
+	return total
+}
+
+func rankPoints(rank Rank, aceLow bool) int {
+	if rank == Ace {
+		if aceLow {
+			return 1
+		}
+		return 10
+	}
+	if rank >= Jack && rank <= King {
+		return 10
+	}
+	if rank >= Two && rank <= Ten {
+		return int(rank)
+	}
+
+	return 0
+}
+
 func (c *Composition) isValid() bool {
 	switch c.variant {
 	case set:
