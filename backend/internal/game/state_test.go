@@ -1058,6 +1058,189 @@ func TestGameStateDiscardFromHandMovesCardAndAdvancesTurn(t *testing.T) {
 	}
 }
 
+func TestGameStateDiscardFromHandRemovesCompletedCompositionsBeforeDiscard(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.discardPile = &CardPile{cards: []Card{{rank: Three, suit: Spades}}}
+	state.players[0].hand.cards = []Card{{rank: King, suit: Spades}}
+
+	completeSet, ok := NewSet([]Card{
+		card(Nine, Hearts),
+		card(Nine, Diamonds),
+		card(Nine, Clubs),
+		card(Nine, Spades),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{completeSet}
+
+	err := state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.discardPile.cards) != 6 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 6", len(state.discardPile.cards))
+	}
+	if top := state.discardPile.cards[0]; top.rank != King || top.suit != Spades {
+		t.Fatalf("top discard = %+v; want King of Spades", top)
+	}
+	for i, want := range []Card{
+		card(Nine, Hearts),
+		card(Nine, Diamonds),
+		card(Nine, Clubs),
+		card(Nine, Spades),
+	} {
+		if got := state.discardPile.cards[i+1]; !cardsEqual(got, want) {
+			t.Fatalf("discardPile.cards[%d] = %+v; want %+v", i+1, got, want)
+		}
+	}
+	if bottom := state.discardPile.cards[5]; bottom.rank != Three || bottom.suit != Spades {
+		t.Fatalf("bottom discard = %+v; want Three of Spades", bottom)
+	}
+	if state.turn.number != 2 {
+		t.Fatalf("state.turn.number = %d; want 2", state.turn.number)
+	}
+}
+
+func TestGameStateDiscardFromHandRemovesCompletedRunBeforeDiscard(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.discardPile = &CardPile{cards: []Card{{rank: Three, suit: Spades}}}
+	state.players[0].hand.cards = []Card{{rank: King, suit: Spades}}
+
+	runCards := []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Jack, Hearts),
+		card(Queen, Hearts),
+		card(King, Hearts),
+		card(Ace, Hearts),
+	}
+	completeRun, ok := NewRun(runCards)
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{completeRun}
+
+	err := state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.discardPile.cards) != 16 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 16", len(state.discardPile.cards))
+	}
+	if top := state.discardPile.cards[0]; top.rank != King || top.suit != Spades {
+		t.Fatalf("top discard = %+v; want King of Spades", top)
+	}
+	for i, want := range runCards {
+		if got := state.discardPile.cards[i+1]; !cardsEqual(got, want) {
+			t.Fatalf("discardPile.cards[%d] = %+v; want %+v", i+1, got, want)
+		}
+	}
+	if bottom := state.discardPile.cards[15]; bottom.rank != Three || bottom.suit != Spades {
+		t.Fatalf("bottom discard = %+v; want Three of Spades", bottom)
+	}
+}
+
+func TestGameStateDiscardFromHandRemovesMultipleCompletedCompositionsInOneTurn(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.discardPile = &CardPile{cards: []Card{{rank: Four, suit: Diamonds}}}
+	state.players[0].hand.cards = []Card{{rank: Jack, suit: Clubs}}
+
+	completeSet, ok := NewSet([]Card{
+		card(Nine, Hearts),
+		card(Nine, Diamonds),
+		card(Nine, Clubs),
+		card(Nine, Spades),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	incompleteSet, ok := NewSet([]Card{
+		card(Queen, Hearts),
+		card(Queen, Diamonds),
+		card(Queen, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	runCards := []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Jack, Hearts),
+		card(Queen, Hearts),
+		card(King, Hearts),
+		card(Ace, Hearts),
+	}
+	completeRun, ok := NewRun(runCards)
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{completeSet, incompleteSet, completeRun}
+
+	err := state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if state.activeCompositions[0] != incompleteSet {
+		t.Fatal("remaining active composition changed; want incomplete set to stay on table")
+	}
+	if len(state.discardPile.cards) != 20 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 20", len(state.discardPile.cards))
+	}
+	if top := state.discardPile.cards[0]; top.rank != Jack || top.suit != Clubs {
+		t.Fatalf("top discard = %+v; want Jack of Clubs", top)
+	}
+	for i, want := range runCards {
+		if got := state.discardPile.cards[i+1]; !cardsEqual(got, want) {
+			t.Fatalf("discardPile.cards[%d] = %+v; want %+v", i+1, got, want)
+		}
+	}
+	for i, want := range []Card{
+		card(Nine, Hearts),
+		card(Nine, Diamonds),
+		card(Nine, Clubs),
+		card(Nine, Spades),
+	} {
+		if got := state.discardPile.cards[i+15]; !cardsEqual(got, want) {
+			t.Fatalf("discardPile.cards[%d] = %+v; want %+v", i+15, got, want)
+		}
+	}
+	if bottom := state.discardPile.cards[19]; bottom.rank != Four || bottom.suit != Diamonds {
+		t.Fatalf("bottom discard = %+v; want Four of Diamonds", bottom)
+	}
+}
+
 func TestGameStateDiscardFromHandRejectsInvalidIndex(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true

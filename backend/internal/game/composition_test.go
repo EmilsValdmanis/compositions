@@ -590,6 +590,104 @@ func TestNewRun_InvalidFullSuitRunPlusExtraCard(t *testing.T) {
 	}
 }
 
+func TestCompositionIsCompleteSet(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ace, Hearts),
+		card(Ace, Diamonds),
+		card(Ace, Clubs),
+		card(Ace, Spades),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if !comp.isComplete() {
+		t.Fatal("isComplete() = false; want true")
+	}
+	if !comp.isCompleteSet() {
+		t.Fatal("isCompleteSet() = false; want true")
+	}
+	if comp.isCompleteRun() {
+		t.Fatal("isCompleteRun() = true; want false")
+	}
+}
+
+
+func TestCompositionIsNotCompleteSetWithJoker(t *testing.T) {
+	comp, ok := NewSet([]Card{
+		card(Ace, Hearts),
+		card(Ace, Diamonds),
+		card(Ace, Clubs),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if comp.isComplete() {
+		t.Fatal("isComplete() = true; want false")
+	}
+}
+
+func TestCompositionIsCompleteRun(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Jack, Hearts),
+		card(Queen, Hearts),
+		card(King, Hearts),
+		card(Ace, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if !comp.isComplete() {
+		t.Fatal("isComplete() = false; want true")
+	}
+	if !comp.isCompleteRun() {
+		t.Fatal("isCompleteRun() = false; want true")
+	}
+	if comp.isCompleteSet() {
+		t.Fatal("isCompleteSet() = true; want false")
+	}
+}
+
+
+func TestCompositionIsNotCompleteRunWithJoker(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Jack, Hearts),
+		card(Queen, Hearts),
+		card(King, Hearts),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	if comp.isComplete() {
+		t.Fatal("isComplete() = true; want false")
+	}
+}
+
 func TestCompositionPoints_SetUsesCompositionValueForJokers(t *testing.T) {
 	comp, ok := NewSet([]Card{
 		card(Ten, Hearts),

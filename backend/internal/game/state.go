@@ -266,9 +266,26 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 		return ErrRemovingCard
 	}
 
+	gs.removeCompletedCompositionsToDiscard()
 	gs.discardPile.AddToTop(card)
 	gs.advanceTurn()
 	return nil
+}
+
+func (gs *GameState) removeCompletedCompositionsToDiscard() {
+	remaining := make([]*Composition, 0, len(gs.activeCompositions))
+	for _, comp := range gs.activeCompositions {
+		if comp == nil || !comp.isComplete() {
+			remaining = append(remaining, comp)
+			continue
+		}
+
+		for i := len(comp.cards) - 1; i >= 0; i-- {
+			gs.discardPile.AddToTop(comp.cards[i])
+		}
+	}
+
+	gs.activeCompositions = remaining
 }
 
 func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, order []int) error {

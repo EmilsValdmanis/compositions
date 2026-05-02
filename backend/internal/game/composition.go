@@ -88,6 +88,67 @@ func (c *Composition) Points() int {
 	}
 }
 
+func (c *Composition) isComplete() bool {
+	switch c.variant {
+	case set:
+		return c.isCompleteSet()
+	case run:
+		return c.isCompleteRun()
+	default:
+		return false
+	}
+}
+
+func (c *Composition) isCompleteSet() bool {
+	if len(c.cards) != 4 {
+		return false
+	}
+	if len(nonJokerCards(c.cards)) != len(c.cards) {
+		return false
+	}
+
+	setRank := c.cards[0].rank
+	seenSuits := make(map[Suit]bool, 4)
+	for _, card := range c.cards {
+		if card.rank != setRank || seenSuits[card.suit] {
+			return false
+		}
+		seenSuits[card.suit] = true
+	}
+
+	return len(seenSuits) == 4
+}
+
+func (c *Composition) isCompleteRun() bool {
+	if len(c.cards) != 14 {
+		return false
+	}
+	if len(nonJokerCards(c.cards)) != len(c.cards) {
+		return false
+	}
+
+	runSuit := c.cards[0].suit
+	rankCounts := make(map[Rank]int, 13)
+	for _, card := range c.cards {
+		if card.suit != runSuit {
+			return false
+		}
+		rankCounts[card.rank]++
+	}
+
+	if rankCounts[Ace] != 2 {
+		return false
+	}
+
+	for rank := Two; rank <= King; rank++ {
+		if rankCounts[rank] != 1 {
+			return false
+		}
+	}
+
+	return len(rankCounts) == 13
+}
+
 func (c *Composition) setPoints() int {
 	setRank, ok := c.setRank()
 	if !ok {
