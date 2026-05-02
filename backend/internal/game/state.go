@@ -15,6 +15,7 @@ type GameState struct {
 	round              int
 	dealerIndex        int
 	turn               Turn
+	roundWinnerIndex   int
 }
 
 type GamePhase int
@@ -22,6 +23,7 @@ type GamePhase int
 const (
 	PhaseLobby = iota
 	PhaseInProgress
+	PhaseRoundOver
 	PhaseGameOver
 )
 
@@ -67,6 +69,7 @@ var (
 	ErrCardsNotInHand              = errors.New("one or more cards not in hand")
 	ErrInitialPointsNotMet         = errors.New("initial compositions must total at least 40 points")
 	ErrInitialPlayRequiresOwnComp  = errors.New("initial play requires at least one new composition")
+	ErrMustKeepDiscardCard         = errors.New("player must keep one card for the final discard")
 	ErrInvalidDealingType          = errors.New("invalid dealing type")
 	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
 	ErrInvalidDealer               = errors.New("invalid dealer")
@@ -87,6 +90,7 @@ func NewGameState() *GameState {
 		phase:              PhaseLobby,
 		round:              1,
 		dealerIndex:        0,
+		roundWinnerIndex:   -1,
 		turn: Turn{
 			number:      1,
 			playerIndex: 0,
@@ -240,6 +244,9 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 	if !nextHand.RemoveCards(playedCards) {
 		return ErrCardsNotInHand
 	}
+	if len(nextHand.cards) == 0 {
+		return ErrMustKeepDiscardCard
+	}
 	cp.hand.cards = nextHand.cards
 	gs.activeCompositions = updatedCompositions
 	gs.activeCompositions = append(gs.activeCompositions, comps...)
@@ -268,6 +275,12 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 
 	gs.removeCompletedCompositionsToDiscard()
 	gs.discardPile.AddToTop(card)
+	if len(cp.hand.cards) == 0 {
+		gs.phase = PhaseRoundOver
+		gs.roundWinnerIndex = gs.turn.playerIndex
+		gs.turn.hasDrawn = false
+		return nil
+	}
 	gs.advanceTurn()
 	return nil
 }
@@ -306,6 +319,7 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 		return ErrInvalidDealingOrder
 	}
 	gs.dealerIndex = dealerIndex
+	gs.roundWinnerIndex = -1
 	if err := gs.dealInitialHands(dt, order); err != nil {
 		return err
 	}

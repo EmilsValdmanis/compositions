@@ -76,6 +76,10 @@ Each turn consists of:
 
    - Before discarding, remove any composition completed during that turn and
      place it into the discard pile.
+   - A player wins the round only if this discard leaves their hand empty.
+   - A player cannot end the round by placing every card into compositions or
+     joker reclaims before the discard step; one card must remain available for
+     the final discard.
    - Ends the turn.
 
 ---
@@ -191,7 +195,9 @@ A composition is a valid set of cards placed on the table.
 
 A round ends when:
 
-- A player **plays all their cards**.
+- A player **discards their final card**.
+- A player does **not** end the round by placing all cards into compositions
+  before the discard step.
 
 ## Draw Deck Exhaustion
 

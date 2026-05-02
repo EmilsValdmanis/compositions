@@ -503,6 +503,43 @@ func TestGameStatePlayCompositionsRejectsCardsNotInHand(t *testing.T) {
 	}
 }
 
+func TestGameStatePlayCompositionsRequiresCardLeftForDiscard(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	}
+	comp, ok := NewSet([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayCompositions([]*Composition{comp})
+
+	if !errors.Is(err, ErrMustKeepDiscardCard) {
+		t.Fatalf("PlayCompositions() error = %v; want %v", err, ErrMustKeepDiscardCard)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 3 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 3", len(state.players[0].hand.cards))
+	}
+	if state.phase != PhaseInProgress {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseInProgress)
+	}
+	if state.turn.playerIndex != 0 {
+		t.Fatalf("state.turn.playerIndex = %d; want 0", state.turn.playerIndex)
+	}
+}
+
 func TestGameStatePlayCompositionsDoesNotPartiallyMutateOnFailure(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
@@ -1055,6 +1092,72 @@ func TestGameStateDiscardFromHandMovesCardAndAdvancesTurn(t *testing.T) {
 	}
 	if state.turn.hasDrawn {
 		t.Error("state.turn.hasDrawn = true; want false")
+	}
+}
+
+func TestGameStateDiscardFromHandEndsRoundWhenFinalDiscardEmptiesHand(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Ace, suit: Clubs},
+	}
+	state.players[1].hand.cards = []Card{{rank: Two, suit: Clubs}}
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	startingTurnNumber := state.turn.number
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
+	}})
+
+	if err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+
+	err = state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.roundWinnerIndex != 0 {
+		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	}
+	if len(state.players[0].hand.cards) != 0 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 0", len(state.players[0].hand.cards))
+	}
+	if topDiscard := state.discardPile.cards[0]; topDiscard.rank != Ace || topDiscard.suit != Clubs {
+		t.Fatalf("top discard = %+v; want Ace of Clubs", topDiscard)
+	}
+	if state.turn.playerIndex != 0 {
+		t.Fatalf("state.turn.playerIndex = %d; want 0", state.turn.playerIndex)
+	}
+	if state.turn.number != startingTurnNumber {
+		t.Fatalf("state.turn.number = %d; want %d", state.turn.number, startingTurnNumber)
+	}
+	if state.turn.hasDrawn {
+		t.Fatal("state.turn.hasDrawn = true; want false")
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if len(state.activeCompositions[0].cards) != 4 {
+		t.Fatalf("len(state.activeCompositions[0].cards) = %d; want 4", len(state.activeCompositions[0].cards))
 	}
 }
 

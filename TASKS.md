@@ -14,7 +14,7 @@ Short implementation checklist for finishing the game logic.
 - [X] 10. Implement adding cards to existing table compositions after the first-play requirement is met. See [Turn Structure](RULES.md#turn-structure).
 - [X] 11. Implement joker reclaiming by replacing it with the exact represented card, including the ambiguous-set restriction. See [Jokers](RULES.md#jokers).
 - [X] 12. Implement completed composition detection and removal to the discard pile before the final discard. See [Completed Compositions](RULES.md#completed-compositions).
-- [ ] 13. Implement round end when a player plays all cards. See [Ending a Round](RULES.md#ending-a-round).
+- [X] 13. Implement round end when a player plays all cards. See [Ending a Round](RULES.md#ending-a-round).
 - [ ] 14. Implement draw deck exhaustion by recycling the discard pile into a new draw deck. See [Draw Deck Exhaustion](RULES.md#draw-deck-exhaustion).
 - [ ] 15. Implement end-of-round scoring and the over-100 adjustment rule. See [Scoring After Round](RULES.md#scoring-after-round) and [Winning the Game](RULES.md#winning-the-game).
 - [ ] 16. Implement special win-condition checks: 12 cards of one suit and 6 identical pairs. See [Special Winning Conditions](RULES.md#special-winning-conditions).
