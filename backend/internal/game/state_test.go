@@ -193,6 +193,70 @@ func TestGameStateStartGameAllowsBlockDealingFromPreviousPlayerChooser(t *testin
 	}
 }
 
+func TestGameStateStartGameEndsRoundForDealtSpecialWinningHand(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	state.drawPile = &CardPile{cards: []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Jack, Hearts),
+		card(Queen, Hearts),
+		card(Two, Clubs),
+		card(Three, Clubs),
+		card(Four, Clubs),
+		card(Five, Clubs),
+		card(Six, Clubs),
+		card(Seven, Clubs),
+		card(Eight, Clubs),
+		card(Nine, Clubs),
+		card(Ten, Clubs),
+		card(Jack, Clubs),
+		card(Queen, Clubs),
+		card(King, Clubs),
+		card(Ace, Spades),
+	}}
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+
+	err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealInBlocks, []int{0, 1})
+
+	if err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.roundWinnerIndex != 0 {
+		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	}
+	if first.totalPoints != 0 {
+		t.Fatalf("winner totalPoints = %d; want 0", first.totalPoints)
+	}
+	if second.totalPoints != 84 {
+		t.Fatalf("loser totalPoints = %d; want 84", second.totalPoints)
+	}
+	if len(state.discardPile.cards) != 1 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
+	}
+	if top := state.discardPile.cards[0]; top.rank != Ace || top.suit != Spades {
+		t.Fatalf("top discard = %+v; want Ace of Spades", top)
+	}
+}
+
 func TestDealRoundRobinStartsWithNextPlayerClockwiseFromDealer(t *testing.T) {
 	players := []*Player{NewPlayer(), NewPlayer(), NewPlayer()}
 	drawPile := &CardPile{cards: []Card{
@@ -1420,6 +1484,243 @@ func TestGameStateDiscardFromHandEndsRoundWhenFinalDiscardEmptiesHand(t *testing
 	}
 	if len(state.activeCompositions[0].cards) != 4 {
 		t.Fatalf("len(state.activeCompositions[0].cards) = %d; want 4", len(state.activeCompositions[0].cards))
+	}
+}
+
+func TestGameStateFinishRoundScoresRemainingHands(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Ace, suit: Clubs},
+	}
+	state.players[1].totalPoints = 15
+	state.players[1].hand.cards = []Card{{rank: Ace, suit: Spades}}
+
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
+	}})
+	if err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+
+	err = state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.players[0].totalPoints != 0 {
+		t.Fatalf("winner totalPoints = %d; want 0", state.players[0].totalPoints)
+	}
+	if state.players[1].totalPoints != 16 {
+		t.Fatalf("loser totalPoints = %d; want 16", state.players[1].totalPoints)
+	}
+}
+
+func TestGameStateFinishRoundAppliesOverHundredAdjustment(t *testing.T) {
+	state := newTurnTestState()
+	third := NewPlayer()
+	state.players = append(state.players, third)
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Ace, suit: Clubs},
+	}
+	state.players[1].totalPoints = 95
+	state.players[1].hand.cards = []Card{{rank: Seven, suit: Spades}, {rank: Five, suit: Clubs}}
+	state.players[2].totalPoints = 80
+	state.players[2].hand.cards = []Card{{rank: Nine, suit: Hearts}}
+
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
+	}})
+	if err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+
+	err = state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.players[1].totalPoints != 89 {
+		t.Fatalf("adjusted player totalPoints = %d; want 89", state.players[1].totalPoints)
+	}
+	if state.players[2].totalPoints != 89 {
+		t.Fatalf("safe player totalPoints = %d; want 89", state.players[2].totalPoints)
+	}
+}
+
+func TestGameStateFinishRoundEndsGameWhenAllOtherPlayersExceedHundred(t *testing.T) {
+	state := newTurnTestState()
+	third := NewPlayer()
+	state.players = append(state.players, third)
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Hearts},
+		{rank: Ace, suit: Clubs},
+	}
+	state.players[1].totalPoints = 95
+	state.players[1].hand.cards = []Card{{rank: Six, suit: Clubs}}
+	state.players[2].totalPoints = 100
+	state.players[2].hand.cards = []Card{{rank: Two, suit: Hearts}}
+
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
+	}})
+	if err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+
+	err = state.DiscardFromHand(0)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseGameOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseGameOver)
+	}
+	if state.players[1].totalPoints != 101 {
+		t.Fatalf("player 1 totalPoints = %d; want 101", state.players[1].totalPoints)
+	}
+	if state.players[2].totalPoints != 102 {
+		t.Fatalf("player 2 totalPoints = %d; want 102", state.players[2].totalPoints)
+	}
+}
+
+func TestGameStatePlayTableEndsRoundForSameSuitCollection(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[1].totalPoints = 30
+	state.players[1].hand.cards = []Card{{rank: Two, suit: Clubs}}
+
+	base, ok := NewRun([]Card{
+		{rank: Seven, suit: Clubs},
+		{rank: Eight, suit: Clubs},
+		{rank: Nine, suit: Clubs},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Ten, suit: Clubs},
+		{rank: Ace, suit: Hearts},
+		{rank: Two, suit: Hearts},
+		{rank: Three, suit: Hearts},
+		{rank: Four, suit: Hearts},
+		{rank: Five, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+		{rank: Ten, suit: Hearts},
+		{rank: Jack, suit: Hearts},
+		{rank: Queen, suit: Hearts},
+	}
+
+	err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards:            []Card{{rank: Ten, suit: Clubs}},
+	}})
+
+	if err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.roundWinnerIndex != 0 {
+		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	}
+	if len(state.players[0].hand.cards) != 12 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 12", len(state.players[0].hand.cards))
+	}
+	if state.players[1].totalPoints != 32 {
+		t.Fatalf("player 1 totalPoints = %d; want 32", state.players[1].totalPoints)
+	}
+}
+
+func TestGameStateDiscardFromHandEndsRoundForSixIdenticalPairs(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[1].totalPoints = 40
+	state.players[1].hand.cards = []Card{{rank: King, suit: Hearts}}
+	state.players[0].hand.cards = []Card{
+		{rank: Two, suit: Hearts},
+		{rank: Two, suit: Hearts},
+		{rank: Three, suit: Clubs},
+		{rank: Three, suit: Clubs},
+		{rank: Four, suit: Diamonds},
+		{rank: Four, suit: Diamonds},
+		{rank: Five, suit: Spades},
+		{rank: Five, suit: Spades},
+		{rank: Six, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Seven, suit: Diamonds},
+		{rank: Seven, suit: Diamonds},
+		{rank: Ace, suit: Clubs},
+	}
+
+	err := state.DiscardFromHand(12)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.roundWinnerIndex != 0 {
+		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	}
+	if len(state.players[0].hand.cards) != 12 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 12", len(state.players[0].hand.cards))
+	}
+	if state.players[1].totalPoints != 50 {
+		t.Fatalf("player 1 totalPoints = %d; want 50", state.players[1].totalPoints)
 	}
 }
 

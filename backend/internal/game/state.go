@@ -55,6 +55,12 @@ type tablePlayCandidate struct {
 	usesDiscard bool
 }
 
+type handCardKey struct {
+	rank    Rank
+	suit    Suit
+	isJoker bool
+}
+
 const (
 	DealRoundRobin = iota
 	DealInBlocks
@@ -262,6 +268,9 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 	gs.activeCompositions = updatedCompositions
 	gs.activeCompositions = append(gs.activeCompositions, comps...)
 	cp.hasOpened = true
+	if gs.finishRoundIfSpecialWin(gs.turn.playerIndex) {
+		return nil
+	}
 
 	return nil
 }
@@ -287,13 +296,136 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 	gs.removeCompletedCompositionsToDiscard()
 	gs.discardPile.AddToTop(card)
 	if len(cp.hand.cards) == 0 {
-		gs.phase = PhaseRoundOver
-		gs.roundWinnerIndex = gs.turn.playerIndex
-		gs.turn.hasDrawn = false
+		gs.finishRound(gs.turn.playerIndex)
+		return nil
+	}
+	if gs.finishRoundIfSpecialWin(gs.turn.playerIndex) {
 		return nil
 	}
 	gs.advanceTurn()
 	return nil
+}
+
+func (gs *GameState) finishRoundIfSpecialWin(playerIndex int) bool {
+	if !isValidPlayerIndex(playerIndex, len(gs.players)) {
+		return false
+	}
+
+	player := gs.players[playerIndex]
+	if player == nil || !hasSpecialWinningHand(player.hand.cards) {
+		return false
+	}
+
+	gs.finishRound(playerIndex)
+	return true
+}
+
+func (gs *GameState) finishRound(winnerIndex int) {
+	gs.roundWinnerIndex = winnerIndex
+	gs.turn.hasDrawn = false
+
+	for i, player := range gs.players {
+		if i == winnerIndex || player == nil {
+			continue
+		}
+		player.totalPoints += player.hand.Points()
+	}
+
+	if gs.allOtherPlayersOverHundred(winnerIndex) {
+		gs.phase = PhaseGameOver
+		return
+	}
+
+	gs.applyOverHundredAdjustment()
+	gs.phase = PhaseRoundOver
+}
+
+func (gs *GameState) allOtherPlayersOverHundred(winnerIndex int) bool {
+	for i, player := range gs.players {
+		if i == winnerIndex || player == nil {
+			continue
+		}
+		if player.totalPoints <= 100 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (gs *GameState) applyOverHundredAdjustment() {
+	highestRemaining := -1
+	for _, player := range gs.players {
+		if player == nil || player.totalPoints > 100 {
+			continue
+		}
+		if player.totalPoints > highestRemaining {
+			highestRemaining = player.totalPoints
+		}
+	}
+
+	if highestRemaining < 0 {
+		return
+	}
+
+	for _, player := range gs.players {
+		if player == nil || player.totalPoints <= 100 {
+			continue
+		}
+		player.totalPoints = highestRemaining
+	}
+}
+
+func hasSpecialWinningHand(cards []Card) bool {
+	return hasSameSuitCollection(cards) || hasSixIdenticalPairs(cards)
+}
+
+func hasSameSuitCollection(cards []Card) bool {
+	if len(cards) != InitialHandSize {
+		return false
+	}
+
+	firstSuitSet := false
+	var suit Suit
+	for _, card := range cards {
+		if card.isJoker {
+			return false
+		}
+		if !firstSuitSet {
+			suit = card.suit
+			firstSuitSet = true
+			continue
+		}
+		if card.suit != suit {
+			return false
+		}
+	}
+
+	return true
+}
+
+func hasSixIdenticalPairs(cards []Card) bool {
+	if len(cards) != InitialHandSize {
+		return false
+	}
+
+	counts := make(map[handCardKey]int, 6)
+	for _, card := range cards {
+		key := handCardKey{rank: card.rank, suit: card.suit, isJoker: card.isJoker}
+		counts[key]++
+	}
+
+	if len(counts) != 6 {
+		return false
+	}
+
+	for _, count := range counts {
+		if count != 2 {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (gs *GameState) removeCompletedCompositionsToDiscard() {
@@ -340,6 +472,15 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 		return ErrNotEnoughCardsInDrawPile
 	}
 	gs.discardPile.AddToTop(card)
+	for i, player := range gs.players {
+		if player == nil {
+			continue
+		}
+		if hasSpecialWinningHand(player.hand.cards) {
+			gs.finishRound(i)
+			return nil
+		}
+	}
 	if err := gs.SelectFirstPlayer(); err != nil {
 		return err
 	}
