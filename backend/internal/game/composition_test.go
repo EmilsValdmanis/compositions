@@ -805,6 +805,31 @@ func TestCompositionWithAddedCards_ExtendsSet(t *testing.T) {
 	}
 }
 
+func TestCompositionWithAddedCards_NarrowsSetJokerRepresentation(t *testing.T) {
+	base, ok := NewSet([]Card{
+		card(Ten, Hearts),
+		card(Ten, Diamonds),
+		joker(),
+	})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if _, narrowed := base.JokerRepresentation(2); narrowed {
+		t.Fatal("JokerRepresentation(2) returned ok = true; want false before narrowing")
+	}
+
+	extended, ok := base.WithAddedCards([]Card{card(Ten, Clubs)})
+	if !ok {
+		t.Fatal("WithAddedCards() returned false; want true")
+	}
+
+	expectJokerRepresentation(t, extended, 2, card(Ten, Spades))
+	if _, ok := extended.ReclaimJoker(2, card(Ten, Spades)); !ok {
+		t.Fatal("ReclaimJoker() returned false after addition narrowed the joker")
+	}
+}
+
 func TestCompositionWithAddedCards_ExtendsRunWithMultipleCards(t *testing.T) {
 	base, ok := NewRun([]Card{
 		card(Five, Hearts),

@@ -89,6 +89,7 @@ var (
 	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
 	ErrInvalidDealer               = errors.New("invalid dealer")
 	ErrInvalidDealChooser          = errors.New("invalid deal chooser")
+	ErrInvalidCutSize              = errors.New("invalid cut size")
 )
 
 func NewGameState() *GameState {
@@ -444,7 +445,7 @@ func (gs *GameState) removeCompletedCompositionsToDiscard() {
 	gs.activeCompositions = remaining
 }
 
-func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, order []int) error {
+func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int) error {
 	if gs.phase != PhaseLobby {
 		return ErrGameInProgress
 	}
@@ -461,9 +462,12 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 	if dt == DealInBlocks && order == nil {
 		return ErrInvalidDealingOrder
 	}
+	if dt == DealInBlocks && cutSize != 0 {
+		return ErrInvalidCutSize
+	}
 	gs.dealerIndex = dealerIndex
 	gs.roundWinnerIndex = -1
-	if err := gs.dealInitialHands(dt, order); err != nil {
+	if err := gs.dealInitialHands(dt, order, cutSize); err != nil {
 		return err
 	}
 
@@ -793,10 +797,10 @@ func (gs *GameState) cloneForDiscardTableSearch() *GameState {
 	}
 }
 
-func (gs *GameState) dealInitialHands(dt DealTypes, order []int) error {
+func (gs *GameState) dealInitialHands(dt DealTypes, order []int, cutSize int) error {
 	switch dt {
 	case DealRoundRobin:
-		return dealRoundRobin(gs.players, gs.drawPile, gs.dealerIndex)
+		return dealRoundRobin(gs.players, gs.drawPile, gs.dealerIndex, cutSize)
 	case DealInBlocks:
 		return dealInBlocks(gs.players, gs.drawPile, order)
 	default:
@@ -804,7 +808,7 @@ func (gs *GameState) dealInitialHands(dt DealTypes, order []int) error {
 	}
 }
 
-func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex int) error {
+func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize int) error {
 	required := InitialHandSize * len(players)
 	if len(drawPile.cards) < required {
 		return ErrNotEnoughCardsInDrawPile
@@ -812,15 +816,23 @@ func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex int) erro
 	if !isValidPlayerIndex(dealerIndex, len(players)) {
 		return ErrInvalidDealer
 	}
+	if cutSize < 0 || cutSize > len(drawPile.cards)-required {
+		return ErrInvalidCutSize
+	}
+
+	setAside := append([]Card{}, drawPile.cards[:cutSize]...)
+	mainPile := &CardPile{cards: append([]Card{}, drawPile.cards[cutSize:]...)}
 
 	for range InitialHandSize {
 		for offset := 1; offset <= len(players); offset++ {
 			player := players[(dealerIndex+offset)%len(players)]
-			if !player.hand.Draw(drawPile) {
+			if !player.hand.Draw(mainPile) {
 				return ErrNotEnoughCardsInDrawPile
 			}
 		}
 	}
+
+	drawPile.cards = append(mainPile.cards, setAside...)
 	return nil
 }
 
