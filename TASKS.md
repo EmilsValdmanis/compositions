@@ -19,14 +19,19 @@ Short implementation checklist for finishing the game logic.
 - [X] 15. Implement end-of-round scoring and the over-100 adjustment rule. See [Scoring After Round](RULES.md#scoring-after-round) and [Winning the Game](RULES.md#winning-the-game).
 - [X] 16. Implement special win-condition checks: 12 cards of one suit and 6 identical pairs. See [Special Winning Conditions](RULES.md#special-winning-conditions).
 
-Rough follow-up checklist after the core rules engine.
+Next engine and testing checklist after the core rules engine.
 
 - [X] 1. Implement round reset and round restart flow so a finished round can cleanly produce the next round state without rebuilding `GameState` by hand.
 - [X] 2. Decide and encode table/dealer progression rules between rounds, including who deals next and who acts first in the next round.
-- [ ] 3. Expose the game engine through a real application surface in `backend/cmd/server`, including endpoints or handlers for start game, draw, play, reclaim, add, and discard.
-- [ ] 4. Define request and response models for player actions so clients can submit cut size, tapped dealing order, compositions, additions, reclaims, and discards safely.
-- [ ] 5. Add higher-level integration tests that play through full turns and full rounds instead of only package-level unit tests.
-- [ ] 6. Add multi-round tests that prove scoring, over-100 adjustments, and game-over behavior across consecutive rounds.
-- [ ] 7. Add deterministic test helpers or fixtures for deck construction so scenario tests are easier to read than long inline card lists.
-- [ ] 8. Review performance of discard-pile legality search and add benchmarks around `canTakeDiscardNow` before connecting it to interactive clients.
-- [ ] 9. Add game-state serialization or DTO mapping if the server will return state to a frontend or another process.
+- [ ] 3. Add higher-level integration tests that play through full turns and full rounds instead of only package-level unit tests.
+- [ ] 4. Add multi-round tests that prove scoring, over-100 adjustments, and game-over behavior across consecutive rounds.
+- [ ] 5. Add deterministic test helpers or fixtures for deck construction so scenario tests are easier to read than long inline card lists.
+
+Realtime game server checklist.
+
+- [ ] 1. Expose the game engine through a real WebSocket application surface in `backend/cmd/server`, so clients can create a game, join it, and submit turn actions over a persistent connection.
+- [ ] 2. Define client-to-server and server-to-client message models for lobby setup, start game, draw, play, reclaim, add, discard, and round transitions.
+- [ ] 3. Define connection, player-session, and game-room lifecycle rules so the server can map sockets to players safely across reconnects or disconnects.
+- [ ] 4. Add game-state serialization or DTO mapping for WebSocket broadcasts so clients can receive safe snapshots, action results, errors, and turn updates without depending on internal engine structs.
+- [ ] 5. Add server-level integration tests that drive the WebSocket surface through realistic multiplayer turn flow, including invalid actions and state broadcasts.
+- [ ] 6. Review performance of discard-pile legality search and add benchmarks around `canTakeDiscardNow` before wiring it into interactive WebSocket play.
