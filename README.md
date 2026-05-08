@@ -28,4 +28,4 @@ The Makefile includes the main project commands:
 | `make run` | Starts the backend server |
 | `make build` | Builds the server binary to `backend/dist/server` |
 | `make test` | Runs `go vet` and the test suite |
-
+| `make bench` | Runs benchmarks for critical game logic functions |
