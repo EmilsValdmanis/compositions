@@ -92,10 +92,15 @@ var (
 	ErrInvalidCutSize              = errors.New("invalid cut size")
 )
 
-func NewGameState() *GameState {
-	players := make([]*Player, 0, 4)
+var newShuffledGameDeck = func() *CardPile {
 	deck := NewGameDeck()
 	deck.Shuffle()
+	return deck
+}
+
+func NewGameState() *GameState {
+	players := make([]*Player, 0, 4)
+	deck := newShuffledGameDeck()
 
 	return &GameState{
 		players:            players,
@@ -460,8 +465,7 @@ func (gs *GameState) StartNextRound(dt DealTypes, order []int, cutSize int) erro
 		return ErrCannotStartNextRound
 	}
 
-	deck := NewGameDeck()
-	deck.Shuffle()
+	deck := newShuffledGameDeck()
 	gs.resetRoundState(deck)
 	dealerIndex := nextPlayerIndex(gs.dealerIndex, len(gs.players))
 	chooserIndex := dealChooserIndex(dealerIndex, len(gs.players))
@@ -491,16 +495,16 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	if dt == DealInBlocks && cutSize != 0 {
 		return ErrInvalidCutSize
 	}
+	if len(gs.drawPile.cards) < InitialHandSize*len(gs.players)+1 {
+		return ErrNotEnoughCardsInDrawPile
+	}
 	gs.dealerIndex = dealerIndex
 	if err := gs.dealInitialHands(dt, order, cutSize); err != nil {
 		return err
 	}
-
-	card, ok := gs.drawPile.DrawOne()
-	if !ok {
-		return ErrNotEnoughCardsInDrawPile
+	if err := gs.startDiscardPile(); err != nil {
+		return err
 	}
-	gs.discardPile.AddToTop(card)
 	for i, player := range gs.players {
 		if player == nil {
 			continue
@@ -517,10 +521,19 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	return nil
 }
 
+func (gs *GameState) startDiscardPile() error {
+	card, ok := gs.drawPile.DrawOne()
+	if !ok {
+		return ErrNotEnoughCardsInDrawPile
+	}
+
+	gs.discardPile.AddToTop(card)
+	return nil
+}
+
 func (gs *GameState) resetRoundState(drawPile *CardPile) {
 	if drawPile == nil {
-		drawPile = NewGameDeck()
-		drawPile.Shuffle()
+		drawPile = newShuffledGameDeck()
 	}
 
 	gs.activeCompositions = []*Composition{}

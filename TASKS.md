@@ -23,9 +23,9 @@ Next engine and testing checklist after the core rules engine.
 
 - [X] 1. Implement round reset and round restart flow so a finished round can cleanly produce the next round state without rebuilding `GameState` by hand.
 - [X] 2. Decide and encode table/dealer progression rules between rounds, including who deals next and who acts first in the next round.
-- [ ] 3. Add higher-level integration tests that play through full turns and full rounds instead of only package-level unit tests.
-- [ ] 4. Add multi-round tests that prove scoring, over-100 adjustments, and game-over behavior across consecutive rounds.
-- [ ] 5. Add deterministic test helpers or fixtures for deck construction so scenario tests are easier to read than long inline card lists.
+- [X] 3. Add higher-level integration tests that play through full turns and full rounds instead of only package-level unit tests.
+- [X] 4. Add multi-round tests that prove scoring, over-100 adjustments, and game-over behavior across consecutive rounds.
+- [X] 5. Add deterministic test helpers or fixtures for deck construction so scenario tests are easier to read than long inline card lists.
 
 Realtime game server checklist.
 

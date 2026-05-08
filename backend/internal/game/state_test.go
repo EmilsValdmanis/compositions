@@ -265,6 +265,26 @@ func TestGameStateStartGameBuildsDrawPileFromUndealtCardsOnTopOfSetAsidePacket(t
 	}
 }
 
+func TestGameStateStartGameRequiresOpeningDiscardCard(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	state.drawPile = &CardPile{cards: append([]Card(nil), NewGameDeck().cards[:2*InitialHandSize]...)}
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+
+	err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+
+	if !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
+		t.Fatalf("StartGame() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)
+	}
+}
+
 func TestGameStateStartNextRoundAdvancesDealerAndResetsRoundScopedState(t *testing.T) {
 	state := NewGameState()
 	first := NewPlayer()
