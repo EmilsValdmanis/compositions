@@ -262,6 +262,118 @@ func TestGameStateStartGameBuildsDrawPileFromUndealtCardsOnTopOfSetAsidePacket(t
 	}
 }
 
+func TestGameStateStartNextRoundResetsRoundScopedState(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+
+	state.phase = PhaseRoundOver
+	state.round = 1
+	state.dealerIndex = 1
+	state.roundWinnerIndex = 0
+	state.turn = Turn{number: 9, playerIndex: 1, hasDrawn: true}
+	state.activeCompositions = []*Composition{{cards: []Card{
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+	}}}
+	state.drawPile = &CardPile{cards: []Card{card(King, Spades)}}
+	state.discardPile = &CardPile{cards: []Card{card(Queen, Clubs), card(Jack, Diamonds)}}
+	first.totalPoints = 18
+	first.hasOpened = true
+	first.hand.cards = []Card{card(Ace, Hearts)}
+	second.totalPoints = 37
+	second.hasOpened = true
+	second.hand.cards = []Card{card(Two, Clubs)}
+
+	err := state.StartNextRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+
+	if err != nil {
+		t.Fatalf("StartNextRound() error = %v", err)
+	}
+	if state.phase != PhaseInProgress {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseInProgress)
+	}
+	if state.round != 2 {
+		t.Fatalf("state.round = %d; want 2", state.round)
+	}
+	if state.roundWinnerIndex != -1 {
+		t.Fatalf("state.roundWinnerIndex = %d; want -1", state.roundWinnerIndex)
+	}
+	if state.dealerIndex != twoPlayerDealerIndex {
+		t.Fatalf("state.dealerIndex = %d; want %d", state.dealerIndex, twoPlayerDealerIndex)
+	}
+	if state.turn.number != 1 {
+		t.Fatalf("state.turn.number = %d; want 1", state.turn.number)
+	}
+	if state.turn.hasDrawn {
+		t.Fatal("state.turn.hasDrawn = true; want false")
+	}
+	if state.turn.playerIndex < 0 || state.turn.playerIndex >= len(state.players) {
+		t.Fatalf("state.turn.playerIndex = %d; want valid player index", state.turn.playerIndex)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(first.hand.cards) != InitialHandSize {
+		t.Fatalf("len(first.hand.cards) = %d; want %d", len(first.hand.cards), InitialHandSize)
+	}
+	if len(second.hand.cards) != InitialHandSize {
+		t.Fatalf("len(second.hand.cards) = %d; want %d", len(second.hand.cards), InitialHandSize)
+	}
+	if first.hasOpened {
+		t.Fatal("first.hasOpened = true; want false")
+	}
+	if second.hasOpened {
+		t.Fatal("second.hasOpened = true; want false")
+	}
+	if first.totalPoints != 18 {
+		t.Fatalf("first.totalPoints = %d; want 18", first.totalPoints)
+	}
+	if second.totalPoints != 37 {
+		t.Fatalf("second.totalPoints = %d; want 37", second.totalPoints)
+	}
+	if len(state.discardPile.cards) != 1 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
+	}
+	if len(state.drawPile.cards) != 108-(2*InitialHandSize)-1 {
+		t.Fatalf("len(state.drawPile.cards) = %d; want %d", len(state.drawPile.cards), 108-(2*InitialHandSize)-1)
+	}
+}
+
+func TestGameStateStartNextRoundRequiresFinishedNonFinalRound(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+
+	err := state.StartNextRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+
+	if !errors.Is(err, ErrCannotStartNextRound) {
+		t.Fatalf("StartNextRound() error = %v; want %v", err, ErrCannotStartNextRound)
+	}
+
+	state.phase = PhaseGameOver
+	err = state.StartNextRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+
+	if !errors.Is(err, ErrCannotStartNextRound) {
+		t.Fatalf("StartNextRound() after game over error = %v; want %v", err, ErrCannotStartNextRound)
+	}
+}
+
 func TestGameStateStartGameRejectsCutThatLeavesTooFewCardsToDeal(t *testing.T) {
 	state := NewGameState()
 	first := NewPlayer()

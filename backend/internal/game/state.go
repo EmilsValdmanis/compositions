@@ -69,6 +69,7 @@ const (
 var (
 	ErrGameInProgress              = errors.New("game already in progress")
 	ErrGameNotInProgress           = errors.New("game is not in progress")
+	ErrCannotStartNextRound        = errors.New("cannot start next round")
 	ErrGameFull                    = errors.New("game is full")
 	ErrPlayerExists                = errors.New("player already in game")
 	ErrNilPlayer                   = errors.New("player is nil")
@@ -449,6 +450,30 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 	if gs.phase != PhaseLobby {
 		return ErrGameInProgress
 	}
+
+	gs.resetRoundState(gs.drawPile)
+
+	return gs.startRound(dealerIndex, chooserIndex, dt, order, cutSize)
+}
+
+func (gs *GameState) StartNextRound(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int) error {
+	if gs.phase != PhaseRoundOver {
+		return ErrCannotStartNextRound
+	}
+
+	deck := NewGameDeck()
+	deck.Shuffle()
+	gs.resetRoundState(deck)
+
+	if err := gs.startRound(dealerIndex, chooserIndex, dt, order, cutSize); err != nil {
+		return err
+	}
+
+	gs.round++
+	return nil
+}
+
+func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int) error {
 	if len(gs.players) < 2 {
 		return ErrNotEnoughPlayers
 	}
@@ -466,7 +491,6 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 		return ErrInvalidCutSize
 	}
 	gs.dealerIndex = dealerIndex
-	gs.roundWinnerIndex = -1
 	if err := gs.dealInitialHands(dt, order, cutSize); err != nil {
 		return err
 	}
@@ -490,6 +514,32 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 	}
 	gs.phase = PhaseInProgress
 	return nil
+}
+
+func (gs *GameState) resetRoundState(drawPile *CardPile) {
+	if drawPile == nil {
+		drawPile = NewGameDeck()
+		drawPile.Shuffle()
+	}
+
+	gs.activeCompositions = []*Composition{}
+	gs.drawPile = drawPile
+	gs.discardPile = &CardPile{cards: make([]Card, 0, cardsInDeck*2)}
+	gs.phase = PhaseLobby
+	gs.roundWinnerIndex = -1
+	gs.turn = Turn{
+		number:      1,
+		playerIndex: 0,
+	}
+
+	for _, player := range gs.players {
+		if player == nil {
+			continue
+		}
+
+		player.hand = NewHand()
+		player.hasOpened = false
+	}
 }
 
 func (gs *GameState) SelectFirstPlayer() error {
