@@ -82,6 +82,9 @@ func TestGameStateStartGameDealsHandsAndCreatesDiscardPile(t *testing.T) {
 	if state.turn.number != 1 {
 		t.Errorf("state.turn.number = %d; want 1", state.turn.number)
 	}
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
+	}
 	currentPlayer, err := state.CurrentPlayer()
 	if err != nil {
 		t.Fatalf("CurrentPlayer() error = %v", err)
@@ -262,7 +265,7 @@ func TestGameStateStartGameBuildsDrawPileFromUndealtCardsOnTopOfSetAsidePacket(t
 	}
 }
 
-func TestGameStateStartNextRoundResetsRoundScopedState(t *testing.T) {
+func TestGameStateStartNextRoundAdvancesDealerAndResetsRoundScopedState(t *testing.T) {
 	state := NewGameState()
 	first := NewPlayer()
 	second := NewPlayer()
@@ -293,7 +296,7 @@ func TestGameStateStartNextRoundResetsRoundScopedState(t *testing.T) {
 	second.hasOpened = true
 	second.hand.cards = []Card{card(Two, Clubs)}
 
-	err := state.StartNextRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+	err := state.StartNextRound(DealRoundRobin, nil, 0)
 
 	if err != nil {
 		t.Fatalf("StartNextRound() error = %v", err)
@@ -307,8 +310,8 @@ func TestGameStateStartNextRoundResetsRoundScopedState(t *testing.T) {
 	if state.roundWinnerIndex != -1 {
 		t.Fatalf("state.roundWinnerIndex = %d; want -1", state.roundWinnerIndex)
 	}
-	if state.dealerIndex != twoPlayerDealerIndex {
-		t.Fatalf("state.dealerIndex = %d; want %d", state.dealerIndex, twoPlayerDealerIndex)
+	if state.dealerIndex != 0 {
+		t.Fatalf("state.dealerIndex = %d; want 0", state.dealerIndex)
 	}
 	if state.turn.number != 1 {
 		t.Fatalf("state.turn.number = %d; want 1", state.turn.number)
@@ -316,8 +319,8 @@ func TestGameStateStartNextRoundResetsRoundScopedState(t *testing.T) {
 	if state.turn.hasDrawn {
 		t.Fatal("state.turn.hasDrawn = true; want false")
 	}
-	if state.turn.playerIndex < 0 || state.turn.playerIndex >= len(state.players) {
-		t.Fatalf("state.turn.playerIndex = %d; want valid player index", state.turn.playerIndex)
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
 	}
 	if len(state.activeCompositions) != 0 {
 		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
@@ -360,14 +363,14 @@ func TestGameStateStartNextRoundRequiresFinishedNonFinalRound(t *testing.T) {
 		t.Fatalf("AddPlayer(second) error = %v", err)
 	}
 
-	err := state.StartNextRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+	err := state.StartNextRound(DealRoundRobin, nil, 0)
 
 	if !errors.Is(err, ErrCannotStartNextRound) {
 		t.Fatalf("StartNextRound() error = %v; want %v", err, ErrCannotStartNextRound)
 	}
 
 	state.phase = PhaseGameOver
-	err = state.StartNextRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+	err = state.StartNextRound(DealRoundRobin, nil, 0)
 
 	if !errors.Is(err, ErrCannotStartNextRound) {
 		t.Fatalf("StartNextRound() after game over error = %v; want %v", err, ErrCannotStartNextRound)
@@ -477,6 +480,42 @@ func TestGameStateStartGameEndsRoundForDealtSpecialWinningHand(t *testing.T) {
 	}
 	if top := state.discardPile.cards[0]; top.rank != Ace || top.suit != Spades {
 		t.Fatalf("top discard = %+v; want Ace of Spades", top)
+	}
+}
+
+func TestGameStateStartNextRoundAdvancesDealerClockwiseForThreePlayers(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	third := NewPlayer()
+
+	if err := state.AddPlayer(first); err != nil {
+		t.Fatalf("AddPlayer(first) error = %v", err)
+	}
+	if err := state.AddPlayer(second); err != nil {
+		t.Fatalf("AddPlayer(second) error = %v", err)
+	}
+	if err := state.AddPlayer(third); err != nil {
+		t.Fatalf("AddPlayer(third) error = %v", err)
+	}
+
+	state.phase = PhaseRoundOver
+	state.round = 4
+	state.dealerIndex = 1
+
+	err := state.StartNextRound(DealInBlocks, []int{0, 1, 2}, 0)
+
+	if err != nil {
+		t.Fatalf("StartNextRound() error = %v", err)
+	}
+	if state.round != 5 {
+		t.Fatalf("state.round = %d; want 5", state.round)
+	}
+	if state.dealerIndex != 2 {
+		t.Fatalf("state.dealerIndex = %d; want 2", state.dealerIndex)
+	}
+	if state.turn.playerIndex != 0 {
+		t.Fatalf("state.turn.playerIndex = %d; want 0", state.turn.playerIndex)
 	}
 }
 
@@ -1378,7 +1417,7 @@ func TestGameStatePlayTableAllowsOpeningWithCompositionAndAddition(t *testing.T)
 
 	err := state.PlayTable([]*Composition{setComp}, []CompositionAddition{{
 		CompositionIndex: 0,
-		Cards: []Card{{rank: Ten, suit: Hearts}},
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
 	}})
 
 	if err != nil {
@@ -1421,7 +1460,7 @@ func TestGameStateAddToCompositionsRejectsUnopenedPlayerWithoutOwnComposition(t 
 
 	err := state.AddToCompositions([]CompositionAddition{{
 		CompositionIndex: 0,
-		Cards: []Card{{rank: Ten, suit: Hearts}},
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
 	}})
 
 	if !errors.Is(err, ErrInitialPlayRequiresOwnComp) {
@@ -1467,7 +1506,7 @@ func TestGameStatePlayTableRejectsOpeningBelowFortyWithAddition(t *testing.T) {
 
 	err := state.PlayTable([]*Composition{setComp}, []CompositionAddition{{
 		CompositionIndex: 0,
-		Cards: []Card{{rank: Ten, suit: Hearts}},
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
 	}})
 
 	if !errors.Is(err, ErrInitialPointsNotMet) {
@@ -1504,10 +1543,10 @@ func TestGameStateAddToCompositionsDoesNotMutateOnInvalidAddition(t *testing.T) 
 
 	err := state.AddToCompositions([]CompositionAddition{{
 		CompositionIndex: 0,
-		Cards: []Card{{rank: Ten, suit: Hearts}},
+		Cards:            []Card{{rank: Ten, suit: Hearts}},
 	}, {
 		CompositionIndex: 0,
-		Cards: []Card{{rank: Queen, suit: Hearts}},
+		Cards:            []Card{{rank: Queen, suit: Hearts}},
 	}})
 
 	if !errors.Is(err, ErrInvalidComposition) {

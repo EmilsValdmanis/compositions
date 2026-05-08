@@ -3,7 +3,6 @@ package game
 import (
 	"errors"
 	"math/bits"
-	"math/rand"
 )
 
 type GameState struct {
@@ -48,10 +47,10 @@ type JokerReclaim struct {
 }
 
 type tablePlayCandidate struct {
-	usedMask   uint32
-	comp       *Composition
-	addition   *CompositionAddition
-	reclaim    *JokerReclaim
+	usedMask    uint32
+	comp        *Composition
+	addition    *CompositionAddition
+	reclaim     *JokerReclaim
 	usesDiscard bool
 }
 
@@ -456,7 +455,7 @@ func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, orde
 	return gs.startRound(dealerIndex, chooserIndex, dt, order, cutSize)
 }
 
-func (gs *GameState) StartNextRound(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int) error {
+func (gs *GameState) StartNextRound(dt DealTypes, order []int, cutSize int) error {
 	if gs.phase != PhaseRoundOver {
 		return ErrCannotStartNextRound
 	}
@@ -464,6 +463,8 @@ func (gs *GameState) StartNextRound(dealerIndex, chooserIndex int, dt DealTypes,
 	deck := NewGameDeck()
 	deck.Shuffle()
 	gs.resetRoundState(deck)
+	dealerIndex := nextPlayerIndex(gs.dealerIndex, len(gs.players))
+	chooserIndex := dealChooserIndex(dealerIndex, len(gs.players))
 
 	if err := gs.startRound(dealerIndex, chooserIndex, dt, order, cutSize); err != nil {
 		return err
@@ -547,7 +548,7 @@ func (gs *GameState) SelectFirstPlayer() error {
 		return ErrNoPlayers
 	}
 
-	gs.turn.playerIndex = rand.Intn(len(gs.players))
+	gs.turn.playerIndex = nextPlayerIndex(gs.dealerIndex, len(gs.players))
 	return nil
 }
 
@@ -843,7 +844,7 @@ func (gs *GameState) cloneForDiscardTableSearch() *GameState {
 			playerIndex: gs.turn.playerIndex,
 			hasDrawn:    true,
 		},
-		roundWinnerIndex:   gs.roundWinnerIndex,
+		roundWinnerIndex: gs.roundWinnerIndex,
 	}
 }
 
@@ -929,4 +930,8 @@ func isValidPlayerIndex(playerIndex, playerCount int) bool {
 
 func dealChooserIndex(dealerIndex, playerCount int) int {
 	return (dealerIndex - 1 + playerCount) % playerCount
+}
+
+func nextPlayerIndex(playerIndex, playerCount int) int {
+	return (playerIndex + 1) % playerCount
 }

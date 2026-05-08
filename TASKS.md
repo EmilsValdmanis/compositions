@@ -22,7 +22,7 @@ Short implementation checklist for finishing the game logic.
 Rough follow-up checklist after the core rules engine.
 
 - [X] 1. Implement round reset and round restart flow so a finished round can cleanly produce the next round state without rebuilding `GameState` by hand.
-- [ ] 2. Decide and encode table/dealer progression rules between rounds, including who deals next and who acts first in the next round.
+- [X] 2. Decide and encode table/dealer progression rules between rounds, including who deals next and who acts first in the next round.
 - [ ] 3. Expose the game engine through a real application surface in `backend/cmd/server`, including endpoints or handlers for start game, draw, play, reclaim, add, and discard.
 - [ ] 4. Define request and response models for player actions so clients can submit cut size, tapped dealing order, compositions, additions, reclaims, and discards safely.
 - [ ] 5. Add higher-level integration tests that play through full turns and full rounds instead of only package-level unit tests.
