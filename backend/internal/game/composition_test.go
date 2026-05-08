@@ -905,3 +905,273 @@ func TestCompositionAddedCardsPoints_UsesRepresentedJokerValue(t *testing.T) {
 		t.Fatalf("AddedCardsPoints() = %d; want 10", got)
 	}
 }
+
+func TestCompositionAddedCardsPointsRejectsInvalidAddition(t *testing.T) {
+	base := mustRun(t, card(Five, Hearts), card(Six, Hearts), card(Seven, Hearts))
+
+	if got, ok := base.AddedCardsPoints([]Card{card(Nine, Hearts)}); ok || got != 0 {
+		t.Fatalf("AddedCardsPoints() = (%d, %v); want (0, false)", got, ok)
+	}
+}
+
+func TestNewCompositionRejectsUnknownVariant(t *testing.T) {
+	if comp, ok := NewComposition([]Card{card(Ace, Hearts), card(Ace, Diamonds), card(Ace, Clubs)}, compositionVariant("weird")); ok || comp != nil {
+		t.Fatalf("NewComposition() = (%v, %v); want (nil, false)", comp, ok)
+	}
+}
+
+func TestCompositionReclaimJokerRejectsInvalidInputs(t *testing.T) {
+	comp := mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))
+
+	if _, ok := comp.ReclaimJoker(-1, card(Six, Hearts)); ok {
+		t.Fatal("ReclaimJoker() returned true for negative index")
+	}
+	if _, ok := comp.ReclaimJoker(3, card(Six, Hearts)); ok {
+		t.Fatal("ReclaimJoker() returned true for out-of-range index")
+	}
+	if _, ok := comp.ReclaimJoker(0, card(Five, Hearts)); ok {
+		t.Fatal("ReclaimJoker() returned true for non-joker card")
+	}
+	if _, ok := comp.ReclaimJoker(1, joker()); ok {
+		t.Fatal("ReclaimJoker() returned true for joker replacement")
+	}
+	if _, ok := comp.ReclaimJoker(1, card(Eight, Hearts)); ok {
+		t.Fatal("ReclaimJoker() returned true for wrong replacement")
+	}
+}
+
+func TestCompositionCanReclaimJoker(t *testing.T) {
+	ambiguous := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), joker())
+	if ambiguous.canReclaimJoker(2, card(Ten, Clubs)) {
+		t.Fatal("canReclaimJoker() = true; want false for ambiguous set joker")
+	}
+
+	comp := mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))
+	if !comp.canReclaimJoker(1, card(Six, Hearts)) {
+		t.Fatal("canReclaimJoker() = false; want true")
+	}
+	if comp.canReclaimJoker(-1, card(Six, Hearts)) {
+		t.Fatal("canReclaimJoker() = true for negative index")
+	}
+	if comp.canReclaimJoker(0, card(Five, Hearts)) {
+		t.Fatal("canReclaimJoker() = true for non-joker slot")
+	}
+	if comp.canReclaimJoker(1, joker()) {
+		t.Fatal("canReclaimJoker() = true for joker replacement")
+	}
+	if comp.canReclaimJoker(1, card(Eight, Hearts)) {
+		t.Fatal("canReclaimJoker() = true for wrong card")
+	}
+}
+
+func TestCompositionAddedCardsPointsNoAllocRejectsInvalidAddition(t *testing.T) {
+	base := mustRun(t, card(Five, Hearts), card(Six, Hearts), card(Seven, Hearts))
+
+	if got, ok := base.addedCardsPointsNoAlloc([]Card{card(Nine, Hearts)}, make([]Card, 0, 8)); ok || got != 0 {
+		t.Fatalf("addedCardsPointsNoAlloc() = (%d, %v); want (0, false)", got, ok)
+	}
+	if got, ok := base.addedCardsPointsNoAlloc([]Card{card(Eight, Hearts)}, make([]Card, 0, 8)); !ok || got != 8 {
+		t.Fatalf("addedCardsPointsNoAlloc() = (%d, %v); want (8, true)", got, ok)
+	}
+}
+
+func TestCompositionPointsUnknownVariant(t *testing.T) {
+	comp := &Composition{variant: compositionVariant("weird")}
+
+	if got := comp.Points(); got != 0 {
+		t.Fatalf("Points() = %d; want 0", got)
+	}
+}
+
+func TestCompositionIsCompleteUnknownVariant(t *testing.T) {
+	comp := &Composition{variant: compositionVariant("weird")}
+
+	if comp.isComplete() {
+		t.Fatal("isComplete() = true; want false")
+	}
+}
+
+func TestCompositionIsCompleteSetRejectsMixedRanksAndDuplicateSuits(t *testing.T) {
+	if comp, ok := NewSet([]Card{card(Ace, Hearts), card(Ace, Diamonds), card(Ace, Clubs), card(Ace, Spades)}); !ok || !comp.isCompleteSet() {
+		t.Fatal("expected complete natural set")
+	}
+
+	mixed := &Composition{variant: set, cards: []Card{card(Ace, Hearts), card(King, Diamonds), card(Ace, Clubs), card(Ace, Spades)}}
+	if mixed.isCompleteSet() {
+		t.Fatal("isCompleteSet() = true; want false for mixed ranks")
+	}
+
+	dup := &Composition{variant: set, cards: []Card{card(Ace, Hearts), card(Ace, Hearts), card(Ace, Clubs), card(Ace, Spades)}}
+	if dup.isCompleteSet() {
+		t.Fatal("isCompleteSet() = true; want false for duplicate suit")
+	}
+}
+
+func TestCompositionIsCompleteRunRejectsWrongSuitAndWrongRankCounts(t *testing.T) {
+	wrongSuit := &Composition{variant: run, cards: []Card{
+		card(Ace, Hearts), card(Two, Hearts), card(Three, Hearts), card(Four, Hearts), card(Five, Hearts), card(Six, Hearts),
+		card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts),
+		card(King, Hearts), card(Ace, Clubs),
+	}}
+	if wrongSuit.isCompleteRun() {
+		t.Fatal("isCompleteRun() = true; want false for mixed suit")
+	}
+
+	wrongAces := &Composition{variant: run, cards: []Card{
+		card(Ace, Hearts), card(Two, Hearts), card(Three, Hearts), card(Four, Hearts), card(Five, Hearts), card(Six, Hearts),
+		card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts),
+		card(King, Hearts), card(King, Hearts),
+	}}
+	if wrongAces.isCompleteRun() {
+		t.Fatal("isCompleteRun() = true; want false for wrong ace count")
+	}
+
+	missingRank := &Composition{variant: run, cards: []Card{
+		card(Ace, Hearts), card(Two, Hearts), card(Three, Hearts), card(Four, Hearts), card(Five, Hearts), card(Six, Hearts),
+		card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts),
+		card(Ace, Hearts), card(Ace, Hearts),
+	}}
+	if missingRank.isCompleteRun() {
+		t.Fatal("isCompleteRun() = true; want false for missing rank")
+	}
+
+	wrongMiddleCount := &Composition{variant: run, cards: []Card{
+		card(Ace, Hearts), card(Two, Hearts), card(Three, Hearts), card(Four, Hearts), card(Five, Hearts), card(Six, Hearts),
+		card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts),
+		card(Queen, Hearts), card(Ace, Hearts),
+	}}
+	if wrongMiddleCount.isCompleteRun() {
+		t.Fatal("isCompleteRun() = true; want false for duplicate middle rank")
+	}
+}
+
+func TestCompositionSetPointsFallsBackWhenSetRankUnknownOrJokerRepresentationMissing(t *testing.T) {
+	empty := &Composition{variant: set}
+	if got := empty.setPoints(); got != 0 {
+		t.Fatalf("setPoints() = %d; want 0", got)
+	}
+
+	allJokers := mustSet(t, joker(), joker(), joker())
+	if got := allJokers.setRank(); got != Ace {
+		t.Fatalf("setRank() = %v; want Ace", got)
+	}
+
+	broken := &Composition{variant: set, cards: []Card{card(Ten, Hearts), card(Ten, Diamonds), joker()}, jokerRepresentations: map[int][]Card{}}
+	if got := broken.setPoints(); got != 30 {
+		t.Fatalf("setPoints() = %d; want 30", got)
+	}
+
+	exact := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), joker())
+	if got := exact.setPoints(); got != 30 {
+		t.Fatalf("setPoints() = %d; want 30", got)
+	}
+
+	narrow := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), card(Ten, Clubs), joker())
+	if got := narrow.setPoints(); got != 40 {
+		t.Fatalf("setPoints() = %d; want 40", got)
+	}
+}
+
+func TestRunCardsPointsTwoAcesForcesFirstAceLow(t *testing.T) {
+	got := runCardsPoints([]Card{card(Ace, Hearts), card(Ace, Hearts), card(King, Hearts)}, false)
+
+	if got != 21 {
+		t.Fatalf("runCardsPoints() = %d; want 21", got)
+	}
+}
+
+func TestRankPointsUnknownRank(t *testing.T) {
+	if got := rankPoints(Rank(99), false); got != 0 {
+		t.Fatalf("rankPoints() = %d; want 0", got)
+	}
+}
+
+func TestCompositionIsValidUnknownVariant(t *testing.T) {
+	comp := &Composition{variant: compositionVariant("weird")}
+
+	if comp.isValid() {
+		t.Fatal("isValid() = true; want false")
+	}
+}
+
+func TestCompositionIsValidSetRejectsTooFewRealCardsForMissingSlots(t *testing.T) {
+	comp := &Composition{variant: set, cards: []Card{card(Five, Hearts), card(Five, Diamonds), card(Five, Clubs), joker(), joker()}}
+
+	if comp.isValidSet() {
+		t.Fatal("isValidSet() = true; want false")
+	}
+}
+
+func TestCompositionAssignJokersEmptyAndUnknownVariant(t *testing.T) {
+	empty := &Composition{}
+	if !empty.assignJokers() {
+		t.Fatal("assignJokers() = false; want true for empty composition")
+	}
+	if len(empty.jokerRepresentations) != 0 {
+		t.Fatalf("len(jokerRepresentations) = %d; want 0", len(empty.jokerRepresentations))
+	}
+
+	unknown := &Composition{variant: compositionVariant("weird"), cards: []Card{joker()}}
+	if unknown.assignJokers() {
+		t.Fatal("assignJokers() = true; want false for unknown variant")
+	}
+}
+
+func TestCompositionAssignSetJokersRejectsNoMissingSuit(t *testing.T) {
+	comp := &Composition{variant: set, cards: []Card{card(Ten, Hearts), card(Ten, Diamonds), card(Ten, Clubs), card(Ten, Spades), joker()}}
+
+	if comp.assignSetJokers() {
+		t.Fatal("assignSetJokers() = true; want false")
+	}
+}
+
+func TestCompositionAssignRunJokersRejectsUnfillableRun(t *testing.T) {
+	comp := &Composition{variant: run, cards: []Card{card(Two, Hearts), joker(), card(Six, Hearts)}}
+
+	if comp.assignRunJokers() {
+		t.Fatal("assignRunJokers() = true; want false")
+	}
+}
+
+func TestMissingSetCardsRejectsFullyUsedSuits(t *testing.T) {
+	if options, ok := missingSetCards(Ten, map[Suit]bool{Hearts: true, Diamonds: true, Clubs: true, Spades: true}); ok || options != nil {
+		t.Fatalf("missingSetCards() = (%v, %v); want (nil, false)", options, ok)
+	}
+}
+
+func TestTryFitSequenceRejectsInvalidAllJokerLengthsAndOverflow(t *testing.T) {
+	if replacements, ok := tryFitSequence(nil, 2, false); ok || replacements != nil {
+		t.Fatalf("tryFitSequence() = (%v, %v); want (nil, false)", replacements, ok)
+	}
+	if replacements, ok := tryFitSequence(nil, 15, false); ok || replacements != nil {
+		t.Fatalf("tryFitSequence() = (%v, %v); want (nil, false)", replacements, ok)
+	}
+	if replacements, ok := tryFitSequence([]Card{card(Ace, Hearts), card(Ace, Hearts)}, 13, false); ok || replacements != nil {
+		t.Fatalf("tryFitSequence() = (%v, %v); want (nil, false)", replacements, ok)
+	}
+}
+
+func TestJokerRepresentationsRejectsInvalidRequests(t *testing.T) {
+	comp := mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))
+
+	if got, ok := comp.JokerRepresentations(-1); ok || got != nil {
+		t.Fatalf("JokerRepresentations(-1) = (%v, %v); want (nil, false)", got, ok)
+	}
+	if got, ok := comp.JokerRepresentations(0); ok || got != nil {
+		t.Fatalf("JokerRepresentations(0) = (%v, %v); want (nil, false)", got, ok)
+	}
+
+	broken := &Composition{variant: run, cards: []Card{card(Five, Hearts), joker(), card(Seven, Hearts)}, jokerRepresentations: map[int][]Card{}}
+	if got, ok := broken.JokerRepresentations(1); ok || got != nil {
+		t.Fatalf("JokerRepresentations(1) = (%v, %v); want (nil, false)", got, ok)
+	}
+}
+
+func TestSequenceRankToCardRank(t *testing.T) {
+	if got := sequenceRankToCardRank(14); got != Ace {
+		t.Fatalf("sequenceRankToCardRank(14) = %v; want Ace", got)
+	}
+	if got := sequenceRankToCardRank(5); got != Five {
+		t.Fatalf("sequenceRankToCardRank(5) = %v; want Five", got)
+	}
+}

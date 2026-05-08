@@ -2336,3 +2336,921 @@ func TestGameStateDiscardFromHandRejectsInvalidIndex(t *testing.T) {
 		t.Errorf("state.turn.playerIndex = %d; want 0", state.turn.playerIndex)
 	}
 }
+
+func TestGameStateAddPlayerRejectsDuplicatePlayer(t *testing.T) {
+	state := NewGameState()
+	player := NewPlayer()
+
+	if err := state.AddPlayer(player); err != nil {
+		t.Fatalf("AddPlayer() error = %v", err)
+	}
+
+	err := state.AddPlayer(player)
+
+	if !errors.Is(err, ErrPlayerExists) {
+		t.Fatalf("AddPlayer() error = %v; want %v", err, ErrPlayerExists)
+	}
+	if len(state.players) != 1 {
+		t.Fatalf("len(state.players) = %d; want 1", len(state.players))
+	}
+}
+
+func TestGameStateAddPlayerRejectsWhenGameIsFull(t *testing.T) {
+	state := NewGameState()
+	for range state.maxPlayers {
+		if err := state.AddPlayer(NewPlayer()); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+
+	err := state.AddPlayer(NewPlayer())
+
+	if !errors.Is(err, ErrGameFull) {
+		t.Fatalf("AddPlayer() error = %v; want %v", err, ErrGameFull)
+	}
+	if len(state.players) != state.maxPlayers {
+		t.Fatalf("len(state.players) = %d; want %d", len(state.players), state.maxPlayers)
+	}
+}
+
+func TestGameStateAddPlayerRejectsAfterGameStarts(t *testing.T) {
+	state := NewGameState()
+	players := []*Player{NewPlayer(), NewPlayer()}
+	for _, player := range players {
+		if err := state.AddPlayer(player); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+	if err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0); err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+
+	err := state.AddPlayer(NewPlayer())
+
+	if !errors.Is(err, ErrGameInProgress) {
+		t.Fatalf("AddPlayer() error = %v; want %v", err, ErrGameInProgress)
+	}
+}
+
+func TestGameStateStartGameRejectsAlreadyStartedGame(t *testing.T) {
+	state := NewGameState()
+	players := []*Player{NewPlayer(), NewPlayer()}
+	for _, player := range players {
+		if err := state.AddPlayer(player); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+	if err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0); err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+
+	err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealRoundRobin, nil, 0)
+
+	if !errors.Is(err, ErrGameInProgress) {
+		t.Fatalf("StartGame() error = %v; want %v", err, ErrGameInProgress)
+	}
+}
+
+func TestGameStateStartGameRequiresAtLeastTwoPlayers(t *testing.T) {
+	state := NewGameState()
+	if err := state.AddPlayer(NewPlayer()); err != nil {
+		t.Fatalf("AddPlayer() error = %v", err)
+	}
+
+	err := state.StartGame(0, 0, DealRoundRobin, nil, 0)
+
+	if !errors.Is(err, ErrNotEnoughPlayers) {
+		t.Fatalf("StartGame() error = %v; want %v", err, ErrNotEnoughPlayers)
+	}
+}
+
+func TestGameStateStartGameRejectsInvalidDealingType(t *testing.T) {
+	state := NewGameState()
+	players := []*Player{NewPlayer(), NewPlayer()}
+	for _, player := range players {
+		if err := state.AddPlayer(player); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+
+	err := state.StartGame(twoPlayerDealerIndex, twoPlayerChooserIndex, DealTypes(99), nil, 0)
+
+	if !errors.Is(err, ErrInvalidDealingType) {
+		t.Fatalf("StartGame() error = %v; want %v", err, ErrInvalidDealingType)
+	}
+}
+
+func TestGameStateStartGameRejectsInvalidBlockOrder(t *testing.T) {
+	state := NewGameState()
+	for range 3 {
+		if err := state.AddPlayer(NewPlayer()); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+
+	err := state.StartGame(1, 0, DealInBlocks, []int{2, 2, 1}, 0)
+
+	if !errors.Is(err, ErrInvalidDealingOrder) {
+		t.Fatalf("StartGame() error = %v; want %v", err, ErrInvalidDealingOrder)
+	}
+}
+
+func TestGameStateDrawFromDiscardRequiresGameInProgress(t *testing.T) {
+	state := NewGameState()
+
+	err := state.DrawFromDiscard()
+
+	if !errors.Is(err, ErrGameNotInProgress) {
+		t.Fatalf("DrawFromDiscard() error = %v; want %v", err, ErrGameNotInProgress)
+	}
+}
+
+func TestGameStateDrawFromDiscardRejectsSecondDrawSameTurn(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Two, Clubs),
+		card(Ace, Clubs),
+	}
+	state.discardPile = &CardPile{cards: []Card{card(Ten, Hearts)}}
+
+	if err := state.DrawFromDiscard(); err != nil {
+		t.Fatalf("first DrawFromDiscard() error = %v", err)
+	}
+
+	err := state.DrawFromDiscard()
+
+	if !errors.Is(err, ErrPlayerAlreadyDrew) {
+		t.Fatalf("second DrawFromDiscard() error = %v; want %v", err, ErrPlayerAlreadyDrew)
+	}
+}
+
+func TestGameStateDrawFromDiscardRejectsEmptyDiscardPile(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+	}
+
+	err := state.DrawFromDiscard()
+
+	if !errors.Is(err, ErrCannotTakeDiscardCard) {
+		t.Fatalf("DrawFromDiscard() error = %v; want %v", err, ErrCannotTakeDiscardCard)
+	}
+}
+
+func TestGameStatePlayTableRejectsEmptyActionSet(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+
+	err := state.PlayTable(nil, nil)
+
+	if !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("PlayTable() error = %v; want %v", err, ErrInvalidComposition)
+	}
+}
+
+func TestGameStateDiscardFromHandRejectsEndingTurnBeforeUsingTakenDiscardCard(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(King, Hearts),
+		card(King, Diamonds),
+		card(King, Clubs),
+		card(Two, Clubs),
+	}
+	state.discardPile = &CardPile{cards: []Card{card(Ten, Hearts)}}
+	state.activeCompositions = []*Composition{mustRun(t,
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+	)}
+
+	if err := state.DrawFromDiscard(); err != nil {
+		t.Fatalf("DrawFromDiscard() error = %v", err)
+	}
+	if err := state.PlayCompositions([]*Composition{mustSet(t,
+		card(King, Hearts),
+		card(King, Diamonds),
+		card(King, Clubs),
+	)}); err != nil {
+		t.Fatalf("PlayCompositions() error = %v", err)
+	}
+
+	err := state.DiscardFromHand(indexOfCard(state.players[0].hand.cards, card(Ace, Clubs)))
+
+	if !errors.Is(err, ErrMustUseDrawnDiscardCard) {
+		t.Fatalf("DiscardFromHand() error = %v; want %v", err, ErrMustUseDrawnDiscardCard)
+	}
+	if len(state.players[0].hand.cards) != 2 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 2", len(state.players[0].hand.cards))
+	}
+	if len(state.discardPile.cards) != 0 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 0", len(state.discardPile.cards))
+	}
+}
+
+func TestGameStateDiscardFromHandAllowsTurnToEndAfterUsingTakenDiscardCardInNewComposition(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Two, Clubs),
+		card(Ace, Clubs),
+	}
+	state.discardPile = &CardPile{cards: []Card{card(Ten, Hearts)}}
+	state.drawPile = &CardPile{cards: []Card{card(Four, Spades)}}
+	state.players[1].hand.cards = []Card{card(Ace, Spades)}
+
+	if err := state.DrawFromDiscard(); err != nil {
+		t.Fatalf("DrawFromDiscard() error = %v", err)
+	}
+	if err := state.PlayCompositions([]*Composition{mustRun(t,
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+	)}); err != nil {
+		t.Fatalf("PlayCompositions() error = %v", err)
+	}
+
+	err := state.DiscardFromHand(indexOfCard(state.players[0].hand.cards, card(Ace, Clubs)))
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
+	}
+	if len(state.discardPile.cards) != 1 || !cardsEqual(state.discardPile.cards[0], card(Ace, Clubs)) {
+		t.Fatalf("discard pile top = %+v; want %+v", state.discardPile.cards, card(Ace, Clubs))
+	}
+}
+
+func TestGameStateDiscardFromHandAllowsTurnToEndAfterUsingTakenDiscardCardInAddition(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Jack, Hearts),
+		card(Two, Clubs),
+		card(Ace, Clubs),
+	}
+	state.discardPile = &CardPile{cards: []Card{card(Ten, Hearts)}}
+	state.drawPile = &CardPile{cards: []Card{card(Four, Spades)}}
+	state.players[1].hand.cards = []Card{card(Ace, Spades)}
+	state.activeCompositions = []*Composition{mustRun(t,
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+	)}
+
+	if err := state.DrawFromDiscard(); err != nil {
+		t.Fatalf("DrawFromDiscard() error = %v", err)
+	}
+	if err := state.AddToCompositions([]CompositionAddition{{
+		CompositionIndex: 0,
+		Cards:            []Card{card(Ten, Hearts), card(Jack, Hearts)},
+	}}); err != nil {
+		t.Fatalf("AddToCompositions() error = %v", err)
+	}
+
+	err := state.DiscardFromHand(indexOfCard(state.players[0].hand.cards, card(Ace, Clubs)))
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
+	}
+}
+
+func TestGameStateDiscardFromHandAllowsTurnToEndAfterUsingTakenDiscardCardInReclaim(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{card(Two, Clubs)}
+	state.discardPile = &CardPile{cards: []Card{card(Six, Hearts)}}
+	state.players[1].hand.cards = []Card{card(Ace, Spades)}
+	state.activeCompositions = []*Composition{mustRun(t,
+		card(Five, Hearts),
+		joker(),
+		card(Seven, Hearts),
+	)}
+
+	if err := state.DrawFromDiscard(); err != nil {
+		t.Fatalf("DrawFromDiscard() error = %v", err)
+	}
+	if err := state.PlayTable(nil, nil, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       1,
+		ReplacementCard:  card(Six, Hearts),
+	}); err != nil {
+		t.Fatalf("PlayTable() error = %v", err)
+	}
+
+	err := state.DiscardFromHand(indexOfCard(state.players[0].hand.cards, card(Two, Clubs)))
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
+	}
+}
+
+func TestGameStateDrawFromDeckPropagatesCurrentPlayerError(t *testing.T) {
+	state := NewGameState()
+	state.phase = PhaseInProgress
+
+	err := state.DrawFromDeck()
+
+	if !errors.Is(err, ErrNoPlayers) {
+		t.Fatalf("DrawFromDeck() error = %v; want %v", err, ErrNoPlayers)
+	}
+}
+
+func TestGameStateDrawFromDiscardPropagatesCurrentPlayerError(t *testing.T) {
+	state := NewGameState()
+	state.phase = PhaseInProgress
+
+	err := state.DrawFromDiscard()
+
+	if !errors.Is(err, ErrNoPlayers) {
+		t.Fatalf("DrawFromDiscard() error = %v; want %v", err, ErrNoPlayers)
+	}
+}
+
+func TestGameStatePlayTableRequiresGameInProgress(t *testing.T) {
+	state := NewGameState()
+
+	err := state.PlayTable([]*Composition{mustSet(t, card(King, Hearts), card(King, Diamonds), card(King, Clubs))}, nil)
+
+	if !errors.Is(err, ErrGameNotInProgress) {
+		t.Fatalf("PlayTable() error = %v; want %v", err, ErrGameNotInProgress)
+	}
+}
+
+func TestGameStatePlayTablePropagatesCurrentPlayerError(t *testing.T) {
+	state := NewGameState()
+	state.phase = PhaseInProgress
+	state.turn.hasDrawn = true
+
+	err := state.PlayTable([]*Composition{mustSet(t, card(King, Hearts), card(King, Diamonds), card(King, Clubs))}, nil)
+
+	if !errors.Is(err, ErrNoPlayers) {
+		t.Fatalf("PlayTable() error = %v; want %v", err, ErrNoPlayers)
+	}
+}
+
+func TestGameStateDiscardFromHandRequiresGameInProgress(t *testing.T) {
+	state := NewGameState()
+
+	err := state.DiscardFromHand(0)
+
+	if !errors.Is(err, ErrGameNotInProgress) {
+		t.Fatalf("DiscardFromHand() error = %v; want %v", err, ErrGameNotInProgress)
+	}
+}
+
+func TestGameStateDiscardFromHandPropagatesCurrentPlayerError(t *testing.T) {
+	state := NewGameState()
+	state.phase = PhaseInProgress
+	state.turn.hasDrawn = true
+
+	err := state.DiscardFromHand(0)
+
+	if !errors.Is(err, ErrNoPlayers) {
+		t.Fatalf("DiscardFromHand() error = %v; want %v", err, ErrNoPlayers)
+	}
+}
+
+func TestFinishRoundIfSpecialWinRejectsInvalidPlayerAndNonWinningHands(t *testing.T) {
+	state := newTurnTestState()
+	if state.finishRoundIfSpecialWin(-1) {
+		t.Fatal("finishRoundIfSpecialWin(-1) = true; want false")
+	}
+
+	state.players[0] = nil
+	if state.finishRoundIfSpecialWin(0) {
+		t.Fatal("finishRoundIfSpecialWin(nil player) = true; want false")
+	}
+
+	state.players[0] = NewPlayer()
+	state.players[0].hand.cards = []Card{card(Ace, Hearts)}
+	if state.finishRoundIfSpecialWin(0) {
+		t.Fatal("finishRoundIfSpecialWin(non-special hand) = true; want false")
+	}
+}
+
+func TestApplyOverHundredAdjustmentWithoutSafePlayersDoesNothing(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].totalPoints = 101
+	state.players[1].totalPoints = 150
+
+	state.applyOverHundredAdjustment()
+
+	if state.players[0].totalPoints != 101 || state.players[1].totalPoints != 150 {
+		t.Fatalf("totals changed unexpectedly: %d %d", state.players[0].totalPoints, state.players[1].totalPoints)
+	}
+}
+
+func TestHasSameSuitCollectionRejectsWrongLengthAndJoker(t *testing.T) {
+	if hasSameSuitCollection([]Card{card(Ace, Hearts)}) {
+		t.Fatal("hasSameSuitCollection() = true; want false for wrong length")
+	}
+	hand := sameSuitCollectionHand(Hearts)
+	hand[0] = joker()
+	if hasSameSuitCollection(hand) {
+		t.Fatal("hasSameSuitCollection() = true; want false for joker")
+	}
+}
+
+func TestHasSixIdenticalPairsRejectsWrongLengthAndBadCounts(t *testing.T) {
+	if hasSixIdenticalPairs([]Card{card(Ace, Hearts)}) {
+		t.Fatal("hasSixIdenticalPairs() = true; want false for wrong length")
+	}
+	bad := []Card{
+		card(Two, Hearts), card(Two, Hearts),
+		card(Three, Hearts), card(Three, Hearts),
+		card(Four, Hearts), card(Four, Hearts),
+		card(Five, Hearts), card(Five, Hearts),
+		card(Six, Hearts), card(Six, Hearts),
+		card(Seven, Hearts), card(Eight, Hearts),
+	}
+	if hasSixIdenticalPairs(bad) {
+		t.Fatal("hasSixIdenticalPairs() = true; want false for unmatched final pair")
+	}
+}
+
+func TestRemoveCompletedCompositionsToDiscardKeepsNilComposition(t *testing.T) {
+	state := newTurnTestState()
+	state.activeCompositions = []*Composition{nil}
+
+	state.removeCompletedCompositionsToDiscard()
+
+	if len(state.activeCompositions) != 1 || state.activeCompositions[0] != nil {
+		t.Fatalf("active compositions = %+v; want single nil entry", state.activeCompositions)
+	}
+}
+
+func TestStartNextRoundPropagatesStartRoundError(t *testing.T) {
+	state := NewGameState()
+	for range 2 {
+		if err := state.AddPlayer(NewPlayer()); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+	state.phase = PhaseRoundOver
+
+	err := state.StartNextRound(DealInBlocks, nil, 0)
+
+	if !errors.Is(err, ErrInvalidDealingOrder) {
+		t.Fatalf("StartNextRound() error = %v; want %v", err, ErrInvalidDealingOrder)
+	}
+}
+
+func TestStartRoundRejectsBlockOrderWithoutOrder(t *testing.T) {
+	state := NewGameState()
+	for range 2 {
+		if err := state.AddPlayer(NewPlayer()); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+	}
+
+	err := state.startRound(twoPlayerDealerIndex, twoPlayerChooserIndex, DealInBlocks, nil, 0)
+
+	if !errors.Is(err, ErrInvalidDealingOrder) {
+		t.Fatalf("startRound() error = %v; want %v", err, ErrInvalidDealingOrder)
+	}
+}
+
+func TestStartDiscardPileFailsWhenDrawPileEmpty(t *testing.T) {
+	state := NewGameState()
+	state.drawPile = &CardPile{}
+
+	err := state.startDiscardPile()
+
+	if !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
+		t.Fatalf("startDiscardPile() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)
+	}
+}
+
+func TestResetRoundStateUsesFreshDeckAndSkipsNilPlayers(t *testing.T) {
+	state := NewGameState()
+	player := NewPlayer()
+	player.hasOpened = true
+	player.hand.cards = []Card{card(Ace, Hearts)}
+	state.players = []*Player{player, nil}
+
+	state.resetRoundState(nil)
+
+	if len(state.drawPile.cards) != 108 {
+		t.Fatalf("len(state.drawPile.cards) = %d; want 108", len(state.drawPile.cards))
+	}
+	if player.hasOpened {
+		t.Fatal("player.hasOpened = true; want false")
+	}
+	if len(player.hand.cards) != 0 {
+		t.Fatalf("len(player.hand.cards) = %d; want 0", len(player.hand.cards))
+	}
+}
+
+func TestCurrentPlayerCanReturnNilPlayer(t *testing.T) {
+	state := NewGameState()
+	state.players = []*Player{nil}
+
+	player, err := state.CurrentPlayer()
+
+	if err != nil {
+		t.Fatalf("CurrentPlayer() error = %v", err)
+	}
+	if player != nil {
+		t.Fatalf("CurrentPlayer() = %v; want nil", player)
+	}
+}
+
+func TestDealRoundRobinRejectsShortPileAndInvalidDealer(t *testing.T) {
+	players := []*Player{NewPlayer(), NewPlayer()}
+
+	if err := dealRoundRobin(players, &CardPile{cards: []Card{}}, 0, 0); !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
+		t.Fatalf("dealRoundRobin() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)
+	}
+	if err := dealRoundRobin(players, orderedGameDeck(blockDealSetup([]int{0, 1}, [][]Card{sameSuitCollectionHand(Hearts), sameSuitCollectionHand(Clubs)}, card(Ace, Spades))...), 2, 0); !errors.Is(err, ErrInvalidDealer) {
+		t.Fatalf("dealRoundRobin() error = %v; want %v", err, ErrInvalidDealer)
+	}
+}
+
+func TestDealInBlocksRejectsShortPile(t *testing.T) {
+	players := []*Player{NewPlayer(), NewPlayer()}
+
+	err := dealInBlocks(players, &CardPile{cards: []Card{}}, []int{0, 1})
+
+	if !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
+		t.Fatalf("dealInBlocks() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)
+	}
+}
+
+func TestValidateOrderRejectsShortAndOutOfRangeOrders(t *testing.T) {
+	if validateOrder([]int{0}, 2) {
+		t.Fatal("validateOrder() = true; want false for short order")
+	}
+	if validateOrder([]int{0, 2}, 2) {
+		t.Fatal("validateOrder() = true; want false for out-of-range index")
+	}
+}
+
+func TestHasSixIdenticalPairsRejectsSevenDistinctCards(t *testing.T) {
+	bad := []Card{
+		card(Two, Hearts), card(Two, Hearts),
+		card(Three, Hearts), card(Three, Hearts),
+		card(Four, Hearts), card(Four, Hearts),
+		card(Five, Hearts), card(Five, Hearts),
+		card(Six, Hearts), card(Six, Hearts),
+		card(Seven, Hearts), card(Seven, Hearts),
+	}
+	bad[11] = card(Eight, Hearts)
+
+	if hasSixIdenticalPairs(bad) {
+		t.Fatal("hasSixIdenticalPairs() = true; want false when distinct count != 6")
+	}
+}
+
+func TestHasSixIdenticalPairsRejectsTripleCount(t *testing.T) {
+	bad := []Card{
+		card(Two, Hearts), card(Two, Hearts), card(Two, Hearts),
+		card(Three, Hearts), card(Three, Hearts),
+		card(Four, Hearts), card(Four, Hearts),
+		card(Five, Hearts), card(Five, Hearts),
+		card(Six, Hearts), card(Six, Hearts),
+		card(Seven, Hearts),
+	}
+
+	if hasSixIdenticalPairs(bad) {
+		t.Fatal("hasSixIdenticalPairs() = true; want false when one count != 2")
+	}
+}
+
+func TestStartDiscardPileSuccess(t *testing.T) {
+	state := NewGameState()
+	state.drawPile = &CardPile{cards: []Card{card(Ace, Hearts)}}
+
+	if err := state.startDiscardPile(); err != nil {
+		t.Fatalf("startDiscardPile() error = %v", err)
+	}
+	if len(state.discardPile.cards) != 1 || !cardsEqual(state.discardPile.cards[0], card(Ace, Hearts)) {
+		t.Fatalf("discard pile = %+v; want Ace of Hearts", state.discardPile.cards)
+	}
+}
+
+func TestSelectFirstPlayerSuccess(t *testing.T) {
+	state := NewGameState()
+	state.players = []*Player{NewPlayer(), NewPlayer(), NewPlayer()}
+	state.dealerIndex = 1
+
+	if err := state.SelectFirstPlayer(); err != nil {
+		t.Fatalf("SelectFirstPlayer() error = %v", err)
+	}
+	if state.turn.playerIndex != 2 {
+		t.Fatalf("state.turn.playerIndex = %d; want 2", state.turn.playerIndex)
+	}
+}
+
+func TestCanTakeDiscardNowRejectsBaseStateFailure(t *testing.T) {
+	state := NewGameState()
+	state.phase = PhaseInProgress
+	state.discardPile = &CardPile{cards: []Card{card(Ace, Hearts)}}
+
+	if state.canTakeDiscardNow() {
+		t.Fatal("canTakeDiscardNow() = true; want false")
+	}
+}
+
+func TestCanTakeDiscardNowAllowsDiscardViaReclaimSearch(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{card(Two, Clubs)}
+	state.discardPile = &CardPile{cards: []Card{card(Six, Hearts)}}
+	state.activeCompositions = []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts)), nil}
+
+	if !state.canTakeDiscardNow() {
+		t.Fatal("canTakeDiscardNow() = false; want true")
+	}
+
+	state.activeCompositions = []*Composition{nil, mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts)), mustRun(t, card(Seven, Clubs), card(Eight, Clubs), card(Nine, Clubs))}
+	if !state.canTakeDiscardNow() {
+		t.Fatal("canTakeDiscardNow() = false; want true with nil and non-joker compositions present")
+	}
+
+	state.players[0].hand.cards = []Card{card(Two, Clubs)}
+	state.discardPile = &CardPile{cards: []Card{card(Six, Clubs)}}
+	state.activeCompositions = []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))}
+	if state.canTakeDiscardNow() {
+		t.Fatal("canTakeDiscardNow() = true; want false when reclaim replacement is invalid")
+	}
+}
+
+func TestHasLegalPlayWithDiscardAndSearchSupportCandidates(t *testing.T) {
+	base := tablePlayState{
+		handCards:          []Card{card(King, Hearts), card(King, Diamonds), card(Ten, Hearts)},
+		activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+		hasOpened:          true,
+	}
+	scratch := searchScratch{maskCards: make([]Card, 0, 8), combinedBuf: make([]Card, 0, 14)}
+	discardMask := uint32(1 << 2)
+
+	if !hasLegalPlayWithDiscard(base, discardMask, scratch, nil) {
+		t.Fatal("hasLegalPlayWithDiscard() = false; want true")
+	}
+	if hasLegalPlayWithDiscard(base, discardMask, scratch, &tablePlayCandidate{usedMask: discardMask, reclaim: &JokerReclaim{CompositionIndex: 0, JokerIndex: 0, ReplacementCard: card(Two, Clubs)}, usesDiscard: true}) {
+		t.Fatal("hasLegalPlayWithDiscard() = true; want false for invalid reclaim candidate")
+	}
+	if !searchSupportCandidates(tablePlayState{
+		handCards:          []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs), card(Two, Clubs)},
+		hasOpened:          true,
+		activeCompositions: nil,
+	}, 1<<3, 1, 0, nil, nil, nil, nil, scratch) {
+		t.Fatal("searchSupportCandidates() = false; want true")
+	}
+	if !searchSupportCandidates(tablePlayState{
+		handCards:          []Card{card(Ten, Hearts), card(Jack, Hearts), card(Two, Clubs), card(Ace, Spades)},
+		hasOpened:          true,
+		activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+	}, 1<<3, 1, 0, nil, nil, nil, nil, scratch) {
+		t.Fatal("searchSupportCandidates() = false; want true for addition path")
+	}
+	if hasLegalPlayWithDiscard(tablePlayState{
+		handCards:          []Card{card(Two, Clubs), card(Three, Diamonds), card(Five, Spades)},
+		hasOpened:          true,
+		activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+	}, 1<<2, scratch, nil) {
+		t.Fatal("hasLegalPlayWithDiscard() = true; want false")
+	}
+	if hasLegalPlayWithDiscard(tablePlayState{
+		handCards: []Card{
+			card(Seven, Hearts),
+			card(Seven, Diamonds),
+			card(Seven, Clubs),
+		},
+		hasOpened:          false,
+		activeCompositions: nil,
+	}, 1<<2, scratch, nil) {
+		t.Fatal("hasLegalPlayWithDiscard() = true; want false after composition search backtracking")
+	}
+	if searchSupportCandidates(tablePlayState{
+		handCards:          []Card{card(Ten, Hearts), card(Ace, Clubs)},
+		hasOpened:          false,
+		activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+	}, 1<<1, 1, 0, nil, nil, nil, nil, scratch) {
+		t.Fatal("searchSupportCandidates() = true; want false after addition search backtracking")
+	}
+
+	reclaim := tablePlayCandidate{usedMask: discardMask, reclaim: &JokerReclaim{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Six, Hearts)}, usesDiscard: true}
+	reclaimBase := tablePlayState{
+		handCards:          []Card{card(Six, Hearts)},
+		activeCompositions: []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))},
+		hasOpened:          true,
+	}
+	if !hasLegalPlayWithDiscard(reclaimBase, 1, searchScratch{maskCards: make([]Card, 0, 4), combinedBuf: make([]Card, 0, 14)}, &reclaim) {
+		t.Fatal("hasLegalPlayWithDiscard(reclaim) = false; want true")
+	}
+	if hasLegalPlayWithDiscard(base, discardMask, scratch, &tablePlayCandidate{usedMask: discardMask, reclaim: &JokerReclaim{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Two, Clubs)}, usesDiscard: true}) {
+		t.Fatal("hasLegalPlayWithDiscard(reclaim) = true; want false")
+	}
+}
+
+func TestCanTakeDiscardNowTraversesNilAndReclaimPaths(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{card(Two, Clubs)}
+	state.discardPile = &CardPile{cards: []Card{card(Ten, Spades)}}
+	state.activeCompositions = []*Composition{
+		nil,
+		mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), card(Ten, Clubs), joker()),
+	}
+
+	if !state.canTakeDiscardNow() {
+		t.Fatal("canTakeDiscardNow() = false; want true after nil skip and reclaim traversal")
+	}
+}
+
+func TestSearchSupportCandidatesRecursiveAdditionPath(t *testing.T) {
+	scratch := searchScratch{maskCards: make([]Card, 0, 8), combinedBuf: make([]Card, 0, 14)}
+	base := tablePlayState{
+		handCards: []Card{
+			card(Ten, Hearts),
+			card(King, Hearts),
+			card(King, Diamonds),
+			card(King, Clubs),
+			card(Ace, Clubs),
+		},
+		hasOpened:          false,
+		activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+	}
+
+	if !searchSupportCandidates(base, 1<<4, 1, 0, nil, nil, nil, nil, scratch) {
+		t.Fatal("searchSupportCandidates() = false; want true via recursive addition path")
+	}
+}
+
+func TestHasLegalPlayWithDiscardBacktracksInvalidOpeningComposition(t *testing.T) {
+	scratch := searchScratch{maskCards: make([]Card, 0, 8), combinedBuf: make([]Card, 0, 14)}
+	base := tablePlayState{
+		handCards: []Card{
+			card(Seven, Hearts),
+			card(Seven, Diamonds),
+			card(Two, Clubs),
+			card(Seven, Clubs),
+		},
+		hasOpened:          false,
+		activeCompositions: nil,
+	}
+
+	if hasLegalPlayWithDiscard(base, 1<<3, scratch, nil) {
+		t.Fatal("hasLegalPlayWithDiscard() = true; want false after backtracking invalid opening composition")
+	}
+}
+
+func TestValidateTablePlayBranches(t *testing.T) {
+	scratch := searchScratch{maskCards: make([]Card, 0, 8), combinedBuf: make([]Card, 0, 14)}
+	base := tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs)}, hasOpened: true}
+
+	if validateTablePlay(base, nil, nil, nil, nil, 0, false, scratch) {
+		t.Fatal("validateTablePlay() = true; want false without discard play")
+	}
+	if validateTablePlay(base, nil, nil, nil, nil, 0, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false with no actions")
+	}
+	if validateTablePlay(base, []uint32{0b111}, []compositionVariant{compositionVariant("bad")}, nil, nil, 0b111, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for invalid composition variant")
+	}
+
+	reclaimBase := tablePlayState{handCards: []Card{card(Six, Hearts)}, activeCompositions: []*Composition{nil, mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))}, hasOpened: true}
+	if validateTablePlay(reclaimBase, nil, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 0, ReplacementCard: card(Six, Hearts)}}, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for nil reclaim target")
+	}
+	if validateTablePlay(reclaimBase, nil, nil, nil, []JokerReclaim{{CompositionIndex: -1, JokerIndex: 0, ReplacementCard: card(Six, Hearts)}}, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for invalid reclaim index")
+	}
+	if validateTablePlay(reclaimBase, nil, nil, nil, []JokerReclaim{{CompositionIndex: 1, JokerIndex: 1, ReplacementCard: card(Two, Clubs)}}, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for invalid reclaim card")
+	}
+
+	additionBase := tablePlayState{handCards: []Card{card(Ten, Hearts), card(Jack, Hearts), card(Ace, Clubs)}, activeCompositions: []*Composition{nil, mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))}, hasOpened: true}
+	if validateTablePlay(additionBase, nil, nil, []selectedAddition{{compositionIndex: 0, mask: 1}}, nil, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for nil addition target")
+	}
+	if validateTablePlay(additionBase, nil, nil, []selectedAddition{{compositionIndex: -1, mask: 1}}, nil, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for invalid addition index")
+	}
+	if validateTablePlay(additionBase, nil, nil, []selectedAddition{{compositionIndex: 1, mask: 0}}, nil, 0, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for empty addition cards")
+	}
+	if validateTablePlay(additionBase, nil, nil, []selectedAddition{{compositionIndex: 1, mask: 0b101}}, nil, 0b101, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false for invalid single-card addition")
+	}
+
+	closedBase := tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs)}, hasOpened: false}
+	if validateTablePlay(closedBase, nil, nil, []selectedAddition{{compositionIndex: 0, mask: 1}}, nil, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false without opening composition")
+	}
+	if validateTablePlay(tablePlayState{handCards: []Card{card(Seven, Hearts), card(Seven, Diamonds), card(Seven, Clubs), card(Two, Clubs)}, hasOpened: false}, []uint32{0b111}, []compositionVariant{set}, nil, nil, 0b111, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false below 40 points")
+	}
+	if validateTablePlay(tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs)}, hasOpened: true}, []uint32{0b111}, []compositionVariant{set}, nil, nil, 0b111, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false when no discard remains")
+	}
+	if !validateTablePlay(tablePlayState{
+		handCards:          []Card{card(Six, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Ace, Clubs)},
+		activeCompositions: []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts)), mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+		hasOpened:          true,
+	}, nil, nil, []selectedAddition{{compositionIndex: 1, mask: 0b110}}, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Six, Hearts)}}, 0b111, true, scratch) {
+		t.Fatal("validateTablePlay() = false; want true for combined reclaim and addition")
+	}
+	if !validateTablePlay(tablePlayState{
+		handCards:          []Card{card(Six, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts), card(Ace, Clubs)},
+		activeCompositions: []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts)), mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
+		hasOpened:          true,
+	}, nil, nil, []selectedAddition{{compositionIndex: 1, mask: 0b00110}, {compositionIndex: 1, mask: 0b01000}}, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Six, Hearts)}}, 0b01111, true, scratch) {
+		t.Fatal("validateTablePlay() = false; want true for repeated composition updates")
+	}
+}
+
+func TestDiscardSearchBaseStateAndTablePlayUsesCard(t *testing.T) {
+	state := NewGameState()
+	state.discardPile = &CardPile{cards: []Card{card(Ace, Hearts)}}
+	if _, ok := state.discardSearchBaseState(); ok {
+		t.Fatal("discardSearchBaseState() ok = true; want false")
+	}
+
+	state.players = []*Player{NewPlayer()}
+	state.players[0].hand.cards = []Card{card(Two, Clubs)}
+	base, ok := state.discardSearchBaseState()
+	if !ok || len(base.handCards) != 2 {
+		t.Fatalf("discardSearchBaseState() = (%+v, %v); want hand with discard appended", base, ok)
+	}
+
+	if tablePlayUsesCard([]*Composition{nil}, []CompositionAddition{{Cards: []Card{card(Three, Hearts)}}}, nil, card(Four, Hearts)) {
+		t.Fatal("tablePlayUsesCard() = true; want false")
+	}
+	if !tablePlayUsesCard([]*Composition{mustSet(t, card(King, Hearts), card(King, Diamonds), card(King, Clubs))}, nil, nil, card(King, Diamonds)) {
+		t.Fatal("tablePlayUsesCard() = false; want true for composition")
+	}
+	if !tablePlayUsesCard(nil, []CompositionAddition{{Cards: []Card{card(Ten, Hearts)}}}, nil, card(Ten, Hearts)) {
+		t.Fatal("tablePlayUsesCard() = false; want true for addition")
+	}
+	if !tablePlayUsesCard(nil, nil, []JokerReclaim{{ReplacementCard: card(Six, Hearts)}}, card(Six, Hearts)) {
+		t.Fatal("tablePlayUsesCard() = false; want true for reclaim")
+	}
+}
+
+func TestApplyTablePlayStateErrorBranches(t *testing.T) {
+	baseState := tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs), card(Two, Clubs)}, activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))}}
+
+	if _, err := applyTablePlayState(baseState, []*Composition{nil}, nil, nil); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(baseState, []*Composition{{variant: compositionVariant("bad"), cards: []Card{card(Ace, Hearts), card(Ace, Diamonds), card(Ace, Clubs)}}}, nil, nil); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(baseState, nil, nil, []JokerReclaim{{CompositionIndex: -1, JokerIndex: 0, ReplacementCard: card(Six, Hearts)}}); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Six, Hearts), card(Two, Clubs)}, activeCompositions: []*Composition{nil}}, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 0, ReplacementCard: card(Six, Hearts)}}); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Two, Clubs)}, activeCompositions: []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))}}, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Two, Clubs)}}); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+
+	if _, err := applyTablePlayState(baseState, nil, []CompositionAddition{{CompositionIndex: 0}}, nil); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(baseState, nil, []CompositionAddition{{CompositionIndex: -1, Cards: []Card{card(Ten, Hearts)}}}, nil); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Ten, Hearts), card(Two, Clubs)}, activeCompositions: []*Composition{nil}, hasOpened: true}, nil, []CompositionAddition{{CompositionIndex: 0, Cards: []Card{card(Ten, Hearts)}}}, nil); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Ten, Hearts), card(Queen, Hearts), card(Two, Clubs)}, activeCompositions: []*Composition{mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))}, hasOpened: true}, nil, []CompositionAddition{{CompositionIndex: 0, Cards: []Card{card(Ten, Hearts), card(Queen, Hearts)}}}, nil); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInvalidComposition)
+	}
+
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Ten, Hearts)}}, nil, nil, nil); !errors.Is(err, ErrInitialPlayRequiresOwnComp) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInitialPlayRequiresOwnComp)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Seven, Hearts), card(Seven, Diamonds), card(Seven, Clubs), card(Two, Clubs)}}, []*Composition{mustSet(t, card(Seven, Hearts), card(Seven, Diamonds), card(Seven, Clubs))}, nil, nil); !errors.Is(err, ErrInitialPointsNotMet) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrInitialPointsNotMet)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs)}, hasOpened: true}, []*Composition{mustSet(t, card(King, Hearts), card(King, Diamonds), card(King, Clubs))}, nil, nil); !errors.Is(err, ErrMustKeepDiscardCard) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrMustKeepDiscardCard)
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(Two, Clubs)}, hasOpened: true}, []*Composition{mustSet(t, card(King, Hearts), card(King, Diamonds), card(King, Clubs))}, nil, nil); !errors.Is(err, ErrCardsNotInHand) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrCardsNotInHand)
+	}
+}

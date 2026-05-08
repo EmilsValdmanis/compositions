@@ -24,9 +24,7 @@ func NewComposition(cards []Card, variant compositionVariant) (*Composition, boo
 	if !c.isValid() {
 		return nil, false
 	}
-	if !c.assignJokers() {
-		return nil, false
-	}
+	c.assignJokers()
 	return c, true
 }
 
@@ -179,10 +177,7 @@ func (c *Composition) isCompleteRun() bool {
 }
 
 func (c *Composition) setPoints() int {
-	setRank, ok := c.setRank()
-	if !ok {
-		return 0
-	}
+	setRank := c.setRank()
 
 	total := 0
 	for i, card := range c.cards {
@@ -203,14 +198,14 @@ func (c *Composition) setPoints() int {
 	return total
 }
 
-func (c *Composition) setRank() (Rank, bool) {
+func (c *Composition) setRank() Rank {
 	for _, card := range c.cards {
 		if !card.isJoker {
-			return card.rank, true
+			return card.rank
 		}
 	}
 
-	return Ace, true
+	return Ace
 }
 
 func (c *Composition) runPoints() int {
@@ -300,11 +295,8 @@ func (c *Composition) isValidSet() bool {
 	}
 
 	var realCards []Card
-	var jokerCount int
-
 	for _, card := range c.cards {
 		if card.isJoker {
-			jokerCount++
 		} else {
 			realCards = append(realCards, card)
 		}
@@ -326,12 +318,6 @@ func (c *Composition) isValidSet() bool {
 			seenSuits[card.suit] = true
 		}
 	}
-
-	missingSlots := cardCount - len(realCards)
-	if jokerCount < missingSlots {
-		return false
-	}
-
 	return true
 }
 
@@ -466,9 +452,6 @@ func tryFitSequence(realCards []Card, jokerCount int, aceLow bool) ([]Card, bool
 		replacements := make([]Card, 0, jokerCount)
 		for rank := Ace; len(replacements) < jokerCount && rank <= King; rank++ {
 			replacements = append(replacements, Card{rank: rank, suit: Hearts})
-		}
-		if len(replacements) != jokerCount {
-			return nil, false
 		}
 		return replacements, true
 	}

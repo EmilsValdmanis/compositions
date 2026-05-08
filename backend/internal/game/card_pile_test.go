@@ -43,3 +43,13 @@ func TestCardPileAddToTop(t *testing.T) {
 		t.Errorf("DrawOne() after AddToTop() = %+v; want %+v", card, top)
 	}
 }
+
+func TestCardPileString(t *testing.T) {
+	pile := &CardPile{cards: []Card{card(Ace, Hearts), joker()}}
+
+	got := pile.String()
+
+	if got != "{Rank: Ace, Suit: Hearts}\nJoker" {
+		t.Fatalf("String() = %q; want %q", got, "{Rank: Ace, Suit: Hearts}\nJoker")
+	}
+}

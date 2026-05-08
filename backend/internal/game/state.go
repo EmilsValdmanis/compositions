@@ -28,9 +28,11 @@ const (
 )
 
 type Turn struct {
-	number      int
-	playerIndex int
-	hasDrawn    bool
+	number             int
+	playerIndex        int
+	hasDrawn           bool
+	mustUseDiscardDraw bool
+	discardDrawCard    Card
 }
 
 type DealTypes int
@@ -101,6 +103,7 @@ var (
 	ErrInitialPointsNotMet         = errors.New("initial compositions must total at least 40 points")
 	ErrInitialPlayRequiresOwnComp  = errors.New("initial play requires at least one new composition")
 	ErrMustKeepDiscardCard         = errors.New("player must keep one card for the final discard")
+	ErrMustUseDrawnDiscardCard     = errors.New("player must use the drawn discard card before discarding")
 	ErrInvalidDealingType          = errors.New("invalid dealing type")
 	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
 	ErrInvalidDealer               = errors.New("invalid dealer")
@@ -154,6 +157,8 @@ func (gs *GameState) DrawFromDeck() error {
 		return ErrNotEnoughCardsInDrawPile
 	}
 	gs.turn.hasDrawn = true
+	gs.turn.mustUseDiscardDraw = false
+	gs.turn.discardDrawCard = Card{}
 	return nil
 }
 
@@ -174,11 +179,13 @@ func (gs *GameState) DrawFromDiscard() error {
 		return ErrCannotTakeDiscardCard
 	}
 
-	if !cp.hand.Draw(gs.discardPile) {
-		return ErrNotEnoughCardsInDiscardPile
-	}
+	discardCard := gs.discardPile.cards[0]
+	gs.discardPile.cards = gs.discardPile.cards[1:]
+	cp.hand.cards = append(cp.hand.cards, discardCard)
 
 	gs.turn.hasDrawn = true
+	gs.turn.mustUseDiscardDraw = true
+	gs.turn.discardDrawCard = discardCard
 	return nil
 }
 
@@ -218,7 +225,10 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 	cp.hand.cards = nextState.handCards
 	gs.activeCompositions = nextState.activeCompositions
 	cp.hasOpened = nextState.hasOpened
-	if gs.finishRoundIfSpecialWin(gs.turn.playerIndex) {
+	if gs.turn.mustUseDiscardDraw && tablePlayUsesCard(comps, additions, reclaims, gs.turn.discardDrawCard) {
+		gs.turn.mustUseDiscardDraw = false
+	}
+	if !gs.turn.mustUseDiscardDraw && gs.finishRoundIfSpecialWin(gs.turn.playerIndex) {
 		return nil
 	}
 
@@ -231,6 +241,9 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 	}
 	if !gs.turn.hasDrawn {
 		return ErrPlayerHasntDrawn
+	}
+	if gs.turn.mustUseDiscardDraw {
+		return ErrMustUseDrawnDiscardCard
 	}
 
 	cp, err := gs.CurrentPlayer()
@@ -273,6 +286,8 @@ func (gs *GameState) finishRoundIfSpecialWin(playerIndex int) bool {
 func (gs *GameState) finishRound(winnerIndex int) {
 	gs.roundWinnerIndex = winnerIndex
 	gs.turn.hasDrawn = false
+	gs.turn.mustUseDiscardDraw = false
+	gs.turn.discardDrawCard = Card{}
 
 	for i, player := range gs.players {
 		if i == winnerIndex || player == nil {
@@ -446,21 +461,15 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	if err := gs.dealInitialHands(dt, order, cutSize); err != nil {
 		return err
 	}
-	if err := gs.startDiscardPile(); err != nil {
-		return err
-	}
+	card, _ := gs.drawPile.DrawOne()
+	gs.discardPile.AddToTop(card)
 	for i, player := range gs.players {
-		if player == nil {
-			continue
-		}
 		if hasSpecialWinningHand(player.hand.cards) {
 			gs.finishRound(i)
 			return nil
 		}
 	}
-	if err := gs.SelectFirstPlayer(); err != nil {
-		return err
-	}
+	gs.turn.playerIndex = nextPlayerIndex(gs.dealerIndex, len(gs.players))
 	gs.phase = PhaseInProgress
 	return nil
 }
@@ -540,6 +549,8 @@ func (gs *GameState) advanceTurn() {
 	gs.turn.number++
 	gs.turn.playerIndex = (gs.turn.playerIndex + 1) % len(gs.players)
 	gs.turn.hasDrawn = false
+	gs.turn.mustUseDiscardDraw = false
+	gs.turn.discardDrawCard = Card{}
 	gs.recycleDiscardIntoDrawPileIfNeeded()
 }
 
@@ -802,10 +813,7 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
 			return false
 		}
-		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
-		if !ok {
-			return false
-		}
+		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
 		storeComposition(reclaim.CompositionIndex, updated)
 	}
 
@@ -824,15 +832,11 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 			return false
 		}
 
-		addedPoints, ok := target.addedCardsPointsNoAlloc(cards, scratch.combinedBuf)
-		if !ok {
-			return false
-		}
 		extended, ok := target.WithAddedCards(cards)
 		if !ok {
 			return false
 		}
-		openingPoints += addedPoints
+		openingPoints += extended.Points() - target.Points()
 		storeComposition(addition.compositionIndex, extended)
 	}
 
@@ -864,6 +868,35 @@ func (gs *GameState) discardSearchBaseState() (tablePlayState, bool) {
 		activeCompositions: gs.activeCompositions,
 		hasOpened:          cp.hasOpened,
 	}, true
+}
+
+func tablePlayUsesCard(comps []*Composition, additions []CompositionAddition, reclaims []JokerReclaim, target Card) bool {
+	for _, comp := range comps {
+		if comp == nil {
+			continue
+		}
+		for _, playedCard := range comp.cards {
+			if cardsEqual(playedCard, target) && playedCard.isJoker == target.isJoker {
+				return true
+			}
+		}
+	}
+
+	for _, addition := range additions {
+		for _, playedCard := range addition.Cards {
+			if cardsEqual(playedCard, target) && playedCard.isJoker == target.isJoker {
+				return true
+			}
+		}
+	}
+
+	for _, reclaim := range reclaims {
+		if cardsEqual(reclaim.ReplacementCard, target) && reclaim.ReplacementCard.isJoker == target.isJoker {
+			return true
+		}
+	}
+
+	return false
 }
 
 func applyTablePlayState(state tablePlayState, comps []*Composition, additions []CompositionAddition, reclaims []JokerReclaim) (tablePlayState, error) {
@@ -916,11 +949,6 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 			return tablePlayState{}, ErrInvalidComposition
 		}
 
-		addedPoints, ok := target.AddedCardsPoints(addition.Cards)
-		if !ok {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
 		extended, ok := target.WithAddedCards(addition.Cards)
 		if !ok {
 			return tablePlayState{}, ErrInvalidComposition
@@ -928,7 +956,7 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 
 		updatedCompositions[addition.CompositionIndex] = extended
 		playedCards = append(playedCards, addition.Cards...)
-		openingPoints += addedPoints
+		openingPoints += extended.Points() - target.Points()
 	}
 
 	if !state.hasOpened && len(comps) == 0 {
@@ -985,9 +1013,8 @@ func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize 
 	for range InitialHandSize {
 		for offset := 1; offset <= len(players); offset++ {
 			player := players[(dealerIndex+offset)%len(players)]
-			if !player.hand.Draw(mainPile) {
-				return ErrNotEnoughCardsInDrawPile
-			}
+			card, _ := mainPile.DrawOne()
+			player.hand.cards = append(player.hand.cards, card)
 		}
 	}
 
@@ -1008,9 +1035,8 @@ func dealInBlocks(players []*Player, drawPile *CardPile, order []int) error {
 		player := players[i]
 
 		for range InitialHandSize {
-			if !player.hand.Draw(drawPile) {
-				return ErrNotEnoughCardsInDrawPile
-			}
+			card, _ := drawPile.DrawOne()
+			player.hand.cards = append(player.hand.cards, card)
 		}
 	}
 
