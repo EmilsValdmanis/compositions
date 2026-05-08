@@ -68,9 +68,38 @@ func (c *Composition) ReclaimJoker(cardIndex int, replacement Card) (*Compositio
 	return NewComposition(updatedCards, c.variant)
 }
 
+func (c *Composition) canReclaimJoker(cardIndex int, replacement Card) bool {
+	if cardIndex < 0 || cardIndex >= len(c.cards) {
+		return false
+	}
+	if !c.cards[cardIndex].isJoker || replacement.isJoker {
+		return false
+	}
+
+	options, ok := c.jokerRepresentations[cardIndex]
+	if !ok || len(options) != 1 {
+		return false
+	}
+
+	return cardsEqual(options[0], replacement)
+}
+
 func (c *Composition) AddedCardsPoints(cards []Card) (int, bool) {
 	extended, ok := c.WithAddedCards(cards)
 	if !ok {
+		return 0, false
+	}
+
+	return extended.Points() - c.Points(), true
+}
+
+func (c *Composition) addedCardsPointsNoAlloc(cards []Card, combinedBuf []Card) (int, bool) {
+	combined := combinedBuf[:0]
+	combined = append(combined, c.cards...)
+	combined = append(combined, cards...)
+
+	extended := Composition{variant: c.variant, cards: combined}
+	if !extended.isValid() {
 		return 0, false
 	}
 

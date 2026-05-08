@@ -1,4 +1,7 @@
-.PHONY: run build test
+.PHONY: run build test bench
+
+BENCH ?= .
+BENCHMEM ?= 1
 
 run:
 	cd backend && go run ./cmd/server
@@ -9,3 +12,5 @@ build:
 test:
 	cd backend && go vet ./... && go test ./...
 
+bench:
+	cd backend && go test -run '^$$' -bench '$(BENCH)' $(if $(filter 1,$(BENCHMEM)),-benchmem,) ./...

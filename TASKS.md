@@ -26,6 +26,7 @@ Next engine and testing checklist after the core rules engine.
 - [X] 3. Add higher-level integration tests that play through full turns and full rounds instead of only package-level unit tests.
 - [X] 4. Add multi-round tests that prove scoring, over-100 adjustments, and game-over behavior across consecutive rounds.
 - [X] 5. Add deterministic test helpers or fixtures for deck construction so scenario tests are easier to read than long inline card lists.
+- [X] 6. Review performance of discard-pile legality search and add benchmarks around `canTakeDiscardNow` before wiring it into interactive WebSocket play.
 
 Realtime game server checklist.
 
@@ -34,4 +35,3 @@ Realtime game server checklist.
 - [ ] 3. Define connection, player-session, and game-room lifecycle rules so the server can map sockets to players safely across reconnects or disconnects.
 - [ ] 4. Add game-state serialization or DTO mapping for WebSocket broadcasts so clients can receive safe snapshots, action results, errors, and turn updates without depending on internal engine structs.
 - [ ] 5. Add server-level integration tests that drive the WebSocket surface through realistic multiplayer turn flow, including invalid actions and state broadcasts.
-- [ ] 6. Review performance of discard-pile legality search and add benchmarks around `canTakeDiscardNow` before wiring it into interactive WebSocket play.

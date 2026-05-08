@@ -54,6 +54,22 @@ type tablePlayCandidate struct {
 	usesDiscard bool
 }
 
+type searchScratch struct {
+	maskCards   []Card
+	combinedBuf []Card
+}
+
+type tablePlayState struct {
+	handCards          []Card
+	activeCompositions []*Composition
+	hasOpened          bool
+}
+
+type selectedAddition struct {
+	compositionIndex int
+	mask             uint32
+}
+
 type handCardKey struct {
 	rank    Rank
 	suit    Suit
@@ -185,95 +201,23 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 		return ErrInvalidComposition
 	}
 
-	playedCards := make([]Card, 0)
-	reclaimedCards := make([]Card, 0, len(reclaims))
-	openingPoints := 0
-	for _, comp := range comps {
-		if comp == nil {
-			return ErrInvalidComposition
-		}
-		if !comp.isValid() {
-			return ErrInvalidComposition
-		}
-		playedCards = append(playedCards, comp.cards...)
-		openingPoints += comp.Points()
-	}
-
-	updatedCompositions := make([]*Composition, len(gs.activeCompositions))
-	copy(updatedCompositions, gs.activeCompositions)
-	for _, reclaim := range reclaims {
-		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
-			return ErrInvalidComposition
-		}
-
-		target := updatedCompositions[reclaim.CompositionIndex]
-		if target == nil {
-			return ErrInvalidComposition
-		}
-
-		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
-		if !ok {
-			return ErrInvalidComposition
-		}
-
-		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
-		playedCards = append(playedCards, reclaim.ReplacementCard)
-		updatedCompositions[reclaim.CompositionIndex] = updated
-	}
-
-	for _, addition := range additions {
-		if len(addition.Cards) == 0 {
-			return ErrInvalidComposition
-		}
-		if addition.CompositionIndex < 0 || addition.CompositionIndex >= len(updatedCompositions) {
-			return ErrInvalidComposition
-		}
-
-		target := updatedCompositions[addition.CompositionIndex]
-		if target == nil {
-			return ErrInvalidComposition
-		}
-
-		addedPoints, ok := target.AddedCardsPoints(addition.Cards)
-		if !ok {
-			return ErrInvalidComposition
-		}
-
-		extended, ok := target.WithAddedCards(addition.Cards)
-		if !ok {
-			return ErrInvalidComposition
-		}
-
-		updatedCompositions[addition.CompositionIndex] = extended
-		playedCards = append(playedCards, addition.Cards...)
-		openingPoints += addedPoints
-	}
-
 	cp, err := gs.CurrentPlayer()
 	if err != nil {
 		return err
 	}
 
-	if !cp.hasOpened && len(comps) == 0 {
-		return ErrInitialPlayRequiresOwnComp
-	}
-	if !cp.hasOpened && openingPoints < 40 {
-		return ErrInitialPointsNotMet
+	nextState, err := applyTablePlayState(tablePlayState{
+		handCards:          cp.hand.cards,
+		activeCompositions: gs.activeCompositions,
+		hasOpened:          cp.hasOpened,
+	}, comps, additions, reclaims)
+	if err != nil {
+		return err
 	}
 
-	nextHand := &Hand{cards: make([]Card, 0, len(cp.hand.cards)+len(reclaimedCards))}
-	nextHand.cards = append(nextHand.cards, cp.hand.cards...)
-	nextHand.cards = append(nextHand.cards, reclaimedCards...)
-	if !nextHand.RemoveCards(playedCards) {
-		return ErrCardsNotInHand
-	}
-	if len(nextHand.cards) == 0 {
-		return ErrMustKeepDiscardCard
-	}
-	cp.hand.cards = nextHand.cards
-	gs.activeCompositions = updatedCompositions
-	gs.activeCompositions = append(gs.activeCompositions, comps...)
-	cp.hasOpened = true
+	cp.hand.cards = nextState.handCards
+	gs.activeCompositions = nextState.activeCompositions
+	cp.hasOpened = nextState.hasOpened
 	if gs.finishRoundIfSpecialWin(gs.turn.playerIndex) {
 		return nil
 	}
@@ -618,135 +562,57 @@ func (gs *GameState) canTakeDiscardNow() bool {
 		return false
 	}
 
-	cp, err := gs.CurrentPlayer()
-	if err != nil {
+	baseState, ok := gs.discardSearchBaseState()
+	if !ok {
 		return false
 	}
 
-	availableCards := make([]Card, 0, len(cp.hand.cards)+1)
-	availableCards = append(availableCards, cp.hand.cards...)
-	availableCards = append(availableCards, gs.discardPile.cards[0])
+	availableCards := baseState.handCards
 	discardMask := uint32(1) << uint(len(availableCards)-1)
+	scratch := searchScratch{
+		maskCards:   make([]Card, 0, len(availableCards)),
+		combinedBuf: make([]Card, 0, 14),
+	}
 
-	candidates := make([]tablePlayCandidate, 0)
-	candidates = append(candidates, buildCompositionCandidates(availableCards, discardMask)...)
-	candidates = append(candidates, buildAdditionCandidates(gs.activeCompositions, availableCards, discardMask)...)
-	reclaimCandidates := buildReclaimCandidates(gs.activeCompositions, availableCards, discardMask)
-
-	if gs.hasLegalPlayWithDiscard(candidates, nil, discardMask) {
+	if hasLegalPlayWithDiscard(baseState, discardMask, scratch, nil) {
 		return true
 	}
 
-	for _, reclaim := range reclaimCandidates {
-		if gs.hasLegalPlayWithDiscard(candidates, &reclaim, discardMask) {
-			return true
+	for compositionIndex, comp := range gs.activeCompositions {
+		if comp == nil {
+			continue
+		}
+
+		for jokerIndex, tableCard := range comp.cards {
+			if !tableCard.isJoker {
+				continue
+			}
+
+			for cardIndex, replacementCard := range availableCards {
+				if cardIndex != len(availableCards)-1 {
+					continue
+				}
+				if !comp.canReclaimJoker(jokerIndex, replacementCard) {
+					continue
+				}
+
+				reclaim := tablePlayCandidate{
+					usedMask:    discardMask,
+					reclaim:     &JokerReclaim{CompositionIndex: compositionIndex, JokerIndex: jokerIndex, ReplacementCard: replacementCard},
+					usesDiscard: true,
+				}
+				if hasLegalPlayWithDiscard(baseState, discardMask, scratch, &reclaim) {
+					return true
+				}
+			}
 		}
 	}
 
 	return false
 }
 
-func buildCompositionCandidates(availableCards []Card, discardMask uint32) []tablePlayCandidate {
-	limit := uint32(1) << uint(len(availableCards))
-	candidates := make([]tablePlayCandidate, 0)
-
-	for mask := uint32(1); mask < limit; mask++ {
-		cardCount := bits.OnesCount32(mask)
-		if cardCount < 3 {
-			continue
-		}
-
-		cards := cardsForMask(availableCards, mask)
-		if comp, ok := NewSet(cards); ok {
-			candidates = append(candidates, tablePlayCandidate{
-				usedMask:    mask,
-				comp:        comp,
-				usesDiscard: mask&discardMask != 0,
-			})
-		}
-		if comp, ok := NewRun(cards); ok {
-			candidates = append(candidates, tablePlayCandidate{
-				usedMask:    mask,
-				comp:        comp,
-				usesDiscard: mask&discardMask != 0,
-			})
-		}
-	}
-
-	return candidates
-}
-
-func buildAdditionCandidates(activeCompositions []*Composition, availableCards []Card, discardMask uint32) []tablePlayCandidate {
-	limit := uint32(1) << uint(len(availableCards))
-	candidates := make([]tablePlayCandidate, 0)
-
-	for compositionIndex, comp := range activeCompositions {
-		if comp == nil {
-			continue
-		}
-
-		for mask := uint32(1); mask < limit; mask++ {
-			cards := cardsForMask(availableCards, mask)
-			if _, ok := comp.WithAddedCards(cards); !ok {
-				continue
-			}
-
-			addition := CompositionAddition{
-				CompositionIndex: compositionIndex,
-				Cards:            cards,
-			}
-			candidates = append(candidates, tablePlayCandidate{
-				usedMask:    mask,
-				addition:    &addition,
-				usesDiscard: mask&discardMask != 0,
-			})
-		}
-	}
-
-	return candidates
-}
-
-func buildReclaimCandidates(activeCompositions []*Composition, availableCards []Card, discardMask uint32) []tablePlayCandidate {
-	candidates := make([]tablePlayCandidate, 0)
-
-	for compositionIndex, comp := range activeCompositions {
-		if comp == nil {
-			continue
-		}
-
-		for jokerIndex, card := range comp.cards {
-			if !card.isJoker {
-				continue
-			}
-
-			for cardIndex, replacementCard := range availableCards {
-				if replacementCard.isJoker {
-					continue
-				}
-				if _, ok := comp.ReclaimJoker(jokerIndex, replacementCard); !ok {
-					continue
-				}
-
-				usedMask := uint32(1) << uint(cardIndex)
-				reclaim := JokerReclaim{
-					CompositionIndex: compositionIndex,
-					JokerIndex:       jokerIndex,
-					ReplacementCard:  replacementCard,
-				}
-				candidates = append(candidates, tablePlayCandidate{
-					usedMask:    usedMask,
-					reclaim:     &reclaim,
-					usesDiscard: usedMask&discardMask != 0,
-				})
-			}
-		}
-	}
-
-	return candidates
-}
-
-func cardsForMask(availableCards []Card, mask uint32) []Card {
-	cards := make([]Card, 0, bits.OnesCount32(mask))
+func cardsForMask(availableCards []Card, mask uint32, buf []Card) []Card {
+	cards := buf[:0]
 	for i, card := range availableCards {
 		if mask&(uint32(1)<<uint(i)) == 0 {
 			continue
@@ -756,9 +622,10 @@ func cardsForMask(availableCards []Card, mask uint32) []Card {
 	return cards
 }
 
-func (gs *GameState) hasLegalPlayWithDiscard(candidates []tablePlayCandidate, reclaimCandidate *tablePlayCandidate, discardMask uint32) bool {
-	selectedComps := make([]*Composition, 0)
-	selectedAdditions := make([]CompositionAddition, 0)
+func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scratch searchScratch, reclaimCandidate *tablePlayCandidate) bool {
+	selectedCompMasks := make([]uint32, 0, len(baseState.handCards))
+	selectedCompVariants := make([]compositionVariant, 0, len(baseState.handCards))
+	selectedAdditions := make([]selectedAddition, 0, len(baseState.handCards))
 	selectedReclaims := make([]JokerReclaim, 0, 1)
 	usedMask := uint32(0)
 	hasDiscardPlay := false
@@ -767,98 +634,326 @@ func (gs *GameState) hasLegalPlayWithDiscard(candidates []tablePlayCandidate, re
 		usedMask = reclaimCandidate.usedMask
 		hasDiscardPlay = reclaimCandidate.usesDiscard
 		selectedReclaims = append(selectedReclaims, *reclaimCandidate.reclaim)
-		if gs.simulatePlayTable(selectedComps, selectedAdditions, selectedReclaims, hasDiscardPlay) {
+		if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, usedMask, hasDiscardPlay, scratch) {
 			return true
 		}
 	}
 
-	return gs.searchLegalDiscardPlay(candidates, 0, usedMask, hasDiscardPlay, selectedComps, selectedAdditions, selectedReclaims, discardMask)
-}
+	if hasDiscardPlay {
+		return searchSupportCandidates(baseState, discardMask, 1, usedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch)
+	}
 
-func (gs *GameState) searchLegalDiscardPlay(candidates []tablePlayCandidate, start int, usedMask uint32, hasDiscardPlay bool, selectedComps []*Composition, selectedAdditions []CompositionAddition, selectedReclaims []JokerReclaim, discardMask uint32) bool {
-	for i := start; i < len(candidates); i++ {
-		candidate := candidates[i]
-		if usedMask&candidate.usedMask != 0 {
-			continue
+	for subset := uint32(0); subset < discardMask; subset++ {
+		mask := subset | discardMask
+		cards := cardsForMask(baseState.handCards, mask, scratch.maskCards)
+
+		if bits.OnesCount32(subset) >= 2 {
+			for _, variant := range []compositionVariant{set, run} {
+				if !isSearchCompositionValid(cards, variant) {
+					continue
+				}
+
+				selectedCompMasks = append(selectedCompMasks, mask)
+				selectedCompVariants = append(selectedCompVariants, variant)
+				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, mask, true, scratch) {
+					return true
+				}
+				if searchSupportCandidates(baseState, discardMask, 1, mask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+					return true
+				}
+				selectedCompMasks = selectedCompMasks[:len(selectedCompMasks)-1]
+				selectedCompVariants = selectedCompVariants[:len(selectedCompVariants)-1]
+			}
 		}
 
-		nextUsedMask := usedMask | candidate.usedMask
-		nextHasDiscardPlay := hasDiscardPlay || candidate.usesDiscard
-		nextComps := append([]*Composition{}, selectedComps...)
-		nextAdditions := append([]CompositionAddition{}, selectedAdditions...)
+		for compositionIndex, target := range baseState.activeCompositions {
+			if target == nil || !canAddCardsToComposition(target, cards, scratch.combinedBuf) {
+				continue
+			}
 
-		if candidate.comp != nil {
-			nextComps = append(nextComps, candidate.comp)
-		}
-		if candidate.addition != nil {
-			nextAdditions = append(nextAdditions, *candidate.addition)
-		}
-
-		if gs.simulatePlayTable(nextComps, nextAdditions, selectedReclaims, nextHasDiscardPlay) {
-			return true
-		}
-
-		if gs.searchLegalDiscardPlay(candidates, i+1, nextUsedMask, nextHasDiscardPlay, nextComps, nextAdditions, selectedReclaims, discardMask) {
-			return true
+			selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, mask: mask})
+			if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, mask, true, scratch) {
+				return true
+			}
+			if searchSupportCandidates(baseState, discardMask, 1, mask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+				return true
+			}
+			selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
 		}
 	}
 
 	return false
 }
 
-func (gs *GameState) simulatePlayTable(comps []*Composition, additions []CompositionAddition, reclaims []JokerReclaim, hasDiscardPlay bool) bool {
+func searchSupportCandidates(baseState tablePlayState, discardMask uint32, startMask uint32, usedMask uint32, selectedCompMasks []uint32, selectedCompVariants []compositionVariant, selectedAdditions []selectedAddition, selectedReclaims []JokerReclaim, scratch searchScratch) bool {
+	for mask := startMask; mask < discardMask; mask++ {
+		if usedMask&mask != 0 {
+			continue
+		}
+		cards := cardsForMask(baseState.handCards, mask, scratch.maskCards)
+		nextUsedMask := usedMask | mask
+
+		if bits.OnesCount32(mask) >= 3 {
+			for _, variant := range []compositionVariant{set, run} {
+				if !isSearchCompositionValid(cards, variant) {
+					continue
+				}
+
+				selectedCompMasks = append(selectedCompMasks, mask)
+				selectedCompVariants = append(selectedCompVariants, variant)
+				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
+					return true
+				}
+
+				if searchSupportCandidates(baseState, discardMask, mask+1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+					return true
+				}
+				selectedCompMasks = selectedCompMasks[:len(selectedCompMasks)-1]
+				selectedCompVariants = selectedCompVariants[:len(selectedCompVariants)-1]
+			}
+		}
+
+		for compositionIndex, target := range baseState.activeCompositions {
+			if target == nil || !canAddCardsToComposition(target, cards, scratch.combinedBuf) {
+				continue
+			}
+
+			selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, mask: mask})
+			if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
+				return true
+			}
+
+			if searchSupportCandidates(baseState, discardMask, mask+1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+				return true
+			}
+			selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
+		}
+	}
+
+	return false
+}
+
+func isSearchCompositionValid(cards []Card, variant compositionVariant) bool {
+	comp := Composition{variant: variant, cards: cards}
+	return comp.isValid()
+}
+
+func canAddCardsToComposition(comp *Composition, cards []Card, combinedBuf []Card) bool {
+	combined := combinedBuf[:0]
+	combined = append(combined, comp.cards...)
+	combined = append(combined, cards...)
+	extended := Composition{variant: comp.variant, cards: combined}
+	return extended.isValid()
+}
+
+func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariants []compositionVariant, additions []selectedAddition, reclaims []JokerReclaim, usedMask uint32, hasDiscardPlay bool, scratch searchScratch) bool {
 	if !hasDiscardPlay {
 		return false
 	}
-	if len(comps) == 0 && len(additions) == 0 && len(reclaims) == 0 {
+	if len(compMasks) == 0 && len(additions) == 0 && len(reclaims) == 0 {
 		return false
 	}
 
-	clone := gs.cloneForDiscardTableSearch()
-	if err := clone.PlayTable(comps, additions, reclaims...); err != nil {
+	openingPoints := 0
+	for i, mask := range compMasks {
+		cards := cardsForMask(baseState.handCards, mask, scratch.maskCards)
+		comp, ok := NewComposition(cards, compVariants[i])
+		if !ok {
+			return false
+		}
+		openingPoints += comp.Points()
+	}
+
+	var updatedIndices [32]int
+	var updatedComps [32]*Composition
+	updatedCount := 0
+
+	currentComposition := func(index int) *Composition {
+		for i := 0; i < updatedCount; i++ {
+			if updatedIndices[i] == index {
+				return updatedComps[i]
+			}
+		}
+		return baseState.activeCompositions[index]
+	}
+
+	storeComposition := func(index int, comp *Composition) {
+		for i := 0; i < updatedCount; i++ {
+			if updatedIndices[i] == index {
+				updatedComps[i] = comp
+				return
+			}
+		}
+		updatedIndices[updatedCount] = index
+		updatedComps[updatedCount] = comp
+		updatedCount++
+	}
+
+	for _, reclaim := range reclaims {
+		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(baseState.activeCompositions) {
+			return false
+		}
+
+		target := currentComposition(reclaim.CompositionIndex)
+		if target == nil {
+			return false
+		}
+
+		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
+			return false
+		}
+		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
+		if !ok {
+			return false
+		}
+		storeComposition(reclaim.CompositionIndex, updated)
+	}
+
+	for _, addition := range additions {
+		if addition.compositionIndex < 0 || addition.compositionIndex >= len(baseState.activeCompositions) {
+			return false
+		}
+
+		cards := cardsForMask(baseState.handCards, addition.mask, scratch.maskCards)
+		if len(cards) == 0 {
+			return false
+		}
+
+		target := currentComposition(addition.compositionIndex)
+		if target == nil {
+			return false
+		}
+
+		addedPoints, ok := target.addedCardsPointsNoAlloc(cards, scratch.combinedBuf)
+		if !ok {
+			return false
+		}
+		extended, ok := target.WithAddedCards(cards)
+		if !ok {
+			return false
+		}
+		openingPoints += addedPoints
+		storeComposition(addition.compositionIndex, extended)
+	}
+
+	if !baseState.hasOpened && len(compMasks) == 0 {
+		return false
+	}
+	if !baseState.hasOpened && openingPoints < 40 {
+		return false
+	}
+	if len(baseState.handCards)-bits.OnesCount32(usedMask)+len(reclaims) == 0 {
 		return false
 	}
 
 	return true
 }
 
-func (gs *GameState) cloneForDiscardTableSearch() *GameState {
-	players := make([]*Player, len(gs.players))
-	for i, player := range gs.players {
-		if player == nil {
-			continue
+func (gs *GameState) discardSearchBaseState() (tablePlayState, bool) {
+	cp, err := gs.CurrentPlayer()
+	if err != nil {
+		return tablePlayState{}, false
+	}
+
+	handCards := make([]Card, 0, len(cp.hand.cards)+1)
+	handCards = append(handCards, cp.hand.cards...)
+	handCards = append(handCards, gs.discardPile.cards[0])
+
+	return tablePlayState{
+		handCards:          handCards,
+		activeCompositions: gs.activeCompositions,
+		hasOpened:          cp.hasOpened,
+	}, true
+}
+
+func applyTablePlayState(state tablePlayState, comps []*Composition, additions []CompositionAddition, reclaims []JokerReclaim) (tablePlayState, error) {
+	playedCards := make([]Card, 0)
+	reclaimedCards := make([]Card, 0, len(reclaims))
+	openingPoints := 0
+	for _, comp := range comps {
+		if comp == nil {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+		if !comp.isValid() {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+		playedCards = append(playedCards, comp.cards...)
+		openingPoints += comp.Points()
+	}
+
+	updatedCompositions := make([]*Composition, len(state.activeCompositions))
+	copy(updatedCompositions, state.activeCompositions)
+	for _, reclaim := range reclaims {
+		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
+			return tablePlayState{}, ErrInvalidComposition
 		}
 
-		clonedHand := &Hand{cards: append([]Card{}, player.hand.cards...)}
-		players[i] = &Player{
-			ID:          player.ID,
-			hand:        clonedHand,
-			totalPoints: player.totalPoints,
-			hasOpened:   player.hasOpened,
+		target := updatedCompositions[reclaim.CompositionIndex]
+		if target == nil {
+			return tablePlayState{}, ErrInvalidComposition
 		}
+
+		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
+		if !ok {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
+		playedCards = append(playedCards, reclaim.ReplacementCard)
+		updatedCompositions[reclaim.CompositionIndex] = updated
 	}
 
-	if len(gs.discardPile.cards) != 0 && isValidPlayerIndex(gs.turn.playerIndex, len(players)) && players[gs.turn.playerIndex] != nil {
-		players[gs.turn.playerIndex].hand.cards = append(players[gs.turn.playerIndex].hand.cards, gs.discardPile.cards[0])
+	for _, addition := range additions {
+		if len(addition.Cards) == 0 {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+		if addition.CompositionIndex < 0 || addition.CompositionIndex >= len(updatedCompositions) {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		target := updatedCompositions[addition.CompositionIndex]
+		if target == nil {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		addedPoints, ok := target.AddedCardsPoints(addition.Cards)
+		if !ok {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		extended, ok := target.WithAddedCards(addition.Cards)
+		if !ok {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		updatedCompositions[addition.CompositionIndex] = extended
+		playedCards = append(playedCards, addition.Cards...)
+		openingPoints += addedPoints
 	}
 
-	activeCompositions := append([]*Composition{}, gs.activeCompositions...)
-	return &GameState{
-		players:            players,
-		activeCompositions: activeCompositions,
-		drawPile:           &CardPile{cards: append([]Card{}, gs.drawPile.cards...)},
-		discardPile:        &CardPile{cards: append([]Card{}, gs.discardPile.cards...)},
-		maxPlayers:         gs.maxPlayers,
-		phase:              gs.phase,
-		round:              gs.round,
-		dealerIndex:        gs.dealerIndex,
-		turn: Turn{
-			number:      gs.turn.number,
-			playerIndex: gs.turn.playerIndex,
-			hasDrawn:    true,
-		},
-		roundWinnerIndex: gs.roundWinnerIndex,
+	if !state.hasOpened && len(comps) == 0 {
+		return tablePlayState{}, ErrInitialPlayRequiresOwnComp
 	}
+	if !state.hasOpened && openingPoints < 40 {
+		return tablePlayState{}, ErrInitialPointsNotMet
+	}
+
+	nextHand := &Hand{cards: make([]Card, 0, len(state.handCards)+len(reclaimedCards))}
+	nextHand.cards = append(nextHand.cards, state.handCards...)
+	nextHand.cards = append(nextHand.cards, reclaimedCards...)
+	if !nextHand.RemoveCards(playedCards) {
+		return tablePlayState{}, ErrCardsNotInHand
+	}
+	if len(nextHand.cards) == 0 {
+		return tablePlayState{}, ErrMustKeepDiscardCard
+	}
+
+	updatedCompositions = append(updatedCompositions, comps...)
+	return tablePlayState{
+		handCards:          nextHand.cards,
+		activeCompositions: updatedCompositions,
+		hasOpened:          true,
+	}, nil
 }
 
 func (gs *GameState) dealInitialHands(dt DealTypes, order []int, cutSize int) error {
