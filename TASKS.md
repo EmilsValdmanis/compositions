@@ -39,7 +39,7 @@ Realtime game server checklist.
 
 Frontend starter checklist.
 
-- [ ] 1. Choose or scaffold the frontend app entrypoint that will connect to the backend WebSocket server.
+- [X] 1. Choose or scaffold the frontend app entrypoint that will connect to the backend WebSocket server.
 - [ ] 2. Define the frontend WebSocket client types for connection, room, and game messages.
 - [ ] 3. Persist the client `sessionId` locally so reconnect can restore the same player session.
 - [ ] 4. Build a basic lobby screen that can connect, create a room, join a room, and start a game.
