@@ -10,6 +10,26 @@ const (
 	twoPlayerChooserIndex = 1
 )
 
+func TestGameStateAccessors(t *testing.T) {
+	if got := (*GameState)(nil).Phase(); got != PhaseLobby {
+		t.Fatalf("(*GameState)(nil).Phase() = %v; want %v", got, PhaseLobby)
+	}
+	if got := (*GameState)(nil).DealerIndex(); got != 0 {
+		t.Fatalf("(*GameState)(nil).DealerIndex() = %d; want 0", got)
+	}
+
+	state := NewGameState()
+	state.phase = PhaseInProgress
+	state.dealerIndex = 2
+
+	if got := state.Phase(); got != PhaseInProgress {
+		t.Fatalf("state.Phase() = %v; want %v", got, PhaseInProgress)
+	}
+	if got := state.DealerIndex(); got != 2 {
+		t.Fatalf("state.DealerIndex() = %d; want 2", got)
+	}
+}
+
 func newTurnTestState() *GameState {
 	state := NewGameState()
 	first := NewPlayer()

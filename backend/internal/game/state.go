@@ -545,6 +545,20 @@ func (gs *GameState) AddPlayer(p *Player) error {
 	return nil
 }
 
+func (gs *GameState) Phase() GamePhase {
+	if gs == nil {
+		return PhaseLobby
+	}
+	return gs.phase
+}
+
+func (gs *GameState) DealerIndex() int {
+	if gs == nil {
+		return 0
+	}
+	return gs.dealerIndex
+}
+
 func (gs *GameState) advanceTurn() {
 	gs.turn.number++
 	gs.turn.playerIndex = (gs.turn.playerIndex + 1) % len(gs.players)
