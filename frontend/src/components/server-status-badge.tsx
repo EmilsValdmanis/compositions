@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "./ui/badge";
 import { Spinner } from "./ui/spinner";
-import { checkGameServerHealth } from "#/lib/server/health";
+import { checkGameServerHealth } from "#/lib/health";
 
 const pollIntervalMs = 15000;
 

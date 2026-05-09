@@ -1,10 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 
 export const checkGameServerHealth = createServerFn({ method: "GET" }).handler(async () => {
-  const serverUrl = process.env.GAME_SERVER_URL;
+  const gameServerUrl = import.meta.env.VITE_GAME_SERVER_URL;
 
   try {
-    const url = new URL("/health", serverUrl);
+    const url = new URL("/health", gameServerUrl);
     const response = await fetch(url.toString(), {
       headers: {
         Accept: "application/json",

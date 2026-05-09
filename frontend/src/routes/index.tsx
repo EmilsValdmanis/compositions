@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-
+import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
@@ -10,184 +10,12 @@ import { ServerStatusBadge } from "#/components/server-status-badge";
 
 export const Route = createFileRoute("/")({ component: Home });
 
-type ConnectionStatus = "disconnected" | "connecting" | "connected";
-
-type PlayerSnapshot = {
-  playerId: string;
-  sessionId: string;
-  name: string;
-  connected: boolean;
-  seat: number;
-  isHost: boolean;
-  canReconnect: boolean;
-};
-
-type RoomSnapshot = {
-  code: string;
-  phase: string;
-  hostPlayerId: string;
-  dealerIndex?: number;
-  players: PlayerSnapshot[];
-};
-
-type LobbyState = {
-  connectionStatus: ConnectionStatus;
-  sessionId: string;
-  playerId: string;
-  room: RoomSnapshot | null;
-  lastError: string | null;
-  lastEvent: string | null;
-};
-
-type Envelope<T = unknown> = {
-  type: string;
-  data?: T;
-};
-
-const initialState: LobbyState = {
-  connectionStatus: "disconnected",
-  sessionId: "",
-  playerId: "",
-  room: null,
-  lastError: null,
-  lastEvent: null,
-};
-
 function Home() {
-  const socketRef = useRef<WebSocket | null>(null);
-  const [state, setState] = useState<LobbyState>(initialState);
+  const { state, isConnected, connect, disconnect, createRoom, joinRoom, startGame, leaveRoom } =
+    useGameWebSocket();
   const [createName, setCreateName] = useState("");
   const [joinName, setJoinName] = useState("");
   const [joinRoomCode, setJoinRoomCode] = useState("");
-
-  const isConnected = state.connectionStatus === "connected";
-  const playerCount = state.room?.players.length ?? 0;
-  const dealerIndex = useMemo(() => {
-    if (!state.room || playerCount === 0) {
-      return 0;
-    }
-
-    const hostIndex = state.room.players.findIndex((player) => player.isHost);
-    return hostIndex >= 0 ? hostIndex : 0;
-  }, [state.room, playerCount]);
-
-  useEffect(() => {
-    return () => {
-      socketRef.current?.close();
-    };
-  }, []);
-
-  function updateState(updater: (current: LobbyState) => LobbyState) {
-    setState((current) => updater(current));
-  }
-
-  function sendMessage(type: string, data: unknown) {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      updateState((current) => ({
-        ...current,
-        lastError: "websocket is not connected",
-      }));
-      return;
-    }
-
-    socket.send(JSON.stringify({ type, data }));
-    updateState((current) => ({
-      ...current,
-      lastEvent: type,
-      lastError: null,
-    }));
-  }
-
-  function connect() {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      return;
-    }
-
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host =
-      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
-        ? "localhost:8080"
-        : window.location.host;
-    const socket = new WebSocket(`${protocol}//${host}/ws`);
-    socketRef.current = socket;
-
-    updateState((current) => ({
-      ...current,
-      connectionStatus: "connecting",
-      lastError: null,
-      lastEvent: null,
-    }));
-
-    socket.onopen = () => {
-      socket.send(
-        JSON.stringify({
-          type: "connect",
-          data: { sessionId: state.sessionId },
-        }),
-      );
-    };
-
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data) as Envelope<any>;
-
-      if (message.type === "connected") {
-        updateState((current) => ({
-          ...current,
-          connectionStatus: "connected",
-          sessionId: message.data?.sessionId ?? current.sessionId,
-          playerId: message.data?.playerId ?? current.playerId,
-          lastError: null,
-          lastEvent: "connected",
-        }));
-        return;
-      }
-
-      if (message.type === "room_state") {
-        updateState((current) => ({
-          ...current,
-          room: message.data?.room ?? null,
-          lastError: null,
-          lastEvent: "room_state",
-        }));
-        return;
-      }
-
-      if (message.type === "left_room") {
-        updateState((current) => ({
-          ...current,
-          room: null,
-          lastError: null,
-          lastEvent: "left_room",
-        }));
-        return;
-      }
-
-      if (message.type === "error") {
-        updateState((current) => ({
-          ...current,
-          lastError: message.data?.message ?? "unknown error",
-          lastEvent: "error",
-        }));
-      }
-    };
-
-    socket.onerror = () => {
-      updateState((current) => ({
-        ...current,
-        connectionStatus: "disconnected",
-        lastError: "failed to connect websocket",
-      }));
-    };
-
-    socket.onclose = () => {
-      socketRef.current = null;
-      updateState((current) => ({
-        ...current,
-        connectionStatus: "disconnected",
-      }));
-    };
-  }
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 md:px-8">
@@ -230,15 +58,8 @@ function Home() {
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    socketRef.current?.close();
-                    updateState((current) => ({
-                      ...current,
-                      room: null,
-                      lastEvent: "manual_disconnect",
-                    }));
-                  }}
-                  disabled={!socketRef.current}
+                  onClick={disconnect}
+                  disabled={state.connectionStatus === "disconnected"}
                 >
                   Disconnect
                 </Button>
@@ -260,10 +81,7 @@ function Home() {
                   onChange={(event) => setCreateName(event.target.value)}
                   placeholder="Host"
                 />
-                <Button
-                  onClick={() => sendMessage("create_room", { name: createName })}
-                  disabled={!isConnected}
-                >
+                <Button onClick={() => createRoom(createName)} disabled={!isConnected}>
                   Create Room
                 </Button>
               </div>
@@ -285,9 +103,7 @@ function Home() {
                 />
                 <Button
                   variant="secondary"
-                  onClick={() =>
-                    sendMessage("join_room", { roomCode: joinRoomCode, name: joinName })
-                  }
+                  onClick={() => joinRoom(joinRoomCode, joinName)}
                   disabled={!isConnected}
                 >
                   Join Room
@@ -295,15 +111,12 @@ function Home() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => sendMessage("start_game", { dealerIndex })}
-                  disabled={!isConnected || !state.room}
-                >
+                <Button onClick={startGame} disabled={!isConnected || !state.room}>
                   Start Game
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => sendMessage("leave_room", {})}
+                  onClick={leaveRoom}
                   disabled={!isConnected || !state.room}
                 >
                   Leave

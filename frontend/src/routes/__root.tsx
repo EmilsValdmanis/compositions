@@ -1,3 +1,4 @@
+import { GameWebSocketProvider } from "#/components/game-websocket-provider";
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
@@ -46,7 +47,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <ThemeProvider defaultTheme="system" storageKey="theme">
-          {children}
+          <GameWebSocketProvider>{children}</GameWebSocketProvider>
         </ThemeProvider>
         <TanStackDevtools
           config={{
