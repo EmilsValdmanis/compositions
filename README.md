@@ -1,10 +1,21 @@
 # Compositions
 
-A small Go project for bringing a family card game online.
+Compositions is a project for bringing a family card game online.
 
-The goal of this repo is simple: capture the rules of Compositions in code and build a playable experience so it is easier to get a game going, even when everyone is not in the same room.
+The repository is split into separate frontend and backend applications so the game rules, server behavior, and player experience can evolve independently without losing the shape of a single project.
 
-## What It Is
+## Project Goal
+
+The main goal is to turn the rules of Compositions into a playable online experience that still feels faithful to the real game.
+
+That includes:
+
+- encoding the game rules clearly and correctly
+- supporting room creation and multiplayer play
+- building a frontend that makes the game easy to understand and join
+- keeping the codebase small and maintainable while the product is still taking shape
+
+## The Game
 
 Compositions is a multi-round card game built around:
 
@@ -15,17 +26,24 @@ Compositions is a multi-round card game built around:
 
 The full rule set lives in [RULES.md](RULES.md).
 
-## Project Status
+## Repository Layout
 
-This project is currently focused on the game logic and backend foundation. The intent is to keep the implementation clean and rule-driven first, then grow it into a smooth online version of the game.
+- `frontend/`: the web app built with React, TanStack Start, and Vite+
+- `backend/`: the Go server and game logic module
+- `RULES.md`: the current written rules for the game
 
-## Running It
+## Current Status
 
-The Makefile includes the main project commands:
+The project is still in active foundation-building.
 
-| Command | What it does |
-| :-- | :-- |
-| `make run` | Starts the backend server |
-| `make build` | Builds the server binary to `backend/dist/server` |
-| `make test` | Runs `go vet` and the test suite |
-| `make bench` | Runs benchmarks for critical game logic functions |
+- the backend already contains core game logic and a websocket server
+- the frontend has been scaffolded and is ready to grow into the playable client
+- the repo is organized so each side can be worked on independently
+
+## Working In This Repo
+
+- frontend-specific commands and dependencies live in `frontend/`
+- backend-specific commands and Go tooling live in `backend/`
+- shared project context and rules live at the repository root
+
+See `backend/README.md` for backend details.

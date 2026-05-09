@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/EmilsValdmanis/compositions/backend/internal/game"
+	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )

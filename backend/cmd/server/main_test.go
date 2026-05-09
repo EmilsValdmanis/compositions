@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/EmilsValdmanis/compositions/backend/internal/game"
+	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/gorilla/websocket"
 )
 
