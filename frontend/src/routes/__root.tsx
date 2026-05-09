@@ -3,6 +3,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { inject as InjectVercelAnalytics } from "@vercel/analytics";
 import { injectSpeedInsights as InjectVercelSpeedInsights } from "@vercel/speed-insights";
+import { ThemeProvider } from "#/components/theme-provider";
 
 import appCss from "../styles.css?url";
 
@@ -35,12 +36,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   InjectVercelSpeedInsights();
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
       <body>
-        {children}
+        <ThemeProvider defaultTheme="system" storageKey="theme">
+          {children}
+        </ThemeProvider>
         <TanStackDevtools
           config={{
             position: "bottom-right",

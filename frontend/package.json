@@ -12,6 +12,7 @@
     "test": "vp test run"
   },
   "dependencies": {
+    "@base-ui/react": "^1.4.1",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@hugeicons/core-free-icons": "^4.1.2",
     "@hugeicons/react": "^1.1.6",
@@ -28,7 +29,6 @@
     "clsx": "^2.1.1",
     "lucide-react": "^0.545.0",
     "nitro": "npm:nitro-nightly@latest",
-    "radix-ui": "^1.4.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "shadcn": "^4.7.0",
