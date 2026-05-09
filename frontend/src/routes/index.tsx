@@ -1,13 +1,17 @@
 import { ModeToggle } from "#/components/mode-toggle";
+import { ServerStatusBadge } from "#/components/server-status-badge";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/")({ component: Home });
 
 function Home() {
   return (
-    <div className="flex gap-4 items-center justify-center h-screen">
-      <h1>Compositions</h1>
-      <ModeToggle />
-    </div>
+    <main className="h-screen flex items-center justify-center gap-4 flex-col">
+      <div className="flex items-center gap-4">
+        <h1>Compositions</h1>
+        <ModeToggle />
+      </div>
+      <ServerStatusBadge />
+    </main>
   );
 }

@@ -8,7 +8,9 @@ import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 
 const config = defineConfig({
-  fmt: {},
+  fmt: {
+    ignorePatterns: ["/src/routeTree.gen.ts"],
+  },
   lint: { options: { typeAware: true, typeCheck: true } },
   resolve: { tsconfigPaths: true },
   plugins: [

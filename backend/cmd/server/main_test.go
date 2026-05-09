@@ -501,6 +501,38 @@ func TestHandleWSUpgradeFailure(t *testing.T) {
 	}
 }
 
+func TestHandleHealth(t *testing.T) {
+	server := newWSServer()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+
+	server.handleHealth(recorder, request)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("recorder.Code = %d; want %d", recorder.Code, http.StatusOK)
+	}
+	if got := recorder.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("Access-Control-Allow-Origin = %q; want *", got)
+	}
+	if got := recorder.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+		t.Fatalf("Content-Type = %q; want application/json", got)
+	}
+	var response healthResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("json.NewDecoder().Decode() error = %v", err)
+	}
+	if response.Status != "ok" {
+		t.Fatalf("response.Status = %q; want ok", response.Status)
+	}
+}
+
+func TestHandleHealthWriteError(t *testing.T) {
+	server := newWSServer()
+	request := httptest.NewRequest(http.MethodGet, "/health", nil)
+
+	server.handleHealth(failingResponseWriter{}, request)
+}
+
 func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	originalEmit := emitEvent
 	defer func() { emitEvent = originalEmit }()
@@ -827,6 +859,18 @@ func TestDisconnectHandlesMissingRoomAndMissingPlayer(t *testing.T) {
 	sessionB.roomCode = "ROOM"
 	lobby.disconnect(eventB.SessionID, connB)
 }
+
+type failingResponseWriter struct{}
+
+func (failingResponseWriter) Header() http.Header {
+	return http.Header{}
+}
+
+func (failingResponseWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write boom")
+}
+
+func (failingResponseWriter) WriteHeader(statusCode int) {}
 
 func newSocketPair(t *testing.T) (*websocket.Conn, *websocket.Conn, func()) {
 	t.Helper()

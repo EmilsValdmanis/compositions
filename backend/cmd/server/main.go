@@ -59,6 +59,10 @@ type roomStateEvent struct {
 	Room roomSnapshot `json:"room"`
 }
 
+type healthResponse struct {
+	Status string `json:"status"`
+}
+
 type roomSnapshot struct {
 	Code         string           `json:"code"`
 	Phase        string           `json:"phase"`
@@ -141,8 +145,18 @@ func newWSServer() *wsServer {
 
 func (s *wsServer) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ws", s.handleWS)
 	return mux
+}
+
+func (s *wsServer) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(healthResponse{Status: "ok"}); err != nil {
+		log.Printf("write health response: %v", err)
+	}
 }
 
 func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
