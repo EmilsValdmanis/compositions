@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,6 +94,42 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 	if err := reconnectedGuestConn.Close(); err != nil {
 		t.Fatalf("reconnectedGuestConn.Close() error = %v", err)
 	}
+}
+
+func TestWebSocketLeaveRoomFlow(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	mustConnectSession(t, hostConn, "")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+
+	guestConn := mustDialWS(t, httpServer.URL)
+	defer guestConn.Close()
+	mustConnectSession(t, guestConn, "")
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Guest"})
+	_ = mustReadRoomState(t, guestConn)
+	_ = mustReadRoomState(t, hostConn)
+
+	mustSendEnvelope(t, guestConn, "leave_room", leaveRoomRequest{})
+	left := mustReadLeftRoom(t, guestConn)
+	if left.RoomCode != hostRoom.Code {
+		t.Fatalf("left.RoomCode = %q; want %q", left.RoomCode, hostRoom.Code)
+	}
+
+	updatedHostRoom := mustReadRoomState(t, hostConn)
+	if len(updatedHostRoom.Players) != 1 {
+		t.Fatalf("len(updatedHostRoom.Players) = %d; want 1", len(updatedHostRoom.Players))
+	}
+	if updatedHostRoom.Players[0].Name != "Host" {
+		t.Fatalf("updatedHostRoom.Players[0].Name = %q; want Host", updatedHostRoom.Players[0].Name)
+	}
+
+	mustSendEnvelope(t, guestConn, "leave_room", leaveRoomRequest{})
+	mustReadError(t, guestConn, "join a room first")
 }
 
 func TestLobbyServerCoverage(t *testing.T) {
@@ -308,7 +344,9 @@ func TestLobbyServerCoverage(t *testing.T) {
 		t.Fatalf("payload.Name = %q; want ok", payload.Name)
 	}
 
-	envelope := mustMarshalRawMessage(struct{ Name string `json:"name"` }{Name: "x"})
+	envelope := mustMarshalRawMessage(struct {
+		Name string `json:"name"`
+	}{Name: "x"})
 	if string(envelope) != `{"name":"x"}` {
 		t.Fatalf("mustMarshalRawMessage() = %s; want {\"name\":\"x\"}", string(envelope))
 	}
@@ -570,6 +608,10 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 		t.Fatalf("WriteJSON(join_room before connect) error = %v", err)
 	}
 	mustReadError(t, rawConn, "connect first")
+	if err := rawConn.WriteJSON(wsEnvelope{Type: "leave_room", Data: mustMarshalRawMessage(leaveRoomRequest{})}); err != nil {
+		t.Fatalf("WriteJSON(leave_room before connect) error = %v", err)
+	}
+	mustReadError(t, rawConn, "connect first")
 	if err := rawConn.WriteJSON(wsEnvelope{Type: "start_game", Data: mustMarshalRawMessage(startGameRequest{DealerIndex: 0})}); err != nil {
 		t.Fatalf("WriteJSON(start_game before connect) error = %v", err)
 	}
@@ -755,6 +797,51 @@ func TestHandleConnectionReturnsWhenRoomStateWriteFailsAfterReconnect(t *testing
 	<-done
 }
 
+func TestHandleConnectionReturnsWhenLeftRoomWriteFails(t *testing.T) {
+	originalEmit := emitEvent
+	defer func() { emitEvent = originalEmit }()
+	emitEvent = writeEvent
+	originalAddPlayer := addPlayerToGameState
+	defer func() { addPlayerToGameState = originalAddPlayer }()
+	addPlayerToGameState = func(state *game.GameState, player *game.Player) error {
+		return state.AddPlayer(player)
+	}
+
+	server := newWSServer()
+	serverConn, clientConn, cleanup := newSocketPair(t)
+	defer cleanup()
+
+	emitEvent = func(conn *websocket.Conn, messageType string, data any) error {
+		if conn == serverConn && messageType == "left_room" {
+			return errors.New("forced left_room failure")
+		}
+		return writeEvent(conn, messageType, data)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		server.handleConnection(serverConn)
+		close(done)
+	}()
+
+	if err := clientConn.WriteJSON(wsEnvelope{Type: "connect", Data: mustMarshalRawMessage(connectRequest{})}); err != nil {
+		t.Fatalf("WriteJSON(connect) error = %v", err)
+	}
+	if envelope := mustReadEnvelopeFromConn(t, clientConn); envelope.Type != "connected" {
+		t.Fatalf("envelope.Type = %q; want connected", envelope.Type)
+	}
+	if err := clientConn.WriteJSON(wsEnvelope{Type: "create_room", Data: mustMarshalRawMessage(createRoomRequest{Name: "Host"})}); err != nil {
+		t.Fatalf("WriteJSON(create_room) error = %v", err)
+	}
+	if envelope := mustReadEnvelopeFromConn(t, clientConn); envelope.Type != "room_state" {
+		t.Fatalf("envelope.Type = %q; want room_state", envelope.Type)
+	}
+	if err := clientConn.WriteJSON(wsEnvelope{Type: "leave_room", Data: mustMarshalRawMessage(leaveRoomRequest{})}); err != nil {
+		t.Fatalf("WriteJSON(leave_room) error = %v", err)
+	}
+	<-done
+}
+
 func TestHandleConnectionOperationErrors(t *testing.T) {
 	originalEmit := emitEvent
 	defer func() { emitEvent = originalEmit }()
@@ -774,12 +861,22 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 	mustReadError(t, conn, "session not found")
 
 	mustConnectSession(t, conn, "")
+	if err := conn.WriteJSON(wsEnvelope{Type: "leave_room"}); err != nil {
+		t.Fatalf("WriteJSON(leave_room missing data) error = %v", err)
+	}
+	mustReadError(t, conn, "missing data")
+	mustSendEnvelope(t, conn, "leave_room", leaveRoomRequest{})
+	mustReadError(t, conn, "join a room first")
 	if err := conn.WriteJSON(wsEnvelope{Type: "create_room"}); err != nil {
 		t.Fatalf("WriteJSON(create_room missing data) error = %v", err)
 	}
 	mustReadError(t, conn, "missing data")
 	mustSendEnvelope(t, conn, "create_room", createRoomRequest{Name: "Host"})
 	room := mustReadRoomState(t, conn)
+	mustSendEnvelope(t, conn, "leave_room", leaveRoomRequest{})
+	_ = mustReadLeftRoom(t, conn)
+	mustSendEnvelope(t, conn, "create_room", createRoomRequest{Name: "Host"})
+	room = mustReadRoomState(t, conn)
 	mustSendEnvelope(t, conn, "create_room", createRoomRequest{Name: "Again"})
 	mustReadError(t, conn, "already in a room")
 	if err := conn.WriteJSON(wsEnvelope{Type: "join_room"}); err != nil {
@@ -800,8 +897,25 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: room.Code, Name: "Guest"})
 	_ = mustReadRoomState(t, guestConn)
 	_ = mustReadRoomState(t, conn)
+	mustSendEnvelope(t, guestConn, "leave_room", leaveRoomRequest{})
+	_ = mustReadLeftRoom(t, guestConn)
+	room = mustReadRoomState(t, conn)
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: room.Code, Name: "Guest"})
+	_ = mustReadRoomState(t, guestConn)
+	_ = mustReadRoomState(t, conn)
 	mustSendEnvelope(t, conn, "start_game", startGameRequest{DealerIndex: 99})
 	mustReadError(t, conn, game.ErrInvalidDealer.Error())
+	mustSendEnvelope(t, guestConn, "leave_room", leaveRoomRequest{})
+	_ = mustReadLeftRoom(t, guestConn)
+	_ = mustReadRoomState(t, conn)
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: room.Code, Name: "Guest"})
+	_ = mustReadRoomState(t, guestConn)
+	_ = mustReadRoomState(t, conn)
+	mustSendEnvelope(t, conn, "start_game", startGameRequest{DealerIndex: 0})
+	_ = mustReadRoomState(t, conn)
+	_ = mustReadRoomState(t, guestConn)
+	mustSendEnvelope(t, guestConn, "leave_room", leaveRoomRequest{})
+	mustReadError(t, guestConn, "can only leave in lobby")
 	_ = conn.Close()
 	_ = guestConn.Close()
 }
@@ -823,6 +937,236 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 	if _, _, err := lobby.createRoom(event.SessionID, "Host"); err == nil {
 		t.Fatal("createRoom(add player error) error = nil; want error")
 	}
+}
+
+func TestLobbyLeaveRoomCoverage(t *testing.T) {
+	originalMakeGameState := makeGameState
+	originalAddPlayer := addPlayerToGameState
+	defer func() { makeGameState = originalMakeGameState }()
+	defer func() { addPlayerToGameState = originalAddPlayer }()
+
+	t.Run("missing room", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		lobby.sessions[event.SessionID].roomCode = "NOPE"
+		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "room not found" {
+			t.Fatalf("leaveRoom(missing room) error = %v; want room not found", err)
+		}
+	})
+
+	t.Run("missing session", func(t *testing.T) {
+		lobby := newLobbyServer()
+		if _, _, _, err := lobby.leaveRoom("missing"); err == nil || err.Error() != "session not found" {
+			t.Fatalf("leaveRoom(missing session) error = %v; want session not found", err)
+		}
+	})
+
+	t.Run("missing player in room", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		lobby.rooms["ROOM"] = &room{code: "ROOM", gameState: game.NewGameState(), players: []*roomPlayer{}}
+		lobby.sessions[event.SessionID].roomCode = "ROOM"
+		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "player not found in room" {
+			t.Fatalf("leaveRoom(missing player) error = %v; want player not found in room", err)
+		}
+	})
+
+	t.Run("nil player entries are skipped", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		currentPlayer := &roomPlayer{player: newPlayerWithID(event.PlayerID), name: "Solo", sessionID: event.SessionID, connected: true, seat: 0, host: true}
+		lobby.sessions[event.SessionID].roomCode = "ROOM"
+		lobby.rooms["ROOM"] = &room{code: "ROOM", gameState: game.NewGameState(), players: []*roomPlayer{nil, currentPlayer}, hostID: currentPlayer.player.ID}
+
+		snapshot, recipients, roomCode, err := lobby.leaveRoom(event.SessionID)
+		if err != nil {
+			t.Fatalf("leaveRoom() error = %v", err)
+		}
+		if snapshot != nil {
+			t.Fatalf("snapshot = %#v; want nil", snapshot)
+		}
+		if len(recipients) != 0 {
+			t.Fatalf("len(recipients) = %d; want 0", len(recipients))
+		}
+		if roomCode != "ROOM" {
+			t.Fatalf("roomCode = %q; want ROOM", roomCode)
+		}
+		if _, exists := lobby.rooms["ROOM"]; exists {
+			t.Fatal("room still exists after last player left")
+		}
+	})
+
+	t.Run("nil game state creation", func(t *testing.T) {
+		lobby := newLobbyServer()
+		hostConn, _, closeHost := newSocketPair(t)
+		defer closeHost()
+		hostEvent, _, _, err := lobby.connect("", hostConn)
+		if err != nil {
+			t.Fatalf("connect(host) error = %v", err)
+		}
+		roomState, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		guestConn, _, closeGuest := newSocketPair(t)
+		defer closeGuest()
+		guestEvent, _, _, err := lobby.connect("", guestConn)
+		if err != nil {
+			t.Fatalf("connect(guest) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestEvent.SessionID, roomState.Code, "Guest"); err != nil {
+			t.Fatalf("joinRoom() error = %v", err)
+		}
+
+		makeGameState = func() *game.GameState { return nil }
+		if _, _, _, err := lobby.leaveRoom(guestEvent.SessionID); err == nil || err.Error() != "game state not initialized" {
+			t.Fatalf("leaveRoom(nil game state) error = %v; want game state not initialized", err)
+		}
+		makeGameState = originalMakeGameState
+	})
+
+	t.Run("add player error rebuilding room", func(t *testing.T) {
+		lobby := newLobbyServer()
+		hostConn, _, closeHost := newSocketPair(t)
+		defer closeHost()
+		hostEvent, _, _, err := lobby.connect("", hostConn)
+		if err != nil {
+			t.Fatalf("connect(host) error = %v", err)
+		}
+		roomState, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		guestConn, _, closeGuest := newSocketPair(t)
+		defer closeGuest()
+		guestEvent, _, _, err := lobby.connect("", guestConn)
+		if err != nil {
+			t.Fatalf("connect(guest) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestEvent.SessionID, roomState.Code, "Guest"); err != nil {
+			t.Fatalf("joinRoom() error = %v", err)
+		}
+
+		addPlayerToGameState = func(state *game.GameState, player *game.Player) error {
+			return errors.New("add player boom")
+		}
+		if _, _, _, err := lobby.leaveRoom(guestEvent.SessionID); err == nil || err.Error() != "add player boom" {
+			t.Fatalf("leaveRoom(add player error) error = %v; want add player boom", err)
+		}
+		addPlayerToGameState = originalAddPlayer
+	})
+
+	t.Run("host reassignment and seat compaction", func(t *testing.T) {
+		lobby := newLobbyServer()
+		hostConn, _, closeHost := newSocketPair(t)
+		defer closeHost()
+		hostEvent, _, _, err := lobby.connect("", hostConn)
+		if err != nil {
+			t.Fatalf("connect(host) error = %v", err)
+		}
+		roomState, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+
+		guestAConn, _, closeGuestA := newSocketPair(t)
+		defer closeGuestA()
+		guestAEvent, _, _, err := lobby.connect("", guestAConn)
+		if err != nil {
+			t.Fatalf("connect(guestA) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestAEvent.SessionID, roomState.Code, "Guest A"); err != nil {
+			t.Fatalf("joinRoom(guestA) error = %v", err)
+		}
+
+		guestBConn, _, closeGuestB := newSocketPair(t)
+		defer closeGuestB()
+		guestBEvent, _, _, err := lobby.connect("", guestBConn)
+		if err != nil {
+			t.Fatalf("connect(guestB) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestBEvent.SessionID, roomState.Code, "Guest B"); err != nil {
+			t.Fatalf("joinRoom(guestB) error = %v", err)
+		}
+
+		snapshot, recipients, roomCode, err := lobby.leaveRoom(hostEvent.SessionID)
+		if err != nil {
+			t.Fatalf("leaveRoom(host) error = %v", err)
+		}
+		if snapshot == nil {
+			t.Fatal("leaveRoom(host) snapshot = nil; want snapshot")
+		}
+		if roomCode != roomState.Code {
+			t.Fatalf("roomCode = %q; want %q", roomCode, roomState.Code)
+		}
+		if len(recipients) != 2 {
+			t.Fatalf("len(recipients) = %d; want 2", len(recipients))
+		}
+		if snapshot.HostPlayerID != guestAEvent.PlayerID {
+			t.Fatalf("snapshot.HostPlayerID = %q; want %q", snapshot.HostPlayerID, guestAEvent.PlayerID)
+		}
+		if len(snapshot.Players) != 2 {
+			t.Fatalf("len(snapshot.Players) = %d; want 2", len(snapshot.Players))
+		}
+		if !snapshot.Players[0].IsHost || snapshot.Players[0].Seat != 0 {
+			t.Fatalf("first player = %#v; want host at seat 0", snapshot.Players[0])
+		}
+		if snapshot.Players[1].IsHost || snapshot.Players[1].Seat != 1 {
+			t.Fatalf("second player = %#v; want non-host at seat 1", snapshot.Players[1])
+		}
+		if got := lobby.sessions[hostEvent.SessionID].roomCode; got != "" {
+			t.Fatalf("host session roomCode = %q; want empty", got)
+		}
+	})
+
+	t.Run("fallback host when current host missing from players", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+
+		remaining := &roomPlayer{player: newPlayerWithID("remaining"), name: "Remaining", sessionID: event.SessionID, connected: true, seat: 3}
+		lobby.sessions[event.SessionID].playerID = remaining.player.ID
+		lobby.sessions[event.SessionID].roomCode = "ROOM"
+		lobby.rooms["ROOM"] = &room{
+			code:      "ROOM",
+			gameState: game.NewGameState(),
+			players: []*roomPlayer{
+				{player: newPlayerWithID("ghost"), name: "Ghost", sessionID: "ghost-session", connected: false, seat: 0},
+				remaining,
+			},
+			hostID: "missing-host",
+		}
+
+		snapshot, _, _, err := lobby.leaveRoom(event.SessionID)
+		if err != nil {
+			t.Fatalf("leaveRoom() error = %v", err)
+		}
+		if snapshot == nil || snapshot.HostPlayerID != "ghost" {
+			t.Fatalf("snapshot.HostPlayerID = %v; want ghost", snapshot)
+		}
+		if !snapshot.Players[0].IsHost || snapshot.Players[0].Seat != 0 {
+			t.Fatalf("snapshot.Players[0] = %#v; want host seat 0", snapshot.Players[0])
+		}
+	})
 }
 
 func TestWriteEventReturnsSocketClosedForCloseSent(t *testing.T) {
@@ -985,4 +1329,18 @@ func mustReadError(t *testing.T, conn *websocket.Conn, want string) {
 	if event.Message != want {
 		t.Fatalf("error message = %q; want %q", event.Message, want)
 	}
+}
+
+func mustReadLeftRoom(t *testing.T, conn *websocket.Conn) leftRoomEvent {
+	t.Helper()
+
+	envelope := mustReadEnvelopeFromConn(t, conn)
+	if envelope.Type != "left_room" {
+		t.Fatalf("left_room response type = %q; want left_room", envelope.Type)
+	}
+	var event leftRoomEvent
+	if err := json.Unmarshal(envelope.Data, &event); err != nil {
+		t.Fatalf("json.Unmarshal(left_room) error = %v", err)
+	}
+	return event
 }

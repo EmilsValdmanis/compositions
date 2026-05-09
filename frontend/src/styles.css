@@ -19,6 +19,8 @@ body {
   margin: 0;
 }
 
+/* shadcn --preset b5KbFbc38 */
+
 @theme inline {
   --font-heading: var(--font-mono);
   --font-mono: "JetBrains Mono Variable", monospace;

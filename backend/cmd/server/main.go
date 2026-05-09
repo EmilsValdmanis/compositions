@@ -46,6 +46,8 @@ type startGameRequest struct {
 	DealerIndex int `json:"dealerIndex"`
 }
 
+type leaveRoomRequest struct{}
+
 type connectedEvent struct {
 	SessionID string `json:"sessionId"`
 	PlayerID  string `json:"playerId"`
@@ -57,6 +59,10 @@ type errorEvent struct {
 
 type roomStateEvent struct {
 	Room roomSnapshot `json:"room"`
+}
+
+type leftRoomEvent struct {
+	RoomCode string `json:"roomCode,omitempty"`
 }
 
 type healthResponse struct {
@@ -262,6 +268,29 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 				continue
 			}
 			s.broadcastRoomState(roomState, recipients)
+		case "leave_room":
+			if sessionID == "" {
+				s.writeError(conn, errors.New("connect first"))
+				continue
+			}
+
+			var req leaveRoomRequest
+			if err := decodePayload(envelope.Data, &req); err != nil {
+				s.writeError(conn, err)
+				continue
+			}
+
+			roomState, recipients, roomCode, err := s.lobby.leaveRoom(sessionID)
+			if err != nil {
+				s.writeError(conn, err)
+				continue
+			}
+			if err := emitEvent(conn, "left_room", leftRoomEvent{RoomCode: roomCode}); err != nil {
+				return
+			}
+			if roomState != nil {
+				s.broadcastRoomState(*roomState, recipients)
+			}
 		default:
 			s.writeError(conn, errors.New("unknown message type"))
 		}
@@ -470,6 +499,77 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot
 	}
 
 	return room.snapshot(), room.connectedConns(l.sessions), nil
+}
+
+func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.Conn, string, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if session.roomCode == "" {
+		return nil, nil, "", errors.New("join a room first")
+	}
+
+	room := l.rooms[session.roomCode]
+	if room == nil {
+		return nil, nil, "", errors.New("room not found")
+	}
+	if room.gameState == nil || room.gameStatePhase() != game.PhaseLobby {
+		return nil, nil, "", errors.New("can only leave in lobby")
+	}
+
+	updatedPlayers := make([]*roomPlayer, 0, len(room.players))
+	foundPlayer := false
+	for _, player := range room.players {
+		if player == nil {
+			continue
+		}
+		if player.player.ID == session.playerID {
+			foundPlayer = true
+			continue
+		}
+		updatedPlayers = append(updatedPlayers, player)
+	}
+	if !foundPlayer {
+		return nil, nil, "", errors.New("player not found in room")
+	}
+
+	roomCode := room.code
+	if len(updatedPlayers) == 0 {
+		delete(l.rooms, roomCode)
+		session.roomCode = ""
+		return nil, nil, roomCode, nil
+	}
+
+	nextGameState := makeGameState()
+	if nextGameState == nil {
+		return nil, nil, "", errors.New("game state not initialized")
+	}
+	for _, player := range updatedPlayers {
+		if err := addPlayerToGameState(nextGameState, player.player); err != nil {
+			return nil, nil, "", err
+		}
+	}
+
+	nextHostID := room.hostID
+	if nextHostID == session.playerID || room.playerByID(nextHostID) == nil {
+		nextHostID = updatedPlayers[0].player.ID
+	}
+	for i, player := range updatedPlayers {
+		player.seat = i
+		player.host = player.player.ID == nextHostID
+	}
+
+	room.players = updatedPlayers
+	room.hostID = nextHostID
+	room.gameState = nextGameState
+	session.roomCode = ""
+
+	snapshot := room.snapshot()
+	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
 }
 
 func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
