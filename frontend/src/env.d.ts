@@ -8,4 +8,15 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
+declare global {
+  namespace NodeJS {
+    interface ProcessEnv {
+      readonly BETTER_AUTH_SECRET: string;
+      readonly BETTER_AUTH_URL: string;
+      readonly GOOGLE_CLIENT_ID: string;
+      readonly GOOGLE_CLIENT_SECRET: string;
+    }
+  }
+}
+
 export {};

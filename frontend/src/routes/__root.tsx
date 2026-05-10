@@ -6,13 +6,32 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { inject as InjectVercelAnalytics } from "@vercel/analytics";
 import { injectSpeedInsights as InjectVercelSpeedInsights } from "@vercel/speed-insights";
 import { ThemeProvider } from "#/components/theme-provider";
+import { getRequestHeaders } from "@tanstack/react-start/server";
+import type { QueryClient } from "@tanstack/react-query";
+import { createServerFn } from "@tanstack/react-start";
+import { authClient } from "#/lib/auth-client";
 
 import appCss from "../styles.css?url";
-import type { QueryClient } from "@tanstack/react-query";
+
+const getSession = createServerFn({ method: "GET" }).handler(async () => {
+  const headers = getRequestHeaders();
+  const { data: session } = await authClient.getSession({
+    fetchOptions: {
+      headers,
+    },
+  });
+  return session;
+});
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
+  beforeLoad: async () => {
+    const session = await getSession();
+    return {
+      session,
+    };
+  },
   head: () => ({
     meta: [
       {
