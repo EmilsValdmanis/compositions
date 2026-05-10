@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,6 +14,17 @@ import (
 	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/gorilla/websocket"
 )
+
+type staticSessionVerifier struct {
+	usersByToken map[string]authenticatedUser
+}
+
+func (v staticSessionVerifier) VerifySession(_ context.Context, bearerToken string) (authenticatedUser, error) {
+	if user, ok := v.usersByToken[bearerToken]; ok {
+		return user, nil
+	}
+	return authenticatedUser{}, errAuthenticationRequired
+}
 
 func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 	server := newWSServer()
@@ -95,6 +107,174 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
+	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
+		"host-token":  {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
+		"guest-token": {ID: "guest-user", Name: "Guest Account", Email: "guest@example.com"},
+	}})
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	unauthenticatedConn := mustDialWS(t, httpServer.URL)
+	defer unauthenticatedConn.Close()
+	mustSendEnvelope(t, unauthenticatedConn, "connect", connectRequest{})
+	mustReadError(t, unauthenticatedConn, errAuthenticationRequired.Error())
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	hostConnected := mustConnectAuthenticatedSession(t, hostConn, "", "host-token")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Spoofed Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+	if got := hostRoom.Players[0].Name; got != "Host Account" {
+		t.Fatalf("hostRoom.Players[0].Name = %q; want Host Account", got)
+	}
+
+	guestConn := mustDialWS(t, httpServer.URL)
+	defer guestConn.Close()
+	guestConnected := mustConnectAuthenticatedSession(t, guestConn, "", "guest-token")
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Spoofed Guest"})
+	guestRoom := mustReadRoomState(t, guestConn)
+	hostRoom = mustReadRoomState(t, hostConn)
+	for _, room := range []roomSnapshot{guestRoom, hostRoom} {
+		if room.Players[1].PlayerID != guestConnected.PlayerID {
+			t.Fatalf("room.Players[1].PlayerID = %q; want %q", room.Players[1].PlayerID, guestConnected.PlayerID)
+		}
+		if room.Players[1].Name != "Guest Account" {
+			t.Fatalf("room.Players[1].Name = %q; want Guest Account", room.Players[1].Name)
+		}
+	}
+
+	hijackConn := mustDialWS(t, httpServer.URL)
+	defer hijackConn.Close()
+	mustSendEnvelope(t, hijackConn, "connect", connectRequest{SessionID: hostConnected.SessionID, AuthToken: "guest-token"})
+	mustReadError(t, hijackConn, "session belongs to a different user")
+}
+
+func TestAuthenticatedWebSocketRejectsSecondLiveSocketForSameUser(t *testing.T) {
+	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
+		"same-user-token": {ID: "same-user", Name: "Same Account", Email: "same@example.com"},
+	}})
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	firstConn := mustDialWS(t, httpServer.URL)
+	defer firstConn.Close()
+	firstConnected := mustConnectAuthenticatedSession(t, firstConn, "", "same-user-token")
+
+	secondConn := mustDialWS(t, httpServer.URL)
+	defer secondConn.Close()
+	mustSendEnvelope(t, secondConn, "connect", connectRequest{AuthToken: "same-user-token"})
+	mustReadError(t, secondConn, "session already connected")
+	if len(server.lobby.sessions) != 1 {
+		t.Fatalf("len(server.lobby.sessions) = %d; want 1", len(server.lobby.sessions))
+	}
+
+	mustSendEnvelope(t, firstConn, "create_room", createRoomRequest{Name: "Should Work"})
+	room := mustReadRoomState(t, firstConn)
+	if room.HostPlayerID != firstConnected.PlayerID {
+		t.Fatalf("room.HostPlayerID = %q; want %q", room.HostPlayerID, firstConnected.PlayerID)
+	}
+}
+
+func TestAuthenticatedWebSocketReusesSessionAfterDisconnectForSameUser(t *testing.T) {
+	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
+		"same-user-token": {ID: "same-user", Name: "Same Account", Email: "same@example.com"},
+	}})
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	firstConn := mustDialWS(t, httpServer.URL)
+	firstConnected := mustConnectAuthenticatedSession(t, firstConn, "", "same-user-token")
+	if err := firstConn.Close(); err != nil {
+		t.Fatalf("firstConn.Close() error = %v", err)
+	}
+
+	secondConn := mustDialWS(t, httpServer.URL)
+	defer secondConn.Close()
+	secondConnected := mustConnectAuthenticatedSession(t, secondConn, "", "same-user-token")
+
+	if secondConnected.SessionID != firstConnected.SessionID {
+		t.Fatalf("secondConnected.SessionID = %q; want %q", secondConnected.SessionID, firstConnected.SessionID)
+	}
+	if secondConnected.PlayerID != firstConnected.PlayerID {
+		t.Fatalf("secondConnected.PlayerID = %q; want %q", secondConnected.PlayerID, firstConnected.PlayerID)
+	}
+}
+
+func TestAuthenticatedWebSocketRejectsUnexpectedOrigin(t *testing.T) {
+	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
+		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
+	}}, "http://frontend.test")
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	url := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws"
+	conn, resp, err := websocket.DefaultDialer.Dial(url, http.Header{"Origin": {"http://evil.test"}})
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("Dial() error = nil; want websocket upgrade rejection")
+	}
+	if resp == nil {
+		t.Fatal("Dial() response = nil; want forbidden response")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Dial() status = %d; want %d", resp.StatusCode, http.StatusForbidden)
+	}
+}
+
+func TestAuthenticatedWebSocketAcceptsConfiguredOrigin(t *testing.T) {
+	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
+		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
+	}}, "http://frontend.test")
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	url := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(url, http.Header{"Origin": {"http://frontend.test"}})
+	if err != nil {
+		t.Fatalf("Dial() error = %v", err)
+	}
+	defer conn.Close()
+
+	mustConnectAuthenticatedSession(t, conn, "", "host-token")
+}
+
+func TestWebSocketOriginHelpers(t *testing.T) {
+	t.Run("configured server allows empty origin for non-browser clients", func(t *testing.T) {
+		server := newWSServerWithAllowedOrigin(nil, "http://frontend.test/")
+		if !server.isAllowedOrigin("") {
+			t.Fatal("isAllowedOrigin(empty) = false; want true")
+		}
+		if !server.isAllowedOrigin("http://frontend.test/") {
+			t.Fatal("isAllowedOrigin(configured origin) = false; want true")
+		}
+	})
+
+	t.Run("invalid base url yields empty origin", func(t *testing.T) {
+		if got := originFromBaseURL("://bad"); got != "" {
+			t.Fatalf("originFromBaseURL(invalid) = %q; want empty", got)
+		}
+		if got := originFromBaseURL("frontend.test"); got != "" {
+			t.Fatalf("originFromBaseURL(missing scheme) = %q; want empty", got)
+		}
+	})
+}
+
+func TestInactiveSocketCannotMutateSessionState(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	connected := mustConnectSession(t, conn, "")
+
+	server.lobby.sessions[connected.SessionID].conn = nil
+
+	mustSendEnvelope(t, conn, "leave_room", leaveRoomRequest{})
+	mustReadError(t, conn, "session not active on this connection")
+}
+
 func TestWebSocketLeaveRoomFlow(t *testing.T) {
 	server := newWSServer()
 	httpServer := httptest.NewServer(server.routes())
@@ -131,7 +311,7 @@ func TestWebSocketLeaveRoomFlow(t *testing.T) {
 	mustReadError(t, guestConn, "join a room first")
 }
 
-func TestSupersededWebSocketConnectionCannotMutateSessionState(t *testing.T) {
+func TestSecondLiveWebSocketConnectionForSessionIsRejected(t *testing.T) {
 	server := newWSServer()
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
@@ -144,14 +324,11 @@ func TestSupersededWebSocketConnectionCannotMutateSessionState(t *testing.T) {
 
 	replacementConn := mustDialWS(t, httpServer.URL)
 	defer replacementConn.Close()
-	mustConnectSession(t, replacementConn, hostConnected.SessionID)
-	_ = mustReadRoomState(t, replacementConn)
+	mustSendEnvelope(t, replacementConn, "connect", connectRequest{SessionID: hostConnected.SessionID})
+	mustReadError(t, replacementConn, "session already connected")
 
 	mustSendEnvelope(t, hostConn, "leave_room", leaveRoomRequest{})
-	mustReadError(t, hostConn, "session not active on this connection")
-
-	mustSendEnvelope(t, replacementConn, "leave_room", leaveRoomRequest{})
-	left := mustReadLeftRoom(t, replacementConn)
+	left := mustReadLeftRoom(t, hostConn)
 	if left.RoomCode != hostRoom.Code {
 		t.Fatalf("left.RoomCode = %q; want %q", left.RoomCode, hostRoom.Code)
 	}
@@ -231,7 +408,7 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	hostRoom := mustReadRoomState(t, hostConn)
 
 	guestConn := mustDialWS(t, httpServer.URL)
-	mustConnectSession(t, guestConn, "")
+	guestConnected := mustConnectSession(t, guestConn, "")
 	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Guest"})
 	_ = mustReadRoomState(t, guestConn)
 	_ = mustReadRoomState(t, hostConn)
@@ -304,18 +481,29 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 
 	mustSendEnvelope(t, rawConn, "connect", connectRequest{SessionID: hostConnected.SessionID})
 	connectedEnvelope := mustReadEnvelopeFromConn(t, rawConn)
-	if connectedEnvelope.Type != "connected" {
-		t.Fatalf("connectedEnvelope.Type = %q; want connected", connectedEnvelope.Type)
+	if connectedEnvelope.Type != "error" {
+		t.Fatalf("connectedEnvelope.Type = %q; want error", connectedEnvelope.Type)
 	}
-	_ = mustReadRoomState(t, rawConn)
-	_ = mustReadRoomState(t, guestConn)
+	var reconnectError errorEvent
+	if err := json.Unmarshal(connectedEnvelope.Data, &reconnectError); err != nil {
+		t.Fatalf("json.Unmarshal(error event) error = %v", err)
+	}
+	if reconnectError.Message != "session already connected" {
+		t.Fatalf("reconnectError.Message = %q; want session already connected", reconnectError.Message)
+	}
+
+	mustSendEnvelope(t, hostConn, "leave_room", leaveRoomRequest{})
+	_ = mustReadLeftRoom(t, hostConn)
+	updatedGuestRoom := mustReadRoomState(t, guestConn)
+	if len(updatedGuestRoom.Players) != 1 {
+		t.Fatalf("len(updatedGuestRoom.Players) = %d; want 1", len(updatedGuestRoom.Players))
+	}
+	if updatedGuestRoom.Players[0].PlayerID != guestConnected.PlayerID {
+		t.Fatalf("updatedGuestRoom.Players[0].PlayerID = %q; want %q", updatedGuestRoom.Players[0].PlayerID, guestConnected.PlayerID)
+	}
 
 	if err := rawConn.Close(); err != nil {
 		t.Fatalf("rawConn.Close() error = %v", err)
-	}
-	updatedGuestRoom := mustReadRoomState(t, guestConn)
-	if updatedGuestRoom.Players[0].Connected {
-		t.Fatal("updatedGuestRoom.Players[0].Connected = true; want false")
 	}
 	if err := guestConn.Close(); err != nil {
 		t.Fatalf("guestConn.Close() error = %v", err)
@@ -489,7 +677,11 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 	conn := mustDialWS(t, httpServer.URL)
 	mustSendEnvelope(t, conn, "connect", connectRequest{SessionID: "missing"})
 	mustReadError(t, conn, "session not found")
+	if err := conn.Close(); err != nil {
+		t.Fatalf("conn.Close() after failed connect error = %v", err)
+	}
 
+	conn = mustDialWS(t, httpServer.URL)
 	mustConnectSession(t, conn, "")
 	if err := conn.WriteJSON(wsEnvelope{Type: "leave_room"}); err != nil {
 		t.Fatalf("WriteJSON(leave_room missing data) error = %v", err)

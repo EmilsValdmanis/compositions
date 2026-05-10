@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,6 +22,7 @@ type wsEnvelope struct {
 
 type connectRequest struct {
 	SessionID string `json:"sessionId"`
+	AuthToken string `json:"authToken"`
 }
 
 type createRoomRequest struct {
@@ -77,18 +81,66 @@ type playerSnapshot struct {
 
 type wsServer struct {
 	lobby    *lobbyServer
+	verifier sessionVerifier
+	allowedOrigin string
 	upgrader websocket.Upgrader
 }
 
 func newWSServer() *wsServer {
-	return &wsServer{
-		lobby: newLobbyServer(),
-		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
+	return newWSServerWithVerifier(nil)
+}
+
+func newWSServerWithVerifier(verifier sessionVerifier) *wsServer {
+	return newWSServerWithAllowedOrigin(verifier, "")
+}
+
+func newWSServerWithAllowedOrigin(verifier sessionVerifier, allowedOrigin string) *wsServer {
+	server := &wsServer{
+		lobby:         newLobbyServer(),
+		verifier:      verifier,
+		allowedOrigin: normalizeOrigin(allowedOrigin),
+	}
+	server.upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return server.isAllowedOrigin(r.Header.Get("Origin"))
 		},
 	}
+	return server
+}
+
+func newConfiguredWSServer() (*wsServer, error) {
+	baseURL, err := betterAuthBaseURLFromEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	verifier := newBetterAuthSessionVerifier(baseURL, nil)
+	return newWSServerWithAllowedOrigin(verifier, originFromBaseURL(baseURL)), nil
+}
+
+func (s *wsServer) isAllowedOrigin(origin string) bool {
+	if s == nil || s.allowedOrigin == "" {
+		return true
+	}
+
+	cleanOrigin := normalizeOrigin(origin)
+	if cleanOrigin == "" {
+		return true
+	}
+
+	return cleanOrigin == s.allowedOrigin
+}
+
+func normalizeOrigin(origin string) string {
+	return strings.TrimRight(strings.TrimSpace(origin), "/")
+}
+
+func originFromBaseURL(baseURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+	return normalizeOrigin(parsed.Scheme + "://" + parsed.Host)
 }
 
 func (s *wsServer) routes() http.Handler {
@@ -163,10 +215,20 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 		return "", false
 	}
 
-	event, roomState, recipients, err := s.lobby.connect(req.SessionID, conn)
+	user := authenticatedUser{}
+	if s.verifier != nil {
+		verifiedUser, err := s.verifier.VerifySession(context.Background(), req.AuthToken)
+		if err != nil {
+			s.writeError(conn, err)
+			return "", true
+		}
+		user = verifiedUser
+	}
+
+	event, roomState, recipients, err := s.lobby.connectWithUser(req.SessionID, user, conn)
 	if err != nil {
 		s.writeError(conn, err)
-		return "", false
+		return "", true
 	}
 	if err := emitEvent(conn, "connected", event); err != nil {
 		return "", true

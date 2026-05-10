@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { getGameConnectionAuth } from "#/lib/game-auth";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
@@ -34,13 +35,15 @@ type Envelope<T = unknown> = {
   data?: T;
 };
 
+type ConnectionAuth = Awaited<ReturnType<typeof getGameConnectionAuth>>;
+
 type GameWebSocketContextValue = {
   state: LobbyState;
   isConnected: boolean;
-  connect: () => void;
+  connect: () => Promise<void>;
   disconnect: () => void;
-  createRoom: (name: string) => void;
-  joinRoom: (roomCode: string, name: string) => void;
+  createRoom: () => void;
+  joinRoom: (roomCode: string) => void;
   startGame: () => void;
   leaveRoom: () => void;
 };
@@ -55,6 +58,36 @@ const initialState: LobbyState = {
 };
 
 const GameWebSocketContext = createContext<GameWebSocketContextValue | null>(null);
+
+const incomingMessageReducers: Record<string, (current: LobbyState, data: any) => LobbyState> = {
+  connected: (current, data) => ({
+    ...current,
+    connectionStatus: "connected",
+    sessionId: data?.sessionId ?? current.sessionId,
+    playerId: data?.playerId ?? current.playerId,
+    lastError: null,
+    lastEvent: "connected",
+  }),
+  room_state: (current, data) => ({
+    ...current,
+    room: data?.room ?? null,
+    lastError: null,
+    lastEvent: "room_state",
+  }),
+  left_room: (current) => ({
+    ...current,
+    room: null,
+    lastError: null,
+    lastEvent: "left_room",
+  }),
+  error: (current, data) => ({
+    ...current,
+    connectionStatus:
+      current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
+    lastError: data?.message ?? "unknown error",
+    lastEvent: "error",
+  }),
+};
 
 function getDealerIndex(room: RoomSnapshot | null) {
   if (!room || room.players.length === 0) {
@@ -79,6 +112,59 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     setState((current) => updater(current));
   }
 
+  function setConnectionError(message: string) {
+    updateState((current) => ({
+      ...current,
+      connectionStatus: "disconnected",
+      lastError: message,
+    }));
+  }
+
+  function resolveConnectionAuthError(error: unknown) {
+    if (error instanceof Error && error.message.trim() !== "") {
+      return error.message;
+    }
+    return "failed to resolve websocket authentication";
+  }
+
+  function parseEnvelope(rawData: unknown): Envelope | null {
+    if (typeof rawData !== "string") {
+      return null;
+    }
+
+    try {
+      const message = JSON.parse(rawData) as Envelope;
+      if (typeof message?.type !== "string" || message.type === "") {
+        return null;
+      }
+      return message;
+    } catch {
+      return null;
+    }
+  }
+
+  function applyIncomingMessage(message: Envelope) {
+    const reducer = incomingMessageReducers[message.type];
+    if (!reducer) {
+      updateState((current) => ({
+        ...current,
+        lastError: `unknown websocket message: ${message.type}`,
+      }));
+      return;
+    }
+
+    updateState((current) => reducer(current, message.data));
+  }
+
+  async function getConnectionAuth(): Promise<ConnectionAuth> {
+    try {
+      return await getGameConnectionAuth();
+    } catch (error) {
+      setConnectionError(resolveConnectionAuthError(error));
+      return null;
+    }
+  }
+
   function send(type: string, data: unknown) {
     const socket = socketRef.current;
 
@@ -98,7 +184,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     }));
   }
 
-  function connect() {
+  async function connect() {
     const currentSocket = socketRef.current;
 
     if (
@@ -112,16 +198,20 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     const serverUrl = import.meta.env.VITE_GAME_SERVER_URL;
 
     if (!serverUrl) {
-      updateState((current) => ({
-        ...current,
-        lastError: "missing VITE_GAME_SERVER_URL",
-      }));
+      setConnectionError("missing VITE_GAME_SERVER_URL");
+      return;
+    }
+
+    const connectionAuth = await getConnectionAuth();
+    if (!connectionAuth?.authToken) {
+      setConnectionError("authentication required before connecting");
       return;
     }
 
     const wsUrl = new URL("/ws", serverUrl).toString();
     const socket = new WebSocket(wsUrl);
     const sessionId = state.sessionId;
+    const authToken = connectionAuth.authToken;
     socketRef.current = socket;
 
     updateState((current) => ({
@@ -132,55 +222,21 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     }));
 
     socket.onopen = () => {
-      socket.send(JSON.stringify({ type: "connect", data: { sessionId } }));
+      socket.send(JSON.stringify({ type: "connect", data: { sessionId, authToken } }));
     };
 
     socket.onmessage = (event) => {
-      const message = JSON.parse(event.data) as Envelope<any>;
-
-      switch (message.type) {
-        case "connected":
-          updateState((current) => ({
-            ...current,
-            connectionStatus: "connected",
-            sessionId: message.data?.sessionId ?? current.sessionId,
-            playerId: message.data?.playerId ?? current.playerId,
-            lastError: null,
-            lastEvent: "connected",
-          }));
-          return;
-        case "room_state":
-          updateState((current) => ({
-            ...current,
-            room: message.data?.room ?? null,
-            lastError: null,
-            lastEvent: "room_state",
-          }));
-          return;
-        case "left_room":
-          updateState((current) => ({
-            ...current,
-            room: null,
-            lastError: null,
-            lastEvent: "left_room",
-          }));
-          return;
-        case "error":
-          updateState((current) => ({
-            ...current,
-            lastError: message.data?.message ?? "unknown error",
-            lastEvent: "error",
-          }));
-          return;
+      const message = parseEnvelope(event.data);
+      if (!message) {
+        setConnectionError("received invalid websocket message");
+        return;
       }
+
+      applyIncomingMessage(message);
     };
 
     socket.onerror = () => {
-      updateState((current) => ({
-        ...current,
-        connectionStatus: "disconnected",
-        lastError: "failed to connect websocket",
-      }));
+      setConnectionError("failed to connect websocket");
     };
 
     socket.onclose = () => {
@@ -209,8 +265,8 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     isConnected: state.connectionStatus === "connected",
     connect,
     disconnect,
-    createRoom: (name) => send("create_room", { name }),
-    joinRoom: (roomCode, name) => send("join_room", { roomCode, name }),
+    createRoom: () => send("create_room", {}),
+    joinRoom: (roomCode) => send("join_room", { roomCode }),
     startGame: () => send("start_game", { dealerIndex: getDealerIndex(state.room) }),
     leaveRoom: () => send("leave_room", {}),
   };

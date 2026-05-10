@@ -20,10 +20,13 @@ const (
 )
 
 type playerSession struct {
-	sessionID string
-	playerID  string
-	conn      *websocket.Conn
-	roomCode  string
+	sessionID     string
+	playerID      string
+	conn          *websocket.Conn
+	roomCode      string
+	authUserID    string
+	displayName   string
+	authenticated bool
 }
 
 type roomPlayer struct {
@@ -63,28 +66,53 @@ func newLobbyServer() *lobbyServer {
 }
 
 func (l *lobbyServer) connect(existingSessionID string, conn *websocket.Conn) (connectedEvent, *roomSnapshot, []*websocket.Conn, error) {
+	return l.connectWithUser(existingSessionID, authenticatedUser{}, conn)
+}
+
+func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticatedUser, conn *websocket.Conn) (connectedEvent, *roomSnapshot, []*websocket.Conn, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	if existingSessionID != "" {
-		return l.connectExistingSession(existingSessionID, conn)
+		return l.connectExistingSessionWithUser(existingSessionID, user, conn)
+	}
+	if user.isAuthenticated() {
+		if existingSession := l.sessionByAuthUserID(user.ID); existingSession != nil {
+			return l.connectExistingSessionWithUser(existingSession.sessionID, user, conn)
+		}
 	}
 
 	sessionID := uuid.NewString()
 	playerID := newPlayer().ID
 	l.sessions[sessionID] = &playerSession{
-		sessionID: sessionID,
-		playerID:  playerID,
-		conn:      conn,
+		sessionID:     sessionID,
+		playerID:      playerID,
+		conn:          conn,
+		authUserID:    user.ID,
+		displayName:   user.displayName(),
+		authenticated: user.isAuthenticated(),
 	}
 
 	return connectedEvent{SessionID: sessionID, PlayerID: playerID}, nil, nil, nil
 }
 
-func (l *lobbyServer) connectExistingSession(existingSessionID string, conn *websocket.Conn) (connectedEvent, *roomSnapshot, []*websocket.Conn, error) {
+
+func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, user authenticatedUser, conn *websocket.Conn) (connectedEvent, *roomSnapshot, []*websocket.Conn, error) {
 	session, ok := l.sessions[existingSessionID]
 	if !ok {
 		return connectedEvent{}, nil, nil, errors.New("session not found")
+	}
+	if session.authenticated != user.isAuthenticated() {
+		return connectedEvent{}, nil, nil, errAuthenticationRequired
+	}
+	if session.authenticated && session.authUserID != user.ID {
+		return connectedEvent{}, nil, nil, errors.New("session belongs to a different user")
+	}
+	if session.conn != nil && session.conn != conn {
+		return connectedEvent{}, nil, nil, errors.New("session already connected")
+	}
+	if session.authenticated {
+		session.displayName = user.displayName()
 	}
 
 	session.conn = conn
@@ -94,6 +122,9 @@ func (l *lobbyServer) connectExistingSession(existingSessionID string, conn *web
 		player := room.playerByID(session.playerID)
 		player.connected = true
 		player.sessionID = session.sessionID
+		if session.authenticated {
+			player.name = session.displayName
+		}
 		snapshot := room.snapshot()
 		roomState = &snapshot
 		recipients = room.connectedConns(l.sessions)
@@ -113,7 +144,7 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	if l.sessionRoom(session) != nil {
 		return roomSnapshot{}, nil, errors.New("already in a room")
 	}
-	cleanName, err := normalizePlayerName(name)
+	cleanName, err := session.playerName(name)
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
@@ -170,7 +201,7 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 		return roomSnapshot{}, nil, errors.New("room is full")
 	}
 
-	cleanName, err := normalizePlayerName(name)
+	cleanName, err := session.playerName(name)
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
@@ -337,6 +368,22 @@ func (l *lobbyServer) requireSession(sessionID string) (*playerSession, error) {
 		return nil, errors.New("session not found")
 	}
 	return session, nil
+}
+
+func (l *lobbyServer) sessionByAuthUserID(authUserID string) *playerSession {
+	for _, session := range l.sessions {
+		if session != nil && session.authenticated && session.authUserID == authUserID {
+			return session
+		}
+	}
+	return nil
+}
+
+func (s *playerSession) playerName(fallback string) (string, error) {
+	if s != nil && s.authenticated {
+		return normalizePlayerName(s.displayName)
+	}
+	return normalizePlayerName(fallback)
 }
 
 func (l *lobbyServer) requireActiveSessionConnection(sessionID string, conn *websocket.Conn) error {

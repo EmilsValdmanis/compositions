@@ -17,6 +17,7 @@ func TestRunServerAndMain(t *testing.T) {
 	defer func() { listenAndServe = originalListen }()
 	originalFatal := fatalOnRunError
 	defer func() { fatalOnRunError = originalFatal }()
+	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
 
 	calledAddrs := make([]string, 0, 2)
 	listenAndServe = func(addr string, handler http.Handler) error {
@@ -55,6 +56,26 @@ func TestRunServerAndMain(t *testing.T) {
 	}
 	if len(calledAddrs) != 2 || calledAddrs[1] != ":8080" {
 		t.Fatalf("calledAddrs = %v; want [:0 :8080]", calledAddrs)
+	}
+}
+
+func TestRunServerReturnsEnvErrorBeforeListen(t *testing.T) {
+	originalListen := listenAndServe
+	defer func() { listenAndServe = originalListen }()
+	t.Setenv("BETTER_AUTH_URL", "")
+
+	listenCalled := false
+	listenAndServe = func(addr string, handler http.Handler) error {
+		listenCalled = true
+		return nil
+	}
+
+	err := runServer(":0")
+	if err == nil || err.Error() != "BETTER_AUTH_URL is required" {
+		t.Fatalf("runServer() error = %v; want BETTER_AUTH_URL is required", err)
+	}
+	if listenCalled {
+		t.Fatal("listenAndServe() was called; want startup to fail before listen")
 	}
 }
 
@@ -126,6 +147,19 @@ func mustConnectSession(t *testing.T, conn *websocket.Conn, sessionID string) co
 	t.Helper()
 
 	mustSendEnvelope(t, conn, "connect", connectRequest{SessionID: sessionID})
+	return mustReadConnectedEvent(t, conn)
+}
+
+func mustConnectAuthenticatedSession(t *testing.T, conn *websocket.Conn, sessionID, authToken string) connectedEvent {
+	t.Helper()
+
+	mustSendEnvelope(t, conn, "connect", connectRequest{SessionID: sessionID, AuthToken: authToken})
+	return mustReadConnectedEvent(t, conn)
+}
+
+func mustReadConnectedEvent(t *testing.T, conn *websocket.Conn) connectedEvent {
+	t.Helper()
+
 	envelope := mustReadEnvelopeFromConn(t, conn)
 	if envelope.Type != "connected" {
 		t.Fatalf("connect response type = %q; want connected", envelope.Type)

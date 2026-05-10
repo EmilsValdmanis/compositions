@@ -241,6 +241,163 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		}
 	})
 
+	t.Run("authenticated reconnect requires authenticated user", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+
+		event, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Host User"}, conn)
+		if err != nil {
+			t.Fatalf("connectWithUser() error = %v", err)
+		}
+
+		reconnectConn, _, reconnectCleanup := newSocketPair(t)
+		defer reconnectCleanup()
+
+		if _, _, _, err := lobby.connectExistingSessionWithUser(event.SessionID, authenticatedUser{}, reconnectConn); !errors.Is(err, errAuthenticationRequired) {
+			t.Fatalf("connectExistingSessionWithUser() error = %v; want errAuthenticationRequired", err)
+		}
+	})
+
+	t.Run("authenticated connect rejects second live socket", func(t *testing.T) {
+		lobby := newLobbyServer()
+		firstConn, _, firstCleanup := newSocketPair(t)
+		defer firstCleanup()
+
+		firstEvent, firstRoomState, firstRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name"}, firstConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(first) error = %v", err)
+		}
+		if firstRoomState != nil {
+			t.Fatalf("firstRoomState = %#v; want nil", firstRoomState)
+		}
+		if len(firstRecipients) != 0 {
+			t.Fatalf("len(firstRecipients) = %d; want 0", len(firstRecipients))
+		}
+		if len(lobby.sessions) != 1 {
+			t.Fatalf("len(lobby.sessions) = %d; want 1", len(lobby.sessions))
+		}
+
+		secondConn, _, secondCleanup := newSocketPair(t)
+		defer secondCleanup()
+
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name"}, secondConn)
+		if err == nil || err.Error() != "session already connected" {
+			t.Fatalf("connectWithUser(second) error = %v; want session already connected", err)
+		}
+		if secondEvent != (connectedEvent{}) {
+			t.Fatalf("secondEvent = %#v; want zero value", secondEvent)
+		}
+		if secondRoomState != nil {
+			t.Fatalf("secondRoomState = %#v; want nil", secondRoomState)
+		}
+		if len(secondRecipients) != 0 {
+			t.Fatalf("len(secondRecipients) = %d; want 0", len(secondRecipients))
+		}
+		if len(lobby.sessions) != 1 {
+			t.Fatalf("len(lobby.sessions) = %d; want 1 after rejected second socket", len(lobby.sessions))
+		}
+
+		session := lobby.sessions[firstEvent.SessionID]
+		if session == nil {
+			t.Fatal("session = nil; want existing session")
+		}
+		if session.conn != firstConn {
+			t.Fatal("session.conn changed; want first connection to stay active")
+		}
+		if session.displayName != "First Name" {
+			t.Fatalf("session.displayName = %q; want First Name", session.displayName)
+		}
+	})
+
+	t.Run("authenticated connect reuses session after disconnect", func(t *testing.T) {
+		lobby := newLobbyServer()
+		firstConn, _, firstCleanup := newSocketPair(t)
+		defer firstCleanup()
+
+		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name"}, firstConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(first) error = %v", err)
+		}
+
+		lobby.disconnect(firstEvent.SessionID, firstConn)
+
+		secondConn, _, secondCleanup := newSocketPair(t)
+		defer secondCleanup()
+
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name"}, secondConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(second) error = %v", err)
+		}
+		if secondEvent.SessionID != firstEvent.SessionID {
+			t.Fatalf("secondEvent.SessionID = %q; want %q", secondEvent.SessionID, firstEvent.SessionID)
+		}
+		if secondEvent.PlayerID != firstEvent.PlayerID {
+			t.Fatalf("secondEvent.PlayerID = %q; want %q", secondEvent.PlayerID, firstEvent.PlayerID)
+		}
+		if secondRoomState != nil {
+			t.Fatalf("secondRoomState = %#v; want nil", secondRoomState)
+		}
+		if len(secondRecipients) != 0 {
+			t.Fatalf("len(secondRecipients) = %d; want 0", len(secondRecipients))
+		}
+
+		session := lobby.sessions[firstEvent.SessionID]
+		if session == nil {
+			t.Fatal("session = nil; want existing session")
+		}
+		if session.conn != secondConn {
+			t.Fatal("session.conn was not updated to reconnected connection")
+		}
+		if session.displayName != "Updated Name" {
+			t.Fatalf("session.displayName = %q; want Updated Name", session.displayName)
+		}
+	})
+
+	t.Run("authenticated reconnect updates room player name", func(t *testing.T) {
+		lobby := newLobbyServer()
+		firstConn, _, firstCleanup := newSocketPair(t)
+		defer firstCleanup()
+
+		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name"}, firstConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(first) error = %v", err)
+		}
+		roomState, _, err := lobby.createRoom(firstEvent.SessionID, "ignored")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		if roomState.Players[0].Name != "First Name" {
+			t.Fatalf("roomState.Players[0].Name = %q; want First Name", roomState.Players[0].Name)
+		}
+
+		lobby.disconnect(firstEvent.SessionID, firstConn)
+
+		secondConn, _, secondCleanup := newSocketPair(t)
+		defer secondCleanup()
+
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name"}, secondConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(second) error = %v", err)
+		}
+		if secondEvent.SessionID != firstEvent.SessionID {
+			t.Fatalf("secondEvent.SessionID = %q; want %q", secondEvent.SessionID, firstEvent.SessionID)
+		}
+		if secondRoomState == nil {
+			t.Fatal("secondRoomState = nil; want room snapshot")
+		}
+		if secondRoomState.Players[0].Name != "Updated Name" {
+			t.Fatalf("secondRoomState.Players[0].Name = %q; want Updated Name", secondRoomState.Players[0].Name)
+		}
+		if len(secondRecipients) != 1 || secondRecipients[0] != secondConn {
+			t.Fatalf("secondRecipients = %v; want [%p]", secondRecipients, secondConn)
+		}
+
+		if err := lobby.requireActiveSessionConnection(firstEvent.SessionID, firstConn); err == nil || err.Error() != "session not active on this connection" {
+			t.Fatalf("requireActiveSessionConnection(stale) error = %v; want session not active on this connection", err)
+		}
+	})
+
 	t.Run("stale room membership is cleared", func(t *testing.T) {
 		lobby := newLobbyServer()
 		conn, _, cleanup := newSocketPair(t)

@@ -1,12 +1,11 @@
-import { authClient } from "#/lib/auth-client";
+import { GameWebSocketActions } from "#/components/game-websocket-actions";
 import { ModeToggle } from "#/components/mode-toggle";
 import { ServerStatusBadge } from "#/components/server-status-badge";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { getUserInitials } from "#/lib/utils";
-import { Button } from "#/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Login01Icon, Logout02FreeIcons } from "@hugeicons/core-free-icons";
+import SignInButton from "#/components/auth/sign-in-button";
+import SignOutButton from "#/components/auth/sign-out-button";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -14,18 +13,6 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   const { session } = Route.useRouteContext();
-  const router = useRouter();
-
-  const handleGoogleSignIn = async () => {
-    await authClient.signIn.social({
-      provider: "google",
-    });
-  };
-
-  const handleSignOut = async () => {
-    await authClient.signOut();
-    await router.invalidate();
-  };
 
   const user = session?.user;
   const displayName = user?.name || "";
@@ -38,11 +25,7 @@ function Home() {
         <ServerStatusBadge />
         <ModeToggle />
       </div>
-      {!session && (
-        <Button onClick={handleGoogleSignIn}>
-          Sign in <HugeiconsIcon icon={Login01Icon} />
-        </Button>
-      )}
+      {!session && <SignInButton />}
       {session && (
         <div className="flex items-center gap-4">
           <Avatar>
@@ -50,11 +33,10 @@ function Home() {
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
           <p className="text-xs">{displayName}</p>
-          <Button variant="destructive" size="icon" onClick={handleSignOut}>
-            <HugeiconsIcon icon={Logout02FreeIcons} />
-          </Button>
+          <SignOutButton />
         </div>
       )}
+      <GameWebSocketActions />
     </main>
   );
 }

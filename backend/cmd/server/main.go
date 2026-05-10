@@ -15,7 +15,10 @@ func main() {
 }
 
 func runServer(addr string) error {
-	server := newWSServer()
+	server, err := newConfiguredWSServer()
+	if err != nil {
+		return err
+	}
 	log.Printf("server running on %s", addr)
 	return listenAndServe(addr, server.routes())
 }
