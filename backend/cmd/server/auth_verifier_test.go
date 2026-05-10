@@ -184,11 +184,12 @@ func TestBetterAuthSessionVerifierVerifySession(t *testing.T) {
 		{
 			name:       "success with email fallback",
 			statusCode: http.StatusOK,
-			body:       `{"user":{"id":"user-1","name":"","email":"player@example.com"}}`,
+			body:       `{"user":{"id":"user-1","name":"","email":"player@example.com","image":"https://cdn.example.com/player.png"}}`,
 			wantUser: authenticatedUser{
 				ID:    "user-1",
 				Name:  "",
 				Email: "player@example.com",
+				Image: "https://cdn.example.com/player.png",
 			},
 		},
 	}

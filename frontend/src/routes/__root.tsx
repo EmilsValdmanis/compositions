@@ -5,11 +5,12 @@ import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import { inject as InjectVercelAnalytics } from "@vercel/analytics";
 import { injectSpeedInsights as InjectVercelSpeedInsights } from "@vercel/speed-insights";
-import { ThemeProvider } from "#/components/theme-provider";
+import { ThemeProvider, useTheme } from "#/components/theme-provider";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { authClient } from "#/lib/auth-client";
+import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 
@@ -59,6 +60,8 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   InjectVercelAnalytics();
   InjectVercelSpeedInsights();
 
+  const { theme } = useTheme();
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -67,6 +70,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <ThemeProvider defaultTheme="system" storageKey="theme">
           <GameWebSocketProvider>{children}</GameWebSocketProvider>
+          <Toaster richColors theme={theme} />
         </ThemeProvider>
         <TanStackDevtools
           config={{

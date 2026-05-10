@@ -264,7 +264,7 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		firstConn, _, firstCleanup := newSocketPair(t)
 		defer firstCleanup()
 
-		firstEvent, firstRoomState, firstRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name"}, firstConn)
+		firstEvent, firstRoomState, firstRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name", Image: "https://cdn.example.com/first.png"}, firstConn)
 		if err != nil {
 			t.Fatalf("connectWithUser(first) error = %v", err)
 		}
@@ -281,7 +281,7 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		secondConn, _, secondCleanup := newSocketPair(t)
 		defer secondCleanup()
 
-		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name"}, secondConn)
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name", Image: "https://cdn.example.com/updated.png"}, secondConn)
 		if err == nil || err.Error() != "session already connected" {
 			t.Fatalf("connectWithUser(second) error = %v; want session already connected", err)
 		}
@@ -308,6 +308,9 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		if session.displayName != "First Name" {
 			t.Fatalf("session.displayName = %q; want First Name", session.displayName)
 		}
+		if session.imageURL != "https://cdn.example.com/first.png" {
+			t.Fatalf("session.imageURL = %q; want https://cdn.example.com/first.png", session.imageURL)
+		}
 	})
 
 	t.Run("authenticated connect reuses session after disconnect", func(t *testing.T) {
@@ -315,7 +318,7 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		firstConn, _, firstCleanup := newSocketPair(t)
 		defer firstCleanup()
 
-		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name"}, firstConn)
+		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name", Image: "https://cdn.example.com/first.png"}, firstConn)
 		if err != nil {
 			t.Fatalf("connectWithUser(first) error = %v", err)
 		}
@@ -325,7 +328,7 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		secondConn, _, secondCleanup := newSocketPair(t)
 		defer secondCleanup()
 
-		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name"}, secondConn)
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name", Image: "https://cdn.example.com/updated.png"}, secondConn)
 		if err != nil {
 			t.Fatalf("connectWithUser(second) error = %v", err)
 		}
@@ -352,6 +355,9 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		if session.displayName != "Updated Name" {
 			t.Fatalf("session.displayName = %q; want Updated Name", session.displayName)
 		}
+		if session.imageURL != "https://cdn.example.com/updated.png" {
+			t.Fatalf("session.imageURL = %q; want https://cdn.example.com/updated.png", session.imageURL)
+		}
 	})
 
 	t.Run("authenticated reconnect updates room player name", func(t *testing.T) {
@@ -359,7 +365,7 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		firstConn, _, firstCleanup := newSocketPair(t)
 		defer firstCleanup()
 
-		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name"}, firstConn)
+		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First Name", Image: "https://cdn.example.com/first.png"}, firstConn)
 		if err != nil {
 			t.Fatalf("connectWithUser(first) error = %v", err)
 		}
@@ -370,13 +376,16 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		if roomState.Players[0].Name != "First Name" {
 			t.Fatalf("roomState.Players[0].Name = %q; want First Name", roomState.Players[0].Name)
 		}
+		if roomState.Players[0].ImageURL != "https://cdn.example.com/first.png" {
+			t.Fatalf("roomState.Players[0].ImageURL = %q; want https://cdn.example.com/first.png", roomState.Players[0].ImageURL)
+		}
 
 		lobby.disconnect(firstEvent.SessionID, firstConn)
 
 		secondConn, _, secondCleanup := newSocketPair(t)
 		defer secondCleanup()
 
-		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name"}, secondConn)
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name", Image: "https://cdn.example.com/updated.png"}, secondConn)
 		if err != nil {
 			t.Fatalf("connectWithUser(second) error = %v", err)
 		}
@@ -389,12 +398,50 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		if secondRoomState.Players[0].Name != "Updated Name" {
 			t.Fatalf("secondRoomState.Players[0].Name = %q; want Updated Name", secondRoomState.Players[0].Name)
 		}
+		if secondRoomState.Players[0].ImageURL != "https://cdn.example.com/updated.png" {
+			t.Fatalf("secondRoomState.Players[0].ImageURL = %q; want https://cdn.example.com/updated.png", secondRoomState.Players[0].ImageURL)
+		}
 		if len(secondRecipients) != 1 || secondRecipients[0] != secondConn {
 			t.Fatalf("secondRecipients = %v; want [%p]", secondRecipients, secondConn)
 		}
 
 		if err := lobby.requireActiveSessionConnection(firstEvent.SessionID, firstConn); err == nil || err.Error() != "session not active on this connection" {
 			t.Fatalf("requireActiveSessionConnection(stale) error = %v; want session not active on this connection", err)
+		}
+	})
+
+	t.Run("authenticated room snapshot includes image url", func(t *testing.T) {
+		lobby := newLobbyServer()
+		hostConn, _, closeHostPair := newSocketPair(t)
+		defer closeHostPair()
+
+		hostEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Host User", Image: "https://cdn.example.com/host.png"}, hostConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(host) error = %v", err)
+		}
+
+		roomState, _, err := lobby.createRoom(hostEvent.SessionID, "ignored")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		if roomState.Players[0].ImageURL != "https://cdn.example.com/host.png" {
+			t.Fatalf("roomState.Players[0].ImageURL = %q; want https://cdn.example.com/host.png", roomState.Players[0].ImageURL)
+		}
+
+		guestConn, _, closeGuestPair := newSocketPair(t)
+		defer closeGuestPair()
+
+		guestEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-2", Name: "Guest User", Image: "https://cdn.example.com/guest.png"}, guestConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(guest) error = %v", err)
+		}
+
+		joinedRoom, _, err := lobby.joinRoom(guestEvent.SessionID, roomState.Code, "ignored")
+		if err != nil {
+			t.Fatalf("joinRoom() error = %v", err)
+		}
+		if joinedRoom.Players[1].ImageURL != "https://cdn.example.com/guest.png" {
+			t.Fatalf("joinedRoom.Players[1].ImageURL = %q; want https://cdn.example.com/guest.png", joinedRoom.Players[1].ImageURL)
 		}
 	})
 

@@ -73,6 +73,7 @@ type playerSnapshot struct {
 	PlayerID     string `json:"playerId"`
 	SessionID    string `json:"sessionId"`
 	Name         string `json:"name"`
+	ImageURL     string `json:"imageUrl,omitempty"`
 	Connected    bool   `json:"connected"`
 	Seat         int    `json:"seat"`
 	IsHost       bool   `json:"isHost"`

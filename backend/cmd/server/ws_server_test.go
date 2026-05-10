@@ -109,8 +109,8 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 
 func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"host-token":  {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
-		"guest-token": {ID: "guest-user", Name: "Guest Account", Email: "guest@example.com"},
+		"host-token":  {ID: "host-user", Name: "Host Account", Email: "host@example.com", Image: "https://cdn.example.com/host.png"},
+		"guest-token": {ID: "guest-user", Name: "Guest Account", Email: "guest@example.com", Image: "https://cdn.example.com/guest.png"},
 	}})
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
@@ -128,6 +128,9 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	if got := hostRoom.Players[0].Name; got != "Host Account" {
 		t.Fatalf("hostRoom.Players[0].Name = %q; want Host Account", got)
 	}
+	if got := hostRoom.Players[0].ImageURL; got != "https://cdn.example.com/host.png" {
+		t.Fatalf("hostRoom.Players[0].ImageURL = %q; want https://cdn.example.com/host.png", got)
+	}
 
 	guestConn := mustDialWS(t, httpServer.URL)
 	defer guestConn.Close()
@@ -141,6 +144,9 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 		}
 		if room.Players[1].Name != "Guest Account" {
 			t.Fatalf("room.Players[1].Name = %q; want Guest Account", room.Players[1].Name)
+		}
+		if room.Players[1].ImageURL != "https://cdn.example.com/guest.png" {
+			t.Fatalf("room.Players[1].ImageURL = %q; want https://cdn.example.com/guest.png", room.Players[1].ImageURL)
 		}
 	}
 

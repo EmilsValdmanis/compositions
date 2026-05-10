@@ -26,12 +26,14 @@ type playerSession struct {
 	roomCode      string
 	authUserID    string
 	displayName   string
+	imageURL      string
 	authenticated bool
 }
 
 type roomPlayer struct {
 	player    *game.Player
 	name      string
+	imageURL  string
 	sessionID string
 	connected bool
 	seat      int
@@ -90,6 +92,7 @@ func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticat
 		conn:          conn,
 		authUserID:    user.ID,
 		displayName:   user.displayName(),
+		imageURL:      user.Image,
 		authenticated: user.isAuthenticated(),
 	}
 
@@ -113,6 +116,7 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 	}
 	if session.authenticated {
 		session.displayName = user.displayName()
+		session.imageURL = user.Image
 	}
 
 	session.conn = conn
@@ -124,6 +128,7 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 		player.sessionID = session.sessionID
 		if session.authenticated {
 			player.name = session.displayName
+			player.imageURL = session.imageURL
 		}
 		snapshot := room.snapshot()
 		roomState = &snapshot
@@ -157,6 +162,7 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	player := &roomPlayer{
 		player:    newPlayerWithID(session.playerID),
 		name:      cleanName,
+		imageURL:  session.imageURL,
 		sessionID: session.sessionID,
 		connected: true,
 		seat:      0,
@@ -209,6 +215,7 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	player := &roomPlayer{
 		player:    newPlayerWithID(session.playerID),
 		name:      cleanName,
+		imageURL:  session.imageURL,
 		sessionID: session.sessionID,
 		connected: true,
 		seat:      len(room.players),
@@ -452,6 +459,7 @@ func (r *room) snapshot() roomSnapshot {
 			PlayerID:     player.player.ID,
 			SessionID:    player.sessionID,
 			Name:         player.name,
+			ImageURL:     player.imageURL,
 			Connected:    player.connected,
 			Seat:         player.seat,
 			IsHost:       player.host,

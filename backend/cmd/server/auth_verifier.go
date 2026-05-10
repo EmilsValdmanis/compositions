@@ -17,6 +17,7 @@ type authenticatedUser struct {
 	ID    string
 	Name  string
 	Email string
+	Image string
 }
 
 func (u authenticatedUser) isAuthenticated() bool {
@@ -47,6 +48,7 @@ type betterAuthSessionResponse struct {
 		ID    string `json:"id"`
 		Name  string `json:"name"`
 		Email string `json:"email"`
+		Image string `json:"image"`
 	} `json:"user"`
 }
 
@@ -114,6 +116,7 @@ func (v *betterAuthSessionVerifier) VerifySession(ctx context.Context, bearerTok
 		ID:    strings.TrimSpace(payload.User.ID),
 		Name:  strings.TrimSpace(payload.User.Name),
 		Email: strings.TrimSpace(payload.User.Email),
+		Image: strings.TrimSpace(payload.User.Image),
 	}
 	if !user.isAuthenticated() || user.displayName() == "" {
 		return authenticatedUser{}, errAuthenticationRequired

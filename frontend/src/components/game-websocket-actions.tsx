@@ -7,12 +7,9 @@ import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { Input } from "#/components/ui/input";
 import { getUserInitials } from "#/lib/utils";
+import { toast } from "sonner";
 
-type GameWebSocketActionsProps = {
-  currentUser?: {
-    image?: string | null;
-  };
-};
+type GameWebSocketActionsProps = {};
 
 function formatLabel(value: string) {
   return value
@@ -34,7 +31,7 @@ function compactId(value: string) {
   return `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
-export function GameWebSocketActions({ currentUser }: GameWebSocketActionsProps) {
+export function GameWebSocketActions(_props: GameWebSocketActionsProps) {
   const { state, connect, disconnect, createRoom, joinRoom, leaveRoom, startGame } =
     useGameWebSocket();
   const [roomCode, setRoomCode] = useState("");
@@ -54,6 +51,14 @@ export function GameWebSocketActions({ currentUser }: GameWebSocketActionsProps)
       setRoomCode(state.room.code);
     }
   }, [state.room?.code]);
+
+  useEffect(() => {
+    if (!state.lastError) {
+      return;
+    }
+
+    toast.error(state.lastError);
+  }, [state.lastError, state.lastErrorId]);
 
   return (
     <section className="w-full max-w-5xl">
@@ -152,12 +157,10 @@ export function GameWebSocketActions({ currentUser }: GameWebSocketActionsProps)
               <CardContent className="grid gap-4 pb-4">
                 <div className="flex items-center gap-3 rounded-3xl border border-border/60 bg-muted/30 px-4 py-3">
                   <Avatar size="lg">
-                    {currentPlayer?.playerId === state.playerId && currentUser?.image ? (
-                      <AvatarImage src={currentUser.image} alt={currentPlayer.name} />
+                    {currentPlayer?.imageUrl ? (
+                      <AvatarImage src={currentPlayer.imageUrl} alt={currentPlayer.name} />
                     ) : null}
-                    <AvatarFallback>
-                      {getUserInitials(currentPlayer?.name ?? "Guest Player")}
-                    </AvatarFallback>
+                    <AvatarFallback>{getUserInitials(currentPlayer?.name ?? "")}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 space-y-1">
                     <p className="truncate font-medium">{currentPlayer?.name ?? "Not in a room"}</p>
@@ -237,12 +240,6 @@ export function GameWebSocketActions({ currentUser }: GameWebSocketActionsProps)
                     {state.lastEvent ? formatLabel(state.lastEvent) : "None"}
                   </p>
                 </div>
-                {state.lastError ? (
-                  <div className="rounded-3xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-destructive sm:col-span-2">
-                    <p className="text-xs uppercase tracking-wide">Last error</p>
-                    <p className="mt-1 font-medium">{state.lastError}</p>
-                  </div>
-                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -275,8 +272,8 @@ export function GameWebSocketActions({ currentUser }: GameWebSocketActionsProps)
                     >
                       <div className="flex min-w-0 items-center gap-3">
                         <Avatar>
-                          {isCurrentPlayer && currentUser?.image ? (
-                            <AvatarImage src={currentUser.image} alt={player.name} />
+                          {player.imageUrl ? (
+                            <AvatarImage src={player.imageUrl} alt={player.name} />
                           ) : null}
                           <AvatarFallback>{getUserInitials(player.name)}</AvatarFallback>
                         </Avatar>

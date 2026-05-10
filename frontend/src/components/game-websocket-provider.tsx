@@ -7,6 +7,7 @@ type PlayerSnapshot = {
   playerId: string;
   sessionId: string;
   name: string;
+  imageUrl?: string;
   connected: boolean;
   seat: number;
   isHost: boolean;
@@ -27,6 +28,7 @@ type LobbyState = {
   playerId: string;
   room: RoomSnapshot | null;
   lastError: string | null;
+  lastErrorId: number;
   lastEvent: string | null;
 };
 
@@ -54,39 +56,57 @@ const initialState: LobbyState = {
   playerId: "",
   room: null,
   lastError: null,
+  lastErrorId: 0,
   lastEvent: null,
 };
 
 const GameWebSocketContext = createContext<GameWebSocketContextValue | null>(null);
 
+function withError(
+  current: LobbyState,
+  message: string,
+  partial?: Partial<LobbyState>,
+): LobbyState {
+  return {
+    ...current,
+    ...partial,
+    lastError: message,
+    lastErrorId: current.lastErrorId + 1,
+  };
+}
+
+function clearError(current: LobbyState, partial?: Partial<LobbyState>): LobbyState {
+  return {
+    ...current,
+    ...partial,
+    lastError: null,
+  };
+}
+
 const incomingMessageReducers: Record<string, (current: LobbyState, data: any) => LobbyState> = {
-  connected: (current, data) => ({
-    ...current,
-    connectionStatus: "connected",
-    sessionId: data?.sessionId ?? current.sessionId,
-    playerId: data?.playerId ?? current.playerId,
-    lastError: null,
-    lastEvent: "connected",
-  }),
-  room_state: (current, data) => ({
-    ...current,
-    room: data?.room ?? null,
-    lastError: null,
-    lastEvent: "room_state",
-  }),
-  left_room: (current) => ({
-    ...current,
-    room: null,
-    lastError: null,
-    lastEvent: "left_room",
-  }),
-  error: (current, data) => ({
-    ...current,
-    connectionStatus:
-      current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
-    lastError: data?.message ?? "unknown error",
-    lastEvent: "error",
-  }),
+  connected: (current, data) =>
+    clearError(current, {
+      connectionStatus: "connected",
+      sessionId: data?.sessionId ?? current.sessionId,
+      playerId: data?.playerId ?? current.playerId,
+      lastEvent: "connected",
+    }),
+  room_state: (current, data) =>
+    clearError(current, {
+      room: data?.room ?? null,
+      lastEvent: "room_state",
+    }),
+  left_room: (current) =>
+    clearError(current, {
+      room: null,
+      lastEvent: "left_room",
+    }),
+  error: (current, data) =>
+    withError(current, data?.message ?? "unknown error", {
+      connectionStatus:
+        current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
+      lastEvent: "error",
+    }),
 };
 
 function getDealerIndex(room: RoomSnapshot | null) {
@@ -113,11 +133,11 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   }
 
   function setConnectionError(message: string) {
-    updateState((current) => ({
-      ...current,
-      connectionStatus: "disconnected",
-      lastError: message,
-    }));
+    updateState((current) =>
+      withError(current, message, {
+        connectionStatus: "disconnected",
+      }),
+    );
   }
 
   function resolveConnectionAuthError(error: unknown) {
@@ -146,10 +166,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   function applyIncomingMessage(message: Envelope) {
     const reducer = incomingMessageReducers[message.type];
     if (!reducer) {
-      updateState((current) => ({
-        ...current,
-        lastError: `unknown websocket message: ${message.type}`,
-      }));
+      updateState((current) => withError(current, `unknown websocket message: ${message.type}`));
       return;
     }
 
@@ -169,19 +186,16 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     const socket = socketRef.current;
 
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-      updateState((current) => ({
-        ...current,
-        lastError: "websocket is not connected",
-      }));
+      updateState((current) => withError(current, "websocket is not connected"));
       return;
     }
 
     socket.send(JSON.stringify({ type, data }));
-    updateState((current) => ({
-      ...current,
-      lastEvent: type,
-      lastError: null,
-    }));
+    updateState((current) =>
+      clearError(current, {
+        lastEvent: type,
+      }),
+    );
   }
 
   async function connect() {
@@ -214,12 +228,12 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     const authToken = connectionAuth.authToken;
     socketRef.current = socket;
 
-    updateState((current) => ({
-      ...current,
-      connectionStatus: "connecting",
-      lastError: null,
-      lastEvent: null,
-    }));
+    updateState((current) =>
+      clearError(current, {
+        connectionStatus: "connecting",
+        lastEvent: null,
+      }),
+    );
 
     socket.onopen = () => {
       socket.send(JSON.stringify({ type: "connect", data: { sessionId, authToken } }));

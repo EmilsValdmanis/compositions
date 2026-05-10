@@ -36,11 +36,7 @@ function Home() {
           <SignOutButton />
         </div>
       )}
-      <GameWebSocketActions
-        currentUser={{
-          image: user?.image,
-        }}
-      />
+      <GameWebSocketActions />
     </main>
   );
 }
