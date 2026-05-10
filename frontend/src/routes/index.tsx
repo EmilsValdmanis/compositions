@@ -19,7 +19,7 @@ function Home() {
   const initials = getUserInitials(displayName);
 
   return (
-    <main className="h-screen flex items-center justify-center gap-4 flex-col">
+    <main className="min-h-screen flex items-center justify-center gap-4 flex-col">
       <div className="flex items-center gap-4">
         <h1>Compositions</h1>
         <ServerStatusBadge />
@@ -36,7 +36,11 @@ function Home() {
           <SignOutButton />
         </div>
       )}
-      <GameWebSocketActions />
+      <GameWebSocketActions
+        currentUser={{
+          image: user?.image,
+        }}
+      />
     </main>
   );
 }
