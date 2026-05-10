@@ -1,8 +1,7 @@
-import { auth } from "#/lib/auth";
+import { AUTH_COOKIE_PREFIX, AUTH_SESSION_COOKIE_NAME, auth } from "#/lib/auth";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, getRequestHeaders } from "@tanstack/react-start/server";
-
-const SESSION_COOKIE_NAME = "better-auth.session_token";
+import { getRequestHeaders } from "@tanstack/react-start/server";
+import { getSessionCookie } from "better-auth/cookies";
 
 export const getGameConnectionAuth = createServerFn({ method: "GET" }).handler(async () => {
   const headers = new Headers(getRequestHeaders());
@@ -10,7 +9,10 @@ export const getGameConnectionAuth = createServerFn({ method: "GET" }).handler(a
 
   if (!session) return null;
 
-  const authToken = getCookie(SESSION_COOKIE_NAME);
+  const authToken = getSessionCookie(headers, {
+    cookiePrefix: AUTH_COOKIE_PREFIX,
+    cookieName: AUTH_SESSION_COOKIE_NAME,
+  });
 
   if (!authToken) return null;
 
