@@ -182,14 +182,8 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 }
 
 func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
-	if err := requireConnectedSession(sessionID); err != nil {
-		s.writeError(conn, err)
-		return
-	}
-
-	var req createRoomRequest
-	if err := decodePayload(envelope.Data, &req); err != nil {
-		s.writeError(conn, err)
+	req, ok := decodeSessionRequest[createRoomRequest](s, conn, sessionID, envelope)
+	if !ok {
 		return
 	}
 
@@ -202,14 +196,8 @@ func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, enve
 }
 
 func (s *wsServer) handleJoinRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
-	if err := requireConnectedSession(sessionID); err != nil {
-		s.writeError(conn, err)
-		return
-	}
-
-	var req joinRoomRequest
-	if err := decodePayload(envelope.Data, &req); err != nil {
-		s.writeError(conn, err)
+	req, ok := decodeSessionRequest[joinRoomRequest](s, conn, sessionID, envelope)
+	if !ok {
 		return
 	}
 
@@ -222,14 +210,8 @@ func (s *wsServer) handleJoinRoom(conn *websocket.Conn, sessionID string, envelo
 }
 
 func (s *wsServer) handleStartGame(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
-	if err := requireConnectedSession(sessionID); err != nil {
-		s.writeError(conn, err)
-		return
-	}
-
-	var req startGameRequest
-	if err := decodePayload(envelope.Data, &req); err != nil {
-		s.writeError(conn, err)
+	req, ok := decodeSessionRequest[startGameRequest](s, conn, sessionID, envelope)
+	if !ok {
 		return
 	}
 
@@ -242,14 +224,7 @@ func (s *wsServer) handleStartGame(conn *websocket.Conn, sessionID string, envel
 }
 
 func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) bool {
-	if err := requireConnectedSession(sessionID); err != nil {
-		s.writeError(conn, err)
-		return false
-	}
-
-	var req leaveRoomRequest
-	if err := decodePayload(envelope.Data, &req); err != nil {
-		s.writeError(conn, err)
+	if _, ok := decodeSessionRequest[leaveRoomRequest](s, conn, sessionID, envelope); !ok {
 		return false
 	}
 
@@ -282,6 +257,23 @@ func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*webs
 			log.Printf("broadcast room_state: %v", err)
 		}
 	}
+}
+
+func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID string, envelope wsEnvelope) (T, bool) {
+	var req T
+	if err := requireConnectedSession(sessionID); err != nil {
+		s.writeError(conn, err)
+		return req, false
+	}
+	if err := s.lobby.requireActiveSessionConnection(sessionID, conn); err != nil {
+		s.writeError(conn, err)
+		return req, false
+	}
+	if err := decodePayload(envelope.Data, &req); err != nil {
+		s.writeError(conn, err)
+		return req, false
+	}
+	return req, true
 }
 
 func requireConnectedSession(sessionID string) error {

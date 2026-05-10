@@ -20,7 +20,9 @@ func (cp *CardPile) DrawOne() (Card, bool) {
 }
 
 func (cp *CardPile) AddToTop(c Card) {
-	cp.cards = append([]Card{c}, cp.cards...)
+	cp.cards = append(cp.cards, Card{})
+	copy(cp.cards[1:], cp.cards[:len(cp.cards)-1])
+	cp.cards[0] = c
 }
 
 func (cp *CardPile) Shuffle() {

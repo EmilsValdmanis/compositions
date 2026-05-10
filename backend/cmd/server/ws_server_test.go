@@ -131,6 +131,32 @@ func TestWebSocketLeaveRoomFlow(t *testing.T) {
 	mustReadError(t, guestConn, "join a room first")
 }
 
+func TestSupersededWebSocketConnectionCannotMutateSessionState(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	hostConnected := mustConnectSession(t, hostConn, "")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+
+	replacementConn := mustDialWS(t, httpServer.URL)
+	defer replacementConn.Close()
+	mustConnectSession(t, replacementConn, hostConnected.SessionID)
+	_ = mustReadRoomState(t, replacementConn)
+
+	mustSendEnvelope(t, hostConn, "leave_room", leaveRoomRequest{})
+	mustReadError(t, hostConn, "session not active on this connection")
+
+	mustSendEnvelope(t, replacementConn, "leave_room", leaveRoomRequest{})
+	left := mustReadLeftRoom(t, replacementConn)
+	if left.RoomCode != hostRoom.Code {
+		t.Fatalf("left.RoomCode = %q; want %q", left.RoomCode, hostRoom.Code)
+	}
+}
+
 func TestHandleWSUpgradeFailure(t *testing.T) {
 	server := newWSServer()
 	recorder := httptest.NewRecorder()
@@ -310,7 +336,10 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	soloHostSession := server.lobby.sessions[soloRoom.Players[0].SessionID]
 	delete(server.lobby.rooms, soloRoom.Code)
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
-	mustReadError(t, soloConn, "room not found")
+	mustReadError(t, soloConn, "join a room first")
+	if soloHostSession.roomCode != "" {
+		t.Fatalf("soloHostSession.roomCode = %q; want empty", soloHostSession.roomCode)
+	}
 	soloHostSession.roomCode = ""
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "join a room first")

@@ -90,16 +90,13 @@ func (l *lobbyServer) connectExistingSession(existingSessionID string, conn *web
 	session.conn = conn
 	var roomState *roomSnapshot
 	var recipients []*websocket.Conn
-	if session.roomCode != "" {
-		if room := l.rooms[session.roomCode]; room != nil {
-			if player := room.playerByID(session.playerID); player != nil {
-				player.connected = true
-				player.sessionID = session.sessionID
-				snapshot := room.snapshot()
-				roomState = &snapshot
-				recipients = room.connectedConns(l.sessions)
-			}
-		}
+	if room := l.sessionRoom(session); room != nil {
+		player := room.playerByID(session.playerID)
+		player.connected = true
+		player.sessionID = session.sessionID
+		snapshot := room.snapshot()
+		roomState = &snapshot
+		recipients = room.connectedConns(l.sessions)
 	}
 
 	return connectedEvent{SessionID: session.sessionID, PlayerID: session.playerID}, roomState, recipients, nil
@@ -113,7 +110,7 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
-	if session.roomCode != "" {
+	if l.sessionRoom(session) != nil {
 		return roomSnapshot{}, nil, errors.New("already in a room")
 	}
 	cleanName, err := normalizePlayerName(name)
@@ -158,7 +155,7 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
-	if session.roomCode != "" {
+	if l.sessionRoom(session) != nil {
 		return roomSnapshot{}, nil, errors.New("already in a room")
 	}
 
@@ -203,13 +200,9 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
-	if session.roomCode == "" {
-		return roomSnapshot{}, nil, errors.New("join a room first")
-	}
-
-	room := l.rooms[session.roomCode]
+	room := l.sessionRoom(session)
 	if room == nil {
-		return roomSnapshot{}, nil, errors.New("room not found")
+		return roomSnapshot{}, nil, errors.New("join a room first")
 	}
 	if room.hostID != session.playerID {
 		return roomSnapshot{}, nil, errors.New("only the host can start the game")
@@ -237,32 +230,23 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	if err != nil {
 		return nil, nil, "", err
 	}
-	if session.roomCode == "" {
-		return nil, nil, "", errors.New("join a room first")
-	}
-
-	room := l.rooms[session.roomCode]
+	room := l.sessionRoom(session)
 	if room == nil {
-		return nil, nil, "", errors.New("room not found")
+		return nil, nil, "", errors.New("join a room first")
 	}
 	if room.gameState == nil || room.gameStatePhase() != game.PhaseLobby {
 		return nil, nil, "", errors.New("can only leave in lobby")
 	}
 
 	updatedPlayers := make([]*roomPlayer, 0, len(room.players))
-	foundPlayer := false
 	for _, player := range room.players {
 		if player == nil {
 			continue
 		}
 		if player.player.ID == session.playerID {
-			foundPlayer = true
 			continue
 		}
 		updatedPlayers = append(updatedPlayers, player)
-	}
-	if !foundPlayer {
-		return nil, nil, "", errors.New("player not found in room")
 	}
 
 	roomCode := room.code
@@ -319,17 +303,13 @@ func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 		return
 	}
 
-	room := l.rooms[session.roomCode]
+	room := l.sessionRoom(session)
 	if room == nil {
 		l.mu.Unlock()
 		return
 	}
 
 	player := room.playerByID(session.playerID)
-	if player == nil {
-		l.mu.Unlock()
-		return
-	}
 	player.connected = false
 
 	roomState = room.snapshot()
@@ -357,6 +337,35 @@ func (l *lobbyServer) requireSession(sessionID string) (*playerSession, error) {
 		return nil, errors.New("session not found")
 	}
 	return session, nil
+}
+
+func (l *lobbyServer) requireActiveSessionConnection(sessionID string, conn *websocket.Conn) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return err
+	}
+	if session.conn != conn {
+		return errors.New("session not active on this connection")
+	}
+
+	return nil
+}
+
+func (l *lobbyServer) sessionRoom(session *playerSession) *room {
+	if session == nil || session.roomCode == "" {
+		return nil
+	}
+
+	room := l.rooms[session.roomCode]
+	if room == nil || room.playerByID(session.playerID) == nil {
+		session.roomCode = ""
+		return nil
+	}
+
+	return room
 }
 
 func (l *lobbyServer) generateRoomCode() string {

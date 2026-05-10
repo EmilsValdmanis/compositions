@@ -223,6 +223,59 @@ func TestLobbyServerCoverage(t *testing.T) {
 }
 
 func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
+	t.Run("require active session connection", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+
+		if err := lobby.requireActiveSessionConnection("missing", conn); err == nil || err.Error() != "session not found" {
+			t.Fatalf("requireActiveSessionConnection(missing) error = %v; want session not found", err)
+		}
+
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		if err := lobby.requireActiveSessionConnection(event.SessionID, conn); err != nil {
+			t.Fatalf("requireActiveSessionConnection(active) error = %v", err)
+		}
+	})
+
+	t.Run("stale room membership is cleared", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		createdRoom, _, err := lobby.createRoom(event.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+
+		delete(lobby.rooms, createdRoom.Code)
+
+		_, roomState, recipients, err := lobby.connect(event.SessionID, conn)
+		if err != nil {
+			t.Fatalf("connect(existing) error = %v", err)
+		}
+		if roomState != nil {
+			t.Fatalf("roomState = %#v; want nil", roomState)
+		}
+		if len(recipients) != 0 {
+			t.Fatalf("len(recipients) = %d; want 0", len(recipients))
+		}
+		if lobby.sessions[event.SessionID].roomCode != "" {
+			t.Fatalf("session.roomCode = %q; want empty", lobby.sessions[event.SessionID].roomCode)
+		}
+
+		if _, _, err := lobby.createRoom(event.SessionID, "Host Again"); err != nil {
+			t.Fatalf("createRoom() after stale room cleanup error = %v", err)
+		}
+	})
+
 	t.Run("nil game state", func(t *testing.T) {
 		originalMakeGameState := makeGameState
 		defer func() { makeGameState = originalMakeGameState }()
@@ -275,8 +328,11 @@ func TestLobbyLeaveRoomCoverage(t *testing.T) {
 			t.Fatalf("connect() error = %v", err)
 		}
 		lobby.sessions[event.SessionID].roomCode = "NOPE"
-		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "room not found" {
-			t.Fatalf("leaveRoom(missing room) error = %v; want room not found", err)
+		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "join a room first" {
+			t.Fatalf("leaveRoom(missing room) error = %v; want join a room first", err)
+		}
+		if lobby.sessions[event.SessionID].roomCode != "" {
+			t.Fatalf("session.roomCode = %q; want empty", lobby.sessions[event.SessionID].roomCode)
 		}
 	})
 
@@ -284,21 +340,6 @@ func TestLobbyLeaveRoomCoverage(t *testing.T) {
 		lobby := newLobbyServer()
 		if _, _, _, err := lobby.leaveRoom("missing"); err == nil || err.Error() != "session not found" {
 			t.Fatalf("leaveRoom(missing session) error = %v; want session not found", err)
-		}
-	})
-
-	t.Run("missing player in room", func(t *testing.T) {
-		lobby := newLobbyServer()
-		conn, _, cleanup := newSocketPair(t)
-		defer cleanup()
-		event, _, _, err := lobby.connect("", conn)
-		if err != nil {
-			t.Fatalf("connect() error = %v", err)
-		}
-		lobby.rooms["ROOM"] = &room{code: "ROOM", gameState: game.NewGameState(), players: []*roomPlayer{}}
-		lobby.sessions[event.SessionID].roomCode = "ROOM"
-		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "player not found in room" {
-			t.Fatalf("leaveRoom(missing player) error = %v; want player not found in room", err)
 		}
 	})
 
@@ -488,6 +529,33 @@ func TestLobbyLeaveRoomCoverage(t *testing.T) {
 			t.Fatalf("snapshot.Players[0] = %#v; want host seat 0", snapshot.Players[0])
 		}
 	})
+}
+
+func BenchmarkLobbyServerCreateJoinStartGame(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		lobby := newLobbyServer()
+
+		hostEvent, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			b.Fatalf("connect(host) error = %v", err)
+		}
+		hostRoom, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			b.Fatalf("createRoom() error = %v", err)
+		}
+
+		guestEvent, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			b.Fatalf("connect(guest) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestEvent.SessionID, hostRoom.Code, "Guest"); err != nil {
+			b.Fatalf("joinRoom() error = %v", err)
+		}
+
+		if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+			b.Fatalf("startGame() error = %v", err)
+		}
+	}
 }
 
 func TestRoomHelpersAndSnapshotCoverage(t *testing.T) {

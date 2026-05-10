@@ -157,8 +157,7 @@ func (gs *GameState) DrawFromDeck() error {
 		return ErrNotEnoughCardsInDrawPile
 	}
 	gs.turn.hasDrawn = true
-	gs.turn.mustUseDiscardDraw = false
-	gs.turn.discardDrawCard = Card{}
+	gs.resetDiscardDrawState()
 	return nil
 }
 
@@ -286,8 +285,7 @@ func (gs *GameState) finishRoundIfSpecialWin(playerIndex int) bool {
 func (gs *GameState) finishRound(winnerIndex int) {
 	gs.roundWinnerIndex = winnerIndex
 	gs.turn.hasDrawn = false
-	gs.turn.mustUseDiscardDraw = false
-	gs.turn.discardDrawCard = Card{}
+	gs.resetDiscardDrawState()
 
 	for i, player := range gs.players {
 		if i == winnerIndex || player == nil {
@@ -563,9 +561,13 @@ func (gs *GameState) advanceTurn() {
 	gs.turn.number++
 	gs.turn.playerIndex = (gs.turn.playerIndex + 1) % len(gs.players)
 	gs.turn.hasDrawn = false
+	gs.resetDiscardDrawState()
+	gs.recycleDiscardIntoDrawPileIfNeeded()
+}
+
+func (gs *GameState) resetDiscardDrawState() {
 	gs.turn.mustUseDiscardDraw = false
 	gs.turn.discardDrawCard = Card{}
-	gs.recycleDiscardIntoDrawPileIfNeeded()
 }
 
 func (gs *GameState) recycleDiscardIntoDrawPileIfNeeded() {
@@ -1062,7 +1064,7 @@ func validateOrder(order []int, playerCount int) bool {
 		return false
 	}
 
-	seen := make(map[int]bool)
+	seen := make([]bool, playerCount)
 	for _, i := range order {
 		if i < 0 || i >= playerCount || seen[i] {
 			return false
