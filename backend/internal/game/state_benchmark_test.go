@@ -43,7 +43,7 @@ func BenchmarkGameStateCanTakeDiscardNowNoLegalPlay(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if state.canTakeDiscardNow() {
 			b.Fatal("canTakeDiscardNow() = true; want false")
 		}
@@ -74,7 +74,7 @@ func BenchmarkGameStateCanTakeDiscardNowOpenedAddition(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if !state.canTakeDiscardNow() {
 			b.Fatal("canTakeDiscardNow() = false; want true")
 		}
@@ -105,7 +105,7 @@ func BenchmarkGameStateCanTakeDiscardNowOpeningAtForty(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if !state.canTakeDiscardNow() {
 			b.Fatal("canTakeDiscardNow() = false; want true")
 		}
@@ -136,7 +136,7 @@ func BenchmarkGameStateCanTakeDiscardNowJokerReclaim(b *testing.B) {
 
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if !state.canTakeDiscardNow() {
 			b.Fatal("canTakeDiscardNow() = false; want true")
 		}

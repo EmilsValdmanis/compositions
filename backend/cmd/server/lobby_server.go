@@ -373,7 +373,7 @@ func (l *lobbyServer) generateRoomCode() string {
 	for {
 		var code strings.Builder
 		code.Grow(roomCodeLength)
-		for i := 0; i < roomCodeLength; i++ {
+		for range roomCodeLength {
 			code.WriteByte(alphabet[l.rng.Intn(len(alphabet))])
 		}
 		roomCode := code.String()

@@ -670,7 +670,7 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 		return searchSupportCandidates(baseState, discardMask, 1, usedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch)
 	}
 
-	for subset := uint32(0); subset < discardMask; subset++ {
+	for subset := range discardMask {
 		mask := subset | discardMask
 		cards := cardsForMask(baseState.handCards, mask, scratch.maskCards)
 
