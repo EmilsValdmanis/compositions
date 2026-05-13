@@ -14,7 +14,7 @@ export default function SignInButton() {
   };
 
   return (
-    <Button onClick={handleGoogleSignIn} disabled={isPending}>
+    <Button onClick={handleGoogleSignIn} disabled={isPending} size="lg">
       {isPending ? (
         <>
           <Spinner data-icon="inline-start" /> Authenticating

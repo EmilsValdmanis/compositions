@@ -9,13 +9,13 @@ import { useTheme } from "@/components/theme-provider";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Moon02Icon, Sun03Icon } from "@hugeicons/core-free-icons";
 
-export function ModeToggle() {
+export function ModeToggle({ className }: { className?: string }) {
   const { setTheme } = useTheme();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon">
+        <Button variant="outline" size="icon" className={className}>
           <HugeiconsIcon
             icon={Sun03Icon}
             className="h-[1.2rem] w-[1.2rem] scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90"
