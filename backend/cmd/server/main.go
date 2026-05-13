@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -19,6 +20,6 @@ func runServer(addr string) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("server running on %s", addr)
+	slog.Info("server starting", "addr", addr, "allowedOrigin", server.allowedOrigin)
 	return listenAndServe(addr, server.routes())
 }

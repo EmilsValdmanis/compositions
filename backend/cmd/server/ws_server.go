@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -156,17 +156,18 @@ func (s *wsServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if err := json.NewEncoder(w).Encode(healthResponse{Status: "ok"}); err != nil {
-		log.Printf("write health response: %v", err)
+		slog.Error("write health response", "error", err)
 	}
 }
 
 func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("upgrade websocket: %v", err)
+		slog.Warn("websocket upgrade failed", "error", err, "remote", r.RemoteAddr)
 		return
 	}
 
+	slog.Debug("websocket connection established", "remote", conn.RemoteAddr().String())
 	s.handleConnection(conn)
 }
 
@@ -181,10 +182,12 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 				s.lobby.disconnect(sessionID, conn)
 			}
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
-				log.Printf("read websocket message: %v", err)
+				slog.Debug("websocket read error", "sessionID", sessionID, "error", err)
 			}
 			return
 		}
+
+		slog.Debug("websocket message received", "sessionID", sessionID, "type", envelope.Type)
 
 		switch envelope.Type {
 		case "connect":
@@ -212,6 +215,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (string, bool) {
 	var req connectRequest
 	if err := decodePayload(envelope.Data, &req); err != nil {
+		slog.Warn("connect: invalid payload", "error", err)
 		s.writeError(conn, err)
 		return "", false
 	}
@@ -220,6 +224,7 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 	if s.verifier != nil {
 		verifiedUser, err := s.verifier.VerifySession(context.Background(), req.AuthToken)
 		if err != nil {
+			slog.Warn("connect: session verification failed", "sessionID", req.SessionID, "error", err)
 			s.writeError(conn, err)
 			return "", true
 		}
@@ -228,12 +233,16 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 
 	event, roomState, recipients, err := s.lobby.connectWithUser(req.SessionID, user, conn)
 	if err != nil {
+		slog.Warn("connect: lobby connect failed", "sessionID", req.SessionID, "error", err)
 		s.writeError(conn, err)
 		return "", true
 	}
 	if err := emitEvent(conn, "connected", event); err != nil {
 		return "", true
 	}
+
+	slog.Info("client connected", "sessionID", event.SessionID, "playerID", event.PlayerID, "authenticated", user.isAuthenticated())
+
 	if roomState != nil {
 		if err := emitEvent(conn, "room_state", roomStateEvent{Room: *roomState}); err != nil {
 			return "", true
@@ -252,9 +261,11 @@ func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, enve
 
 	roomState, recipients, err := s.lobby.createRoom(sessionID, req.Name)
 	if err != nil {
+		slog.Warn("create room failed", "sessionID", sessionID, "error", err)
 		s.writeError(conn, err)
 		return
 	}
+	slog.Info("room created", "roomCode", roomState.Code, "sessionID", sessionID)
 	s.broadcastRoomState(roomState, recipients)
 }
 
@@ -266,9 +277,11 @@ func (s *wsServer) handleJoinRoom(conn *websocket.Conn, sessionID string, envelo
 
 	roomState, recipients, err := s.lobby.joinRoom(sessionID, req.RoomCode, req.Name)
 	if err != nil {
+		slog.Warn("join room failed", "sessionID", sessionID, "roomCode", req.RoomCode, "error", err)
 		s.writeError(conn, err)
 		return
 	}
+	slog.Info("player joined room", "sessionID", sessionID, "roomCode", roomState.Code)
 	s.broadcastRoomState(roomState, recipients)
 }
 
@@ -280,9 +293,11 @@ func (s *wsServer) handleStartGame(conn *websocket.Conn, sessionID string, envel
 
 	roomState, recipients, err := s.lobby.startGame(sessionID, req.DealerIndex)
 	if err != nil {
+		slog.Warn("start game failed", "sessionID", sessionID, "error", err)
 		s.writeError(conn, err)
 		return
 	}
+	slog.Info("game started", "roomCode", roomState.Code, "sessionID", sessionID, "dealerIndex", req.DealerIndex)
 	s.broadcastRoomState(roomState, recipients)
 }
 
@@ -293,12 +308,15 @@ func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envel
 
 	roomState, recipients, roomCode, err := s.lobby.leaveRoom(sessionID)
 	if err != nil {
+		slog.Warn("leave room failed", "sessionID", sessionID, "error", err)
 		s.writeError(conn, err)
 		return false
 	}
 	if err := emitEvent(conn, "left_room", leftRoomEvent{RoomCode: roomCode}); err != nil {
+		slog.Warn("write left_room event failed", "sessionID", sessionID, "roomCode", roomCode, "error", err)
 		return true
 	}
+	slog.Info("player left room", "sessionID", sessionID, "roomCode", roomCode)
 	if roomState != nil {
 		s.broadcastRoomState(*roomState, recipients)
 	}
@@ -307,7 +325,7 @@ func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envel
 
 func (s *wsServer) writeError(conn *websocket.Conn, err error) {
 	if writeErr := emitEvent(conn, "error", errorEvent{Message: err.Error()}); writeErr != nil && !errors.Is(writeErr, errSocketClosed) {
-		log.Printf("write websocket error event: %v", writeErr)
+		slog.Error("write websocket error event failed", "error", writeErr)
 	}
 }
 
@@ -317,7 +335,7 @@ func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*webs
 			continue
 		}
 		if err := emitEvent(conn, "room_state", roomStateEvent{Room: roomState}); err != nil && !errors.Is(err, errSocketClosed) {
-			log.Printf("broadcast room_state: %v", err)
+			slog.Error("broadcast room_state failed", "roomCode", roomState.Code, "error", err)
 		}
 	}
 }

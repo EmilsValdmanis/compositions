@@ -36,14 +36,14 @@ Realtime game server checklist.
 - [ ] 4. Extend the WebSocket surface so clients can submit turn actions such as draw, play, add, reclaim, and discard.
 - [ ] 5. Broadcast in-game state changes and action results to all room participants during active play.
 - [ ] 6. Add server-level integration tests that drive realistic multiplayer turn flow, including invalid actions and state broadcasts during active rounds.
+- [X] 7. Add useful logging and error handling around the WebSocket lobby and game play surfaces to make debugging easier during frontend integration and testing.
 
 Frontend starter checklist.
 
 - [X] 1. Choose or scaffold the frontend app entrypoint that will connect to the backend WebSocket server.
 - [X] 2. Define the frontend WebSocket client types for connection, room, and game messages.
-- [ ] 3. Persist the client `sessionId` locally so reconnect can restore the same player session.
-- [X] 4. Build a basic lobby screen that can connect, create a room, join a room, and start a game.
-- [X] 5. Add a room view that shows room code, players, seats, connected status, and host controls.
-- [ ] 6. Add a basic in-game screen shell for hand, table compositions, draw pile, discard pile, and turn indicator.
-- [ ] 7. Wire frontend state updates from server room-state and game-state events.
-- [ ] 8. Add frontend tests for session restore, lobby flow, and room-state rendering.
+- [X] 3. Build a basic lobby screen that can connect, create a room, join a room, and start a game.
+- [X] 4. Add a room view that shows room code, players, seats, connected status, and host controls.
+- [ ] 5. Add a basic in-game screen shell for hand, table compositions, draw pile, discard pile, and turn indicator.
+- [ ] 6. Wire frontend state updates from server room-state and game-state events.
+- [ ] 7. Add frontend tests for session restore, lobby flow, and room-state rendering.

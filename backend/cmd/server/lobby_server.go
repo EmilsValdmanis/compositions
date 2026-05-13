@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"log/slog"
 	"math/rand"
 	"sort"
 	"strings"
@@ -96,6 +97,12 @@ func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticat
 		authenticated: user.isAuthenticated(),
 	}
 
+	slog.Info("session created",
+		"sessionID", sessionID,
+		"playerID", playerID,
+		"authenticated", user.isAuthenticated(),
+		"displayName", user.displayName(),
+	)
 	return connectedEvent{SessionID: sessionID, PlayerID: playerID}, nil, nil, nil
 }
 
@@ -106,12 +113,15 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 		return connectedEvent{}, nil, nil, errors.New("session not found")
 	}
 	if session.authenticated != user.isAuthenticated() {
+		slog.Warn("session auth mismatch", "sessionID", existingSessionID, "sessionAuthenticated", session.authenticated)
 		return connectedEvent{}, nil, nil, errAuthenticationRequired
 	}
 	if session.authenticated && session.authUserID != user.ID {
+		slog.Warn("session user mismatch", "sessionID", existingSessionID, "sessionUserID", session.authUserID, "requestUserID", user.ID)
 		return connectedEvent{}, nil, nil, errors.New("session belongs to a different user")
 	}
 	if session.conn != nil && session.conn != conn {
+		slog.Warn("session already connected", "sessionID", existingSessionID)
 		return connectedEvent{}, nil, nil, errors.New("session already connected")
 	}
 	if session.authenticated {
@@ -133,6 +143,16 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 		snapshot := room.snapshot()
 		roomState = &snapshot
 		recipients = room.connectedConns(l.sessions)
+		slog.Info("session reconnected to room",
+			"sessionID", session.sessionID,
+			"playerID", session.playerID,
+			"roomCode", room.code,
+		)
+	} else {
+		slog.Info("session reconnected",
+			"sessionID", session.sessionID,
+			"playerID", session.playerID,
+		)
 	}
 
 	return connectedEvent{SessionID: session.sessionID, PlayerID: session.playerID}, roomState, recipients, nil
@@ -181,6 +201,7 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	l.rooms[room.code] = room
 	session.roomCode = room.code
 
+	slog.Info("room created", "roomCode", room.code, "sessionID", session.sessionID, "playerID", session.playerID)
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -227,6 +248,7 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	room.players = append(room.players, player)
 	session.roomCode = room.code
 
+	slog.Info("player joined room", "roomCode", room.code, "sessionID", session.sessionID, "playerID", session.playerID, "playerName", cleanName)
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -257,6 +279,7 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot
 		return roomSnapshot{}, nil, err
 	}
 
+	slog.Info("game started", "roomCode", room.code, "sessionID", session.sessionID, "dealerIndex", dealerIndex, "playerCount", len(room.players))
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -291,6 +314,7 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	if len(updatedPlayers) == 0 {
 		delete(l.rooms, roomCode)
 		session.roomCode = ""
+		slog.Info("room disbanded", "roomCode", roomCode, "sessionID", session.sessionID)
 		return nil, nil, roomCode, nil
 	}
 
@@ -318,6 +342,12 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	room.gameState = nextGameState
 	session.roomCode = ""
 
+	slog.Info("player left room",
+		"roomCode", roomCode,
+		"sessionID", session.sessionID,
+		"remainingPlayers", len(updatedPlayers),
+		"newHostID", nextHostID,
+	)
 	snapshot := room.snapshot()
 	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
 }
@@ -338,12 +368,14 @@ func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 	session.conn = nil
 	if session.roomCode == "" {
 		l.mu.Unlock()
+		slog.Info("client disconnected", "sessionID", sessionID)
 		return
 	}
 
 	room := l.sessionRoom(session)
 	if room == nil {
 		l.mu.Unlock()
+		slog.Info("client disconnected", "sessionID", sessionID)
 		return
 	}
 
@@ -355,6 +387,7 @@ func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 	shouldBroadcast = len(recipients) > 0
 	l.mu.Unlock()
 
+	slog.Info("client disconnected from room", "sessionID", sessionID, "roomCode", room.code)
 	if shouldBroadcast {
 		l.broadcastDisconnect(roomState, recipients)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -82,33 +83,41 @@ func newBetterAuthSessionVerifier(baseURL string, client *http.Client) sessionVe
 func (v *betterAuthSessionVerifier) VerifySession(ctx context.Context, bearerToken string) (authenticatedUser, error) {
 	token := strings.TrimSpace(bearerToken)
 	if token == "" {
+		slog.Warn("verify session: missing bearer token")
 		return authenticatedUser{}, errAuthenticationRequired
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.baseURL+"/api/auth/get-session", nil)
 	if err != nil {
+		slog.Error("verify session: build request failed", "baseURL", v.baseURL, "error", err)
 		return authenticatedUser{}, fmt.Errorf("build auth session request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := v.client.Do(req)
 	if err != nil {
+		slog.Warn("verify session: http request failed", "baseURL", v.baseURL, "error", err)
 		return authenticatedUser{}, fmt.Errorf("verify auth session: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
+		slog.Warn("verify session: unauthorized", "baseURL", v.baseURL, "status", resp.StatusCode)
 		return authenticatedUser{}, errAuthenticationRequired
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return authenticatedUser{}, fmt.Errorf("verify auth session: unexpected status %s", resp.Status)
+		err := fmt.Errorf("verify auth session: unexpected status %s", resp.Status)
+		slog.Warn("verify session: unexpected status", "baseURL", v.baseURL, "status", resp.StatusCode)
+		return authenticatedUser{}, err
 	}
 
 	var payload *betterAuthSessionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		slog.Error("verify session: decode response failed", "baseURL", v.baseURL, "error", err)
 		return authenticatedUser{}, fmt.Errorf("decode auth session response: %w", err)
 	}
 	if payload == nil {
+		slog.Warn("verify session: null payload", "baseURL", v.baseURL)
 		return authenticatedUser{}, errAuthenticationRequired
 	}
 
@@ -119,8 +128,10 @@ func (v *betterAuthSessionVerifier) VerifySession(ctx context.Context, bearerTok
 		Image: strings.TrimSpace(payload.User.Image),
 	}
 	if !user.isAuthenticated() || user.displayName() == "" {
+		slog.Warn("verify session: invalid user data", "baseURL", v.baseURL, "userID", user.ID, "displayName", user.displayName())
 		return authenticatedUser{}, errAuthenticationRequired
 	}
 
+	slog.Info("session verified", "userID", user.ID, "displayName", user.displayName())
 	return user, nil
 }
