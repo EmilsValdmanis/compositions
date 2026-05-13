@@ -1,5 +1,6 @@
-import { GameWebSocketProvider } from "#/components/game-websocket-provider";
+import { GameWebSocketProvider, useGameWebSocket } from "#/components/game-websocket-provider";
 import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
@@ -56,6 +57,22 @@ export const Route = createRootRouteWithContext<{
   shellComponent: RootDocument,
 });
 
+function AutoConnectWebSocket() {
+  const { connect, disconnect } = useGameWebSocket();
+  const { session } = Route.useRouteContext();
+  const isAuthenticated = !!session;
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void connect();
+    } else {
+      disconnect();
+    }
+  }, [isAuthenticated]);
+
+  return null;
+}
+
 function RootDocument({ children }: { children: React.ReactNode }) {
   InjectVercelAnalytics();
   InjectVercelSpeedInsights();
@@ -69,7 +86,10 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <ThemeProvider defaultTheme="system" storageKey="theme">
-          <GameWebSocketProvider>{children}</GameWebSocketProvider>
+          <GameWebSocketProvider>
+            {children}
+            <AutoConnectWebSocket />
+          </GameWebSocketProvider>
           <Toaster richColors theme={theme} />
         </ThemeProvider>
         <TanStackDevtools
