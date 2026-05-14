@@ -98,7 +98,9 @@ export function GameWebSocketActions(_props: GameWebSocketActionsProps) {
                 type="button"
                 variant="outline"
                 onClick={disconnect}
-                disabled={state.connectionStatus === "disconnected"}
+                disabled={
+                  state.connectionStatus === "idle" || state.connectionStatus === "disconnected"
+                }
               >
                 Disconnect
               </Button>

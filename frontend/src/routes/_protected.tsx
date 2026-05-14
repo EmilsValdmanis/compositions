@@ -1,3 +1,5 @@
+import { ModeToggle } from "#/components/mode-toggle";
+import { ServerStatusBadge } from "#/components/server-status-badge";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_protected")({
@@ -11,8 +13,10 @@ export const Route = createFileRoute("/_protected")({
 
 function ProtectedLayout() {
   return (
-    <main className="min-h-screen flex items-center justify-center gap-4 flex-col">
+    <>
       <Outlet />
-    </main>
+      <ServerStatusBadge className="absolute top-4 left-4" />
+      <ModeToggle className="absolute top-4 right-4" />
+    </>
   );
 }

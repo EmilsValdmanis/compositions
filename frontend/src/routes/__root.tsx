@@ -12,7 +12,6 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { authClient } from "#/lib/auth-client";
 import { Toaster } from "sonner";
-
 import appCss from "../styles.css?url";
 
 const getSession = createServerFn({ method: "GET" }).handler(async () => {
@@ -88,29 +87,31 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         )}
       </head>
       <body>
-        <ThemeProvider defaultTheme="system" storageKey="theme">
-          <GameWebSocketProvider>
-            {children}
-            <AutoConnectWebSocket />
-          </GameWebSocketProvider>
-          <Toaster richColors theme={theme} />
-        </ThemeProvider>
-        <TanStackDevtools
-          config={{
-            position: "bottom-right",
-          }}
-          plugins={[
-            {
-              name: "Tanstack Router",
-              render: <TanStackRouterDevtoolsPanel />,
-            },
-            {
-              name: "Tanstack Query",
-              render: <ReactQueryDevtoolsPanel />,
-            },
-          ]}
-        />
-        <Scripts />
+        <main className="min-h-screen flex items-center justify-center gap-4 flex-col">
+          <ThemeProvider defaultTheme="system" storageKey="theme">
+            <GameWebSocketProvider>
+              {children}
+              <AutoConnectWebSocket />
+            </GameWebSocketProvider>
+            <Toaster richColors theme={theme} />
+          </ThemeProvider>
+          <TanStackDevtools
+            config={{
+              position: "bottom-right",
+            }}
+            plugins={[
+              {
+                name: "Tanstack Router",
+                render: <TanStackRouterDevtoolsPanel />,
+              },
+              {
+                name: "Tanstack Query",
+                render: <ReactQueryDevtoolsPanel />,
+              },
+            ]}
+          />
+          <Scripts />
+        </main>
       </body>
     </html>
   );

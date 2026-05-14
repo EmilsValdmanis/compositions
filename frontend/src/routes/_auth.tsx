@@ -13,7 +13,7 @@ export const Route = createFileRoute("/_auth")({
 
 function AuthLayout() {
   return (
-    <main className="min-h-screen flex flex-col items-center gap-4 justify-center">
+    <>
       <div
         className={cn("absolute inset-0 -z-1", "bg-size-[20px_20px]")}
         style={{
@@ -28,6 +28,6 @@ function AuthLayout() {
 
       <Outlet />
       <ModeToggle className="absolute top-4 right-4" />
-    </main>
+    </>
   );
 }

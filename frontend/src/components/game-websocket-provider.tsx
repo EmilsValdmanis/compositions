@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { getGameConnectionAuth } from "#/lib/game-auth";
 
-type ConnectionStatus = "disconnected" | "connecting" | "connected";
+type ConnectionStatus = "idle" | "disconnected" | "connecting" | "connected";
 
 type PlayerSnapshot = {
   playerId: string;
@@ -41,7 +41,6 @@ type ConnectionAuth = Awaited<ReturnType<typeof getGameConnectionAuth>>;
 
 type GameWebSocketContextValue = {
   state: LobbyState;
-  isConnected: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
   createRoom: () => void;
@@ -51,7 +50,7 @@ type GameWebSocketContextValue = {
 };
 
 const initialState: LobbyState = {
-  connectionStatus: "disconnected",
+  connectionStatus: "idle",
   sessionId: "",
   playerId: "",
   room: null,
@@ -268,12 +267,12 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     socket.onclose = () => {
       if (socketRef.current === socket) {
         socketRef.current = null;
-      }
 
-      updateState((current) => ({
-        ...current,
-        connectionStatus: "disconnected",
-      }));
+        updateState((current) => ({
+          ...current,
+          connectionStatus: "disconnected",
+        }));
+      }
     };
   }
 
@@ -288,7 +287,6 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
 
   const value: GameWebSocketContextValue = {
     state,
-    isConnected: state.connectionStatus === "connected",
     connect,
     disconnect,
     createRoom: () => send("create_room", {}),
