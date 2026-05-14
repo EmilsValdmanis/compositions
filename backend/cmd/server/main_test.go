@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,6 +19,8 @@ func TestRunServerAndMain(t *testing.T) {
 	defer func() { listenAndServe = originalListen }()
 	originalFatal := fatalOnRunError
 	defer func() { fatalOnRunError = originalFatal }()
+	originalLogger := slog.Default()
+	defer slog.SetDefault(originalLogger)
 	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
 
 	calledAddrs := make([]string, 0, 2)
@@ -56,6 +60,27 @@ func TestRunServerAndMain(t *testing.T) {
 	}
 	if len(calledAddrs) != 2 || calledAddrs[1] != ":8080" {
 		t.Fatalf("calledAddrs = %v; want [:0 :8080]", calledAddrs)
+	}
+}
+
+func TestConfigureLoggerWritesToProvidedOutput(t *testing.T) {
+	originalLogger := slog.Default()
+	defer slog.SetDefault(originalLogger)
+
+	var output bytes.Buffer
+	configureLogger(&output)
+
+	slog.Info("logger configured", "stream", "stdout")
+
+	logged := output.String()
+	if !strings.Contains(logged, "level=INFO") {
+		t.Fatalf("configured logger output = %q; want INFO level entry", logged)
+	}
+	if !strings.Contains(logged, "msg=\"logger configured\"") {
+		t.Fatalf("configured logger output = %q; want message entry", logged)
+	}
+	if !strings.Contains(logged, "stream=stdout") {
+		t.Fatalf("configured logger output = %q; want custom field", logged)
 	}
 }
 
