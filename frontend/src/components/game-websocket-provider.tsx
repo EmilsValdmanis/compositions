@@ -221,18 +221,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
       return;
     }
 
-    let wsUrl: string;
-    try {
-      const nextURL = new URL("/ws", serverUrl);
-      if (import.meta.env.PROD && nextURL.protocol !== "wss:") {
-        setConnectionError("production requires a wss:// game server URL");
-        return;
-      }
-      wsUrl = nextURL.toString();
-    } catch {
-      setConnectionError("invalid VITE_GAME_SERVER_URL");
-      return;
-    }
+    const wsUrl = new URL("/ws", serverUrl).toString();
 
     const socket = new WebSocket(wsUrl);
     const sessionId = state.sessionId;
