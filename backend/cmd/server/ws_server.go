@@ -8,12 +8,18 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
 var errSocketClosed = errors.New("socket closed")
 var emitEvent = writeEvent
+
+const (
+	defaultWSReadTimeout  = 5 * time.Minute
+	defaultWSWriteTimeout = 10 * time.Second
+)
 
 type wsEnvelope struct {
 	Type string          `json:"type"`
@@ -114,9 +120,13 @@ func newConfiguredWSServer() (*wsServer, error) {
 	if err != nil {
 		return nil, err
 	}
+	allowedOrigin := originFromBaseURL(baseURL)
+	if allowedOrigin == "" {
+		return nil, errors.New("BETTER_AUTH_URL must be a valid absolute URL")
+	}
 
 	verifier := newBetterAuthSessionVerifier(baseURL, nil)
-	return newWSServerWithAllowedOrigin(verifier, originFromBaseURL(baseURL)), nil
+	return newWSServerWithAllowedOrigin(verifier, allowedOrigin), nil
 }
 
 func (s *wsServer) isAllowedOrigin(origin string) bool {
@@ -126,7 +136,7 @@ func (s *wsServer) isAllowedOrigin(origin string) bool {
 
 	cleanOrigin := normalizeOrigin(origin)
 	if cleanOrigin == "" {
-		return true
+		return false
 	}
 
 	return cleanOrigin == s.allowedOrigin
@@ -173,6 +183,7 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 
 func (s *wsServer) handleConnection(conn *websocket.Conn) {
 	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
 
 	sessionID := ""
 	for {
@@ -186,6 +197,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			}
 			return
 		}
+		_ = conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
 
 		slog.Debug("websocket message received", "sessionID", sessionID, "type", envelope.Type)
 
@@ -375,6 +387,7 @@ func decodePayload(data json.RawMessage, target any) error {
 }
 
 func writeEvent(conn *websocket.Conn, messageType string, data any) error {
+	_ = conn.SetWriteDeadline(time.Now().Add(defaultWSWriteTimeout))
 	if err := conn.WriteJSON(wsEnvelope{Type: messageType, Data: mustMarshalRawMessage(data)}); err != nil {
 		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) || errors.Is(err, websocket.ErrCloseSent) {
 			return errSocketClosed

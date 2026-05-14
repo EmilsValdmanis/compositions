@@ -245,9 +245,40 @@ func TestAuthenticatedWebSocketAcceptsConfiguredOrigin(t *testing.T) {
 	mustConnectAuthenticatedSession(t, conn, "", "host-token")
 }
 
+func TestAuthenticatedWebSocketRejectsMissingOriginWhenConfigured(t *testing.T) {
+	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
+		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
+	}}, "http://frontend.test")
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	url := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws"
+	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
+	if err == nil {
+		_ = conn.Close()
+		t.Fatal("Dial() error = nil; want websocket upgrade rejection")
+	}
+	if resp == nil {
+		t.Fatal("Dial() response = nil; want forbidden response")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Dial() status = %d; want %d", resp.StatusCode, http.StatusForbidden)
+	}
+}
+
 func TestWebSocketOriginHelpers(t *testing.T) {
-	t.Run("configured server allows empty origin for non-browser clients", func(t *testing.T) {
+	t.Run("configured server requires matching browser origin", func(t *testing.T) {
 		server := newWSServerWithAllowedOrigin(nil, "http://frontend.test/")
+		if server.isAllowedOrigin("") {
+			t.Fatal("isAllowedOrigin(empty) = true; want false")
+		}
+		if !server.isAllowedOrigin("http://frontend.test/") {
+			t.Fatal("isAllowedOrigin(configured origin) = false; want true")
+		}
+	})
+
+	t.Run("test constructors stay permissive without configured origin", func(t *testing.T) {
+		server := newWSServerWithAllowedOrigin(nil, "")
 		if !server.isAllowedOrigin("") {
 			t.Fatal("isAllowedOrigin(empty) = false; want true")
 		}
@@ -264,6 +295,18 @@ func TestWebSocketOriginHelpers(t *testing.T) {
 			t.Fatalf("originFromBaseURL(missing scheme) = %q; want empty", got)
 		}
 	})
+}
+
+func TestNewConfiguredWSServerRejectsInvalidOriginConfig(t *testing.T) {
+	t.Setenv("BETTER_AUTH_URL", "frontend.test")
+
+	server, err := newConfiguredWSServer()
+	if err == nil || err.Error() != "BETTER_AUTH_URL must be a valid absolute URL" {
+		t.Fatalf("newConfiguredWSServer() error = %v; want BETTER_AUTH_URL must be a valid absolute URL", err)
+	}
+	if server != nil {
+		t.Fatalf("server = %#v; want nil", server)
+	}
 }
 
 func TestInactiveSocketCannotMutateSessionState(t *testing.T) {
