@@ -119,11 +119,27 @@ function getDealerIndex(room: RoomSnapshot | null) {
 
 export function GameWebSocketProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<WebSocket | null>(null);
+  const connectAttemptRef = useRef(0);
+  const connectInFlightRef = useRef(false);
   const [state, setState] = useState(initialState);
 
   useEffect(() => {
+    function cancelPendingConnect() {
+      connectAttemptRef.current += 1;
+      connectInFlightRef.current = false;
+
+      const socket = socketRef.current;
+      socketRef.current = null;
+      socket?.close();
+    }
+
+    window.addEventListener("beforeunload", cancelPendingConnect);
+    window.addEventListener("pagehide", cancelPendingConnect);
+
     return () => {
-      socketRef.current?.close();
+      window.removeEventListener("beforeunload", cancelPendingConnect);
+      window.removeEventListener("pagehide", cancelPendingConnect);
+      cancelPendingConnect();
     };
   }, []);
 
@@ -200,6 +216,10 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   async function connect() {
     const currentSocket = socketRef.current;
 
+    if (connectInFlightRef.current) {
+      return;
+    }
+
     if (
       currentSocket &&
       (currentSocket.readyState === WebSocket.OPEN ||
@@ -215,8 +235,24 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
       return;
     }
 
+    const connectAttempt = connectAttemptRef.current + 1;
+    connectAttemptRef.current = connectAttempt;
+    connectInFlightRef.current = true;
+
+    updateState((current) =>
+      clearError(current, {
+        connectionStatus: "connecting",
+        lastEvent: null,
+      }),
+    );
+
     const connectionAuth = await getConnectionAuth();
+    if (connectAttemptRef.current != connectAttempt) {
+      return;
+    }
+
     if (!connectionAuth?.authToken) {
+      connectInFlightRef.current = false;
       setConnectionError("authentication required before connecting");
       return;
     }
@@ -226,16 +262,21 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     const socket = new WebSocket(wsUrl);
     const sessionId = state.sessionId;
     const authToken = connectionAuth.authToken;
+
+    if (connectAttemptRef.current !== connectAttempt) {
+      socket.close();
+      return;
+    }
+
     socketRef.current = socket;
 
-    updateState((current) =>
-      clearError(current, {
-        connectionStatus: "connecting",
-        lastEvent: null,
-      }),
-    );
-
     socket.onopen = () => {
+      if (connectAttemptRef.current !== connectAttempt || socketRef.current !== socket) {
+        socket.close();
+        return;
+      }
+
+      connectInFlightRef.current = false;
       socket.send(JSON.stringify({ type: "connect", data: { sessionId, authToken } }));
     };
 
@@ -250,12 +291,16 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     };
 
     socket.onerror = () => {
+      if (connectAttemptRef.current === connectAttempt) {
+        connectInFlightRef.current = false;
+      }
       setConnectionError("failed to connect websocket");
     };
 
     socket.onclose = () => {
       if (socketRef.current === socket) {
         socketRef.current = null;
+        connectInFlightRef.current = false;
 
         updateState((current) => ({
           ...current,
@@ -266,7 +311,13 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   }
 
   function disconnect() {
-    socketRef.current?.close();
+    connectAttemptRef.current += 1;
+    connectInFlightRef.current = false;
+
+    const socket = socketRef.current;
+    socketRef.current = null;
+    socket?.close();
+
     updateState((current) => ({
       ...current,
       room: null,
