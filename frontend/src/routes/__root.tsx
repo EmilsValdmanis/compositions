@@ -87,7 +87,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         )}
       </head>
       <body>
-        <main className="min-h-screen flex items-center justify-center gap-4 flex-col">
+        <main className="min-h-screen flex items-center gap-4 flex-col">
           <ThemeProvider defaultTheme="system" storageKey="theme">
             <GameWebSocketProvider>
               {children}

@@ -9,7 +9,6 @@ import { Spinner } from "./ui/spinner";
 import { Separator } from "./ui/separator";
 import { Label } from "./ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { cn } from "#/lib/utils";
 
 const connectionLabels = {
   idle: "Checking",
@@ -24,7 +23,7 @@ const serverVariants = {
   offline: "destructive",
 } as const;
 
-export function ServerStatusBadge({ className }: { className?: string }) {
+export function ServerStatusBadge() {
   const { state } = useGameWebSocket();
 
   const { data, isFetching, isPending } = useQuery({
@@ -52,7 +51,7 @@ export function ServerStatusBadge({ className }: { className?: string }) {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="icon" className={cn("relative", className)}>
+        <Button variant="outline" size="icon" className="relative">
           <HugeiconsIcon icon={BadgeInfoIcon} />
           {hasIssue && (
             <span className="absolute right-0 top-0 flex size-2.5">
