@@ -1,4 +1,5 @@
 import { authClient } from "#/lib/auth-client";
+import { useTheme } from "#/components/theme-provider";
 import { getUserInitials } from "#/lib/utils";
 import { Route } from "#/routes/__root";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -6,7 +7,16 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Logout02FreeIcons } from "@hugeicons/core-free-icons";
@@ -16,6 +26,7 @@ import { useRouter } from "@tanstack/react-router";
 export function UserDropdown() {
   const { session } = Route.useRouteContext();
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
 
   const user = session?.user;
   const displayName = user?.name || "";
@@ -36,7 +47,30 @@ export function UserDropdown() {
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="flex flex-col gap-0.5">
+          <span className="font-medium text-foreground">{displayName || "Account"}</span>
+          {user?.email ? <span className="text-muted-foreground text-xs">{user.email}</span> : null}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Theme</DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup
+                  value={theme}
+                  onValueChange={(value) => setTheme(value as typeof theme)}
+                >
+                  <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut}>
           <HugeiconsIcon icon={Logout02FreeIcons} />
           Sign Out
