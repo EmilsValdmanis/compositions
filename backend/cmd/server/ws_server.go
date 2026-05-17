@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/gorilla/websocket"
 )
 
@@ -46,6 +47,44 @@ type startGameRequest struct {
 
 type leaveRoomRequest struct{}
 
+type drawRequest struct {
+	Source string `json:"source"`
+}
+
+type cardRequest struct {
+	Rank    int  `json:"rank,omitempty"`
+	Suit    int  `json:"suit,omitempty"`
+	IsJoker bool `json:"isJoker,omitempty"`
+}
+
+type compositionRequest struct {
+	Type  string        `json:"type"`
+	Cards []cardRequest `json:"cards"`
+}
+
+type playRequest struct {
+	Compositions []compositionRequest `json:"compositions"`
+}
+
+type compositionAdditionRequest struct {
+	CompositionIndex int           `json:"compositionIndex"`
+	Cards            []cardRequest `json:"cards"`
+}
+
+type addRequest struct {
+	Additions []compositionAdditionRequest `json:"additions"`
+}
+
+type reclaimRequest struct {
+	CompositionIndex int         `json:"compositionIndex"`
+	JokerIndex       int         `json:"jokerIndex"`
+	ReplacementCard  cardRequest `json:"replacementCard"`
+}
+
+type discardRequest struct {
+	CardIndex int `json:"cardIndex"`
+}
+
 type connectedEvent struct {
 	SessionID string `json:"sessionId"`
 	PlayerID  string `json:"playerId"`
@@ -57,6 +96,17 @@ type errorEvent struct {
 
 type roomStateEvent struct {
 	Room roomSnapshot `json:"room"`
+}
+
+type gameStateEvent struct {
+	Room roomSnapshot      `json:"room"`
+	Game game.GameSnapshot `json:"game"`
+}
+
+type actionResultEvent struct {
+	Action   string `json:"action"`
+	PlayerID string `json:"playerId"`
+	OK       bool   `json:"ok"`
 }
 
 type leftRoomEvent struct {
@@ -87,10 +137,10 @@ type playerSnapshot struct {
 }
 
 type wsServer struct {
-	lobby    *lobbyServer
-	verifier sessionVerifier
+	lobby         *lobbyServer
+	verifier      sessionVerifier
 	allowedOrigin string
-	upgrader websocket.Upgrader
+	upgrader      websocket.Upgrader
 }
 
 func newWSServer() *wsServer {
@@ -218,6 +268,16 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			if s.handleLeaveRoom(conn, sessionID, envelope) {
 				return
 			}
+		case "draw":
+			s.handleDraw(conn, sessionID, envelope)
+		case "play":
+			s.handlePlay(conn, sessionID, envelope)
+		case "add":
+			s.handleAdd(conn, sessionID, envelope)
+		case "reclaim":
+			s.handleReclaim(conn, sessionID, envelope)
+		case "discard":
+			s.handleDiscard(conn, sessionID, envelope)
 		default:
 			s.writeError(conn, errors.New("unknown message type"))
 		}
@@ -335,6 +395,99 @@ func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envel
 	return false
 }
 
+func (s *wsServer) handleDraw(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[drawRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.draw(sessionID, req.Source)
+	if err != nil {
+		slog.Warn("draw failed", "sessionID", sessionID, "source", req.Source, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[playRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	comps, err := compositionsFromRequest(req.Compositions)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.play(sessionID, comps)
+	if err != nil {
+		slog.Warn("play failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handleAdd(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[addRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	additions, err := additionsFromRequest(req.Additions)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.add(sessionID, additions)
+	if err != nil {
+		slog.Warn("add failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handleReclaim(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[reclaimRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	reclaim, err := reclaimFromRequest(req)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.reclaim(sessionID, reclaim)
+	if err != nil {
+		slog.Warn("reclaim failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[discardRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.discard(sessionID, req.CardIndex)
+	if err != nil {
+		slog.Warn("discard failed", "sessionID", sessionID, "cardIndex", req.CardIndex, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
 func (s *wsServer) writeError(conn *websocket.Conn, err error) {
 	if writeErr := emitEvent(conn, "error", errorEvent{Message: err.Error()}); writeErr != nil && !errors.Is(writeErr, errSocketClosed) {
 		slog.Error("write websocket error event failed", "error", writeErr)
@@ -350,6 +503,43 @@ func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*webs
 			slog.Error("broadcast room_state failed", "roomCode", roomState.Code, "error", err)
 		}
 	}
+}
+
+func (s *wsServer) broadcastGameState(recipients []gameStateRecipient) {
+	for _, recipient := range recipients {
+		if recipient.conn == nil {
+			continue
+		}
+		if err := emitEvent(recipient.conn, "game_state", recipient.event); err != nil && !errors.Is(err, errSocketClosed) {
+			slog.Error("broadcast game_state failed", "roomCode", recipient.event.Room.Code, "error", err)
+		}
+	}
+}
+
+func (s *wsServer) broadcastActionResult(result actionResultEvent, recipients []*websocket.Conn) {
+	for _, conn := range recipients {
+		if conn == nil {
+			continue
+		}
+		if err := emitEvent(conn, "action_result", result); err != nil && !errors.Is(err, errSocketClosed) {
+			slog.Error("broadcast action_result failed", "action", result.Action, "playerID", result.PlayerID, "error", err)
+		}
+	}
+}
+
+func (s *wsServer) broadcastActionSuccess(result actionResultEvent, roomState roomSnapshot, recipients []gameStateRecipient) {
+	conns := gameRecipientConns(recipients)
+	s.broadcastActionResult(result, conns)
+	s.broadcastRoomState(roomState, conns)
+	s.broadcastGameState(recipients)
+}
+
+func gameRecipientConns(recipients []gameStateRecipient) []*websocket.Conn {
+	conns := make([]*websocket.Conn, 0, len(recipients))
+	for _, recipient := range recipients {
+		conns = append(conns, recipient.conn)
+	}
+	return conns
 }
 
 func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID string, envelope wsEnvelope) (T, bool) {
@@ -414,4 +604,77 @@ func otherConnections(conns []*websocket.Conn, exclude *websocket.Conn) []*webso
 		filtered = append(filtered, conn)
 	}
 	return filtered
+}
+
+func compositionsFromRequest(requests []compositionRequest) ([]*game.Composition, error) {
+	comps := make([]*game.Composition, 0, len(requests))
+	for _, req := range requests {
+		cards, err := cardsFromRequest(req.Cards)
+		if err != nil {
+			return nil, err
+		}
+
+		var comp *game.Composition
+		var ok bool
+		switch req.Type {
+		case "set":
+			comp, ok = game.NewSet(cards)
+		case "run":
+			comp, ok = game.NewRun(cards)
+		default:
+			return nil, errors.New("unknown composition type")
+		}
+		if !ok {
+			return nil, game.ErrInvalidComposition
+		}
+		comps = append(comps, comp)
+	}
+	return comps, nil
+}
+
+func additionsFromRequest(requests []compositionAdditionRequest) ([]game.CompositionAddition, error) {
+	additions := make([]game.CompositionAddition, 0, len(requests))
+	for _, req := range requests {
+		cards, err := cardsFromRequest(req.Cards)
+		if err != nil {
+			return nil, err
+		}
+		additions = append(additions, game.CompositionAddition{CompositionIndex: req.CompositionIndex, Cards: cards})
+	}
+	return additions, nil
+}
+
+func reclaimFromRequest(req reclaimRequest) (game.JokerReclaim, error) {
+	replacement, err := cardFromRequest(req.ReplacementCard)
+	if err != nil {
+		return game.JokerReclaim{}, err
+	}
+	return game.JokerReclaim{CompositionIndex: req.CompositionIndex, JokerIndex: req.JokerIndex, ReplacementCard: replacement}, nil
+}
+
+func cardsFromRequest(requests []cardRequest) ([]game.Card, error) {
+	cards := make([]game.Card, 0, len(requests))
+	for _, req := range requests {
+		card, err := cardFromRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		cards = append(cards, card)
+	}
+	return cards, nil
+}
+
+func cardFromRequest(req cardRequest) (game.Card, error) {
+	if req.IsJoker {
+		return game.NewJoker(), nil
+	}
+	rank := game.Rank(req.Rank)
+	if rank < game.Ace || rank > game.King {
+		return game.Card{}, errors.New("invalid card rank")
+	}
+	suit := game.Suit(req.Suit)
+	if suit < game.Hearts || suit > game.Spades {
+		return game.Card{}, errors.New("invalid card suit")
+	}
+	return game.NewCard(rank, suit), nil
 }

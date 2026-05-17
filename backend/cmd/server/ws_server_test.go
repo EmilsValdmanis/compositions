@@ -841,6 +841,9 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 		return errors.New("emit boom")
 	}
 	server.broadcastRoomState(hostRoom, []*websocket.Conn{writeConn})
+	server.broadcastGameState([]gameStateRecipient{{conn: nil}, {conn: writeConn, event: gameStateEvent{Room: hostRoom}}})
+	server.broadcastActionResult(actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, []*websocket.Conn{nil, writeConn})
+	server.broadcastActionSuccess(actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, hostRoom, []gameStateRecipient{{conn: nil}, {conn: writeConn, event: gameStateEvent{Room: hostRoom}}})
 }
 
 func TestDecodePayload(t *testing.T) {
@@ -917,4 +920,242 @@ func TestOtherConnections(t *testing.T) {
 	if len(filtered) != 2 || filtered[0] != hostConn || filtered[1] != thirdConn {
 		t.Fatalf("otherConnections() = %v; want [%p %p]", filtered, hostConn, thirdConn)
 	}
+}
+
+func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
+	originalMakeGameState := makeGameState
+	defer func() { makeGameState = originalMakeGameState }()
+	makeGameState = func() *game.GameState {
+		return game.NewGameStateWithDeck(roundRobinDeckForServerTest(
+			[]game.Card{
+				game.NewCard(game.King, game.Hearts),
+				game.NewCard(game.King, game.Diamonds),
+				game.NewCard(game.King, game.Clubs),
+				game.NewCard(game.Ace, game.Spades),
+				game.NewCard(game.Two, game.Spades),
+				game.NewCard(game.Three, game.Spades),
+				game.NewCard(game.Five, game.Hearts),
+				game.NewJoker(),
+				game.NewCard(game.Seven, game.Hearts),
+				game.NewCard(game.Six, game.Hearts),
+				game.NewCard(game.Five, game.Spades),
+				game.NewCard(game.Two, game.Clubs),
+			},
+			[]game.Card{
+				game.NewCard(game.Ace, game.Clubs),
+				game.NewCard(game.Ace, game.Diamonds),
+				game.NewCard(game.Two, game.Clubs),
+				game.NewCard(game.Four, game.Clubs),
+				game.NewCard(game.Five, game.Diamonds),
+				game.NewCard(game.Six, game.Clubs),
+				game.NewCard(game.Seven, game.Diamonds),
+				game.NewCard(game.Eight, game.Clubs),
+				game.NewCard(game.Nine, game.Diamonds),
+				game.NewCard(game.Five, game.Spades),
+				game.NewCard(game.Two, game.Hearts),
+				game.NewCard(game.Three, game.Spades),
+			},
+			game.NewCard(game.Four, game.Spades),
+			game.NewCard(game.Three, game.Diamonds),
+			game.NewCard(game.Ace, game.Diamonds),
+		))
+	}
+
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	mustConnectSession(t, hostConn, "")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+
+	guestConn := mustDialWS(t, httpServer.URL)
+	defer guestConn.Close()
+	guestConnected := mustConnectSession(t, guestConn, "")
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Guest"})
+	_ = mustReadRoomState(t, guestConn)
+	_ = mustReadRoomState(t, hostConn)
+
+	mustSendEnvelope(t, hostConn, "start_game", startGameRequest{DealerIndex: 0})
+	_ = mustReadRoomState(t, hostConn)
+	_ = mustReadRoomState(t, guestConn)
+
+	mustSendEnvelope(t, hostConn, "draw", drawRequest{Source: "deck"})
+	mustReadError(t, hostConn, "not your turn")
+	mustSendEnvelope(t, guestConn, "draw", drawRequest{Source: "sideways"})
+	mustReadError(t, guestConn, "unknown draw source")
+
+	mustSendEnvelope(t, guestConn, "draw", drawRequest{Source: "discard"})
+	guestDrawState := mustReadActionBroadcast(t, guestConn, "draw", guestConnected.PlayerID)
+	hostDrawState := mustReadActionBroadcast(t, hostConn, "draw", guestConnected.PlayerID)
+	if len(guestDrawState.Game.Hand) != game.InitialHandSize+1 {
+		t.Fatalf("guest hand after draw = %d; want %d", len(guestDrawState.Game.Hand), game.InitialHandSize+1)
+	}
+	if len(hostDrawState.Game.Hand) != game.InitialHandSize {
+		t.Fatalf("host hand after guest draw = %d; want %d", len(hostDrawState.Game.Hand), game.InitialHandSize)
+	}
+	if !guestDrawState.Game.Turn.MustUseDiscardDraw {
+		t.Fatal("guest draw state MustUseDiscardDraw = false; want true")
+	}
+
+	mustSendEnvelope(t, guestConn, "play", playRequest{Compositions: []compositionRequest{{Type: "mystery"}}})
+	mustReadError(t, guestConn, "unknown composition type")
+	mustSendEnvelope(t, guestConn, "play", playRequest{Compositions: []compositionRequest{
+		{Type: "set", Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}},
+		{Type: "run", Cards: []cardRequest{cardReq(game.Ace, game.Spades), cardReq(game.Two, game.Spades), cardReq(game.Three, game.Spades), cardReq(game.Four, game.Spades)}},
+		{Type: "run", Cards: []cardRequest{cardReq(game.Five, game.Hearts), jokerReq(), cardReq(game.Seven, game.Hearts)}},
+	}})
+	guestPlayState := mustReadActionBroadcast(t, guestConn, "play", guestConnected.PlayerID)
+	_ = mustReadActionBroadcast(t, hostConn, "play", guestConnected.PlayerID)
+	if len(guestPlayState.Game.ActiveCompositions) != 3 {
+		t.Fatalf("active compositions after play = %d; want 3", len(guestPlayState.Game.ActiveCompositions))
+	}
+	if !guestPlayState.Game.Players[1].HasOpened {
+		t.Fatalf("guest HasOpened = false; want true")
+	}
+
+	mustSendEnvelope(t, guestConn, "discard", discardRequest{CardIndex: -1})
+	mustReadError(t, guestConn, game.ErrRemovingCard.Error())
+	mustSendEnvelope(t, guestConn, "discard", discardRequest{CardIndex: 2})
+	guestDiscardState := mustReadActionBroadcast(t, guestConn, "discard", guestConnected.PlayerID)
+	_ = mustReadActionBroadcast(t, hostConn, "discard", guestConnected.PlayerID)
+	if guestDiscardState.Game.Turn.PlayerIndex != 0 {
+		t.Fatalf("turn player after guest discard = %d; want 0", guestDiscardState.Game.Turn.PlayerIndex)
+	}
+
+	mustSendEnvelope(t, hostConn, "draw", drawRequest{Source: "deck"})
+	_ = mustReadActionBroadcast(t, hostConn, "draw", hostDrawState.Room.HostPlayerID)
+	_ = mustReadActionBroadcast(t, guestConn, "draw", hostDrawState.Room.HostPlayerID)
+	mustSendEnvelope(t, hostConn, "discard", discardRequest{CardIndex: 9})
+	_ = mustReadActionBroadcast(t, hostConn, "discard", hostDrawState.Room.HostPlayerID)
+	_ = mustReadActionBroadcast(t, guestConn, "discard", hostDrawState.Room.HostPlayerID)
+
+	mustSendEnvelope(t, guestConn, "draw", drawRequest{Source: "deck"})
+	_ = mustReadActionBroadcast(t, guestConn, "draw", guestConnected.PlayerID)
+	_ = mustReadActionBroadcast(t, hostConn, "draw", guestConnected.PlayerID)
+	mustSendEnvelope(t, guestConn, "reclaim", reclaimRequest{CompositionIndex: 2, JokerIndex: 1, ReplacementCard: cardReq(game.Six, game.Hearts)})
+	reclaimState := mustReadActionBroadcast(t, guestConn, "reclaim", guestConnected.PlayerID)
+	_ = mustReadActionBroadcast(t, hostConn, "reclaim", guestConnected.PlayerID)
+	if reclaimState.Game.ActiveCompositions[2].Cards[1].Rank != game.Six {
+		t.Fatalf("reclaimed composition card = %#v; want six of hearts", reclaimState.Game.ActiveCompositions[2].Cards[1])
+	}
+
+	mustSendEnvelope(t, guestConn, "add", addRequest{Additions: []compositionAdditionRequest{
+		{CompositionIndex: 1, Cards: []cardRequest{cardReq(game.Five, game.Spades)}},
+	}})
+	addState := mustReadActionBroadcast(t, guestConn, "add", guestConnected.PlayerID)
+	_ = mustReadActionBroadcast(t, hostConn, "add", guestConnected.PlayerID)
+	if len(addState.Game.ActiveCompositions[1].Cards) != 5 {
+		t.Fatalf("spade run length after add = %d; want 5", len(addState.Game.ActiveCompositions[1].Cards))
+	}
+}
+
+func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	rawConn := mustDialWS(t, httpServer.URL)
+	defer rawConn.Close()
+	for _, messageType := range []string{"draw", "play", "add", "reclaim", "discard"} {
+		mustSendEnvelope(t, rawConn, messageType, struct{}{})
+		mustReadError(t, rawConn, "connect first")
+	}
+
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	mustConnectSession(t, conn, "")
+	for _, messageType := range []string{"draw", "play", "add", "reclaim", "discard"} {
+		if err := conn.WriteJSON(wsEnvelope{Type: messageType}); err != nil {
+			t.Fatalf("WriteJSON(%q missing data) error = %v", messageType, err)
+		}
+		mustReadError(t, conn, "missing data")
+	}
+	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Type: "set", Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}}}})
+	mustReadError(t, conn, "join a room first")
+	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Type: "set", Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})
+	mustReadError(t, conn, "invalid card rank")
+	mustSendEnvelope(t, conn, "add", addRequest{Additions: []compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{{Rank: int(game.Ace), Suit: 99}}}}})
+	mustReadError(t, conn, "invalid card suit")
+	mustSendEnvelope(t, conn, "add", addRequest{Additions: []compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{cardReq(game.Eight, game.Hearts)}}}})
+	mustReadError(t, conn, "join a room first")
+	mustSendEnvelope(t, conn, "reclaim", reclaimRequest{ReplacementCard: cardRequest{Rank: 99, Suit: int(game.Clubs)}})
+	mustReadError(t, conn, "invalid card rank")
+	mustSendEnvelope(t, conn, "reclaim", reclaimRequest{CompositionIndex: 0, JokerIndex: 0, ReplacementCard: cardReq(game.Six, game.Hearts)})
+	mustReadError(t, conn, "join a room first")
+
+	if _, err := compositionsFromRequest([]compositionRequest{{Type: "set", Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}); err == nil || err.Error() != "invalid card rank" {
+		t.Fatalf("compositionsFromRequest(invalid card) error = %v; want invalid card rank", err)
+	}
+	if _, err := compositionsFromRequest([]compositionRequest{{Type: "set", Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Hearts), cardReq(game.King, game.Clubs)}}}); !errors.Is(err, game.ErrInvalidComposition) {
+		t.Fatalf("compositionsFromRequest(invalid set) error = %v; want ErrInvalidComposition", err)
+	}
+	if comps, err := compositionsFromRequest([]compositionRequest{{Type: "run", Cards: []cardRequest{cardReq(game.Five, game.Hearts), cardReq(game.Six, game.Hearts), jokerReq()}}}); err != nil || len(comps) != 1 {
+		t.Fatalf("compositionsFromRequest(valid run) = %v, %v; want one comp", comps, err)
+	}
+	if _, err := additionsFromRequest([]compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}); err == nil || err.Error() != "invalid card rank" {
+		t.Fatalf("additionsFromRequest(invalid rank) error = %v; want invalid card rank", err)
+	}
+	if additions, err := additionsFromRequest([]compositionAdditionRequest{{CompositionIndex: 2, Cards: []cardRequest{cardReq(game.Eight, game.Hearts)}}}); err != nil || len(additions) != 1 {
+		t.Fatalf("additionsFromRequest(valid) = %v, %v; want one addition", additions, err)
+	}
+	if _, err := reclaimFromRequest(reclaimRequest{ReplacementCard: cardRequest{Rank: int(game.Ace), Suit: 99}}); err == nil || err.Error() != "invalid card suit" {
+		t.Fatalf("reclaimFromRequest(invalid suit) error = %v; want invalid card suit", err)
+	}
+	if reclaim, err := reclaimFromRequest(reclaimRequest{CompositionIndex: 1, JokerIndex: 2, ReplacementCard: cardReq(game.Ten, game.Clubs)}); err != nil || reclaim.CompositionIndex != 1 || reclaim.JokerIndex != 2 {
+		t.Fatalf("reclaimFromRequest(valid) = %#v, %v; want reclaim", reclaim, err)
+	}
+	if card, err := cardFromRequest(jokerReq()); err != nil || !card.IsJoker() {
+		t.Fatalf("cardFromRequest(joker) = %#v, %v; want joker", card, err)
+	}
+}
+
+func mustReadActionBroadcast(t *testing.T, conn *websocket.Conn, action, playerID string) gameStateEvent {
+	t.Helper()
+
+	actionEnvelope := mustReadEnvelopeFromConn(t, conn)
+	if actionEnvelope.Type != "action_result" {
+		t.Fatalf("action result type = %q; want action_result", actionEnvelope.Type)
+	}
+	var result actionResultEvent
+	if err := json.Unmarshal(actionEnvelope.Data, &result); err != nil {
+		t.Fatalf("json.Unmarshal(action_result) error = %v", err)
+	}
+	if result.Action != action || result.PlayerID != playerID || !result.OK {
+		t.Fatalf("action result = %#v; want %s by %s ok", result, action, playerID)
+	}
+
+	room := mustReadRoomState(t, conn)
+	gameEnvelope := mustReadEnvelopeFromConn(t, conn)
+	if gameEnvelope.Type != "game_state" {
+		t.Fatalf("game state type = %q; want game_state", gameEnvelope.Type)
+	}
+	var event gameStateEvent
+	if err := json.Unmarshal(gameEnvelope.Data, &event); err != nil {
+		t.Fatalf("json.Unmarshal(game_state) error = %v", err)
+	}
+	if event.Room.Code != room.Code {
+		t.Fatalf("game_state room code = %q; want %q", event.Room.Code, room.Code)
+	}
+	return event
+}
+
+func cardReq(rank game.Rank, suit game.Suit) cardRequest {
+	return cardRequest{Rank: int(rank), Suit: int(suit)}
+}
+
+func jokerReq() cardRequest {
+	return cardRequest{IsJoker: true}
+}
+
+func roundRobinDeckForServerTest(firstPlayerHand, dealerHand []game.Card, discard game.Card, drawCards ...game.Card) []game.Card {
+	deck := make([]game.Card, 0, len(firstPlayerHand)+len(dealerHand)+1+len(drawCards))
+	for i := range firstPlayerHand {
+		deck = append(deck, firstPlayerHand[i], dealerHand[i])
+	}
+	deck = append(deck, discard)
+	deck = append(deck, drawCards...)
+	return deck
 }

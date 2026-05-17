@@ -35,6 +35,26 @@ type Card struct {
 	isJoker bool
 }
 
+func NewCard(rank Rank, suit Suit) Card {
+	return Card{rank: rank, suit: suit}
+}
+
+func NewJoker() Card {
+	return Card{isJoker: true}
+}
+
+func (c Card) Rank() Rank {
+	return c.rank
+}
+
+func (c Card) Suit() Suit {
+	return c.suit
+}
+
+func (c Card) IsJoker() bool {
+	return c.isJoker
+}
+
 func cardsEqual(a, b Card) bool {
 	return a.rank == b.rank && a.suit == b.suit
 }

@@ -34,9 +34,9 @@ Realtime game server checklist.
 - [x] 2. Define connection, player-session, and game-room lifecycle rules for connect, websocket-close disconnect handling, reconnect, host ownership, and room start flow.
 - [x] 3. Add server-level tests for the lobby/session/start flow, including reconnect handling, invalid lobby operations, and room-state broadcasts.
 - [ ] 4. Add WebSocket rate limiting for connection attempts, room creation/join attempts, and per-connection message throughput to reduce brute-force room joins and flooding.
-- [ ] 5. Extend the WebSocket surface so clients can submit turn actions such as draw, play, add, reclaim, and discard.
-- [ ] 6. Broadcast in-game state changes and action results to all room participants during active play.
-- [ ] 7. Add server-level integration tests that drive realistic multiplayer turn flow, including invalid actions and state broadcasts during active rounds.
+- [x] 5. Extend the WebSocket surface so clients can submit turn actions such as draw, play, add, reclaim, and discard.
+- [x] 6. Broadcast in-game state changes and action results to all room participants during active play.
+- [x] 7. Add server-level integration tests that drive realistic multiplayer turn flow, including invalid actions and state broadcasts during active rounds.
 - [x] 8. Add useful logging and error handling around the WebSocket lobby and game play surfaces to make debugging easier during frontend integration and testing.
 
 Frontend starter checklist.
@@ -45,6 +45,7 @@ Frontend starter checklist.
 - [x] 2. Define the frontend WebSocket client types for connection, room, and game messages.
 - [x] 3. Build a basic lobby screen that can connect, create a room, join a room, and start a game.
 - [x] 4. Add a room view that shows room code, players, seats, connected status, and host controls.
-- [ ] 5. Add a basic in-game screen shell for hand, table compositions, draw pile, discard pile, and turn indicator.
-- [ ] 6. Wire frontend state updates from server room-state and game-state events.
-- [ ] 7. Add frontend tests for session restore, lobby flow, and room-state rendering.
+- [ ] 5. Add basic lobby system UI (join, leave, copy code, share link, etc.)
+- [ ] 6. Add a basic in-game screen shell for hand, table compositions, draw pile, discard pile, and turn indicator.
+- [ ] 7. Wire frontend state updates from server room-state and game-state events.
+- [ ] 8. Add frontend tests for session restore, lobby flow, and room-state rendering.

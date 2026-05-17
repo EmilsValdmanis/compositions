@@ -48,6 +48,11 @@ type room struct {
 	hostID    string
 }
 
+type gameStateRecipient struct {
+	conn  *websocket.Conn
+	event gameStateEvent
+}
+
 type lobbyServer struct {
 	mu       sync.Mutex
 	rng      *rand.Rand
@@ -105,7 +110,6 @@ func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticat
 	)
 	return connectedEvent{SessionID: sessionID, PlayerID: playerID}, nil, nil, nil
 }
-
 
 func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, user authenticatedUser, conn *websocket.Conn) (connectedEvent, *roomSnapshot, []*websocket.Conn, error) {
 	session, ok := l.sessions[existingSessionID]
@@ -352,6 +356,77 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
 }
 
+func (l *lobbyServer) draw(sessionID, source string) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.applyGameAction(sessionID, "draw", func(state *game.GameState) error {
+		switch source {
+		case "deck":
+			return state.DrawFromDeck()
+		case "discard":
+			return state.DrawFromDiscard()
+		default:
+			return errors.New("unknown draw source")
+		}
+	})
+}
+
+func (l *lobbyServer) play(sessionID string, comps []*game.Composition) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.applyGameAction(sessionID, "play", func(state *game.GameState) error {
+		return state.PlayCompositions(comps)
+	})
+}
+
+func (l *lobbyServer) add(sessionID string, additions []game.CompositionAddition) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.applyGameAction(sessionID, "add", func(state *game.GameState) error {
+		return state.AddToCompositions(additions)
+	})
+}
+
+func (l *lobbyServer) reclaim(sessionID string, reclaim game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.applyGameAction(sessionID, "reclaim", func(state *game.GameState) error {
+		return state.PlayTable(nil, nil, reclaim)
+	})
+}
+
+func (l *lobbyServer) discard(sessionID string, cardIndex int) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.applyGameAction(sessionID, "discard", func(state *game.GameState) error {
+		return state.DiscardFromHand(cardIndex)
+	})
+}
+
+func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*game.GameState) error) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("join a room first")
+	}
+	if room.gameState == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("game state not initialized")
+	}
+	if room.gameState.Phase() != game.PhaseInProgress {
+		return roomSnapshot{}, nil, actionResultEvent{}, game.ErrGameNotInProgress
+	}
+	if !room.isCurrentTurn(session.playerID) {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("not your turn")
+	}
+	if err := mutate(room.gameState); err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	result := actionResultEvent{Action: action, PlayerID: session.playerID, OK: true}
+	return roomState, recipients, result, nil
+}
+
 func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 	var roomState roomSnapshot
 	var recipients []*websocket.Conn
@@ -531,6 +606,28 @@ func (r *room) connectedConns(sessions map[string]*playerSession) []*websocket.C
 	return recipients
 }
 
+func (r *room) gameStateRecipients(sessions map[string]*playerSession, roomState roomSnapshot) ([]gameStateRecipient, error) {
+	recipients := make([]gameStateRecipient, 0, len(r.players))
+	for _, player := range r.players {
+		if player == nil || !player.connected {
+			continue
+		}
+		session := sessions[player.sessionID]
+		if session == nil || session.conn == nil {
+			continue
+		}
+		state, ok := r.gameState.SnapshotForPlayer(player.player.ID)
+		if !ok {
+			return nil, errors.New("game state snapshot failed")
+		}
+		recipients = append(recipients, gameStateRecipient{
+			conn:  session.conn,
+			event: gameStateEvent{Room: roomState, Game: state},
+		})
+	}
+	return recipients, nil
+}
+
 func (r *room) playerByID(playerID string) *roomPlayer {
 	for _, player := range r.players {
 		if player != nil && player.player.ID == playerID {
@@ -547,6 +644,17 @@ func (r *room) allPlayersConnected() bool {
 		}
 	}
 	return true
+}
+
+func (r *room) isCurrentTurn(playerID string) bool {
+	if r == nil || r.gameState == nil {
+		return false
+	}
+	playerIndex := r.gameState.CurrentPlayerIndex()
+	if playerIndex < 0 || playerIndex >= len(r.players) || r.players[playerIndex] == nil {
+		return false
+	}
+	return r.players[playerIndex].player.ID == playerID
 }
 
 func (r *room) gameStatePhase() game.GamePhase {

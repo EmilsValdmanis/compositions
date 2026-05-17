@@ -138,6 +138,12 @@ func NewGameState() *GameState {
 	}
 }
 
+func NewGameStateWithDeck(cards []Card) *GameState {
+	state := NewGameState()
+	state.drawPile = &CardPile{cards: append([]Card(nil), cards...)}
+	return state
+}
+
 func (gs *GameState) DrawFromDeck() error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress

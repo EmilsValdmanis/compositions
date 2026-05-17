@@ -837,3 +837,194 @@ func TestDisconnectHandlesMissingRoomAndMissingPlayer(t *testing.T) {
 	sessionB.roomCode = "ROOM"
 	lobby.disconnect(eventB.SessionID, connB)
 }
+
+func TestLobbyGameActionCoverage(t *testing.T) {
+	originalMakeGameState := makeGameState
+	defer func() { makeGameState = originalMakeGameState }()
+	makeGameState = func() *game.GameState {
+		return game.NewGameStateWithDeck(roundRobinDeckForServerTest(
+			[]game.Card{
+				game.NewCard(game.King, game.Hearts),
+				game.NewCard(game.King, game.Diamonds),
+				game.NewCard(game.King, game.Clubs),
+				game.NewCard(game.Ace, game.Spades),
+				game.NewCard(game.Two, game.Spades),
+				game.NewCard(game.Three, game.Spades),
+				game.NewCard(game.Five, game.Hearts),
+				game.NewJoker(),
+				game.NewCard(game.Seven, game.Hearts),
+				game.NewCard(game.Six, game.Hearts),
+				game.NewCard(game.Five, game.Spades),
+				game.NewCard(game.Two, game.Clubs),
+			},
+			[]game.Card{
+				game.NewCard(game.Ace, game.Clubs),
+				game.NewCard(game.Ace, game.Diamonds),
+				game.NewCard(game.Two, game.Clubs),
+				game.NewCard(game.Four, game.Clubs),
+				game.NewCard(game.Five, game.Diamonds),
+				game.NewCard(game.Six, game.Clubs),
+				game.NewCard(game.Seven, game.Diamonds),
+				game.NewCard(game.Eight, game.Clubs),
+				game.NewCard(game.Nine, game.Diamonds),
+				game.NewCard(game.Five, game.Spades),
+				game.NewCard(game.Two, game.Hearts),
+				game.NewCard(game.Three, game.Spades),
+			},
+			game.NewCard(game.Four, game.Spades),
+			game.NewCard(game.Three, game.Diamonds),
+			game.NewCard(game.Ace, game.Diamonds),
+		))
+	}
+
+	lobby := newLobbyServer()
+	if _, _, _, err := lobby.draw("missing", "deck"); err == nil || err.Error() != "session not found" {
+		t.Fatalf("draw(missing session) error = %v; want session not found", err)
+	}
+
+	hostConn, _, closeHost := newSocketPair(t)
+	defer closeHost()
+	hostEvent, _, _, err := lobby.connect("", hostConn)
+	if err != nil {
+		t.Fatalf("connect(host) error = %v", err)
+	}
+	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "join a room first" {
+		t.Fatalf("draw(no room) error = %v; want join a room first", err)
+	}
+	hostRoom, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); !errors.Is(err, game.ErrGameNotInProgress) {
+		t.Fatalf("draw(lobby phase) error = %v; want ErrGameNotInProgress", err)
+	}
+
+	guestConn, _, closeGuest := newSocketPair(t)
+	defer closeGuest()
+	guestEvent, _, _, err := lobby.connect("", guestConn)
+	if err != nil {
+		t.Fatalf("connect(guest) error = %v", err)
+	}
+	if _, _, err := lobby.joinRoom(guestEvent.SessionID, hostRoom.Code, "Guest"); err != nil {
+		t.Fatalf("joinRoom() error = %v", err)
+	}
+	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+		t.Fatalf("startGame() error = %v", err)
+	}
+	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "not your turn" {
+		t.Fatalf("draw(not your turn) error = %v; want not your turn", err)
+	}
+
+	roomState, recipients, result, err := lobby.draw(guestEvent.SessionID, "discard")
+	if err != nil {
+		t.Fatalf("draw(discard) error = %v", err)
+	}
+	if roomState.Phase != "in_progress" || len(recipients) != 2 || result.Action != "draw" || result.PlayerID != guestEvent.PlayerID || !result.OK {
+		t.Fatalf("draw result = %#v, recipients=%d, room=%#v; want successful broadcast", result, len(recipients), roomState)
+	}
+	if _, _, _, err := lobby.draw(guestEvent.SessionID, "deck"); !errors.Is(err, game.ErrPlayerAlreadyDrew) {
+		t.Fatalf("draw(twice) error = %v; want ErrPlayerAlreadyDrew", err)
+	}
+	if _, _, _, err := lobby.play(guestEvent.SessionID, []*game.Composition{}); !errors.Is(err, game.ErrInvalidComposition) {
+		t.Fatalf("play(empty) error = %v; want ErrInvalidComposition", err)
+	}
+
+	setComp, ok := game.NewSet([]game.Card{game.NewCard(game.King, game.Hearts), game.NewCard(game.King, game.Diamonds), game.NewCard(game.King, game.Clubs)})
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	spadeRun, ok := game.NewRun([]game.Card{game.NewCard(game.Ace, game.Spades), game.NewCard(game.Two, game.Spades), game.NewCard(game.Three, game.Spades), game.NewCard(game.Four, game.Spades)})
+	if !ok {
+		t.Fatal("NewRun(spade) returned false; want true")
+	}
+	heartRun, ok := game.NewRun([]game.Card{game.NewCard(game.Five, game.Hearts), game.NewJoker(), game.NewCard(game.Seven, game.Hearts)})
+	if !ok {
+		t.Fatal("NewRun(heart) returned false; want true")
+	}
+	if _, _, result, err := lobby.play(guestEvent.SessionID, []*game.Composition{setComp, spadeRun, heartRun}); err != nil || result.Action != "play" {
+		t.Fatalf("play(valid) result = %#v, error = %v; want play success", result, err)
+	}
+	if _, _, _, err := lobby.reclaim(guestEvent.SessionID, game.JokerReclaim{CompositionIndex: 2, JokerIndex: 1, ReplacementCard: game.NewCard(game.Six, game.Hearts)}); err != nil {
+		t.Fatalf("reclaim() error = %v", err)
+	}
+	if _, _, _, err := lobby.add(guestEvent.SessionID, []game.CompositionAddition{{CompositionIndex: 1, Cards: []game.Card{game.NewCard(game.Five, game.Spades)}}}); err != nil {
+		t.Fatalf("add() error = %v", err)
+	}
+	if _, _, _, err := lobby.discard(guestEvent.SessionID, 1); err != nil {
+		t.Fatalf("discard() error = %v", err)
+	}
+
+	activeRoom := lobby.rooms[hostRoom.Code]
+	if activeRoom == nil {
+		t.Fatal("active room = nil; want room")
+	}
+	originalHostPlayer := activeRoom.players[0].player
+	activeRoom.players[0].player = newPlayerWithID("not-in-state")
+	lobby.sessions[hostEvent.SessionID].playerID = "not-in-state"
+	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "game state snapshot failed" {
+		t.Fatalf("draw(snapshot failure) error = %v; want game state snapshot failed", err)
+	}
+	activeRoom.players[0].player = originalHostPlayer
+	lobby.sessions[hostEvent.SessionID].playerID = hostEvent.PlayerID
+
+	activeRoom.gameState = nil
+	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "game state not initialized" {
+		t.Fatalf("draw(nil game state) error = %v; want game state not initialized", err)
+	}
+}
+
+func TestRoomGameStateRecipientAndCurrentTurnCoverage(t *testing.T) {
+	if (&room{}).isCurrentTurn("p1") {
+		t.Fatal("empty room isCurrentTurn() = true; want false")
+	}
+	if ((*room)(nil)).isCurrentTurn("p1") {
+		t.Fatal("nil room isCurrentTurn() = true; want false")
+	}
+
+	state := game.NewGameState()
+	statePlayer := newPlayerWithID("state-player")
+	if err := state.AddPlayer(statePlayer); err != nil {
+		t.Fatalf("AddPlayer() error = %v", err)
+	}
+	roomWithBadTurn := &room{gameState: state, players: []*roomPlayer{}}
+	if roomWithBadTurn.isCurrentTurn("state-player") {
+		t.Fatal("out-of-range turn isCurrentTurn() = true; want false")
+	}
+	roomWithNilPlayerTurn := &room{gameState: state, players: []*roomPlayer{nil}}
+	if roomWithNilPlayerTurn.isCurrentTurn("state-player") {
+		t.Fatal("nil player turn isCurrentTurn() = true; want false")
+	}
+	roomWithTurn := &room{gameState: state, players: []*roomPlayer{{player: statePlayer}}}
+	if !roomWithTurn.isCurrentTurn("state-player") {
+		t.Fatal("matching turn isCurrentTurn() = false; want true")
+	}
+	if roomWithTurn.isCurrentTurn("other") {
+		t.Fatal("different player isCurrentTurn() = true; want false")
+	}
+
+	sessions := map[string]*playerSession{
+		"connected": {conn: func() *websocket.Conn { conn, _, cleanup := newSocketPair(t); t.Cleanup(cleanup); return conn }()},
+	}
+	roomForRecipients := &room{
+		code:      "ROOM",
+		gameState: state,
+		players: []*roomPlayer{
+			nil,
+			{player: statePlayer, sessionID: "connected", connected: true},
+			{player: newPlayerWithID("offline"), sessionID: "offline", connected: false},
+			{player: newPlayerWithID("missing-session"), sessionID: "missing", connected: true},
+		},
+	}
+	recipients, err := roomForRecipients.gameStateRecipients(sessions, roomSnapshot{Code: "ROOM"})
+	if err != nil {
+		t.Fatalf("gameStateRecipients() error = %v", err)
+	}
+	if len(recipients) != 1 {
+		t.Fatalf("len(recipients) = %d; want 1", len(recipients))
+	}
+
+	roomForRecipients.players[1].player = newPlayerWithID("not-in-state")
+	if _, err := roomForRecipients.gameStateRecipients(sessions, roomSnapshot{Code: "ROOM"}); err == nil || err.Error() != "game state snapshot failed" {
+		t.Fatalf("gameStateRecipients(snapshot failure) error = %v; want game state snapshot failed", err)
+	}
+}
