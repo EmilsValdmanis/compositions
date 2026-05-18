@@ -15,7 +15,7 @@ function ProtectedLayout() {
   return (
     <>
       <nav className="w-full flex justify-center border-b">
-        <div className="grow grid grid-cols-3 items-center py-2 px-4 max-w-7xl">
+        <div className="grow grid grid-cols-3 items-center py-2 px-4">
           <ServerStatusBadge />
           <h1 className="text-center text-lg font-semibold tracking-tight md:text-xl">
             Compositions

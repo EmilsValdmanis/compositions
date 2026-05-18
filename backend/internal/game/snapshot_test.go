@@ -1,6 +1,10 @@
 package game
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
 
 func TestCardConstructorsAccessorsAndSnapshots(t *testing.T) {
 	queen := NewCard(Queen, Spades)
@@ -125,5 +129,23 @@ func TestGameStateSnapshotForPlayerFailuresAndInvalidTurn(t *testing.T) {
 	}
 	if snapshot.Turn.PlayerID != "" {
 		t.Fatalf("snapshot.Turn.PlayerID = %q; want empty for invalid turn index", snapshot.Turn.PlayerID)
+	}
+}
+
+func TestCardSnapshotJSONIncludesHeartsSuit(t *testing.T) {
+	payload, err := json.Marshal(CardSnapshot{Rank: Ace, Suit: Hearts})
+	if err != nil {
+		t.Fatalf("json.Marshal(CardSnapshot) error = %v", err)
+	}
+
+	jsonText := string(payload)
+	if !strings.Contains(jsonText, `"suit":0`) {
+		t.Fatalf("json.Marshal(CardSnapshot) = %s; want hearts suit encoded", jsonText)
+	}
+	if !strings.Contains(jsonText, `"rank":1`) {
+		t.Fatalf("json.Marshal(CardSnapshot) = %s; want rank encoded", jsonText)
+	}
+	if strings.Contains(jsonText, `"isJoker":`) {
+		t.Fatalf("json.Marshal(CardSnapshot) = %s; want joker flag omitted", jsonText)
 	}
 }

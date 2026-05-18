@@ -45,6 +45,10 @@ type startGameRequest struct {
 	DealerIndex int `json:"dealerIndex"`
 }
 
+type chooseDealingRequest struct {
+	DealType string `json:"dealType"`
+}
+
 type leaveRoomRequest struct{}
 
 type drawRequest struct {
@@ -118,11 +122,18 @@ type healthResponse struct {
 }
 
 type roomSnapshot struct {
-	Code         string           `json:"code"`
-	Phase        string           `json:"phase"`
-	HostPlayerID string           `json:"hostPlayerId"`
-	DealerIndex  int              `json:"dealerIndex,omitempty"`
-	Players      []playerSnapshot `json:"players"`
+	Code              string                     `json:"code"`
+	Phase             string                     `json:"phase"`
+	HostPlayerID      string                     `json:"hostPlayerId"`
+	DealerIndex       int                        `json:"dealerIndex,omitempty"`
+	PendingDealChoice *pendingDealChoiceSnapshot `json:"pendingDealChoice,omitempty"`
+	Players           []playerSnapshot           `json:"players"`
+}
+
+type pendingDealChoiceSnapshot struct {
+	DealerIndex    int    `json:"dealerIndex"`
+	ChooserIndex   int    `json:"chooserIndex"`
+	ChooserPlayerID string `json:"chooserPlayerId"`
 }
 
 type playerSnapshot struct {
@@ -264,6 +275,8 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			s.handleJoinRoom(conn, sessionID, envelope)
 		case "start_game":
 			s.handleStartGame(conn, sessionID, envelope)
+		case "choose_dealing":
+			s.handleChooseDealing(conn, sessionID, envelope)
 		case "leave_room":
 			if s.handleLeaveRoom(conn, sessionID, envelope) {
 				return
@@ -319,6 +332,17 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 		if err := emitEvent(conn, "room_state", roomStateEvent{Room: *roomState}); err != nil {
 			return "", true
 		}
+		gameState, err := s.lobby.gameStateForSession(event.SessionID, *roomState)
+		if err != nil {
+			slog.Warn("connect: game state resume failed", "sessionID", event.SessionID, "error", err)
+			s.writeError(conn, err)
+			return "", true
+		}
+		if gameState != nil {
+			if err := emitEvent(conn, "game_state", *gameState); err != nil {
+				return "", true
+			}
+		}
 		s.broadcastRoomState(*roomState, otherConnections(recipients, conn))
 	}
 
@@ -369,8 +393,26 @@ func (s *wsServer) handleStartGame(conn *websocket.Conn, sessionID string, envel
 		s.writeError(conn, err)
 		return
 	}
-	slog.Info("game started", "roomCode", roomState.Code, "sessionID", sessionID, "dealerIndex", req.DealerIndex)
+	slog.Info("game start requested", "roomCode", roomState.Code, "sessionID", sessionID, "dealerIndex", req.DealerIndex)
 	s.broadcastRoomState(roomState, recipients)
+}
+
+func (s *wsServer) handleChooseDealing(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[chooseDealingRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	roomState, recipients, err := s.lobby.chooseDealing(sessionID, req.DealType)
+	if err != nil {
+		slog.Warn("choose dealing failed", "sessionID", sessionID, "dealType", req.DealType, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	slog.Info("game started", "roomCode", roomState.Code, "sessionID", sessionID, "dealType", req.DealType)
+	conns := gameRecipientConns(recipients)
+	s.broadcastRoomState(roomState, conns)
+	s.broadcastGameState(recipients)
 }
 
 func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) bool {

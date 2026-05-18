@@ -92,8 +92,24 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 	}
 
 	mustSendEnvelope(t, hostConn, "start_game", startGameRequest{DealerIndex: 1})
+	hostPendingStart := mustReadRoomState(t, hostConn)
+	guestPendingStart := mustReadRoomState(t, reconnectedGuestConn)
+	for _, room := range []roomSnapshot{hostPendingStart, guestPendingStart} {
+		if room.Phase != "lobby" {
+			t.Fatalf("room.Phase = %q; want lobby while waiting for deal choice", room.Phase)
+		}
+		if room.PendingDealChoice == nil {
+			t.Fatal("room.PendingDealChoice = nil; want pending dealing choice")
+		}
+		if room.PendingDealChoice.ChooserPlayerID != hostConnected.PlayerID {
+			t.Fatalf("room.PendingDealChoice.ChooserPlayerID = %q; want %q", room.PendingDealChoice.ChooserPlayerID, hostConnected.PlayerID)
+		}
+	}
+	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
 	hostStarted := mustReadRoomState(t, hostConn)
 	guestStarted := mustReadRoomState(t, reconnectedGuestConn)
+	hostInitialGame := mustReadGameState(t, hostConn, hostStarted.Code)
+	guestInitialGame := mustReadGameState(t, reconnectedGuestConn, guestStarted.Code)
 	for _, room := range []roomSnapshot{hostStarted, guestStarted} {
 		if room.Phase != "in_progress" {
 			t.Fatalf("room.Phase = %q; want in_progress", room.Phase)
@@ -102,6 +118,35 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 			t.Fatalf("room.DealerIndex = %d; want 1", room.DealerIndex)
 		}
 	}
+	if hostInitialGame.Game.Turn.PlayerID != hostConnected.PlayerID || guestInitialGame.Game.Turn.PlayerID != hostConnected.PlayerID {
+		t.Fatalf("initial turn player = host:%q guest:%q; want %q", hostInitialGame.Game.Turn.PlayerID, guestInitialGame.Game.Turn.PlayerID, hostConnected.PlayerID)
+	}
+	if err := hostConn.Close(); err != nil {
+		t.Fatalf("hostConn.Close() error = %v", err)
+	}
+	hostDisconnectedRoom := mustReadRoomState(t, reconnectedGuestConn)
+	if hostDisconnectedRoom.Players[0].Connected {
+		t.Fatal("host connected flag = true; want false after refresh disconnect")
+	}
+
+	refreshedHostConn := mustDialWS(t, httpServer.URL)
+	defer refreshedHostConn.Close()
+	refreshedHost := mustConnectSession(t, refreshedHostConn, hostConnected.SessionID)
+	if refreshedHost.SessionID != hostConnected.SessionID || refreshedHost.PlayerID != hostConnected.PlayerID {
+		t.Fatalf("refreshedHost = %#v; want same host session/player", refreshedHost)
+	}
+	refreshedHostRoom := mustReadRoomState(t, refreshedHostConn)
+	refreshedHostGame := mustReadGameState(t, refreshedHostConn, refreshedHostRoom.Code)
+	if refreshedHostRoom.Phase != "in_progress" {
+		t.Fatalf("refreshedHostRoom.Phase = %q; want in_progress", refreshedHostRoom.Phase)
+	}
+	if len(refreshedHostGame.Game.Hand) != game.InitialHandSize {
+		t.Fatalf("refreshed host hand = %d; want %d", len(refreshedHostGame.Game.Hand), game.InitialHandSize)
+	}
+	if refreshedHostGame.Game.Turn.PlayerID != hostConnected.PlayerID {
+		t.Fatalf("refreshed host turn player = %q; want %q", refreshedHostGame.Game.Turn.PlayerID, hostConnected.PlayerID)
+	}
+	_ = mustReadRoomState(t, reconnectedGuestConn)
 	if err := reconnectedGuestConn.Close(); err != nil {
 		t.Fatalf("reconnectedGuestConn.Close() error = %v", err)
 	}
@@ -149,6 +194,40 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 			t.Fatalf("room.Players[1].ImageURL = %q; want https://cdn.example.com/guest.png", room.Players[1].ImageURL)
 		}
 	}
+
+	mustSendEnvelope(t, hostConn, "start_game", startGameRequest{DealerIndex: 1})
+	pendingHostRoom := mustReadRoomState(t, hostConn)
+	pendingGuestRoom := mustReadRoomState(t, guestConn)
+	for _, room := range []roomSnapshot{pendingHostRoom, pendingGuestRoom} {
+		if room.PendingDealChoice == nil || room.PendingDealChoice.ChooserPlayerID != hostConnected.PlayerID {
+			t.Fatalf("pending room = %#v; want host as pending chooser", room)
+		}
+	}
+	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	startedHostRoom := mustReadRoomState(t, hostConn)
+	startedGuestRoom := mustReadRoomState(t, guestConn)
+	_ = mustReadGameState(t, hostConn, startedHostRoom.Code)
+	_ = mustReadGameState(t, guestConn, startedGuestRoom.Code)
+	if err := hostConn.Close(); err != nil {
+		t.Fatalf("hostConn.Close() error = %v", err)
+	}
+	_ = mustReadRoomState(t, guestConn)
+
+	refreshedHostConn := mustDialWS(t, httpServer.URL)
+	defer refreshedHostConn.Close()
+	refreshedHost := mustConnectAuthenticatedSession(t, refreshedHostConn, "", "host-token")
+	if refreshedHost.SessionID != hostConnected.SessionID || refreshedHost.PlayerID != hostConnected.PlayerID {
+		t.Fatalf("refreshedHost = %#v; want same authenticated host session/player", refreshedHost)
+	}
+	refreshedHostRoom := mustReadRoomState(t, refreshedHostConn)
+	refreshedHostGame := mustReadGameState(t, refreshedHostConn, refreshedHostRoom.Code)
+	if refreshedHostRoom.Phase != "in_progress" {
+		t.Fatalf("refreshedHostRoom.Phase = %q; want in_progress", refreshedHostRoom.Phase)
+	}
+	if len(refreshedHostGame.Game.Hand) != game.InitialHandSize {
+		t.Fatalf("refreshed authenticated host hand = %d; want %d", len(refreshedHostGame.Game.Hand), game.InitialHandSize)
+	}
+	_ = mustReadRoomState(t, guestConn)
 
 	hijackConn := mustDialWS(t, httpServer.URL)
 	defer hijackConn.Close()
@@ -205,6 +284,92 @@ func TestAuthenticatedWebSocketReusesSessionAfterDisconnectForSameUser(t *testin
 	if secondConnected.PlayerID != firstConnected.PlayerID {
 		t.Fatalf("secondConnected.PlayerID = %q; want %q", secondConnected.PlayerID, firstConnected.PlayerID)
 	}
+}
+
+func TestHandleConnectResumeGameStateErrorPaths(t *testing.T) {
+	t.Run("snapshot failure", func(t *testing.T) {
+		originalEmit := emitEvent
+		defer func() { emitEvent = originalEmit }()
+		emitEvent = func(_ *websocket.Conn, _ string, _ any) error {
+			return nil
+		}
+
+		server := newWSServer()
+		gameState := game.NewGameState()
+		if err := gameState.AddPlayer(newPlayerWithID("other-a")); err != nil {
+			t.Fatalf("AddPlayer(other-a) error = %v", err)
+		}
+		if err := gameState.AddPlayer(newPlayerWithID("other-b")); err != nil {
+			t.Fatalf("AddPlayer(other-b) error = %v", err)
+		}
+		if err := gameState.StartGame(0, 1, game.DealRoundRobin, nil, 0); err != nil {
+			t.Fatalf("StartGame() error = %v", err)
+		}
+
+		sessionID := "session-with-missing-game-player"
+		playerID := "room-player-only"
+		server.lobby.sessions[sessionID] = &playerSession{
+			sessionID: sessionID,
+			playerID:  playerID,
+			roomCode:  "ROOM",
+		}
+		server.lobby.rooms["ROOM"] = &room{
+			code:      "ROOM",
+			gameState: gameState,
+			hostID:    playerID,
+			players: []*roomPlayer{{
+				player:    newPlayerWithID(playerID),
+				sessionID: sessionID,
+				seat:      0,
+				host:      true,
+			}},
+		}
+
+		_, shouldClose := server.handleConnect(nil, wsEnvelope{Data: mustMarshalRawMessage(connectRequest{SessionID: sessionID})})
+		if !shouldClose {
+			t.Fatal("handleConnect() shouldClose = false; want true after game state snapshot failure")
+		}
+	})
+
+	t.Run("game state write failure", func(t *testing.T) {
+		originalEmit := emitEvent
+		defer func() { emitEvent = originalEmit }()
+		emitEvent = func(_ *websocket.Conn, messageType string, _ any) error {
+			if messageType == "game_state" {
+				return errors.New("write game state boom")
+			}
+			return nil
+		}
+
+		server := newWSServer()
+		hostEvent, _, _, err := server.lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect(host) error = %v", err)
+		}
+		hostRoom, _, err := server.lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		guestEvent, _, _, err := server.lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect(guest) error = %v", err)
+		}
+		if _, _, err := server.lobby.joinRoom(guestEvent.SessionID, hostRoom.Code, "Guest"); err != nil {
+			t.Fatalf("joinRoom() error = %v", err)
+		}
+		if _, _, err := server.lobby.startGame(hostEvent.SessionID, 0); err != nil {
+			t.Fatalf("startGame() error = %v", err)
+		}
+		if _, _, err := server.lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+			t.Fatalf("chooseDealing() error = %v", err)
+		}
+		server.lobby.sessions[hostEvent.SessionID].conn = nil
+
+		_, shouldClose := server.handleConnect(nil, wsEnvelope{Data: mustMarshalRawMessage(connectRequest{SessionID: hostEvent.SessionID})})
+		if !shouldClose {
+			t.Fatal("handleConnect() shouldClose = false; want true after game state write failure")
+		}
+	})
 }
 
 func TestAuthenticatedWebSocketRejectsUnexpectedOrigin(t *testing.T) {
@@ -760,6 +925,12 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 		t.Fatalf("WriteJSON(start_game missing data) error = %v", err)
 	}
 	mustReadError(t, conn, "missing data")
+	if err := conn.WriteJSON(wsEnvelope{Type: "choose_dealing"}); err != nil {
+		t.Fatalf("WriteJSON(choose_dealing missing data) error = %v", err)
+	}
+	mustReadError(t, conn, "missing data")
+	mustSendEnvelope(t, conn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustReadError(t, conn, "no dealing choice is pending")
 	mustSendEnvelope(t, conn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, conn, "need at least 2 players to start")
 
@@ -783,8 +954,18 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 	_ = mustReadRoomState(t, guestConn)
 	_ = mustReadRoomState(t, conn)
 	mustSendEnvelope(t, conn, "start_game", startGameRequest{DealerIndex: 0})
-	_ = mustReadRoomState(t, conn)
-	_ = mustReadRoomState(t, guestConn)
+	pendingRoom := mustReadRoomState(t, conn)
+	guestPendingRoom := mustReadRoomState(t, guestConn)
+	if pendingRoom.PendingDealChoice == nil || guestPendingRoom.PendingDealChoice == nil {
+		t.Fatalf("pending deal choice = host:%#v guest:%#v; want pending state", pendingRoom.PendingDealChoice, guestPendingRoom.PendingDealChoice)
+	}
+	mustSendEnvelope(t, conn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustReadError(t, conn, "only the deal chooser can choose dealing type")
+	mustSendEnvelope(t, guestConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	startedRoom := mustReadRoomState(t, conn)
+	guestStartedRoom := mustReadRoomState(t, guestConn)
+	_ = mustReadGameState(t, conn, startedRoom.Code)
+	_ = mustReadGameState(t, guestConn, guestStartedRoom.Code)
 	mustSendEnvelope(t, guestConn, "leave_room", leaveRoomRequest{})
 	mustReadError(t, guestConn, "can only leave in lobby")
 	_ = conn.Close()
@@ -979,8 +1160,22 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 	_ = mustReadRoomState(t, hostConn)
 
 	mustSendEnvelope(t, hostConn, "start_game", startGameRequest{DealerIndex: 0})
-	_ = mustReadRoomState(t, hostConn)
-	_ = mustReadRoomState(t, guestConn)
+	pendingHostRoom := mustReadRoomState(t, hostConn)
+	pendingGuestRoom := mustReadRoomState(t, guestConn)
+	if pendingHostRoom.PendingDealChoice == nil || pendingGuestRoom.PendingDealChoice == nil {
+		t.Fatalf("pending deal choice = host:%#v guest:%#v; want pending state", pendingHostRoom.PendingDealChoice, pendingGuestRoom.PendingDealChoice)
+	}
+	mustSendEnvelope(t, guestConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	hostStartedRoom := mustReadRoomState(t, hostConn)
+	guestStartedRoom := mustReadRoomState(t, guestConn)
+	hostInitialGame := mustReadGameState(t, hostConn, hostStartedRoom.Code)
+	guestInitialGame := mustReadGameState(t, guestConn, guestStartedRoom.Code)
+	if hostInitialGame.Game.Turn.PlayerID != guestConnected.PlayerID || guestInitialGame.Game.Turn.PlayerID != guestConnected.PlayerID {
+		t.Fatalf("initial turn player = host:%q guest:%q; want %q", hostInitialGame.Game.Turn.PlayerID, guestInitialGame.Game.Turn.PlayerID, guestConnected.PlayerID)
+	}
+	if len(hostInitialGame.Game.Hand) != game.InitialHandSize || len(guestInitialGame.Game.Hand) != game.InitialHandSize {
+		t.Fatalf("initial hand sizes = host:%d guest:%d; want %d", len(hostInitialGame.Game.Hand), len(guestInitialGame.Game.Hand), game.InitialHandSize)
+	}
 
 	mustSendEnvelope(t, hostConn, "draw", drawRequest{Source: "deck"})
 	mustReadError(t, hostConn, "not your turn")
@@ -1138,6 +1333,23 @@ func mustReadActionBroadcast(t *testing.T, conn *websocket.Conn, action, playerI
 	}
 	if event.Room.Code != room.Code {
 		t.Fatalf("game_state room code = %q; want %q", event.Room.Code, room.Code)
+	}
+	return event
+}
+
+func mustReadGameState(t *testing.T, conn *websocket.Conn, roomCode string) gameStateEvent {
+	t.Helper()
+
+	envelope := mustReadEnvelopeFromConn(t, conn)
+	if envelope.Type != "game_state" {
+		t.Fatalf("game state type = %q; want game_state", envelope.Type)
+	}
+	var event gameStateEvent
+	if err := json.Unmarshal(envelope.Data, &event); err != nil {
+		t.Fatalf("json.Unmarshal(game_state) error = %v", err)
+	}
+	if event.Room.Code != roomCode {
+		t.Fatalf("game_state room code = %q; want %q", event.Room.Code, roomCode)
 	}
 	return event
 }

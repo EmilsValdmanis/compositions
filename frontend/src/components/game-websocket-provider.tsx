@@ -1,9 +1,53 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef } from "react";
+import { createStore } from "@tanstack/store";
+import { useSelector } from "@tanstack/react-store";
 import { getGameConnectionAuth } from "#/lib/game-auth";
 
 type ConnectionStatus = "idle" | "disconnected" | "connecting" | "connected";
 
-type PlayerSnapshot = {
+export type CardSnapshot = {
+  rank?: number;
+  suit?: number;
+  isJoker?: boolean;
+};
+
+export type CompositionSnapshot = {
+  type: string;
+  cards: CardSnapshot[];
+  jokerRepresentations?: Record<number, CardSnapshot[]>;
+  points: number;
+  complete: boolean;
+};
+
+export type PlayerStateSnapshot = {
+  playerId: string;
+  handCount: number;
+  totalPoints: number;
+  hasOpened: boolean;
+};
+
+export type TurnSnapshot = {
+  number: number;
+  playerIndex: number;
+  playerId?: string;
+  hasDrawn: boolean;
+  mustUseDiscardDraw: boolean;
+};
+
+export type GameSnapshot = {
+  phase: number;
+  round: number;
+  dealerIndex: number;
+  roundWinnerIndex: number;
+  turn: TurnSnapshot;
+  players: PlayerStateSnapshot[];
+  hand: CardSnapshot[];
+  drawPileCount: number;
+  discardPile: CardSnapshot[];
+  activeCompositions: CompositionSnapshot[];
+};
+
+export type PlayerSnapshot = {
   playerId: string;
   sessionId: string;
   name: string;
@@ -14,19 +58,34 @@ type PlayerSnapshot = {
   canReconnect: boolean;
 };
 
-type RoomSnapshot = {
+export type PendingDealChoiceSnapshot = {
+  dealerIndex: number;
+  chooserIndex: number;
+  chooserPlayerId: string;
+};
+
+export type RoomSnapshot = {
   code: string;
   phase: string;
   hostPlayerId: string;
   dealerIndex?: number;
+  pendingDealChoice?: PendingDealChoiceSnapshot;
   players: PlayerSnapshot[];
 };
 
-type LobbyState = {
+type ActionResult = {
+  action: string;
+  playerId: string;
+  ok: boolean;
+};
+
+export type LobbyState = {
   connectionStatus: ConnectionStatus;
   sessionId: string;
   playerId: string;
   room: RoomSnapshot | null;
+  game: GameSnapshot | null;
+  lastActionResult: ActionResult | null;
   lastError: string | null;
   lastErrorId: number;
   lastEvent: string | null;
@@ -46,7 +105,11 @@ type GameWebSocketContextValue = {
   createRoom: () => void;
   joinRoom: (roomCode: string) => void;
   startGame: () => void;
+  chooseDealing: (dealType: string) => void;
   leaveRoom: () => void;
+  drawFromDeck: () => void;
+  drawFromDiscard: () => void;
+  discardCard: (cardIndex: number) => void;
 };
 
 const initialState: LobbyState = {
@@ -54,10 +117,14 @@ const initialState: LobbyState = {
   sessionId: "",
   playerId: "",
   room: null,
+  game: null,
+  lastActionResult: null,
   lastError: null,
   lastErrorId: 0,
   lastEvent: null,
 };
+
+const gameWebSocketStore = createStore(initialState);
 
 const GameWebSocketContext = createContext<GameWebSocketContextValue | null>(null);
 
@@ -93,11 +160,24 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
   room_state: (current, data) =>
     clearError(current, {
       room: data?.room ?? null,
+      game: data?.room?.phase === "lobby" ? null : current.game,
       lastEvent: "room_state",
+    }),
+  game_state: (current, data) =>
+    clearError(current, {
+      room: data?.room ?? current.room,
+      game: data?.game ?? null,
+      lastEvent: "game_state",
+    }),
+  action_result: (current, data) =>
+    clearError(current, {
+      lastActionResult: data ?? null,
+      lastEvent: "action_result",
     }),
   left_room: (current) =>
     clearError(current, {
       room: null,
+      game: null,
       lastEvent: "left_room",
     }),
   error: (current, data) =>
@@ -121,7 +201,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   const socketRef = useRef<WebSocket | null>(null);
   const connectAttemptRef = useRef(0);
   const connectInFlightRef = useRef(false);
-  const [state, setState] = useState(initialState);
+  const state = useSelector(gameWebSocketStore);
 
   useEffect(() => {
     function cancelPendingConnect() {
@@ -144,7 +224,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   }, []);
 
   function updateState(updater: (current: LobbyState) => LobbyState) {
-    setState((current) => updater(current));
+    gameWebSocketStore.setState((current) => updater(current));
   }
 
   function setConnectionError(message: string) {
@@ -260,7 +340,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     const wsUrl = new URL("/ws", serverUrl).toString();
 
     const socket = new WebSocket(wsUrl);
-    const sessionId = state.sessionId;
+    const sessionId = gameWebSocketStore.get().sessionId;
     const authToken = connectionAuth.authToken;
 
     if (connectAttemptRef.current !== connectAttempt) {
@@ -321,6 +401,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     updateState((current) => ({
       ...current,
       room: null,
+      game: null,
       lastEvent: "manual_disconnect",
     }));
   }
@@ -332,7 +413,11 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     createRoom: () => send("create_room", {}),
     joinRoom: (roomCode) => send("join_room", { roomCode }),
     startGame: () => send("start_game", { dealerIndex: getDealerIndex(state.room) }),
+    chooseDealing: (dealType) => send("choose_dealing", { dealType }),
     leaveRoom: () => send("leave_room", {}),
+    drawFromDeck: () => send("draw", { source: "deck" }),
+    drawFromDiscard: () => send("draw", { source: "discard" }),
+    discardCard: (cardIndex) => send("discard", { cardIndex }),
   };
 
   return <GameWebSocketContext value={value}>{children}</GameWebSocketContext>;

@@ -118,16 +118,50 @@ func TestLobbyServerCoverage(t *testing.T) {
 	if _, _, err := lobby.startGame(guestEvent.SessionID, 0); err == nil {
 		t.Fatal("startGame(non host) error = nil; want error")
 	}
+	if _, _, err := lobby.startGame(hostEvent.SessionID, 99); !errors.Is(err, game.ErrInvalidDealer) {
+		t.Fatalf("startGame(invalid dealer) error = %v; want ErrInvalidDealer", err)
+	}
 
 	startedRoom, startRecipients, err := lobby.startGame(hostEvent.SessionID, 0)
 	if err != nil {
 		t.Fatalf("startGame() error = %v", err)
 	}
-	if startedRoom.Phase != "in_progress" {
-		t.Fatalf("startedRoom.Phase = %q; want in_progress", startedRoom.Phase)
+	if startedRoom.Phase != "lobby" {
+		t.Fatalf("startedRoom.Phase = %q; want lobby", startedRoom.Phase)
+	}
+	if startedRoom.PendingDealChoice == nil {
+		t.Fatal("startedRoom.PendingDealChoice = nil; want pending dealing choice")
+	}
+	if startedRoom.PendingDealChoice.ChooserPlayerID != fourthEvent.PlayerID {
+		t.Fatalf("startedRoom.PendingDealChoice.ChooserPlayerID = %q; want %q", startedRoom.PendingDealChoice.ChooserPlayerID, fourthEvent.PlayerID)
 	}
 	if len(startRecipients) != 4 {
 		t.Fatalf("len(startRecipients) = %d; want 4", len(startRecipients))
+	}
+	if _, _, err := lobby.joinRoom(notHostEvent.SessionID, hostRoom.Code, "Late"); err == nil {
+		t.Fatal("joinRoom(while starting) error = nil; want error")
+	}
+	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err == nil {
+		t.Fatal("startGame(second start request) error = nil; want error")
+	}
+	if _, _, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin"); err == nil {
+		t.Fatal("chooseDealing(non chooser) error = nil; want error")
+	}
+	if _, _, err := lobby.chooseDealing(fourthEvent.SessionID, "tap"); err == nil {
+		t.Fatal("chooseDealing(tap) error = nil; want error")
+	}
+	startedRoom, gameRecipients, err := lobby.chooseDealing(fourthEvent.SessionID, "round_robin")
+	if err != nil {
+		t.Fatalf("chooseDealing() error = %v", err)
+	}
+	if startedRoom.Phase != "in_progress" {
+		t.Fatalf("startedRoom.Phase = %q; want in_progress", startedRoom.Phase)
+	}
+	if startedRoom.PendingDealChoice != nil {
+		t.Fatalf("startedRoom.PendingDealChoice = %#v; want nil", startedRoom.PendingDealChoice)
+	}
+	if len(gameRecipients) != 4 {
+		t.Fatalf("len(gameRecipients) = %d; want 4", len(gameRecipients))
 	}
 
 	afterReconnectEvent, reconnectRoom, reconnectRecipients, err := lobby.connect(guestEvent.SessionID, guestConn)
@@ -759,6 +793,9 @@ func BenchmarkLobbyServerCreateJoinStartGame(b *testing.B) {
 		if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
 			b.Fatalf("startGame() error = %v", err)
 		}
+		if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+			b.Fatalf("chooseDealing() error = %v", err)
+		}
 	}
 }
 
@@ -811,6 +848,11 @@ func TestRoomHelpersAndSnapshotCoverage(t *testing.T) {
 	}
 	if len(brokenRoom.connectedConns(lobby.sessions)) != 0 {
 		t.Fatalf("len(brokenRoom.connectedConns()) = %d; want 0", len(brokenRoom.connectedConns(lobby.sessions)))
+	}
+	brokenRoom.pendingDealChoice = &pendingDealChoice{dealerIndex: 0, chooserIndex: 0}
+	brokenRoomSnapshot = brokenRoom.snapshot()
+	if brokenRoomSnapshot.PendingDealChoice == nil || brokenRoomSnapshot.PendingDealChoice.ChooserPlayerID != "p1" {
+		t.Fatalf("brokenRoomSnapshot.PendingDealChoice = %#v; want chooser p1", brokenRoomSnapshot.PendingDealChoice)
 	}
 }
 
@@ -911,6 +953,9 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
 		t.Fatalf("startGame() error = %v", err)
 	}
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+		t.Fatalf("chooseDealing() error = %v", err)
+	}
 	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "not your turn" {
 		t.Fatalf("draw(not your turn) error = %v; want not your turn", err)
 	}
@@ -970,6 +1015,100 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	activeRoom.gameState = nil
 	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "game state not initialized" {
 		t.Fatalf("draw(nil game state) error = %v; want game state not initialized", err)
+	}
+}
+
+func TestLobbyStartGameGameStateRecipientsError(t *testing.T) {
+	lobby := newLobbyServer()
+	gameState := game.NewGameState()
+	if err := gameState.AddPlayer(newPlayerWithID("engine-player-a")); err != nil {
+		t.Fatalf("AddPlayer(engine-player-a) error = %v", err)
+	}
+	if err := gameState.AddPlayer(newPlayerWithID("engine-player-b")); err != nil {
+		t.Fatalf("AddPlayer(engine-player-b) error = %v", err)
+	}
+
+	hostSessionID := "host-session"
+	hostPlayerID := "room-player-a"
+	guestSessionID := "guest-session"
+	guestPlayerID := "room-player-b"
+	lobby.sessions[hostSessionID] = &playerSession{sessionID: hostSessionID, playerID: hostPlayerID, conn: &websocket.Conn{}, roomCode: "ROOM"}
+	lobby.sessions[guestSessionID] = &playerSession{sessionID: guestSessionID, playerID: guestPlayerID, conn: &websocket.Conn{}, roomCode: "ROOM"}
+	lobby.rooms["ROOM"] = &room{
+		code:      "ROOM",
+		gameState: gameState,
+		hostID:    hostPlayerID,
+		players: []*roomPlayer{
+			{player: newPlayerWithID(hostPlayerID), sessionID: hostSessionID, connected: true, seat: 0, host: true},
+			{player: newPlayerWithID(guestPlayerID), sessionID: guestSessionID, connected: true, seat: 1},
+		},
+	}
+
+	if roomState, recipients, err := lobby.startGame(hostSessionID, 0); err != nil {
+		t.Fatalf("startGame() error = %v", err)
+	} else if roomState.PendingDealChoice == nil || len(recipients) != 2 {
+		t.Fatalf("startGame() = room:%#v recipients:%d; want pending choice and 2 recipients", roomState, len(recipients))
+	}
+	if _, _, err := lobby.chooseDealing(guestSessionID, "round_robin"); err == nil || err.Error() != "game state snapshot failed" {
+		t.Fatalf("chooseDealing(snapshot failure) error = %v; want game state snapshot failed", err)
+	}
+}
+
+func TestLobbyChooseDealingValidationErrors(t *testing.T) {
+	lobby := newLobbyServer()
+	if _, _, err := lobby.chooseDealing("missing", "round_robin"); err == nil || err.Error() != "session not found" {
+		t.Fatalf("chooseDealing(missing session) error = %v; want session not found", err)
+	}
+
+	hostConn, _, closeHost := newSocketPair(t)
+	defer closeHost()
+	hostEvent, _, _, err := lobby.connect("", hostConn)
+	if err != nil {
+		t.Fatalf("connect(host) error = %v", err)
+	}
+	if _, _, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin"); err == nil || err.Error() != "join a room first" {
+		t.Fatalf("chooseDealing(no room) error = %v; want join a room first", err)
+	}
+
+	hostRoom, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	if _, _, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin"); err == nil || err.Error() != "no dealing choice is pending" {
+		t.Fatalf("chooseDealing(no pending) error = %v; want no dealing choice is pending", err)
+	}
+
+	guestConn, _, closeGuest := newSocketPair(t)
+	defer closeGuest()
+	guestEvent, _, _, err := lobby.connect("", guestConn)
+	if err != nil {
+		t.Fatalf("connect(guest) error = %v", err)
+	}
+	if _, _, err := lobby.joinRoom(guestEvent.SessionID, hostRoom.Code, "Guest"); err != nil {
+		t.Fatalf("joinRoom() error = %v", err)
+	}
+	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+		t.Fatalf("startGame() error = %v", err)
+	}
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "banana"); !errors.Is(err, game.ErrInvalidDealingType) {
+		t.Fatalf("chooseDealing(invalid type) error = %v; want ErrInvalidDealingType", err)
+	}
+	room := lobby.rooms[hostRoom.Code]
+	room.pendingDealChoice = &pendingDealChoice{dealerIndex: 99, chooserIndex: 1}
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); !errors.Is(err, game.ErrInvalidDealer) {
+		t.Fatalf("chooseDealing(start game failure) error = %v; want ErrInvalidDealer", err)
+	}
+}
+
+func TestLobbyGameStateForSessionMissingSession(t *testing.T) {
+	lobby := newLobbyServer()
+
+	state, err := lobby.gameStateForSession("missing", roomSnapshot{})
+	if err == nil || err.Error() != "session not found" {
+		t.Fatalf("gameStateForSession(missing) error = %v; want session not found", err)
+	}
+	if state != nil {
+		t.Fatalf("gameStateForSession(missing) state = %#v; want nil", state)
 	}
 }
 

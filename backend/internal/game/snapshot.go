@@ -2,7 +2,7 @@ package game
 
 type CardSnapshot struct {
 	Rank    Rank `json:"rank,omitempty"`
-	Suit    Suit `json:"suit,omitempty"`
+	Suit    Suit `json:"suit"`
 	IsJoker bool `json:"isJoker,omitempty"`
 }
 
