@@ -59,7 +59,7 @@ func cardsEqual(a, b Card) bool {
 	return a.rank == b.rank && a.suit == b.suit
 }
 
-func (c *Card) Points() int {
+func (c Card) Points() int {
 	if c.isJoker {
 		return 20
 	} else if c.rank >= Jack && c.rank <= King {

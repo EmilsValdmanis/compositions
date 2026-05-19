@@ -126,16 +126,6 @@ func TestGameStateStartGameDealsHandsAndCreatesDiscardPile(t *testing.T) {
 	}
 }
 
-func TestGameStateSelectFirstPlayerRequiresPlayers(t *testing.T) {
-	state := NewGameState()
-
-	err := state.SelectFirstPlayer()
-
-	if !errors.Is(err, ErrNoPlayers) {
-		t.Errorf("SelectFirstPlayer() error = %v; want %v", err, ErrNoPlayers)
-	}
-}
-
 func TestGameStateStartGameRejectsInvalidDealer(t *testing.T) {
 	state := NewGameState()
 	first := NewPlayer()
@@ -2850,17 +2840,6 @@ func TestStartRoundRejectsBlockOrderWithoutOrder(t *testing.T) {
 	}
 }
 
-func TestStartDiscardPileFailsWhenDrawPileEmpty(t *testing.T) {
-	state := NewGameState()
-	state.drawPile = &CardPile{}
-
-	err := state.startDiscardPile()
-
-	if !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
-		t.Fatalf("startDiscardPile() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)
-	}
-}
-
 func TestResetRoundStateUsesFreshDeckAndSkipsNilPlayers(t *testing.T) {
 	state := NewGameState()
 	player := NewPlayer()
@@ -2953,31 +2932,6 @@ func TestHasSixIdenticalPairsRejectsTripleCount(t *testing.T) {
 
 	if hasSixIdenticalPairs(bad) {
 		t.Fatal("hasSixIdenticalPairs() = true; want false when one count != 2")
-	}
-}
-
-func TestStartDiscardPileSuccess(t *testing.T) {
-	state := NewGameState()
-	state.drawPile = &CardPile{cards: []Card{card(Ace, Hearts)}}
-
-	if err := state.startDiscardPile(); err != nil {
-		t.Fatalf("startDiscardPile() error = %v", err)
-	}
-	if len(state.discardPile.cards) != 1 || !cardsEqual(state.discardPile.cards[0], card(Ace, Hearts)) {
-		t.Fatalf("discard pile = %+v; want Ace of Hearts", state.discardPile.cards)
-	}
-}
-
-func TestSelectFirstPlayerSuccess(t *testing.T) {
-	state := NewGameState()
-	state.players = []*Player{NewPlayer(), NewPlayer(), NewPlayer()}
-	state.dealerIndex = 1
-
-	if err := state.SelectFirstPlayer(); err != nil {
-		t.Fatalf("SelectFirstPlayer() error = %v", err)
-	}
-	if state.turn.playerIndex != 2 {
-		t.Fatalf("state.turn.playerIndex = %d; want 2", state.turn.playerIndex)
 	}
 }
 

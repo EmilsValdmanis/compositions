@@ -296,8 +296,7 @@ func (c *Composition) isValidSet() bool {
 
 	var realCards []Card
 	for _, card := range c.cards {
-		if card.isJoker {
-		} else {
+		if !card.isJoker {
 			realCards = append(realCards, card)
 		}
 	}

@@ -1,8 +1,8 @@
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Button } from "../ui/button";
+import { Button } from "#/components/ui/button";
 import { Login01Icon } from "@hugeicons/core-free-icons";
 import { authClient } from "#/lib/auth-client";
-import { Spinner } from "../ui/spinner";
+import { Spinner } from "#/components/ui/spinner";
 import { useState } from "react";
 
 export default function SignInButton() {

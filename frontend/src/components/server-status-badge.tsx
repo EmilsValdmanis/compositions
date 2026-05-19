@@ -29,7 +29,6 @@ export function ServerStatusBadge() {
   const { data, isFetching, isPending } = useQuery({
     queryKey: ["game-server-health"],
     queryFn: checkGameServerHealth,
-    enabled: typeof window !== "undefined",
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
   });

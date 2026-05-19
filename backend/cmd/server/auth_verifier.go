@@ -53,14 +53,6 @@ type betterAuthSessionResponse struct {
 	} `json:"user"`
 }
 
-func newBetterAuthSessionVerifierFromEnv() (sessionVerifier, error) {
-	baseURL, err := betterAuthBaseURLFromEnv()
-	if err != nil {
-		return nil, err
-	}
-	return newBetterAuthSessionVerifier(baseURL, nil), nil
-}
-
 func betterAuthBaseURLFromEnv() (string, error) {
 	baseURL := strings.TrimSpace(os.Getenv("BETTER_AUTH_URL"))
 	if baseURL == "" {

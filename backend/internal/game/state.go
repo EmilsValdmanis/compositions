@@ -478,16 +478,6 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	return nil
 }
 
-func (gs *GameState) startDiscardPile() error {
-	card, ok := gs.drawPile.DrawOne()
-	if !ok {
-		return ErrNotEnoughCardsInDrawPile
-	}
-
-	gs.discardPile.AddToTop(card)
-	return nil
-}
-
 func (gs *GameState) resetRoundState(drawPile *CardPile) {
 	if drawPile == nil {
 		drawPile = newShuffledGameDeck()
@@ -511,15 +501,6 @@ func (gs *GameState) resetRoundState(drawPile *CardPile) {
 		player.hand = NewHand()
 		player.hasOpened = false
 	}
-}
-
-func (gs *GameState) SelectFirstPlayer() error {
-	if len(gs.players) == 0 {
-		return ErrNoPlayers
-	}
-
-	gs.turn.playerIndex = nextPlayerIndex(gs.dealerIndex, len(gs.players))
-	return nil
 }
 
 func (gs *GameState) CurrentPlayer() (*Player, error) {

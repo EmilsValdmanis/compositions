@@ -73,10 +73,12 @@ function AutoConnectWebSocket() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  InjectVercelAnalytics();
-  InjectVercelSpeedInsights();
-
   const { theme } = useTheme();
+
+  useEffect(() => {
+    InjectVercelAnalytics();
+    InjectVercelSpeedInsights();
+  }, []);
 
   return (
     <html lang="en" suppressHydrationWarning>

@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -48,59 +47,6 @@ func TestAuthenticatedUserHelpers(t *testing.T) {
 		got := (authenticatedUser{ID: "  user-1  "}).displayName()
 		if got != "user-1" {
 			t.Fatalf("displayName() = %q; want user-1", got)
-		}
-	})
-}
-
-func TestNewBetterAuthSessionVerifierFromEnv(t *testing.T) {
-	t.Run("requires env var", func(t *testing.T) {
-		t.Setenv("BETTER_AUTH_URL", "")
-
-		verifier, err := newBetterAuthSessionVerifierFromEnv()
-		if err == nil || err.Error() != "BETTER_AUTH_URL is required" {
-			t.Fatalf("newBetterAuthSessionVerifierFromEnv() error = %v; want BETTER_AUTH_URL is required", err)
-		}
-		if verifier != nil {
-			t.Fatalf("verifier = %#v; want nil", verifier)
-		}
-	})
-
-	t.Run("constructs verifier from env", func(t *testing.T) {
-		t.Setenv("BETTER_AUTH_URL", " http://frontend.test/ ")
-
-		verifier, err := newBetterAuthSessionVerifierFromEnv()
-		if err != nil {
-			t.Fatalf("newBetterAuthSessionVerifierFromEnv() error = %v", err)
-		}
-
-		typedVerifier, ok := verifier.(*betterAuthSessionVerifier)
-		if !ok {
-			t.Fatalf("verifier type = %T; want *betterAuthSessionVerifier", verifier)
-		}
-		if typedVerifier.baseURL != "http://frontend.test" {
-			t.Fatalf("typedVerifier.baseURL = %q; want http://frontend.test", typedVerifier.baseURL)
-		}
-		if typedVerifier.client == nil {
-			t.Fatal("typedVerifier.client = nil; want default http client")
-		}
-		if typedVerifier.client.Timeout != 5*time.Second {
-			t.Fatalf("typedVerifier.client.Timeout = %s; want 5s", typedVerifier.client.Timeout)
-		}
-	})
-
-	t.Run("keeps provided client", func(t *testing.T) {
-		customClient := &http.Client{Timeout: time.Second}
-
-		verifier := newBetterAuthSessionVerifier("http://frontend.test/", customClient)
-		typedVerifier, ok := verifier.(*betterAuthSessionVerifier)
-		if !ok {
-			t.Fatalf("verifier type = %T; want *betterAuthSessionVerifier", verifier)
-		}
-		if typedVerifier.client != customClient {
-			t.Fatal("typedVerifier.client != customClient")
-		}
-		if typedVerifier.baseURL != "http://frontend.test" {
-			t.Fatalf("typedVerifier.baseURL = %q; want http://frontend.test", typedVerifier.baseURL)
 		}
 	})
 }

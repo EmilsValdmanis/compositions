@@ -157,7 +157,7 @@ export function GameLobbyView({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => onJoinRoom(roomCode.trim().toUpperCase())}
+                  onClick={() => onJoinRoom(roomCode.trim())}
                   disabled={!canJoinRoom}
                 >
                   Join
