@@ -131,8 +131,8 @@ type roomSnapshot struct {
 }
 
 type pendingDealChoiceSnapshot struct {
-	DealerIndex    int    `json:"dealerIndex"`
-	ChooserIndex   int    `json:"chooserIndex"`
+	DealerIndex     int    `json:"dealerIndex"`
+	ChooserIndex    int    `json:"chooserIndex"`
 	ChooserPlayerID string `json:"chooserPlayerId"`
 }
 
@@ -531,41 +531,24 @@ func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelop
 }
 
 func (s *wsServer) writeError(conn *websocket.Conn, err error) {
-	if writeErr := emitEvent(conn, "error", errorEvent{Message: err.Error()}); writeErr != nil && !errors.Is(writeErr, errSocketClosed) {
-		slog.Error("write websocket error event failed", "error", writeErr)
-	}
+	logEmitFailure(conn, "error", errorEvent{Message: err.Error()}, "write websocket error event failed")
 }
 
 func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*websocket.Conn) {
 	for _, conn := range recipients {
-		if conn == nil {
-			continue
-		}
-		if err := emitEvent(conn, "room_state", roomStateEvent{Room: roomState}); err != nil && !errors.Is(err, errSocketClosed) {
-			slog.Error("broadcast room_state failed", "roomCode", roomState.Code, "error", err)
-		}
+		logEmitFailure(conn, "room_state", roomStateEvent{Room: roomState}, "broadcast room_state failed", "roomCode", roomState.Code)
 	}
 }
 
 func (s *wsServer) broadcastGameState(recipients []gameStateRecipient) {
 	for _, recipient := range recipients {
-		if recipient.conn == nil {
-			continue
-		}
-		if err := emitEvent(recipient.conn, "game_state", recipient.event); err != nil && !errors.Is(err, errSocketClosed) {
-			slog.Error("broadcast game_state failed", "roomCode", recipient.event.Room.Code, "error", err)
-		}
+		logEmitFailure(recipient.conn, "game_state", recipient.event, "broadcast game_state failed", "roomCode", recipient.event.Room.Code)
 	}
 }
 
 func (s *wsServer) broadcastActionResult(result actionResultEvent, recipients []*websocket.Conn) {
 	for _, conn := range recipients {
-		if conn == nil {
-			continue
-		}
-		if err := emitEvent(conn, "action_result", result); err != nil && !errors.Is(err, errSocketClosed) {
-			slog.Error("broadcast action_result failed", "action", result.Action, "playerID", result.PlayerID, "error", err)
-		}
+		logEmitFailure(conn, "action_result", result, "broadcast action_result failed", "action", result.Action, "playerID", result.PlayerID)
 	}
 }
 
@@ -582,6 +565,15 @@ func gameRecipientConns(recipients []gameStateRecipient) []*websocket.Conn {
 		conns = append(conns, recipient.conn)
 	}
 	return conns
+}
+
+func logEmitFailure(conn *websocket.Conn, messageType string, data any, logMessage string, attrs ...any) {
+	if conn == nil {
+		return
+	}
+	if err := emitEvent(conn, messageType, data); err != nil && !errors.Is(err, errSocketClosed) {
+		slog.Error(logMessage, append(attrs, "error", err)...)
+	}
 }
 
 func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID string, envelope wsEnvelope) (T, bool) {

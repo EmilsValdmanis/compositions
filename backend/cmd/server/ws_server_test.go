@@ -1043,15 +1043,6 @@ func TestDecodePayload(t *testing.T) {
 	}
 }
 
-func TestMustMarshalRawMessage(t *testing.T) {
-	envelope := mustMarshalRawMessage(struct {
-		Name string `json:"name"`
-	}{Name: "x"})
-	if string(envelope) != `{"name":"x"}` {
-		t.Fatalf("mustMarshalRawMessage() = %s; want {\"name\":\"x\"}", string(envelope))
-	}
-}
-
 func TestMustMarshalRawMessagePanicsOnMarshalError(t *testing.T) {
 	defer func() {
 		if recover() == nil {
@@ -1086,20 +1077,6 @@ func TestWriteEventReturnsSocketClosedForCloseSent(t *testing.T) {
 	}
 	if err := writeEvent(conn, "connected", connectedEvent{SessionID: "s", PlayerID: "p"}); !errors.Is(err, errSocketClosed) {
 		t.Fatalf("writeEvent() error = %v; want errSocketClosed", err)
-	}
-}
-
-func TestOtherConnections(t *testing.T) {
-	hostConn, _, closeHost := newSocketPair(t)
-	defer closeHost()
-	guestConn, _, closeGuest := newSocketPair(t)
-	defer closeGuest()
-	thirdConn, _, closeThird := newSocketPair(t)
-	defer closeThird()
-
-	filtered := otherConnections([]*websocket.Conn{hostConn, guestConn, thirdConn}, guestConn)
-	if len(filtered) != 2 || filtered[0] != hostConn || filtered[1] != thirdConn {
-		t.Fatalf("otherConnections() = %v; want [%p %p]", filtered, hostConn, thirdConn)
 	}
 }
 

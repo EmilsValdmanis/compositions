@@ -4,6 +4,7 @@ import {
   DragOverlay,
   closestCenter,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
@@ -28,8 +29,7 @@ type HandEntry = {
 };
 
 type ActiveDrag =
-  | { type: "deck" }
-  | { type: "discard"; card: CardSnapshot }
+  | { type: "draw"; card: CardSnapshot | null; revealedHandKey: string | null }
   | { type: "hand"; handKey: string };
 
 const FACE_DOWN_CARD: CardSnapshot = {};
@@ -66,6 +66,22 @@ function reconcileHandEntries(current: HandEntry[], next: HandEntry[]) {
   const seenKeys = new Set(ordered.map((entry) => entry.key));
 
   return [...ordered, ...next.filter((entry) => !seenKeys.has(entry.key))];
+}
+
+function findNewHandEntry(current: HandEntry[], next: HandEntry[]) {
+  const currentKeys = new Set(current.map((entry) => entry.key));
+  return next.find((entry) => !currentKeys.has(entry.key)) ?? null;
+}
+
+function moveHandEntry(current: HandEntry[], handKey: string, overHandKey: string) {
+  const oldIndex = current.findIndex((entry) => entry.key === handKey);
+  const newIndex = current.findIndex((entry) => entry.key === overHandKey);
+
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
+    return current;
+  }
+
+  return arrayMove(current, oldIndex, newIndex);
 }
 
 export function GameBoardView({
@@ -109,6 +125,20 @@ export function GameBoardView({
     setHandEntries((current) => reconcileHandEntries(current, snapshotHandEntries));
   }, [activeDrag, snapshotHandEntries]);
 
+  useEffect(() => {
+    if (activeDrag?.type !== "draw" || activeDrag.revealedHandKey !== null) {
+      return;
+    }
+
+    const drawnEntry = findNewHandEntry(handEntries, snapshotHandEntries);
+    if (!drawnEntry) {
+      return;
+    }
+
+    setHandEntries(snapshotHandEntries);
+    setActiveDrag({ type: "draw", card: drawnEntry.card, revealedHandKey: drawnEntry.key });
+  }, [activeDrag, handEntries, snapshotHandEntries]);
+
   const activeEntry =
     activeDrag?.type === "hand"
       ? (handEntries.find((entry) => entry.key === activeDrag.handKey) ?? null)
@@ -119,13 +149,13 @@ export function GameBoardView({
     const drawSource = event.active.data.current?.drawSource;
 
     if (drawSource === "deck") {
-      setActiveDrag({ type: "deck" });
+      setActiveDrag({ type: "draw", card: null, revealedHandKey: null });
       onDrawFromDeck();
       return;
     }
 
     if (drawSource === "discard" && topDiscardCard) {
-      setActiveDrag({ type: "discard", card: topDiscardCard });
+      setActiveDrag({ type: "draw", card: topDiscardCard, revealedHandKey: null });
       onDrawFromDiscard();
       return;
     }
@@ -134,12 +164,37 @@ export function GameBoardView({
     setActiveDrag(handKey ? { type: "hand", handKey } : null);
   }
 
+  function handleDragOver(event: DragOverEvent) {
+    if (activeDrag?.type !== "draw" || activeDrag.revealedHandKey === null) {
+      return;
+    }
+
+    const revealedHandKey = activeDrag.revealedHandKey;
+    const overHandKey = typeof event.over?.id === "string" ? event.over.id : null;
+
+    if (overHandKey === null || overHandKey === "discard-pile") {
+      setHandEntries(snapshotHandEntries);
+      return;
+    }
+
+    setHandEntries((current) => moveHandEntry(current, revealedHandKey, overHandKey));
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const currentDrag = activeDrag;
     const draggedHandKey = typeof event.active.id === "string" ? event.active.id : null;
     const overHandKey = typeof event.over?.id === "string" ? event.over.id : null;
 
     setActiveDrag(null);
+
+    if (currentDrag?.type === "draw") {
+      if (currentDrag.revealedHandKey && overHandKey && overHandKey !== "discard-pile") {
+        return;
+      }
+
+      setHandEntries(snapshotHandEntries);
+      return;
+    }
 
     if (currentDrag?.type !== "hand") {
       return;
@@ -155,20 +210,15 @@ export function GameBoardView({
       typeof overHandKey === "string" &&
       draggedHandKey !== overHandKey
     ) {
-      setHandEntries((current) => {
-        const oldIndex = current.findIndex((entry) => entry.key === draggedHandKey);
-        const newIndex = current.findIndex((entry) => entry.key === overHandKey);
-
-        if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
-          return current;
-        }
-
-        return arrayMove(current, oldIndex, newIndex);
-      });
+      setHandEntries((current) => moveHandEntry(current, draggedHandKey, overHandKey));
     }
   }
 
   function handleDragCancel() {
+    if (activeDrag?.type === "draw") {
+      setHandEntries(snapshotHandEntries);
+    }
+
     setActiveDrag(null);
   }
 
@@ -176,6 +226,7 @@ export function GameBoardView({
     <DndContext
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
@@ -221,6 +272,11 @@ export function GameBoardView({
                         card={entry.card}
                         size="hand"
                         draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
+                        className={
+                          activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
+                            ? "invisible"
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
@@ -321,15 +377,11 @@ export function GameBoardView({
         </div>
       </div>
       <DragOverlay dropAnimation={null}>
-        {activeDrag?.type === "deck" ? (
+        {activeDrag?.type === "draw" ? (
           <GameCard
-            card={FACE_DOWN_CARD}
-            faceDown
-            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
-          />
-        ) : activeDrag?.type === "discard" ? (
-          <GameCard
-            card={activeDrag.card}
+            card={activeDrag.card ?? FACE_DOWN_CARD}
+            faceDown={activeDrag.card === null}
+            size="hand"
             className="rotate-3 shadow-xl ring-1 ring-foreground/10"
           />
         ) : activeEntry ? (
