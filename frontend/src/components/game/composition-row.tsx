@@ -44,7 +44,7 @@ export function CompositionRow({
   return (
     <GameBoardDraftDropZone
       id={tableCompositionDropId(index)}
-      className="inline-flex max-w-full flex-col rounded-3xl border border-border/70 bg-muted/20 p-3"
+      className="flex h-full min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3"
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -54,7 +54,7 @@ export function CompositionRow({
         </div>
         <span className="text-xs text-muted-foreground">{composition.points} pts</span>
       </div>
-      <div className="flex min-h-16 flex-wrap justify-center gap-2">
+      <div className="flex flex-1 flex-wrap content-start justify-center gap-2">
         {compositionCards.map(({ card, key }) => (
           <GameCard key={key} card={card} size="compact" />
         ))}

@@ -2,6 +2,7 @@ package game
 
 import (
 	"errors"
+	"slices"
 	"testing"
 )
 
@@ -1121,6 +1122,35 @@ func TestGameStatePlayCompositionsMovesCardsToActiveCompositions(t *testing.T) {
 	}
 }
 
+func TestGameStatePlayCompositionsRejectsUnorderedRun(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Five, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: King, suit: Spades},
+	}
+	runComp := &Composition{variant: run, cards: []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Five, suit: Hearts},
+		{rank: Six, suit: Hearts},
+	}}
+
+	err := state.PlayCompositions([]*Composition{runComp})
+
+	if !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("PlayCompositions() error = %v; want %v", err, ErrInvalidComposition)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 4 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 4", len(state.players[0].hand.cards))
+	}
+}
+
 func TestGameStatePlayCompositionsPlaysMultipleAtOnce(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
@@ -1407,6 +1437,16 @@ func TestGameStateAddToCompositionsAllowsOpenedPlayerToAddCards(t *testing.T) {
 	}
 	if got := state.activeCompositions[0].Points(); got != 44 {
 		t.Fatalf("state.activeCompositions[0].Points() = %d; want 44", got)
+	}
+	wantRun := []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Eight, suit: Hearts},
+		{rank: Nine, suit: Hearts},
+		{rank: Ten, suit: Hearts},
+		{rank: Jack, suit: Hearts},
+	}
+	if !slices.EqualFunc(state.activeCompositions[0].cards, wantRun, sameCard) {
+		t.Fatalf("state.activeCompositions[0].cards = %#v; want %#v", state.activeCompositions[0].cards, wantRun)
 	}
 	if len(state.players[0].hand.cards) != 1 {
 		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
@@ -1695,11 +1735,13 @@ func TestGameStatePlayTableWithReclaimsAllowsReusingJokerSameTurn(t *testing.T) 
 	if len(state.activeCompositions) != 2 {
 		t.Fatalf("len(state.activeCompositions) = %d; want 2", len(state.activeCompositions))
 	}
-	if state.activeCompositions[0].cards[1].isJoker {
-		t.Fatal("reclaimed joker was not replaced in base composition")
+	wantRun := []Card{
+		{rank: Five, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Seven, suit: Hearts},
 	}
-	if got := state.activeCompositions[0].cards[1]; got.rank != Six || got.suit != Hearts {
-		t.Fatalf("state.activeCompositions[0].cards[1] = %+v; want Six of Hearts", got)
+	if !slices.EqualFunc(state.activeCompositions[0].cards, wantRun, sameCard) {
+		t.Fatalf("state.activeCompositions[0].cards = %#v; want %#v", state.activeCompositions[0].cards, wantRun)
 	}
 	if len(state.players[0].hand.cards) != 1 {
 		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))

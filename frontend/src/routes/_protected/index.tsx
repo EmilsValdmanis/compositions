@@ -181,7 +181,7 @@ function HydratedHome() {
   }
 
   return (
-    <section className="mx-auto flex h-full w-full flex-1 flex-col gap-4">
+    <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden">
       <GameBoardHeader
         connectionStatus={state.connectionStatus}
         phase={phase}
@@ -221,7 +221,7 @@ function HydratedHome() {
           />
         </div>
       ) : (
-        <div key="game" className="flex flex-1 flex-col">
+        <div key="game" className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <GameBoardView
             game={state.game}
             roomCode={state.room?.code ?? null}

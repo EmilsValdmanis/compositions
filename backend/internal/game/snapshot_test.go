@@ -64,7 +64,7 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	state.drawPile = &CardPile{cards: []Card{NewCard(Ace, Spades), NewCard(Two, Spades)}}
 	state.discardPile = &CardPile{cards: []Card{NewCard(Three, Diamonds)}}
 	setComp := mustSet(t, NewCard(Ten, Hearts), NewCard(Ten, Diamonds), NewJoker())
-	runComp := mustRun(t, NewCard(Five, Clubs), NewCard(Six, Clubs), NewCard(Seven, Clubs), NewCard(Eight, Clubs), NewCard(Nine, Clubs), NewCard(Ten, Clubs), NewCard(Jack, Clubs), NewCard(Queen, Clubs), NewCard(King, Clubs), NewCard(Ace, Clubs), NewCard(Ace, Clubs), NewCard(Two, Clubs), NewCard(Three, Clubs), NewCard(Four, Clubs))
+	runComp := mustRun(t, NewCard(Ace, Clubs), NewCard(Two, Clubs), NewCard(Three, Clubs), NewCard(Four, Clubs), NewCard(Five, Clubs), NewCard(Six, Clubs), NewCard(Seven, Clubs), NewCard(Eight, Clubs), NewCard(Nine, Clubs), NewCard(Ten, Clubs), NewCard(Jack, Clubs), NewCard(Queen, Clubs), NewCard(King, Clubs), NewCard(Ace, Clubs))
 	state.activeCompositions = []*Composition{nil, setComp, runComp}
 
 	snapshot, ok := state.SnapshotForPlayer("first")
@@ -129,6 +129,40 @@ func TestGameStateSnapshotForPlayerFailuresAndInvalidTurn(t *testing.T) {
 	}
 	if snapshot.Turn.PlayerID != "" {
 		t.Fatalf("snapshot.Turn.PlayerID = %q; want empty for invalid turn index", snapshot.Turn.PlayerID)
+	}
+}
+
+func TestGameStateSnapshotForPlayerKeepsCanonicalRunOrder(t *testing.T) {
+	state := NewGameStateWithDeck([]Card{NewCard(Ace, Hearts)})
+	player := NewPlayer()
+	player.ID = "first"
+	state.players = []*Player{player}
+	comp, ok := NewComposition([]Card{
+		NewCard(Eight, Hearts),
+		NewJoker(),
+		NewCard(Nine, Hearts),
+		NewCard(Ten, Hearts),
+		NewCard(Seven, Hearts),
+	}, run)
+	if !ok {
+		t.Fatal("NewComposition() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{comp}
+
+	snapshot, ok := state.SnapshotForPlayer("first")
+	if !ok {
+		t.Fatal("SnapshotForPlayer() ok = false; want true")
+	}
+
+	got := snapshot.ActiveCompositions[0].Cards
+	if len(got) != 5 {
+		t.Fatalf("len(snapshot.ActiveCompositions[0].Cards) = %d; want 5", len(got))
+	}
+	if got[0].Rank != Seven || got[1].Rank != Eight || got[2].Rank != Nine || got[3].Rank != Ten || !got[4].IsJoker {
+		t.Fatalf("snapshot run cards = %#v; want ordered 7-8-9-10-joker", got)
+	}
+	if representation := snapshot.ActiveCompositions[0].JokerRepresentations[4]; len(representation) != 1 || representation[0].Rank != Jack {
+		t.Fatalf("joker representation = %#v; want jack", representation)
 	}
 }
 
