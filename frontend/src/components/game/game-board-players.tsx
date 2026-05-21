@@ -12,7 +12,7 @@ export function GameBoardPlayers({
   connectedPlayers: number;
 }) {
   return (
-    <Card size="sm">
+    <Card size="sm" className="overflow-y-scroll grow">
       <CardHeader>
         <CardTitle>Players</CardTitle>
         <CardDescription>
