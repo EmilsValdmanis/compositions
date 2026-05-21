@@ -580,10 +580,10 @@ func bestRunOrder(cards []Card) ([]Card, map[int]Card, bool, bool) {
 	}
 
 	type runOrderCandidate struct {
-		ordered             []Card
+		ordered              []Card
 		jokerRepresentations map[int]Card
-		matchesInput        bool
-		matchCount          int
+		matchesInput         bool
+		matchCount           int
 	}
 
 	var best *runOrderCandidate
