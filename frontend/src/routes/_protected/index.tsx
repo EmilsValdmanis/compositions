@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import { type DragEndEvent } from "@dnd-kit/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { GameBoardHeader } from "#/components/game/game-board-header";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
-import { formatLabel } from "#/components/game/game-view-utils";
-import { Badge } from "#/components/ui/badge";
-import { Button } from "#/components/ui/button";
-import { Card, CardContent } from "#/components/ui/card";
+import { playerName } from "#/components/game/game-view-utils";
 
 export const Route = createFileRoute("/_protected/")({
   component: Home,
@@ -27,8 +25,6 @@ function roomShareUrl(code: string) {
 function Home() {
   const {
     state,
-    connect,
-    disconnect,
     createRoom,
     joinRoom,
     leaveRoom,
@@ -36,6 +32,7 @@ function Home() {
     chooseDealing,
     drawFromDeck,
     drawFromDiscard,
+    playCompositions,
     discardCard,
   } = useGameWebSocket();
   const [roomCode, setRoomCode] = useState("");
@@ -67,6 +64,7 @@ function Home() {
   const topDiscardCard = state.game?.discardPile[0] ?? null;
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
+  const turnPlayerName = playerName(players, state.game?.turn.playerId);
 
   useEffect(() => {
     const urlRoomCode = new URLSearchParams(window.location.search).get("room");
@@ -153,40 +151,18 @@ function Home() {
   }
 
   return (
-    <section className="mx-auto grid w-full gap-4">
-      <Card size="sm" className="shadow-sm">
-        <CardContent className="flex flex-col gap-3 py-0 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={state.connectionStatus === "connected" ? "default" : "outline"}>
-              {formatLabel(state.connectionStatus)}
-            </Badge>
-            <Badge variant="secondary">{formatLabel(phase)}</Badge>
-            <Badge variant="outline">Room {state.room?.code ?? "None"}</Badge>
-            <Badge variant="outline">
-              {connectedPlayers}/{players.length || 0} online
-            </Badge>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              onClick={() => void connect()}
-              disabled={state.connectionStatus === "connecting"}
-            >
-              {state.sessionId ? "Reconnect" : "Connect"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={disconnect}
-              disabled={
-                state.connectionStatus === "idle" || state.connectionStatus === "disconnected"
-              }
-            >
-              Disconnect
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <section className="mx-auto flex h-full w-full flex-1 flex-col gap-4">
+      <GameBoardHeader
+        connectionStatus={state.connectionStatus}
+        phase={phase}
+        roomCode={state.room?.code}
+        connectedPlayers={connectedPlayers}
+        playerCount={players.length}
+        isLobbyPhase={isLobbyPhase}
+        isMyTurn={Boolean(isMyTurn)}
+        turnPlayerName={turnPlayerName}
+        game={state.game}
+      />
 
       {isLobbyPhase ? (
         <div key="lobby">
@@ -216,10 +192,9 @@ function Home() {
           />
         </div>
       ) : (
-        <div key="game">
+        <div key="game" className="flex flex-1 flex-col">
           <GameBoardView
             game={state.game}
-            phase={phase}
             players={players}
             connectedPlayers={connectedPlayers}
             canDrawDeck={canDrawDeck}
@@ -230,6 +205,7 @@ function Home() {
             onDragEnd={handleDragEnd}
             onDrawFromDeck={drawFromDeck}
             onDrawFromDiscard={drawFromDiscard}
+            onPlayCompositions={playCompositions}
           />
         </div>
       )}

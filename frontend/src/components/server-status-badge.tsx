@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { BadgeInfoIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { checkGameServerHealth } from "#/lib/health";
 import { useGameWebSocket } from "./game-websocket-provider";
-import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Spinner } from "./ui/spinner";
-import { Separator } from "./ui/separator";
+import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Separator } from "./ui/separator";
+import { Spinner } from "./ui/spinner";
 
 const connectionLabels = {
   idle: "Checking",
@@ -24,7 +24,7 @@ const serverVariants = {
 } as const;
 
 export function ServerStatusBadge() {
-  const { state } = useGameWebSocket();
+  const { state, connect, disconnect } = useGameWebSocket();
 
   const { data, isFetching, isPending } = useQuery({
     queryKey: ["game-server-health"],
@@ -81,6 +81,15 @@ export function ServerStatusBadge() {
             </Badge>
           </div>
         </div>
+        {state.connectionStatus === "disconnected" ? (
+          <Button type="button" onClick={() => void connect()} disabled={isCheckingServer}>
+            Reconnect
+          </Button>
+        ) : state.connectionStatus !== "idle" ? (
+          <Button type="button" variant="outline" onClick={disconnect}>
+            Disconnect
+          </Button>
+        ) : null}
       </PopoverContent>
     </Popover>
   );

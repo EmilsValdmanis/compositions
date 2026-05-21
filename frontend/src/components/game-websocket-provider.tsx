@@ -19,6 +19,11 @@ export type CompositionSnapshot = {
   complete: boolean;
 };
 
+export type CompositionDraftRequest = {
+  type: "set" | "run";
+  cards: CardSnapshot[];
+};
+
 export type PlayerStateSnapshot = {
   playerId: string;
   handCount: number;
@@ -109,6 +114,7 @@ type GameWebSocketContextValue = {
   leaveRoom: () => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
+  playCompositions: (compositions: CompositionDraftRequest[]) => void;
   discardCard: (cardIndex: number) => void;
 };
 
@@ -417,6 +423,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     leaveRoom: () => send("leave_room", {}),
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),
+    playCompositions: (compositions) => send("play", { compositions }),
     discardCard: (cardIndex) => send("discard", { cardIndex }),
   };
 

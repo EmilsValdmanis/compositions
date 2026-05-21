@@ -50,4 +50,5 @@ Frontend starter checklist.
 - [x] 7. Wire frontend state updates from server room-state and game-state events.
 - [ ] 8. Add frontend tests for session restore, lobby flow, and room-state rendering.
 - [ ] 9. Replace the temporary dealing-choice lobby UI with the full chooser flow for cut size, tap dealing order, and non-host status messaging.
-- [ ] 10. Add composition assembling UI for sets and runs, including joker assignment and validation feedback (including placement on table).
+- [x] 10. Add composition assembling UI for sets and runs, including joker assignment and validation feedback (including placement on table).
+- [ ] 11. Add UI for composition additions so players can drag cards onto existing table compositions after opening.

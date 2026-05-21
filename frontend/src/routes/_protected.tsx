@@ -14,8 +14,8 @@ export const Route = createFileRoute("/_protected")({
 function ProtectedLayout() {
   return (
     <>
-      <nav className="w-full flex justify-center border-b">
-        <div className="grow grid grid-cols-3 items-center py-2 px-4">
+      <nav className="w-full border-b">
+        <div className="grid w-full grid-cols-3 items-center px-4 py-2">
           <ServerStatusBadge />
           <h1 className="text-center text-lg font-semibold tracking-tight md:text-xl">
             Compositions
@@ -25,7 +25,7 @@ function ProtectedLayout() {
           </div>
         </div>
       </nav>
-      <main className="flex flex-col gap-4 p-4 md:p-8">
+      <main className="flex w-full flex-1 flex-col gap-4 p-4 md:p-6">
         <Outlet />
       </main>
     </>
