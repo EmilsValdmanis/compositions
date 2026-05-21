@@ -17,6 +17,10 @@ import { GameBoardPiles } from "#/components/game/game-board-piles";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameBoardTable } from "#/components/game/game-board-table";
 import { GameCard } from "#/components/game/game-card";
+import {
+  setPersistedHandOrder,
+  usePersistedHandOrder,
+} from "#/components/game/game-hand-order-store";
 import { playerName } from "#/components/game/game-view-utils";
 import {
   FACE_DOWN_CARD,
@@ -24,6 +28,7 @@ import {
   NEW_COMPOSITION_DROP_ID,
   type ActiveDrag,
   type DraftComposition,
+  applyHandEntryOrder,
   buildTableCompositionViews,
   buildHandEntries,
   compositionIdFromDropId,
@@ -38,6 +43,8 @@ import {
 
 export function GameBoardView({
   game,
+  roomCode,
+  playerId,
   players,
   connectedPlayers,
   canDrawDeck,
@@ -51,6 +58,8 @@ export function GameBoardView({
   onPlayTable,
 }: {
   game: GameSnapshot | null;
+  roomCode: string | null;
+  playerId: string;
   players: PlayerSnapshot[];
   connectedPlayers: number;
   canDrawDeck: boolean;
@@ -63,7 +72,15 @@ export function GameBoardView({
   onDrawFromDiscard: () => void;
   onPlayTable: (play: TablePlayRequest) => void;
 }) {
-  const snapshotHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
+  const handOrderScopeKey = useMemo(
+    () => (roomCode && playerId ? `${roomCode}:${playerId}` : null),
+    [playerId, roomCode],
+  );
+  const persistedHandOrder = usePersistedHandOrder(handOrderScopeKey);
+  const snapshotHandEntries = useMemo(
+    () => applyHandEntryOrder(buildHandEntries(game?.hand ?? []), persistedHandOrder),
+    [game?.hand, persistedHandOrder],
+  );
   const [handEntries, setHandEntries] = useState(snapshotHandEntries);
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
   const [draftCompositions, setDraftCompositions] = useState<DraftComposition[]>([]);
@@ -90,6 +107,17 @@ export function GameBoardView({
     setHandEntries(snapshotHandEntries);
     setActiveDrag({ type: "draw", card: drawnEntry.card, revealedHandKey: drawnEntry.key });
   }, [activeDrag, handEntries, snapshotHandEntries]);
+
+  useEffect(() => {
+    if (activeDrag !== null || game === null) {
+      return;
+    }
+
+    setPersistedHandOrder(
+      handOrderScopeKey,
+      handEntries.map((entry) => entry.key),
+    );
+  }, [activeDrag, game, handEntries, handOrderScopeKey]);
 
   const activeEntry =
     activeDrag?.type === "hand"

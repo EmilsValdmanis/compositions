@@ -1,16 +1,31 @@
 import { useEffect, useState } from "react";
 import { type DragEndEvent } from "@dnd-kit/core";
-import { createFileRoute } from "@tanstack/react-router";
+import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardHeader } from "#/components/game/game-board-header";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { playerName } from "#/components/game/game-view-utils";
+import { Spinner } from "#/components/ui/spinner";
 
 export const Route = createFileRoute("/_protected/")({
   component: Home,
 });
+
+function GameRouteLoadingScreen() {
+  return (
+    <section className="flex flex-1 items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <Spinner className="size-8" />
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Reconnecting to your game</p>
+          <p className="text-muted-foreground text-sm">Loading the latest room state...</p>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function roomShareUrl(code: string) {
   if (typeof window === "undefined") {
@@ -23,6 +38,14 @@ function roomShareUrl(code: string) {
 }
 
 function Home() {
+  return (
+    <ClientOnly fallback={<GameRouteLoadingScreen />}>
+      <HydratedHome />
+    </ClientOnly>
+  );
+}
+
+function HydratedHome() {
   const {
     state,
     createRoom,
@@ -65,6 +88,9 @@ function Home() {
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
   const turnPlayerName = playerName(players, state.game?.turn.playerId);
+  const isBootstrappingConnection =
+    state.connectionStatus === "idle" ||
+    (state.connectionStatus === "connecting" && state.room === null && state.game === null);
 
   useEffect(() => {
     const urlRoomCode = new URLSearchParams(window.location.search).get("room");
@@ -150,6 +176,10 @@ function Home() {
     }
   }
 
+  if (isBootstrappingConnection) {
+    return <GameRouteLoadingScreen />;
+  }
+
   return (
     <section className="mx-auto flex h-full w-full flex-1 flex-col gap-4">
       <GameBoardHeader
@@ -195,6 +225,8 @@ function Home() {
         <div key="game" className="flex flex-1 flex-col">
           <GameBoardView
             game={state.game}
+            roomCode={state.room?.code ?? null}
+            playerId={state.playerId}
             players={players}
             connectedPlayers={connectedPlayers}
             canDrawDeck={canDrawDeck}

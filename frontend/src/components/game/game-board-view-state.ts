@@ -69,6 +69,20 @@ export function reconcileHandEntries(current: HandEntry[], next: HandEntry[]) {
   return [...ordered, ...next.filter((entry) => !seenKeys.has(entry.key))];
 }
 
+export function applyHandEntryOrder(entries: HandEntry[], orderedKeys: string[]) {
+  if (orderedKeys.length === 0) {
+    return entries;
+  }
+
+  const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+  const ordered = orderedKeys
+    .map((key) => entryByKey.get(key) ?? null)
+    .filter((entry): entry is HandEntry => entry !== null);
+  const seenKeys = new Set(ordered.map((entry) => entry.key));
+
+  return [...ordered, ...entries.filter((entry) => !seenKeys.has(entry.key))];
+}
+
 export function findNewHandEntry(current: HandEntry[], next: HandEntry[]) {
   const currentKeys = new Set(current.map((entry) => entry.key));
   return next.find((entry) => !currentKeys.has(entry.key)) ?? null;
