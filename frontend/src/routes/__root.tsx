@@ -12,17 +12,20 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { authClient } from "#/lib/auth-client";
 import { Toaster } from "sonner";
+import { z } from "zod";
 import appCss from "../styles.css?url";
 
-const getSession = createServerFn({ method: "GET" }).handler(async () => {
-  const headers = getRequestHeaders();
-  const { data: session } = await authClient.getSession({
-    fetchOptions: {
-      headers,
-    },
+const getSession = createServerFn({ method: "GET" })
+  .inputValidator(z.undefined())
+  .handler(async () => {
+    const headers = getRequestHeaders();
+    const { data: session } = await authClient.getSession({
+      fetchOptions: {
+        headers,
+      },
+    });
+    return session;
   });
-  return session;
-});
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -85,7 +88,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <head>
         <HeadContent />
         {import.meta.env.DEV && (
-          <script crossOrigin="anonymous" src="//unpkg.com/react-scan/dist/auto.global.js" />
+          <script crossOrigin="anonymous" defer src="//unpkg.com/react-scan/dist/auto.global.js" />
         )}
       </head>
       <body>

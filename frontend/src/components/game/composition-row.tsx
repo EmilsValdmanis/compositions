@@ -6,15 +6,41 @@ import { GameCard } from "#/components/game/game-card";
 import { formatLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 
+const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
+
+function compositionCardKey(card: CompositionSnapshot["cards"][number]) {
+  if (card.isJoker) {
+    return "joker";
+  }
+
+  return `${card.rank ?? "?"}-${card.suit ?? "?"}`;
+}
+
+function buildCompositionCardViews(cards: CompositionSnapshot["cards"]) {
+  const counts = new Map<string, number>();
+  const cardViews: Array<{ card: (typeof cards)[number]; key: string }> = [];
+
+  for (const card of cards) {
+    const baseKey = compositionCardKey(card);
+    const occurrence = (counts.get(baseKey) ?? 0) + 1;
+    counts.set(baseKey, occurrence);
+    cardViews.push({ card, key: `${baseKey}-${occurrence}` });
+  }
+
+  return cardViews;
+}
+
 export function CompositionRow({
   composition,
   index,
-  stagedEntries = [],
+  stagedEntries = EMPTY_STAGED_ENTRIES,
 }: {
   composition: CompositionSnapshot;
   index: number;
   stagedEntries?: HandEntry[];
 }) {
+  const compositionCards = buildCompositionCardViews(composition.cards);
+
   return (
     <GameBoardDraftDropZone
       id={tableCompositionDropId(index)}
@@ -29,8 +55,8 @@ export function CompositionRow({
         <span className="text-xs text-muted-foreground">{composition.points} pts</span>
       </div>
       <div className="flex min-h-16 flex-wrap justify-center gap-2">
-        {composition.cards.map((card, cardIndex) => (
-          <GameCard key={`${index}-${cardIndex}`} card={card} size="compact" />
+        {compositionCards.map(({ card, key }) => (
+          <GameCard key={key} card={card} size="compact" />
         ))}
         <SortableContext
           items={stagedEntries.map((entry) => entry.key)}

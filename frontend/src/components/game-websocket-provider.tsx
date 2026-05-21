@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, use, useEffect, useRef } from "react";
 import { createStore } from "@tanstack/store";
 import { useSelector } from "@tanstack/react-store";
 import { getGameConnectionAuth } from "#/lib/game-auth";
@@ -348,14 +348,22 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
       }),
     );
 
-    const connectionAuth = await getConnectionAuth();
     if (connectAttemptRef.current != connectAttempt) {
+      connectInFlightRef.current = false;
       return;
     }
 
-    if (!connectionAuth?.authToken) {
+    const connectionAuth = await getConnectionAuth();
+    const authToken =
+      connectAttemptRef.current === connectAttempt ? connectionAuth?.authToken : null;
+
+    if (!authToken) {
       connectInFlightRef.current = false;
-      setConnectionError("authentication required before connecting");
+
+      if (connectAttemptRef.current === connectAttempt) {
+        setConnectionError("authentication required before connecting");
+      }
+
       return;
     }
 
@@ -363,7 +371,6 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
 
     const socket = new WebSocket(wsUrl);
     const sessionId = gameWebSocketStore.get().sessionId;
-    const authToken = connectionAuth.authToken;
 
     if (connectAttemptRef.current !== connectAttempt) {
       socket.close();
@@ -447,7 +454,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
 }
 
 export function useGameWebSocket() {
-  const context = useContext(GameWebSocketContext);
+  const context = use(GameWebSocketContext);
 
   if (!context) {
     throw new Error("useGameWebSocket must be used within a GameWebSocketProvider");

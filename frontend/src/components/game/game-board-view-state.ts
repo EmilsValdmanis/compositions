@@ -8,7 +8,13 @@ export type HandEntry = {
 };
 
 export type ActiveDrag =
-  | { type: "draw"; card: CardSnapshot | null; revealedHandKey: string | null }
+  | {
+      type: "draw";
+      card: CardSnapshot | null;
+      baselineEntries: HandEntry[];
+      baselineOrder: string[];
+      revealedHandKey: string | null;
+    }
   | { type: "hand"; handKey: string };
 
 export type DraftComposition = {
@@ -61,12 +67,26 @@ export function buildHandEntries(hand: CardSnapshot[]) {
 
 export function reconcileHandEntries(current: HandEntry[], next: HandEntry[]) {
   const nextByKey = new Map(next.map((entry) => [entry.key, entry]));
-  const ordered = current
-    .map((entry) => nextByKey.get(entry.key) ?? null)
-    .filter((entry): entry is HandEntry => entry !== null);
-  const seenKeys = new Set(ordered.map((entry) => entry.key));
+  const ordered: HandEntry[] = [];
+  const seenKeys = new Set<string>();
 
-  return [...ordered, ...next.filter((entry) => !seenKeys.has(entry.key))];
+  for (const entry of current) {
+    const nextEntry = nextByKey.get(entry.key);
+    if (!nextEntry) {
+      continue;
+    }
+
+    ordered.push(nextEntry);
+    seenKeys.add(nextEntry.key);
+  }
+
+  for (const entry of next) {
+    if (!seenKeys.has(entry.key)) {
+      ordered.push(entry);
+    }
+  }
+
+  return ordered;
 }
 
 export function applyHandEntryOrder(entries: HandEntry[], orderedKeys: string[]) {
@@ -75,12 +95,26 @@ export function applyHandEntryOrder(entries: HandEntry[], orderedKeys: string[])
   }
 
   const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
-  const ordered = orderedKeys
-    .map((key) => entryByKey.get(key) ?? null)
-    .filter((entry): entry is HandEntry => entry !== null);
-  const seenKeys = new Set(ordered.map((entry) => entry.key));
+  const ordered: HandEntry[] = [];
+  const seenKeys = new Set<string>();
 
-  return [...ordered, ...entries.filter((entry) => !seenKeys.has(entry.key))];
+  for (const key of orderedKeys) {
+    const entry = entryByKey.get(key);
+    if (!entry) {
+      continue;
+    }
+
+    ordered.push(entry);
+    seenKeys.add(entry.key);
+  }
+
+  for (const entry of entries) {
+    if (!seenKeys.has(entry.key)) {
+      ordered.push(entry);
+    }
+  }
+
+  return ordered;
 }
 
 export function findNewHandEntry(current: HandEntry[], next: HandEntry[]) {
@@ -129,12 +163,75 @@ export function tableCompositionIndexFromDropId(dropId: string) {
 }
 
 export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKey: string) {
-  return compositions
-    .map((composition) => ({
-      ...composition,
-      handKeys: composition.handKeys.filter((key) => key !== handKey),
-    }))
-    .filter((composition) => composition.handKeys.length > 0);
+  const next: DraftComposition[] = [];
+
+  for (const composition of compositions) {
+    const handKeys: string[] = [];
+
+    for (const key of composition.handKeys) {
+      if (key !== handKey) {
+        handKeys.push(key);
+      }
+    }
+
+    if (handKeys.length > 0) {
+      next.push({
+        ...composition,
+        handKeys,
+      });
+    }
+  }
+
+  return next;
+}
+
+export function handEntryOrder(entries: HandEntry[]) {
+  const order: string[] = [];
+
+  for (const entry of entries) {
+    order.push(entry.key);
+  }
+
+  return order;
+}
+
+export function mapHandKeysToEntries(handKeys: string[], entryByKey: Map<string, HandEntry>) {
+  const entries: HandEntry[] = [];
+
+  for (const handKey of handKeys) {
+    const entry = entryByKey.get(handKey);
+    if (entry) {
+      entries.push(entry);
+    }
+  }
+
+  return entries;
+}
+
+export function pruneDraftCompositions(
+  compositions: DraftComposition[],
+  validHandKeys: Set<string>,
+) {
+  const next: DraftComposition[] = [];
+
+  for (const composition of compositions) {
+    const handKeys: string[] = [];
+
+    for (const handKey of composition.handKeys) {
+      if (validHandKeys.has(handKey)) {
+        handKeys.push(handKey);
+      }
+    }
+
+    if (handKeys.length > 0) {
+      next.push({
+        ...composition,
+        handKeys,
+      });
+    }
+  }
+
+  return next;
 }
 
 export function insertHandKeyIntoDraft(
@@ -178,9 +275,7 @@ export function buildTableCompositionViews(
   }));
 
   for (const composition of draftCompositions) {
-    const entries = composition.handKeys
-      .map((handKey) => entryByKey.get(handKey) ?? null)
-      .filter((entry): entry is HandEntry => entry !== null);
+    const entries = mapHandKeysToEntries(composition.handKeys, entryByKey);
 
     if (composition.tableIndex === null) {
       views.push({
