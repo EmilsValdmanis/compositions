@@ -29,6 +29,7 @@ import {
   type DraftComposition,
   type DraftedCompositionView,
   applyHandEntryOrder,
+  buildTablePlayRequest,
   buildTableCompositionViews,
   buildHandEntries,
   compositionIdFromDropId,
@@ -92,36 +93,10 @@ function buildDraftedCompositionViews(
   })) as DraftedCompositionView[];
 }
 
-function buildTablePlayRequest(
-  draftedCompositionsView: DraftedCompositionView[],
-): TablePlayRequest {
-  const compositions: TablePlayRequest["compositions"] = [];
-  const additions: TablePlayRequest["additions"] = [];
-
-  for (const composition of draftedCompositionsView) {
-    const cards = composition.entries.map((entry) => entry.card);
-
-    if (composition.tableIndex === null) {
-      compositions.push({ cards });
-      continue;
-    }
-
-    additions.push({
-      compositionIndex: composition.tableIndex,
-      cards,
-    });
-  }
-
-  return {
-    compositions,
-    additions,
-    reclaims: [],
-  };
-}
-
 function GameBoardLayout({
   game,
   tableCompositions,
+  newCompositions,
   turnState,
   topDiscardCard,
   players,
@@ -136,6 +111,7 @@ function GameBoardLayout({
 }: {
   game: GameSnapshot | null;
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
+  newCompositions: DraftedCompositionView[];
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
   players: PlayerSnapshot[];
@@ -154,6 +130,7 @@ function GameBoardLayout({
         <GameBoardTable
           game={game}
           tableCompositions={tableCompositions}
+          newCompositions={newCompositions}
           canCompose={turnState.canDiscard}
         />
 
@@ -197,6 +174,7 @@ type GameBoardController = {
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
+  newCompositions: DraftedCompositionView[];
   draftedCompositionsCount: number;
   canSubmitTablePlay: boolean;
   handleDragStart: (event: DragStartEvent) => void;
@@ -335,6 +313,10 @@ function useGameBoardController({
       ),
     [draftedCompositionsView, entryByKey, game?.activeCompositions],
   );
+  const newCompositions = useMemo(
+    () => draftedCompositionsView.filter((composition) => composition.tableIndex === null),
+    [draftedCompositionsView],
+  );
   const canCompose = turnState.canDiscard;
   const canSubmitTablePlay = canCompose && draftedCompositionsView.length > 0;
 
@@ -350,7 +332,7 @@ function useGameBoardController({
       return;
     }
 
-    onPlayTable(buildTablePlayRequest(draftedCompositionsView));
+    onPlayTable(buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView));
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -524,6 +506,7 @@ function useGameBoardController({
     availableHandEntries,
     sortableIds,
     tableCompositions,
+    newCompositions,
     draftedCompositionsCount: draftedCompositionsView.length,
     canSubmitTablePlay,
     handleDragStart,
@@ -569,11 +552,12 @@ export function GameBoardView({
       onDragEnd={controller.handleDragEnd}
       onDragCancel={controller.handleDragCancel}
     >
-      <GameBoardLayout
-        game={game}
-        tableCompositions={controller.tableCompositions}
-        turnState={turnState}
-        topDiscardCard={topDiscardCard}
+        <GameBoardLayout
+          game={game}
+          tableCompositions={controller.tableCompositions}
+          newCompositions={controller.newCompositions}
+          turnState={turnState}
+          topDiscardCard={topDiscardCard}
         players={players}
         connectedPlayers={connectedPlayers}
         availableHandEntries={controller.availableHandEntries}
