@@ -8,6 +8,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  type CompositionAdditionRequest,
   type CompositionDraftRequest,
   type GameSnapshot,
   type PlayerSnapshot,
@@ -33,6 +34,7 @@ import {
   removeHandKeyFromDrafts,
   reconcileHandEntries,
   sameStringArray,
+  tableCompositionIndexFromDropId,
 } from "#/components/game/game-board-view-state";
 
 export function GameBoardView({
@@ -48,6 +50,7 @@ export function GameBoardView({
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayCompositions,
+  onAddToCompositions,
 }: {
   game: GameSnapshot | null;
   players: PlayerSnapshot[];
@@ -61,6 +64,7 @@ export function GameBoardView({
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
   onPlayCompositions: (compositions: CompositionDraftRequest[]) => void;
+  onAddToCompositions: (additions: CompositionAdditionRequest[]) => void;
 }) {
   const snapshotHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
   const [handEntries, setHandEntries] = useState(snapshotHandEntries);
@@ -231,6 +235,7 @@ export function GameBoardView({
     }
 
     const overId = typeof event.over?.id === "string" ? event.over.id : null;
+    const draggedEntry = entryByKey.get(draggedHandKey) ?? null;
     const droppedOnDraftCard =
       overId === null
         ? null
@@ -238,6 +243,7 @@ export function GameBoardView({
     const droppedOnHandCard =
       overId !== null && availableHandEntries.some((entry) => entry.key === overId);
     const droppedOnDraftContainer = overId ? compositionIdFromDropId(overId) : null;
+    const droppedOnTableComposition = overId ? tableCompositionIndexFromDropId(overId) : null;
 
     if (event.over?.id === "discard-pile") {
       if (draftCompositions.some((composition) => composition.handKeys.includes(draggedHandKey))) {
@@ -252,6 +258,16 @@ export function GameBoardView({
       if (droppedOnHandCard && draggedHandKey !== overId) {
         setHandEntries((current) => moveHandEntry(current, draggedHandKey, overId));
       }
+      return;
+    }
+
+    if (droppedOnTableComposition !== null && draggedEntry) {
+      onAddToCompositions([
+        {
+          compositionIndex: droppedOnTableComposition,
+          cards: [draggedEntry.card],
+        },
+      ]);
       return;
     }
 

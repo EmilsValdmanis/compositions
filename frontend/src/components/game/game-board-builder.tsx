@@ -48,10 +48,10 @@ export function GameBoardBuilder({
           Drag cards from your hand into a composition lane, then submit and let the backend
           identify and validate each play.
         </p>
-        <div className="grid gap-2 xl:grid-cols-2">
+        <div className="flex flex-wrap items-start justify-center gap-2">
           <GameBoardDraftDropZone
             id={NEW_COMPOSITION_DROP_ID}
-            className="grid min-h-28 place-items-center rounded-3xl border border-dashed border-border/70 px-4 py-3 text-center text-sm text-muted-foreground"
+            className="grid min-h-28 min-w-64 place-items-center rounded-3xl border border-dashed border-border/70 px-4 py-3 text-center text-sm text-muted-foreground"
           >
             Drop a card here to start a new composition.
           </GameBoardDraftDropZone>
@@ -60,7 +60,7 @@ export function GameBoardBuilder({
               {compositions.map((composition, index) => (
                 <div
                   key={composition.id}
-                  className="rounded-3xl border border-border/70 bg-muted/20 p-3"
+                  className="w-fit max-w-full rounded-3xl border border-border/70 bg-muted/20 p-3"
                 >
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
@@ -70,7 +70,7 @@ export function GameBoardBuilder({
                   </div>
                   <GameBoardDraftDropZone
                     id={draftCompositionDropId(composition.id)}
-                    className="rounded-2xl border border-border/70 bg-background/70 p-2"
+                    className="w-fit max-w-full rounded-2xl border border-border/70 bg-background/70 p-2"
                   >
                     <SortableContext
                       items={composition.entries.map((entry) => entry.key)}

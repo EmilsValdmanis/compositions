@@ -27,13 +27,13 @@ export function GameBoardTable({ game }: { game: GameSnapshot | null }) {
           <Badge variant="outline">{tablePoints} pts</Badge>
         </CardAction>
       </CardHeader>
-      <CardContent className="grid h-full auto-rows-max gap-3">
+      <CardContent className="flex h-full flex-wrap content-start justify-center gap-3">
         {game?.activeCompositions.length ? (
           game.activeCompositions.map((composition, index) => (
             <CompositionRow key={index} composition={composition} index={index} />
           ))
         ) : (
-          <div className="grid min-h-56 place-items-center rounded-3xl border border-dashed border-border/70 text-sm text-muted-foreground">
+          <div className="grid min-h-56 w-full place-items-center rounded-3xl border border-dashed border-border/70 text-sm text-muted-foreground">
             No compositions on the table.
           </div>
         )}

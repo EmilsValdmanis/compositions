@@ -51,7 +51,7 @@ export function GameBoardHand({
               className="rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="flex min-h-36 gap-2 overflow-x-auto pb-2">
+                <div className="flex min-h-36 flex-wrap justify-center gap-2 pb-2">
                   {availableHandEntries.map((entry) => (
                     <GameCard
                       key={entry.key}

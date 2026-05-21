@@ -24,6 +24,9 @@ export const FACE_DOWN_CARD: CardSnapshot = {};
 export const HAND_DROP_ID = "hand-drop-zone";
 export const NEW_COMPOSITION_DROP_ID = "new-composition-drop-zone";
 
+const DRAFT_COMPOSITION_DROP_ID_PREFIX = "draft-composition-";
+const TABLE_COMPOSITION_DROP_ID_PREFIX = "table-composition-";
+
 function handCardKey(card: CardSnapshot) {
   if (card.isJoker) {
     return "joker";
@@ -79,15 +82,28 @@ export function sameStringArray(a: string[], b: string[]) {
 }
 
 export function draftCompositionDropId(compositionId: string) {
-  return `draft-composition-${compositionId}`;
+  return `${DRAFT_COMPOSITION_DROP_ID_PREFIX}${compositionId}`;
 }
 
 export function compositionIdFromDropId(dropId: string) {
-  if (!dropId.startsWith("draft-composition-")) {
+  if (!dropId.startsWith(DRAFT_COMPOSITION_DROP_ID_PREFIX)) {
     return null;
   }
 
-  return dropId.slice("draft-composition-".length);
+  return dropId.slice(DRAFT_COMPOSITION_DROP_ID_PREFIX.length);
+}
+
+export function tableCompositionDropId(compositionIndex: number) {
+  return `${TABLE_COMPOSITION_DROP_ID_PREFIX}${compositionIndex}`;
+}
+
+export function tableCompositionIndexFromDropId(dropId: string) {
+  if (!dropId.startsWith(TABLE_COMPOSITION_DROP_ID_PREFIX)) {
+    return null;
+  }
+
+  const compositionIndex = Number(dropId.slice(TABLE_COMPOSITION_DROP_ID_PREFIX.length));
+  return Number.isInteger(compositionIndex) && compositionIndex >= 0 ? compositionIndex : null;
 }
 
 export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKey: string) {

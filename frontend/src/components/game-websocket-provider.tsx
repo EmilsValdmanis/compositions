@@ -23,6 +23,11 @@ export type CompositionDraftRequest = {
   cards: CardSnapshot[];
 };
 
+export type CompositionAdditionRequest = {
+  compositionIndex: number;
+  cards: CardSnapshot[];
+};
+
 export type PlayerStateSnapshot = {
   playerId: string;
   handCount: number;
@@ -114,6 +119,7 @@ type GameWebSocketContextValue = {
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
   playCompositions: (compositions: CompositionDraftRequest[]) => void;
+  addToCompositions: (additions: CompositionAdditionRequest[]) => void;
   discardCard: (cardIndex: number) => void;
 };
 
@@ -423,6 +429,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),
     playCompositions: (compositions) => send("play", { compositions }),
+    addToCompositions: (additions) => send("add", { additions }),
     discardCard: (cardIndex) => send("discard", { cardIndex }),
   };
 
