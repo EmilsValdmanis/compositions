@@ -84,7 +84,7 @@ export function GameBoardTable({
                 items={composition.entries.map((entry) => entry.key)}
                 strategy={horizontalListSortingStrategy}
               >
-                <div className="flex flex-wrap content-start justify-center gap-2">
+                <div className="flex items-start gap-2">
                   {composition.entries.map((entry) => (
                     <GameCard
                       key={entry.key}

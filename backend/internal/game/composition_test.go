@@ -281,7 +281,24 @@ func TestNewRun_ValidSimpleSequence(t *testing.T) {
 	}
 }
 
-func TestNewRun_RejectsOutOfOrderSequence(t *testing.T) {
+func TestNewRun_AcceptsDescendingSequence(t *testing.T) {
+	cards := []Card{
+		card(Seven, Hearts),
+		card(Six, Hearts),
+		card(Five, Hearts),
+	}
+
+	comp, ok := NewRun(cards)
+	if !ok {
+		t.Fatal("NewRun() returned false; want true for descending run")
+	}
+
+	if got := comp.cards; !slices.Equal(got, []Card{card(Five, Hearts), card(Six, Hearts), card(Seven, Hearts)}) {
+		t.Fatalf("NewRun() cards = %#v; want normalized ascending order", got)
+	}
+}
+
+func TestNewRun_RejectsMixedOrderSequence(t *testing.T) {
 	cards := []Card{
 		card(Seven, Hearts),
 		card(Five, Hearts),
@@ -289,7 +306,7 @@ func TestNewRun_RejectsOutOfOrderSequence(t *testing.T) {
 	}
 
 	if _, ok := NewRun(cards); ok {
-		t.Fatal("NewRun() returned true; want false for unordered run")
+		t.Fatal("NewRun() returned true; want false for mixed-order run")
 	}
 }
 
@@ -1267,6 +1284,18 @@ func TestRunCardsAreOrdered(t *testing.T) {
 	}
 	if runCardsAreOrdered([]Card{card(Eight, Clubs), joker(), card(Nine, Clubs), card(Ten, Clubs)}) {
 		t.Fatal("runCardsAreOrdered() = true; want false for unordered joker placement")
+	}
+}
+
+func TestRunCardsAreReverseOrdered(t *testing.T) {
+	if !runCardsAreReverseOrdered([]Card{card(Ace, Diamonds), card(King, Diamonds), card(Queen, Diamonds)}) {
+		t.Fatal("runCardsAreReverseOrdered() = false; want true for reverse-ordered ace-high run")
+	}
+	if !runCardsAreReverseOrdered([]Card{joker(), card(Ten, Clubs), card(Nine, Clubs), card(Eight, Clubs)}) {
+		t.Fatal("runCardsAreReverseOrdered() = false; want true for reverse-ordered run with joker")
+	}
+	if runCardsAreReverseOrdered([]Card{card(King, Diamonds), card(Queen, Diamonds), card(Ace, Diamonds)}) {
+		t.Fatal("runCardsAreReverseOrdered() = true; want false for mixed ace-high run")
 	}
 }
 

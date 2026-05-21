@@ -1122,7 +1122,43 @@ func TestGameStatePlayCompositionsMovesCardsToActiveCompositions(t *testing.T) {
 	}
 }
 
-func TestGameStatePlayCompositionsRejectsUnorderedRun(t *testing.T) {
+func TestGameStatePlayCompositionsAcceptsDescendingRun(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Five, suit: Hearts},
+		{rank: King, suit: Spades},
+	}
+	runComp := &Composition{variant: run, cards: []Card{
+		{rank: Seven, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Five, suit: Hearts},
+	}}
+
+	err := state.PlayCompositions([]*Composition{runComp})
+
+	if err != nil {
+		t.Fatalf("PlayCompositions() error = %v", err)
+	}
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	if got := state.activeCompositions[0].cards; !slices.Equal(got, []Card{
+		{rank: Five, suit: Hearts},
+		{rank: Six, suit: Hearts},
+		{rank: Seven, suit: Hearts},
+	}) {
+		t.Fatalf("active run cards = %#v; want normalized ascending order", got)
+	}
+}
+
+func TestGameStatePlayCompositionsRejectsMixedOrderRun(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
 	state.players[0].hasOpened = true
