@@ -18,18 +18,18 @@ export function GameBoardPiles({
   canDiscard: boolean;
 }) {
   return (
-    <Card size="sm">
+    <Card size="sm" className="overflow-y-scroll h-fit">
       <CardHeader>
         <CardTitle>Piles</CardTitle>
         <CardDescription>Drop a hand card on discard after drawing.</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-        <div className="rounded-3xl border border-border/70 bg-muted/20 p-3">
+      <CardContent className="grid gap-3 grid-cols-2">
+        <div className="rounded-3xl border flex flex-col border-border/70 bg-muted/20 p-3">
           <div className="mb-2 flex items-center justify-between gap-3 text-xs uppercase text-muted-foreground">
             <span>Draw</span>
             <span>{drawPileCount} cards</span>
           </div>
-          <div className="flex items-center justify-center rounded-2xl border border-border bg-background p-3">
+          <div className="flex items-center justify-center grow flex-col">
             <GameCard
               card={FACE_DOWN_CARD}
               faceDown
@@ -47,7 +47,7 @@ export function GameBoardPiles({
             <span>Discard</span>
             <span>{canDrawDiscard ? "Can draw" : "Top card"}</span>
           </div>
-          <div className="flex items-center justify-center rounded-2xl border border-border bg-background p-3">
+          <div className="flex items-center justify-center">
             {topDiscardCard ? (
               <GameCard
                 card={topDiscardCard}

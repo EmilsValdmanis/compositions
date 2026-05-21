@@ -147,7 +147,7 @@ function GameBoardLayout({
           onSubmitTablePlay={onSubmitTablePlay}
         />
 
-        <div className="grid min-h-0 auto-rows-fr gap-4">
+        <div className="flex flex-col min-h-0 gap-4">
           <GameBoardPiles
             drawPileCount={game?.drawPileCount ?? 0}
             topDiscardCard={topDiscardCard}

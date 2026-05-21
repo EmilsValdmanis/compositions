@@ -7,7 +7,14 @@ import {
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
 type HandStatus = {
@@ -43,9 +50,11 @@ export function GameBoardHand({
       <CardHeader>
         <CardTitle>Hand</CardTitle>
         <CardDescription>{isMyTurn ? "Your turn" : `${turnPlayerName} is up`}</CardDescription>
-        <Badge variant="outline" className="w-fit">
-          {availableHandEntries.length} cards
-        </Badge>
+        <CardAction>
+          <Badge variant="outline" className="w-fit">
+            {availableHandEntries.length} cards
+          </Badge>
+        </CardAction>
       </CardHeader>
       <CardContent className="min-h-0">
         {hasGame ? (

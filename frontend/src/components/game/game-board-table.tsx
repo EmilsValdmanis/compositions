@@ -46,7 +46,7 @@ export function GameBoardTable({
   const hasVisibleCompositions = tableCompositions.length > 0;
 
   return (
-    <Card className="min-h-0 overflow-hidden xl:flex-1">
+    <Card className="min-h-0 overflow-y-scroll xl:flex-1">
       <CardHeader>
         <CardTitle>Table</CardTitle>
         <CardDescription>
@@ -119,7 +119,7 @@ export function GameBoardTable({
           </GameBoardDraftDropZone>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border/70 bg-muted/15 p-3">
+        <div className="flex flex-wrap items-center mt-auto justify-between gap-3 rounded-3xl border border-border/70 bg-muted/15 p-3">
           <div className="space-y-1 text-sm">
             <div className="font-medium">New compositions</div>
             <div className="text-muted-foreground">
