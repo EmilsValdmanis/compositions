@@ -1,5 +1,9 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import { type CardSnapshot, type CompositionSnapshot } from "#/components/game-websocket-provider";
+import {
+  type CardSnapshot,
+  type CompositionSnapshot,
+  type TablePlayRequest,
+} from "#/components/game-websocket-provider";
 
 export type HandEntry = {
   key: string;
@@ -27,11 +31,17 @@ export type DraftedCompositionView = DraftComposition & {
   entries: HandEntry[];
 };
 
+export type PlannedJokerReclaim = {
+  jokerIndex: number;
+  replacementEntry: HandEntry;
+};
+
 export type TableCompositionView = {
-  tableIndex: number | null;
+  tableIndex: number;
   key: string;
-  entries: HandEntry[];
-  snapshot: CompositionSnapshot | null;
+  snapshot: CompositionSnapshot;
+  stagedEntries: HandEntry[];
+  reclaims: PlannedJokerReclaim[];
 };
 
 export const FACE_DOWN_CARD: CardSnapshot = {};
@@ -262,6 +272,110 @@ export function insertHandKeyIntoDraft(
   return next;
 }
 
+function cardsEqual(a: CardSnapshot, b: CardSnapshot) {
+  return (
+    Boolean(a.isJoker) === Boolean(b.isJoker) &&
+    (a.rank ?? null) === (b.rank ?? null) &&
+    (a.suit ?? null) === (b.suit ?? null)
+  );
+}
+
+export function inferPlannedJokerReclaims(
+  composition: CompositionSnapshot,
+  stagedEntries: HandEntry[],
+) {
+  const availableReclaimIndices = new Set<number>();
+
+  for (const [indexKey, options] of Object.entries(composition.jokerRepresentations ?? {})) {
+    const jokerIndex = Number(indexKey);
+
+    if (
+      Number.isInteger(jokerIndex) &&
+      jokerIndex >= 0 &&
+      composition.cards[jokerIndex]?.isJoker &&
+      options.length === 1
+    ) {
+      availableReclaimIndices.add(jokerIndex);
+    }
+  }
+
+  const reclaims: PlannedJokerReclaim[] = [];
+  const additions: HandEntry[] = [];
+
+  for (const entry of stagedEntries) {
+    let matchedJokerIndex: number | null = null;
+
+    for (const jokerIndex of availableReclaimIndices) {
+      const replacementCard = composition.jokerRepresentations?.[jokerIndex]?.[0];
+
+      if (replacementCard && cardsEqual(replacementCard, entry.card)) {
+        matchedJokerIndex = jokerIndex;
+        break;
+      }
+    }
+
+    if (matchedJokerIndex === null) {
+      additions.push(entry);
+      continue;
+    }
+
+    availableReclaimIndices.delete(matchedJokerIndex);
+    reclaims.push({
+      jokerIndex: matchedJokerIndex,
+      replacementEntry: entry,
+    });
+  }
+
+  return {
+    additions,
+    reclaims,
+  };
+}
+
+export function buildTablePlayRequest(
+  activeCompositions: CompositionSnapshot[],
+  draftedCompositionsView: DraftedCompositionView[],
+): TablePlayRequest {
+  const compositions: TablePlayRequest["compositions"] = [];
+  const additions: TablePlayRequest["additions"] = [];
+  const reclaims: TablePlayRequest["reclaims"] = [];
+
+  for (const composition of draftedCompositionsView) {
+    if (composition.tableIndex === null) {
+      compositions.push({
+        cards: composition.entries.map((entry) => entry.card),
+      });
+      continue;
+    }
+
+    const activeComposition = activeCompositions[composition.tableIndex];
+    const { additions: stagedAdditions, reclaims: stagedReclaims } = activeComposition
+      ? inferPlannedJokerReclaims(activeComposition, composition.entries)
+      : { additions: composition.entries, reclaims: [] };
+
+    if (stagedAdditions.length > 0) {
+      additions.push({
+        compositionIndex: composition.tableIndex,
+        cards: stagedAdditions.map((entry) => entry.card),
+      });
+    }
+
+    for (const reclaim of stagedReclaims) {
+      reclaims.push({
+        compositionIndex: composition.tableIndex,
+        jokerIndex: reclaim.jokerIndex,
+        replacementCard: reclaim.replacementEntry.card,
+      });
+    }
+  }
+
+  return {
+    compositions,
+    additions,
+    reclaims,
+  };
+}
+
 export function buildTableCompositionViews(
   activeCompositions: CompositionSnapshot[],
   draftCompositions: DraftComposition[],
@@ -270,26 +384,23 @@ export function buildTableCompositionViews(
   const views: TableCompositionView[] = activeCompositions.map((composition, index) => ({
     tableIndex: index,
     key: `table-${index}`,
-    entries: [],
     snapshot: composition,
+    stagedEntries: [],
+    reclaims: [],
   }));
 
   for (const composition of draftCompositions) {
-    const entries = mapHandKeysToEntries(composition.handKeys, entryByKey);
-
     if (composition.tableIndex === null) {
-      views.push({
-        tableIndex: null,
-        key: composition.id,
-        entries,
-        snapshot: null,
-      });
       continue;
     }
 
     const existing = views[composition.tableIndex];
     if (existing) {
-      existing.entries = entries;
+      existing.stagedEntries = mapHandKeysToEntries(composition.handKeys, entryByKey);
+      existing.reclaims = inferPlannedJokerReclaims(
+        existing.snapshot,
+        existing.stagedEntries,
+      ).reclaims;
     }
   }
 
