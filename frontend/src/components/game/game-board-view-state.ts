@@ -1,5 +1,5 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { type CardSnapshot, type CompositionSnapshot } from "#/components/game-websocket-provider";
 
 export type HandEntry = {
   key: string;
@@ -14,10 +14,18 @@ export type ActiveDrag =
 export type DraftComposition = {
   id: string;
   handKeys: string[];
+  tableIndex: number | null;
 };
 
 export type DraftedCompositionView = DraftComposition & {
   entries: HandEntry[];
+};
+
+export type TableCompositionView = {
+  tableIndex: number | null;
+  key: string;
+  entries: HandEntry[];
+  snapshot: CompositionSnapshot | null;
 };
 
 export const FACE_DOWN_CARD: CardSnapshot = {};
@@ -141,4 +149,40 @@ export function insertHandKeyIntoDraft(
   };
 
   return next;
+}
+
+export function buildTableCompositionViews(
+  activeCompositions: CompositionSnapshot[],
+  draftCompositions: DraftComposition[],
+  entryByKey: Map<string, HandEntry>,
+) {
+  const views: TableCompositionView[] = activeCompositions.map((composition, index) => ({
+    tableIndex: index,
+    key: `table-${index}`,
+    entries: [],
+    snapshot: composition,
+  }));
+
+  for (const composition of draftCompositions) {
+    const entries = composition.handKeys
+      .map((handKey) => entryByKey.get(handKey) ?? null)
+      .filter((entry): entry is HandEntry => entry !== null);
+
+    if (composition.tableIndex === null) {
+      views.push({
+        tableIndex: null,
+        key: composition.id,
+        entries,
+        snapshot: null,
+      });
+      continue;
+    }
+
+    const existing = views[composition.tableIndex];
+    if (existing) {
+      existing.entries = entries;
+    }
+  }
+
+  return views;
 }

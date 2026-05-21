@@ -428,21 +428,9 @@ func (l *lobbyServer) draw(sessionID, source string) (roomSnapshot, []gameStateR
 	})
 }
 
-func (l *lobbyServer) play(sessionID string, comps []*game.Composition) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+func (l *lobbyServer) play(sessionID string, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "play", func(state *game.GameState) error {
-		return state.PlayCompositions(comps)
-	})
-}
-
-func (l *lobbyServer) add(sessionID string, additions []game.CompositionAddition) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
-	return l.applyGameAction(sessionID, "add", func(state *game.GameState) error {
-		return state.AddToCompositions(additions)
-	})
-}
-
-func (l *lobbyServer) reclaim(sessionID string, reclaim game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
-	return l.applyGameAction(sessionID, "reclaim", func(state *game.GameState) error {
-		return state.PlayTable(nil, nil, reclaim)
+		return state.PlayTable(comps, additions, reclaims...)
 	})
 }
 

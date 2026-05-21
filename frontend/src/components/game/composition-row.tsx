@@ -1,16 +1,19 @@
+import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { type HandEntry, tableCompositionDropId } from "#/components/game/game-board-view-state";
 import { type CompositionSnapshot } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { formatLabel } from "#/components/game/game-view-utils";
-import { tableCompositionDropId } from "#/components/game/game-board-view-state";
 import { Badge } from "#/components/ui/badge";
 
 export function CompositionRow({
   composition,
   index,
+  stagedEntries = [],
 }: {
   composition: CompositionSnapshot;
   index: number;
+  stagedEntries?: HandEntry[];
 }) {
   return (
     <GameBoardDraftDropZone
@@ -29,6 +32,19 @@ export function CompositionRow({
         {composition.cards.map((card, cardIndex) => (
           <GameCard key={`${index}-${cardIndex}`} card={card} size="compact" />
         ))}
+        <SortableContext
+          items={stagedEntries.map((entry) => entry.key)}
+          strategy={horizontalListSortingStrategy}
+        >
+          {stagedEntries.map((entry) => (
+            <GameCard
+              key={entry.key}
+              card={entry.card}
+              size="compact"
+              draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
+            />
+          ))}
+        </SortableContext>
       </div>
     </GameBoardDraftDropZone>
   );

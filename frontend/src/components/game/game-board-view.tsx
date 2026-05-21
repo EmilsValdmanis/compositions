@@ -8,12 +8,10 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  type CompositionAdditionRequest,
-  type CompositionDraftRequest,
   type GameSnapshot,
   type PlayerSnapshot,
+  type TablePlayRequest,
 } from "#/components/game-websocket-provider";
-import { GameBoardBuilder } from "#/components/game/game-board-builder";
 import { GameBoardHand } from "#/components/game/game-board-hand";
 import { GameBoardPiles } from "#/components/game/game-board-piles";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
@@ -26,6 +24,7 @@ import {
   NEW_COMPOSITION_DROP_ID,
   type ActiveDrag,
   type DraftComposition,
+  buildTableCompositionViews,
   buildHandEntries,
   compositionIdFromDropId,
   findNewHandEntry,
@@ -49,8 +48,7 @@ export function GameBoardView({
   onDragEnd,
   onDrawFromDeck,
   onDrawFromDiscard,
-  onPlayCompositions,
-  onAddToCompositions,
+  onPlayTable,
 }: {
   game: GameSnapshot | null;
   players: PlayerSnapshot[];
@@ -63,8 +61,7 @@ export function GameBoardView({
   onDragEnd: (event: DragEndEvent) => void;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
-  onPlayCompositions: (compositions: CompositionDraftRequest[]) => void;
-  onAddToCompositions: (additions: CompositionAdditionRequest[]) => void;
+  onPlayTable: (play: TablePlayRequest) => void;
 }) {
   const snapshotHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
   const [handEntries, setHandEntries] = useState(snapshotHandEntries);
@@ -124,8 +121,12 @@ export function GameBoardView({
       })),
     [draftCompositions, entryByKey, handEntries],
   );
+  const tableCompositions = useMemo(
+    () => buildTableCompositionViews(game?.activeCompositions ?? [], draftCompositions, entryByKey),
+    [draftCompositions, entryByKey, game?.activeCompositions],
+  );
   const canCompose = canDiscard;
-  const canSubmitCompositions = canCompose && draftedCompositionsView.length > 0;
+  const canSubmitTablePlay = canCompose && draftCompositions.length > 0;
   const turnPlayerName = playerName(players, game?.turn.playerId);
 
   useEffect(() => {
@@ -168,15 +169,24 @@ export function GameBoardView({
   }
 
   function submitDraftCompositions() {
-    if (!canSubmitCompositions) {
+    if (!canSubmitTablePlay) {
       return;
     }
 
-    onPlayCompositions(
-      draftedCompositionsView.map((composition) => ({
-        cards: composition.entries.map((entry) => entry.card),
-      })),
-    );
+    onPlayTable({
+      compositions: draftedCompositionsView
+        .filter((composition) => composition.tableIndex === null)
+        .map((composition) => ({
+          cards: composition.entries.map((entry) => entry.card),
+        })),
+      additions: draftedCompositionsView
+        .filter((composition) => composition.tableIndex !== null)
+        .map((composition) => ({
+          compositionIndex: composition.tableIndex ?? 0,
+          cards: composition.entries.map((entry) => entry.card),
+        })),
+      reclaims: [],
+    });
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -262,12 +272,22 @@ export function GameBoardView({
     }
 
     if (droppedOnTableComposition !== null && draggedEntry) {
-      onAddToCompositions([
-        {
-          compositionIndex: droppedOnTableComposition,
-          cards: [draggedEntry.card],
-        },
-      ]);
+      setDraftCompositions((current) => {
+        const existing = current.find(
+          (composition) => composition.tableIndex === droppedOnTableComposition,
+        );
+        if (existing) {
+          return insertHandKeyIntoDraft(current, draggedHandKey, existing.id);
+        }
+
+        const compositionId = `draft-${nextDraftIdRef.current}`;
+        nextDraftIdRef.current += 1;
+
+        return [
+          ...removeHandKeyFromDrafts(current, draggedHandKey),
+          { id: compositionId, handKeys: [draggedHandKey], tableIndex: droppedOnTableComposition },
+        ];
+      });
       return;
     }
 
@@ -277,7 +297,7 @@ export function GameBoardView({
 
       setDraftCompositions((current) => [
         ...removeHandKeyFromDrafts(current, draggedHandKey),
-        { id: compositionId, handKeys: [draggedHandKey] },
+        { id: compositionId, handKeys: [draggedHandKey], tableIndex: null },
       ]);
       return;
     }
@@ -328,7 +348,11 @@ export function GameBoardView({
     >
       <div className="flex min-h-[calc(100vh-10.5rem)] flex-col gap-4">
         <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <GameBoardTable game={game} />
+          <GameBoardTable
+            game={game}
+            tableCompositions={tableCompositions}
+            canCompose={canCompose}
+          />
 
           <div className="grid content-start gap-4">
             <GameBoardPiles
@@ -343,12 +367,6 @@ export function GameBoardView({
         </div>
 
         <div className="mt-auto grid gap-4">
-          <GameBoardBuilder
-            compositions={draftedCompositionsView}
-            canSubmit={canSubmitCompositions}
-            onReset={resetDraftCompositions}
-            onSubmit={submitDraftCompositions}
-          />
           <GameBoardHand
             hasGame={Boolean(game)}
             isMyTurn={isMyTurn}
@@ -357,6 +375,9 @@ export function GameBoardView({
             sortableIds={sortableIds}
             activeDrag={activeDrag}
             hasDraftedCompositions={draftedCompositionsView.length > 0}
+            canSubmitTablePlay={canSubmitTablePlay}
+            onResetTablePlay={resetDraftCompositions}
+            onSubmitTablePlay={submitDraftCompositions}
           />
         </div>
       </div>

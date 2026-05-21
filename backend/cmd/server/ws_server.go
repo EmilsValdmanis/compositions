@@ -67,15 +67,13 @@ type compositionRequest struct {
 
 type playRequest struct {
 	Compositions []compositionRequest `json:"compositions"`
+	Additions    []compositionAdditionRequest `json:"additions,omitempty"`
+	Reclaims     []reclaimRequest             `json:"reclaims,omitempty"`
 }
 
 type compositionAdditionRequest struct {
 	CompositionIndex int           `json:"compositionIndex"`
 	Cards            []cardRequest `json:"cards"`
-}
-
-type addRequest struct {
-	Additions []compositionAdditionRequest `json:"additions"`
 }
 
 type reclaimRequest struct {
@@ -284,10 +282,6 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			s.handleDraw(conn, sessionID, envelope)
 		case "play":
 			s.handlePlay(conn, sessionID, envelope)
-		case "add":
-			s.handleAdd(conn, sessionID, envelope)
-		case "reclaim":
-			s.handleReclaim(conn, sessionID, envelope)
 		case "discard":
 			s.handleDiscard(conn, sessionID, envelope)
 		default:
@@ -463,51 +457,21 @@ func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope w
 		return
 	}
 
-	roomState, recipients, result, err := s.lobby.play(sessionID, comps)
-	if err != nil {
-		slog.Warn("play failed", "sessionID", sessionID, "error", err)
-		s.writeError(conn, err)
-		return
-	}
-	s.broadcastActionSuccess(result, roomState, recipients)
-}
-
-func (s *wsServer) handleAdd(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
-	req, ok := decodeSessionRequest[addRequest](s, conn, sessionID, envelope)
-	if !ok {
-		return
-	}
-
 	additions, err := additionsFromRequest(req.Additions)
 	if err != nil {
 		s.writeError(conn, err)
 		return
 	}
 
-	roomState, recipients, result, err := s.lobby.add(sessionID, additions)
-	if err != nil {
-		slog.Warn("add failed", "sessionID", sessionID, "error", err)
-		s.writeError(conn, err)
-		return
-	}
-	s.broadcastActionSuccess(result, roomState, recipients)
-}
-
-func (s *wsServer) handleReclaim(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
-	req, ok := decodeSessionRequest[reclaimRequest](s, conn, sessionID, envelope)
-	if !ok {
-		return
-	}
-
-	reclaim, err := reclaimFromRequest(req)
+	reclaims, err := reclaimsFromRequest(req.Reclaims)
 	if err != nil {
 		s.writeError(conn, err)
 		return
 	}
 
-	roomState, recipients, result, err := s.lobby.reclaim(sessionID, reclaim)
+	roomState, recipients, result, err := s.lobby.play(sessionID, comps, additions, reclaims)
 	if err != nil {
-		slog.Warn("reclaim failed", "sessionID", sessionID, "error", err)
+		slog.Warn("play failed", "sessionID", sessionID, "error", err)
 		s.writeError(conn, err)
 		return
 	}
@@ -682,6 +646,18 @@ func reclaimFromRequest(req reclaimRequest) (game.JokerReclaim, error) {
 		return game.JokerReclaim{}, err
 	}
 	return game.JokerReclaim{CompositionIndex: req.CompositionIndex, JokerIndex: req.JokerIndex, ReplacementCard: replacement}, nil
+}
+
+func reclaimsFromRequest(requests []reclaimRequest) ([]game.JokerReclaim, error) {
+	reclaims := make([]game.JokerReclaim, 0, len(requests))
+	for _, req := range requests {
+		reclaim, err := reclaimFromRequest(req)
+		if err != nil {
+			return nil, err
+		}
+		reclaims = append(reclaims, reclaim)
+	}
+	return reclaims, nil
 }
 
 func cardsFromRequest(requests []cardRequest) ([]game.Card, error) {

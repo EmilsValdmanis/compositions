@@ -1207,18 +1207,22 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 	mustSendEnvelope(t, guestConn, "draw", drawRequest{Source: "deck"})
 	_ = mustReadActionBroadcast(t, guestConn, "draw", guestConnected.PlayerID)
 	_ = mustReadActionBroadcast(t, hostConn, "draw", guestConnected.PlayerID)
-	mustSendEnvelope(t, guestConn, "reclaim", reclaimRequest{CompositionIndex: 2, JokerIndex: 1, ReplacementCard: cardReq(game.Six, game.Hearts)})
-	reclaimState := mustReadActionBroadcast(t, guestConn, "reclaim", guestConnected.PlayerID)
-	_ = mustReadActionBroadcast(t, hostConn, "reclaim", guestConnected.PlayerID)
-	if reclaimState.Game.ActiveCompositions[2].Cards[1].Rank != game.Six {
-		t.Fatalf("reclaimed composition card = %#v; want six of hearts", reclaimState.Game.ActiveCompositions[2].Cards[1])
+	mustSendEnvelope(t, guestConn, "play", playRequest{
+		Additions: []compositionAdditionRequest{{
+			CompositionIndex: 1,
+			Cards:            []cardRequest{cardReq(game.Five, game.Spades)},
+		}},
+		Reclaims: []reclaimRequest{{
+			CompositionIndex: 2,
+			JokerIndex:       1,
+			ReplacementCard:  cardReq(game.Six, game.Hearts),
+		}},
+	})
+	addState := mustReadActionBroadcast(t, guestConn, "play", guestConnected.PlayerID)
+	_ = mustReadActionBroadcast(t, hostConn, "play", guestConnected.PlayerID)
+	if addState.Game.ActiveCompositions[2].Cards[1].Rank != game.Six {
+		t.Fatalf("reclaimed composition card = %#v; want six of hearts", addState.Game.ActiveCompositions[2].Cards[1])
 	}
-
-	mustSendEnvelope(t, guestConn, "add", addRequest{Additions: []compositionAdditionRequest{
-		{CompositionIndex: 1, Cards: []cardRequest{cardReq(game.Five, game.Spades)}},
-	}})
-	addState := mustReadActionBroadcast(t, guestConn, "add", guestConnected.PlayerID)
-	_ = mustReadActionBroadcast(t, hostConn, "add", guestConnected.PlayerID)
 	if len(addState.Game.ActiveCompositions[1].Cards) != 5 {
 		t.Fatalf("spade run length after add = %d; want 5", len(addState.Game.ActiveCompositions[1].Cards))
 	}
@@ -1231,7 +1235,7 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 
 	rawConn := mustDialWS(t, httpServer.URL)
 	defer rawConn.Close()
-	for _, messageType := range []string{"draw", "play", "add", "reclaim", "discard"} {
+	for _, messageType := range []string{"draw", "play", "discard"} {
 		mustSendEnvelope(t, rawConn, messageType, struct{}{})
 		mustReadError(t, rawConn, "connect first")
 	}
@@ -1239,7 +1243,7 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	conn := mustDialWS(t, httpServer.URL)
 	defer conn.Close()
 	mustConnectSession(t, conn, "")
-	for _, messageType := range []string{"draw", "play", "add", "reclaim", "discard"} {
+	for _, messageType := range []string{"draw", "play", "discard"} {
 		if err := conn.WriteJSON(wsEnvelope{Type: messageType}); err != nil {
 			t.Fatalf("WriteJSON(%q missing data) error = %v", messageType, err)
 		}
@@ -1249,15 +1253,10 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	mustReadError(t, conn, "join a room first")
 	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})
 	mustReadError(t, conn, "invalid card rank")
-	mustSendEnvelope(t, conn, "add", addRequest{Additions: []compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{{Rank: int(game.Ace), Suit: 99}}}}})
+	mustSendEnvelope(t, conn, "play", playRequest{Additions: []compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{{Rank: int(game.Ace), Suit: 99}}}}})
 	mustReadError(t, conn, "invalid card suit")
-	mustSendEnvelope(t, conn, "add", addRequest{Additions: []compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{cardReq(game.Eight, game.Hearts)}}}})
-	mustReadError(t, conn, "join a room first")
-	mustSendEnvelope(t, conn, "reclaim", reclaimRequest{ReplacementCard: cardRequest{Rank: 99, Suit: int(game.Clubs)}})
+	mustSendEnvelope(t, conn, "play", playRequest{Reclaims: []reclaimRequest{{ReplacementCard: cardRequest{Rank: 99, Suit: int(game.Clubs)}}}})
 	mustReadError(t, conn, "invalid card rank")
-	mustSendEnvelope(t, conn, "reclaim", reclaimRequest{CompositionIndex: 0, JokerIndex: 0, ReplacementCard: cardReq(game.Six, game.Hearts)})
-	mustReadError(t, conn, "join a room first")
-
 	if _, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}); err == nil || err.Error() != "invalid card rank" {
 		t.Fatalf("compositionsFromRequest(invalid card) error = %v; want invalid card rank", err)
 	}
@@ -1281,6 +1280,12 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	}
 	if reclaim, err := reclaimFromRequest(reclaimRequest{CompositionIndex: 1, JokerIndex: 2, ReplacementCard: cardReq(game.Ten, game.Clubs)}); err != nil || reclaim.CompositionIndex != 1 || reclaim.JokerIndex != 2 {
 		t.Fatalf("reclaimFromRequest(valid) = %#v, %v; want reclaim", reclaim, err)
+	}
+	if _, err := reclaimsFromRequest([]reclaimRequest{{ReplacementCard: cardRequest{Rank: int(game.Ace), Suit: 99}}}); err == nil || err.Error() != "invalid card suit" {
+		t.Fatalf("reclaimsFromRequest(invalid suit) error = %v; want invalid card suit", err)
+	}
+	if reclaims, err := reclaimsFromRequest([]reclaimRequest{{CompositionIndex: 1, JokerIndex: 2, ReplacementCard: cardReq(game.Ten, game.Clubs)}}); err != nil || len(reclaims) != 1 || reclaims[0].CompositionIndex != 1 || reclaims[0].JokerIndex != 2 {
+		t.Fatalf("reclaimsFromRequest(valid) = %#v, %v; want one reclaim", reclaims, err)
 	}
 	if card, err := cardFromRequest(jokerReq()); err != nil || !card.IsJoker() {
 		t.Fatalf("cardFromRequest(joker) = %#v, %v; want joker", card, err)

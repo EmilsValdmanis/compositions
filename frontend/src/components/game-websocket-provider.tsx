@@ -28,6 +28,18 @@ export type CompositionAdditionRequest = {
   cards: CardSnapshot[];
 };
 
+export type JokerReclaimRequest = {
+  compositionIndex: number;
+  jokerIndex: number;
+  replacementCard: CardSnapshot;
+};
+
+export type TablePlayRequest = {
+  compositions: CompositionDraftRequest[];
+  additions: CompositionAdditionRequest[];
+  reclaims: JokerReclaimRequest[];
+};
+
 export type PlayerStateSnapshot = {
   playerId: string;
   handCount: number;
@@ -118,8 +130,7 @@ type GameWebSocketContextValue = {
   leaveRoom: () => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
-  playCompositions: (compositions: CompositionDraftRequest[]) => void;
-  addToCompositions: (additions: CompositionAdditionRequest[]) => void;
+  playTable: (play: TablePlayRequest) => void;
   discardCard: (cardIndex: number) => void;
 };
 
@@ -428,8 +439,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     leaveRoom: () => send("leave_room", {}),
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),
-    playCompositions: (compositions) => send("play", { compositions }),
-    addToCompositions: (additions) => send("add", { additions }),
+    playTable: (play) => send("play", play),
     discardCard: (cardIndex) => send("discard", { cardIndex }),
   };
 

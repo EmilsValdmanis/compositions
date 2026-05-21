@@ -970,7 +970,7 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	if _, _, _, err := lobby.draw(guestEvent.SessionID, "deck"); !errors.Is(err, game.ErrPlayerAlreadyDrew) {
 		t.Fatalf("draw(twice) error = %v; want ErrPlayerAlreadyDrew", err)
 	}
-	if _, _, _, err := lobby.play(guestEvent.SessionID, []*game.Composition{}); !errors.Is(err, game.ErrInvalidComposition) {
+	if _, _, _, err := lobby.play(guestEvent.SessionID, []*game.Composition{}, nil, nil); !errors.Is(err, game.ErrInvalidComposition) {
 		t.Fatalf("play(empty) error = %v; want ErrInvalidComposition", err)
 	}
 
@@ -986,14 +986,16 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	if !ok {
 		t.Fatal("NewRun(heart) returned false; want true")
 	}
-	if _, _, result, err := lobby.play(guestEvent.SessionID, []*game.Composition{setComp, spadeRun, heartRun}); err != nil || result.Action != "play" {
+	if _, _, result, err := lobby.play(guestEvent.SessionID, []*game.Composition{setComp, spadeRun, heartRun}, nil, nil); err != nil || result.Action != "play" {
 		t.Fatalf("play(valid) result = %#v, error = %v; want play success", result, err)
 	}
-	if _, _, _, err := lobby.reclaim(guestEvent.SessionID, game.JokerReclaim{CompositionIndex: 2, JokerIndex: 1, ReplacementCard: game.NewCard(game.Six, game.Hearts)}); err != nil {
-		t.Fatalf("reclaim() error = %v", err)
-	}
-	if _, _, _, err := lobby.add(guestEvent.SessionID, []game.CompositionAddition{{CompositionIndex: 1, Cards: []game.Card{game.NewCard(game.Five, game.Spades)}}}); err != nil {
-		t.Fatalf("add() error = %v", err)
+	if _, _, _, err := lobby.play(
+		guestEvent.SessionID,
+		nil,
+		[]game.CompositionAddition{{CompositionIndex: 1, Cards: []game.Card{game.NewCard(game.Five, game.Spades)}}},
+		[]game.JokerReclaim{{CompositionIndex: 2, JokerIndex: 1, ReplacementCard: game.NewCard(game.Six, game.Hearts)}},
+	); err != nil {
+		t.Fatalf("play(addition+reclaim) error = %v", err)
 	}
 	if _, _, _, err := lobby.discard(guestEvent.SessionID, 1); err != nil {
 		t.Fatalf("discard() error = %v", err)

@@ -7,6 +7,7 @@ import {
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
 import {
   Card,
   CardAction,
@@ -25,6 +26,9 @@ export function GameBoardHand({
   sortableIds,
   activeDrag,
   hasDraftedCompositions,
+  canSubmitTablePlay,
+  onResetTablePlay,
+  onSubmitTablePlay,
 }: {
   hasGame: boolean;
   isMyTurn: boolean;
@@ -33,6 +37,9 @@ export function GameBoardHand({
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
   hasDraftedCompositions: boolean;
+  canSubmitTablePlay: boolean;
+  onResetTablePlay: () => void;
+  onSubmitTablePlay: () => void;
 }) {
   return (
     <Card>
@@ -40,7 +47,26 @@ export function GameBoardHand({
         <CardTitle>Hand</CardTitle>
         <CardDescription>{isMyTurn ? "Your turn" : `${turnPlayerName} is up`}</CardDescription>
         <CardAction>
-          <Badge variant="outline">{availableHandEntries.length} cards</Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">{availableHandEntries.length} cards</Badge>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onResetTablePlay}
+              disabled={!hasDraftedCompositions}
+            >
+              Reset
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={onSubmitTablePlay}
+              disabled={!canSubmitTablePlay}
+            >
+              Submit table play
+            </Button>
+          </div>
         </CardAction>
       </CardHeader>
       <CardContent>

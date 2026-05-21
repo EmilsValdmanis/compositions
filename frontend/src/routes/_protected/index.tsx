@@ -3,10 +3,7 @@ import { type DragEndEvent } from "@dnd-kit/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardHeader } from "#/components/game/game-board-header";
-import {
-  type CompositionAdditionRequest,
-  useGameWebSocket,
-} from "#/components/game-websocket-provider";
+import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { playerName } from "#/components/game/game-view-utils";
@@ -35,8 +32,7 @@ function Home() {
     chooseDealing,
     drawFromDeck,
     drawFromDiscard,
-    playCompositions,
-    addToCompositions,
+    playTable,
     discardCard,
   } = useGameWebSocket();
   const [roomCode, setRoomCode] = useState("");
@@ -154,15 +150,6 @@ function Home() {
     }
   }
 
-  function handleAddToCompositions(additions: CompositionAdditionRequest[]) {
-    if (!canDiscard) {
-      toast.error("Draw before adding to the table");
-      return;
-    }
-
-    addToCompositions(additions);
-  }
-
   return (
     <section className="mx-auto flex h-full w-full flex-1 flex-col gap-4">
       <GameBoardHeader
@@ -218,8 +205,7 @@ function Home() {
             onDragEnd={handleDragEnd}
             onDrawFromDeck={drawFromDeck}
             onDrawFromDiscard={drawFromDiscard}
-            onPlayCompositions={playCompositions}
-            onAddToCompositions={handleAddToCompositions}
+            onPlayTable={playTable}
           />
         </div>
       )}
