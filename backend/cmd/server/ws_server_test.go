@@ -1172,12 +1172,12 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 		t.Fatal("guest draw state MustUseDiscardDraw = false; want true")
 	}
 
-	mustSendEnvelope(t, guestConn, "play", playRequest{Compositions: []compositionRequest{{Type: "mystery"}}})
-	mustReadError(t, guestConn, "unknown composition type")
+	mustSendEnvelope(t, guestConn, "play", playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{}}}})
+	mustReadError(t, guestConn, game.ErrInvalidComposition.Error())
 	mustSendEnvelope(t, guestConn, "play", playRequest{Compositions: []compositionRequest{
-		{Type: "set", Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}},
-		{Type: "run", Cards: []cardRequest{cardReq(game.Ace, game.Spades), cardReq(game.Two, game.Spades), cardReq(game.Three, game.Spades), cardReq(game.Four, game.Spades)}},
-		{Type: "run", Cards: []cardRequest{cardReq(game.Five, game.Hearts), jokerReq(), cardReq(game.Seven, game.Hearts)}},
+		{Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}},
+		{Cards: []cardRequest{cardReq(game.Ace, game.Spades), cardReq(game.Two, game.Spades), cardReq(game.Three, game.Spades), cardReq(game.Four, game.Spades)}},
+		{Cards: []cardRequest{cardReq(game.Five, game.Hearts), jokerReq(), cardReq(game.Seven, game.Hearts)}},
 	}})
 	guestPlayState := mustReadActionBroadcast(t, guestConn, "play", guestConnected.PlayerID)
 	_ = mustReadActionBroadcast(t, hostConn, "play", guestConnected.PlayerID)
@@ -1245,9 +1245,9 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 		}
 		mustReadError(t, conn, "missing data")
 	}
-	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Type: "set", Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}}}})
+	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}}}})
 	mustReadError(t, conn, "join a room first")
-	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Type: "set", Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})
+	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})
 	mustReadError(t, conn, "invalid card rank")
 	mustSendEnvelope(t, conn, "add", addRequest{Additions: []compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{{Rank: int(game.Ace), Suit: 99}}}}})
 	mustReadError(t, conn, "invalid card suit")
@@ -1258,14 +1258,17 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	mustSendEnvelope(t, conn, "reclaim", reclaimRequest{CompositionIndex: 0, JokerIndex: 0, ReplacementCard: cardReq(game.Six, game.Hearts)})
 	mustReadError(t, conn, "join a room first")
 
-	if _, err := compositionsFromRequest([]compositionRequest{{Type: "set", Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}); err == nil || err.Error() != "invalid card rank" {
+	if _, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}); err == nil || err.Error() != "invalid card rank" {
 		t.Fatalf("compositionsFromRequest(invalid card) error = %v; want invalid card rank", err)
 	}
-	if _, err := compositionsFromRequest([]compositionRequest{{Type: "set", Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Hearts), cardReq(game.King, game.Clubs)}}}); !errors.Is(err, game.ErrInvalidComposition) {
+	if _, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Hearts), cardReq(game.King, game.Clubs)}}}); !errors.Is(err, game.ErrInvalidComposition) {
 		t.Fatalf("compositionsFromRequest(invalid set) error = %v; want ErrInvalidComposition", err)
 	}
-	if comps, err := compositionsFromRequest([]compositionRequest{{Type: "run", Cards: []cardRequest{cardReq(game.Five, game.Hearts), cardReq(game.Six, game.Hearts), jokerReq()}}}); err != nil || len(comps) != 1 {
+	if comps, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{cardReq(game.Five, game.Hearts), cardReq(game.Six, game.Hearts), jokerReq()}}}); err != nil || len(comps) != 1 {
 		t.Fatalf("compositionsFromRequest(valid run) = %v, %v; want one comp", comps, err)
+	}
+	if comps, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{jokerReq(), jokerReq(), jokerReq()}}}); err != nil || len(comps) != 1 || comps[0].Points() != 30 {
+		t.Fatalf("compositionsFromRequest(ambiguous jokers) = %v, %v; want one inferred set", comps, err)
 	}
 	if _, err := additionsFromRequest([]compositionAdditionRequest{{CompositionIndex: 0, Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}); err == nil || err.Error() != "invalid card rank" {
 		t.Fatalf("additionsFromRequest(invalid rank) error = %v; want invalid card rank", err)

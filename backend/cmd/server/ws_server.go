@@ -62,7 +62,6 @@ type cardRequest struct {
 }
 
 type compositionRequest struct {
-	Type  string        `json:"type"`
 	Cards []cardRequest `json:"cards"`
 }
 
@@ -648,22 +647,21 @@ func compositionsFromRequest(requests []compositionRequest) ([]*game.Composition
 			return nil, err
 		}
 
-		var comp *game.Composition
-		var ok bool
-		switch req.Type {
-		case "set":
-			comp, ok = game.NewSet(cards)
-		case "run":
-			comp, ok = game.NewRun(cards)
-		default:
-			return nil, errors.New("unknown composition type")
-		}
+		comp, ok := inferComposition(cards)
 		if !ok {
 			return nil, game.ErrInvalidComposition
 		}
 		comps = append(comps, comp)
 	}
 	return comps, nil
+}
+
+func inferComposition(cards []game.Card) (*game.Composition, bool) {
+	if comp, ok := game.NewSet(cards); ok {
+		return comp, true
+	}
+
+	return game.NewRun(cards)
 }
 
 func additionsFromRequest(requests []compositionAdditionRequest) ([]game.CompositionAddition, error) {

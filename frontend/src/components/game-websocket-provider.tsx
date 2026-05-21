@@ -20,7 +20,6 @@ export type CompositionSnapshot = {
 };
 
 export type CompositionDraftRequest = {
-  type: "set" | "run";
   cards: CardSnapshot[];
 };
 

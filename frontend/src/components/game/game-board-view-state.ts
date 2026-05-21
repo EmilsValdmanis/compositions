@@ -1,8 +1,5 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import {
-  type CardSnapshot,
-  type CompositionDraftRequest,
-} from "#/components/game-websocket-provider";
+import { type CardSnapshot } from "#/components/game-websocket-provider";
 
 export type HandEntry = {
   key: string;
@@ -16,7 +13,6 @@ export type ActiveDrag =
 
 export type DraftComposition = {
   id: string;
-  type: CompositionDraftRequest["type"];
   handKeys: string[];
 };
 

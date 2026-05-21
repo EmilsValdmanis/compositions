@@ -1,5 +1,4 @@
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
-import { type CompositionDraftRequest } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import {
   NEW_COMPOSITION_DROP_ID,
@@ -16,13 +15,11 @@ export function GameBoardBuilder({
   canSubmit,
   onReset,
   onSubmit,
-  onTypeChange,
 }: {
   compositions: DraftedCompositionView[];
   canSubmit: boolean;
   onReset: () => void;
   onSubmit: () => void;
-  onTypeChange: (draftId: string, type: CompositionDraftRequest["type"]) => void;
 }) {
   return (
     <Card size="sm">
@@ -48,8 +45,8 @@ export function GameBoardBuilder({
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
-          Drag cards from your hand into a composition lane. Choose set or run on each lane, then
-          submit and let the backend validate the play.
+          Drag cards from your hand into a composition lane, then submit and let the backend
+          identify and validate each play.
         </p>
         <div className="grid gap-2 xl:grid-cols-2">
           <GameBoardDraftDropZone
@@ -69,24 +66,6 @@ export function GameBoardBuilder({
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge variant="secondary">#{index + 1}</Badge>
                       <Badge variant="outline">{composition.entries.length} cards</Badge>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant={composition.type === "set" ? "default" : "outline"}
-                        onClick={() => onTypeChange(composition.id, "set")}
-                      >
-                        Set
-                      </Button>
-                      <Button
-                        type="button"
-                        size="xs"
-                        variant={composition.type === "run" ? "default" : "outline"}
-                        onClick={() => onTypeChange(composition.id, "run")}
-                      >
-                        Run
-                      </Button>
                     </div>
                   </div>
                   <GameBoardDraftDropZone

@@ -163,14 +163,6 @@ export function GameBoardView({
     setDraftCompositions([]);
   }
 
-  function updateDraftCompositionType(draftId: string, type: CompositionDraftRequest["type"]) {
-    setDraftCompositions((current) =>
-      current.map((composition) =>
-        composition.id === draftId ? { ...composition, type } : composition,
-      ),
-    );
-  }
-
   function submitDraftCompositions() {
     if (!canSubmitCompositions) {
       return;
@@ -178,7 +170,6 @@ export function GameBoardView({
 
     onPlayCompositions(
       draftedCompositionsView.map((composition) => ({
-        type: composition.type,
         cards: composition.entries.map((entry) => entry.card),
       })),
     );
@@ -270,7 +261,7 @@ export function GameBoardView({
 
       setDraftCompositions((current) => [
         ...removeHandKeyFromDrafts(current, draggedHandKey),
-        { id: compositionId, type: "set", handKeys: [draggedHandKey] },
+        { id: compositionId, handKeys: [draggedHandKey] },
       ]);
       return;
     }
@@ -341,7 +332,6 @@ export function GameBoardView({
             canSubmit={canSubmitCompositions}
             onReset={resetDraftCompositions}
             onSubmit={submitDraftCompositions}
-            onTypeChange={updateDraftCompositionType}
           />
           <GameBoardHand
             hasGame={Boolean(game)}
