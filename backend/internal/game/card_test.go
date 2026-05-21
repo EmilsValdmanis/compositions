@@ -34,15 +34,15 @@ func TestCardPoints(t *testing.T) {
 
 func TestCardsEqual(t *testing.T) {
 	tests := []struct {
-	a, b     Card
-	expected bool
-}{
-	{Card{rank: Ace, suit: Hearts}, Card{rank: Ace, suit: Hearts}, true},
-	{Card{rank: Ace, suit: Hearts}, Card{rank: Ace, suit: Diamonds}, false},
-	{Card{rank: Two, suit: Spades}, Card{rank: Three, suit: Spades}, false},
-	{Card{isJoker: true}, Card{isJoker: true}, true},
-	{Card{isJoker: true}, Card{rank: Ace, suit: Hearts}, false},
-}
+		a, b     Card
+		expected bool
+	}{
+		{Card{rank: Ace, suit: Hearts}, Card{rank: Ace, suit: Hearts}, true},
+		{Card{rank: Ace, suit: Hearts}, Card{rank: Ace, suit: Diamonds}, false},
+		{Card{rank: Two, suit: Spades}, Card{rank: Three, suit: Spades}, false},
+		{Card{isJoker: true}, Card{isJoker: true}, true},
+		{Card{isJoker: true}, Card{rank: Ace, suit: Hearts}, false},
+	}
 
 	for _, test := range tests {
 		eq := cardsEqual(test.a, test.b)
