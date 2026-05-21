@@ -7,15 +7,7 @@ import {
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
-import { Button } from "#/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
 type HandStatus = {
@@ -26,7 +18,6 @@ type HandStatus = {
 
 type TablePlayState = {
   hasDraftedCompositions: boolean;
-  canSubmitTablePlay: boolean;
 };
 
 type GameBoardHandProps = {
@@ -35,8 +26,6 @@ type GameBoardHandProps = {
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
   tablePlayState: TablePlayState;
-  onResetTablePlay: () => void;
-  onSubmitTablePlay: () => void;
 };
 
 export function GameBoardHand({
@@ -45,39 +34,18 @@ export function GameBoardHand({
   sortableIds,
   activeDrag,
   tablePlayState,
-  onResetTablePlay,
-  onSubmitTablePlay,
 }: GameBoardHandProps) {
   const { hasGame, isMyTurn, turnPlayerName } = status;
-  const { hasDraftedCompositions, canSubmitTablePlay } = tablePlayState;
+  const { hasDraftedCompositions } = tablePlayState;
 
   return (
     <Card className="min-h-0 overflow-hidden">
       <CardHeader>
         <CardTitle>Hand</CardTitle>
         <CardDescription>{isMyTurn ? "Your turn" : `${turnPlayerName} is up`}</CardDescription>
-        <CardAction>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{availableHandEntries.length} cards</Badge>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={onResetTablePlay}
-              disabled={!hasDraftedCompositions}
-            >
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={onSubmitTablePlay}
-              disabled={!canSubmitTablePlay}
-            >
-              Submit table play
-            </Button>
-          </div>
-        </CardAction>
+        <Badge variant="outline" className="w-fit">
+          {availableHandEntries.length} cards
+        </Badge>
       </CardHeader>
       <CardContent className="min-h-0">
         {hasGame ? (
@@ -87,20 +55,22 @@ export function GameBoardHand({
               className="min-h-0 rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="flex flex-wrap justify-center gap-2 pb-2">
-                  {availableHandEntries.map((entry) => (
-                    <GameCard
-                      key={entry.key}
-                      card={entry.card}
-                      size="hand"
-                      draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
-                      className={cn(
-                        activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
-                          ? "invisible"
-                          : undefined,
-                      )}
-                    />
-                  ))}
+                <div className="min-h-0 overflow-x-auto overflow-y-hidden pb-2">
+                  <div className="flex w-max min-w-full justify-center gap-2">
+                    {availableHandEntries.map((entry) => (
+                      <GameCard
+                        key={entry.key}
+                        card={entry.card}
+                        size="hand"
+                        draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
+                        className={cn(
+                          activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
+                            ? "invisible"
+                            : undefined,
+                        )}
+                      />
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="rounded-3xl border border-dashed border-border/70 p-6 text-sm text-muted-foreground">

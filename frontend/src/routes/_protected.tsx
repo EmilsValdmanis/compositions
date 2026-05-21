@@ -25,7 +25,7 @@ function ProtectedLayout() {
           </div>
         </div>
       </nav>
-      <main className="flex w-full flex-1 flex-col gap-4 p-4 md:p-6">
+      <main className="flex min-h-0 w-full flex-1 flex-col gap-4 p-4 md:p-6">
         <Outlet />
       </main>
     </>

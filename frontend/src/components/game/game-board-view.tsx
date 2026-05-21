@@ -42,6 +42,15 @@ import {
   removeHandKeyFromDrafts,
   tableCompositionIndexFromDropId,
 } from "#/components/game/game-board-view-state";
+import { Button } from "#/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "#/components/ui/dialog";
 
 type GameBoardTurnState = {
   canDrawDeck: boolean;
@@ -69,7 +78,7 @@ type GameBoardViewProps = {
   connectedPlayers: number;
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
-  onDragEnd: (event: DragEndEvent) => void;
+  onDiscardCard: (cardIndex: number) => void;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
   onPlayTable: (play: TablePlayRequest) => void;
@@ -132,6 +141,10 @@ function GameBoardLayout({
           tableCompositions={tableCompositions}
           newCompositions={newCompositions}
           canCompose={turnState.canDiscard}
+          hasDraftedCompositions={draftedCompositionsCount > 0}
+          canSubmitTablePlay={canSubmitTablePlay}
+          onResetTablePlay={onResetTablePlay}
+          onSubmitTablePlay={onSubmitTablePlay}
         />
 
         <div className="grid min-h-0 auto-rows-fr gap-4">
@@ -158,10 +171,7 @@ function GameBoardLayout({
           activeDrag={activeDrag}
           tablePlayState={{
             hasDraftedCompositions: draftedCompositionsCount > 0,
-            canSubmitTablePlay,
           }}
-          onResetTablePlay={onResetTablePlay}
-          onSubmitTablePlay={onSubmitTablePlay}
         />
       </div>
     </div>
@@ -177,10 +187,14 @@ type GameBoardController = {
   newCompositions: DraftedCompositionView[];
   draftedCompositionsCount: number;
   canSubmitTablePlay: boolean;
+  pendingDiscardIndex: number | null;
   handleDragStart: (event: DragStartEvent) => void;
   handleDragOver: (event: DragOverEvent) => void;
   handleDragEnd: (event: DragEndEvent) => void;
   handleDragCancel: () => void;
+  closePendingDiscardDialog: () => void;
+  discardWithoutSubmitting: () => void;
+  submitBeforeDiscard: () => void;
   resetDraftCompositions: () => void;
   submitDraftCompositions: () => void;
 };
@@ -191,7 +205,7 @@ function useGameBoardController({
   playerId,
   turnState,
   topDiscardCard,
-  onDragEnd,
+  onDiscardCard,
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayTable,
@@ -202,7 +216,7 @@ function useGameBoardController({
   | "playerId"
   | "turnState"
   | "topDiscardCard"
-  | "onDragEnd"
+  | "onDiscardCard"
   | "onDrawFromDeck"
   | "onDrawFromDiscard"
   | "onPlayTable"
@@ -221,6 +235,7 @@ function useGameBoardController({
     scopeKey: null,
     compositions: [],
   });
+  const [pendingDiscardIndex, setPendingDiscardIndex] = useState<number | null>(null);
   const nextDraftIdRef = useRef(0);
   const rawHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
   const handOrder =
@@ -335,6 +350,25 @@ function useGameBoardController({
     onPlayTable(buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView));
   }
 
+  function closePendingDiscardDialog() {
+    setPendingDiscardIndex(null);
+  }
+
+  function discardWithoutSubmitting() {
+    if (pendingDiscardIndex === null) {
+      return;
+    }
+
+    resetDraftCompositions();
+    onDiscardCard(pendingDiscardIndex);
+    closePendingDiscardDialog();
+  }
+
+  function submitBeforeDiscard() {
+    submitDraftCompositions();
+    closePendingDiscardDialog();
+  }
+
   function handleDragStart(event: DragStartEvent) {
     const drawSource = event.active.data.current?.drawSource;
 
@@ -417,7 +451,14 @@ function useGameBoardController({
         return;
       }
 
-      onDragEnd(event);
+      const cardIndex = event.active.data.current?.cardIndex;
+      if (typeof cardIndex === "number") {
+        if (draftedCompositionsView.length > 0) {
+          setPendingDiscardIndex(cardIndex);
+        } else {
+          onDiscardCard(cardIndex);
+        }
+      }
       return;
     }
 
@@ -509,10 +550,14 @@ function useGameBoardController({
     newCompositions,
     draftedCompositionsCount: draftedCompositionsView.length,
     canSubmitTablePlay,
+    pendingDiscardIndex,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
     handleDragCancel,
+    closePendingDiscardDialog,
+    discardWithoutSubmitting,
+    submitBeforeDiscard,
     resetDraftCompositions,
     submitDraftCompositions,
   };
@@ -526,7 +571,7 @@ export function GameBoardView({
   connectedPlayers,
   turnState,
   topDiscardCard,
-  onDragEnd,
+  onDiscardCard,
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayTable,
@@ -537,7 +582,7 @@ export function GameBoardView({
     playerId,
     turnState,
     topDiscardCard,
-    onDragEnd,
+    onDiscardCard,
     onDrawFromDeck,
     onDrawFromDiscard,
     onPlayTable,
@@ -545,53 +590,85 @@ export function GameBoardView({
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;
 
   return (
-    <DndContext
-      collisionDetection={closestCenter}
-      onDragStart={controller.handleDragStart}
-      onDragOver={controller.handleDragOver}
-      onDragEnd={controller.handleDragEnd}
-      onDragCancel={controller.handleDragCancel}
-    >
-      <GameBoardLayout
-        game={game}
-        tableCompositions={controller.tableCompositions}
-        newCompositions={controller.newCompositions}
-        turnState={turnState}
-        topDiscardCard={topDiscardCard}
-        players={players}
-        connectedPlayers={connectedPlayers}
-        availableHandEntries={controller.availableHandEntries}
-        sortableIds={controller.sortableIds}
-        activeDrag={controller.activeDrag}
-        draftedCompositionsCount={controller.draftedCompositionsCount}
-        canSubmitTablePlay={controller.canSubmitTablePlay}
-        onResetTablePlay={controller.resetDraftCompositions}
-        onSubmitTablePlay={controller.submitDraftCompositions}
-      />
-      <DragOverlay dropAnimation={null}>
-        {activeDraw ? (
-          <GameCard
-            card={
-              (activeDraw.revealedHandKey
-                ? controller.availableHandEntries.find(
-                    (entry) => entry.key === activeDraw.revealedHandKey,
-                  )?.card
-                : null) ??
-              activeDraw.card ??
-              FACE_DOWN_CARD
-            }
-            faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
-            size="hand"
-            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
-          />
-        ) : controller.activeEntry ? (
-          <GameCard
-            card={controller.activeEntry.card}
-            size="hand"
-            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
-          />
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+    <>
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragStart={controller.handleDragStart}
+        onDragOver={controller.handleDragOver}
+        onDragEnd={controller.handleDragEnd}
+        onDragCancel={controller.handleDragCancel}
+      >
+        <GameBoardLayout
+          game={game}
+          tableCompositions={controller.tableCompositions}
+          newCompositions={controller.newCompositions}
+          turnState={turnState}
+          topDiscardCard={topDiscardCard}
+          players={players}
+          connectedPlayers={connectedPlayers}
+          availableHandEntries={controller.availableHandEntries}
+          sortableIds={controller.sortableIds}
+          activeDrag={controller.activeDrag}
+          draftedCompositionsCount={controller.draftedCompositionsCount}
+          canSubmitTablePlay={controller.canSubmitTablePlay}
+          onResetTablePlay={controller.resetDraftCompositions}
+          onSubmitTablePlay={controller.submitDraftCompositions}
+        />
+        <DragOverlay dropAnimation={null}>
+          {activeDraw ? (
+            <GameCard
+              card={
+                (activeDraw.revealedHandKey
+                  ? controller.availableHandEntries.find(
+                      (entry) => entry.key === activeDraw.revealedHandKey,
+                    )?.card
+                  : null) ??
+                activeDraw.card ??
+                FACE_DOWN_CARD
+              }
+              faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
+              size="hand"
+              className="rotate-3 shadow-xl ring-1 ring-foreground/10"
+            />
+          ) : controller.activeEntry ? (
+            <GameCard
+              card={controller.activeEntry.card}
+              size="hand"
+              className="rotate-3 shadow-xl ring-1 ring-foreground/10"
+            />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      <Dialog
+        open={controller.pendingDiscardIndex !== null}
+        onOpenChange={(open) => !open && controller.closePendingDiscardDialog()}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit staged cards first?</DialogTitle>
+            <DialogDescription>
+              You have cards staged in new compositions or table additions. Submit them now, or
+              discard anyway and clear those staged cards.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={controller.closePendingDiscardDialog}>
+              Keep editing
+            </Button>
+            <Button type="button" variant="ghost" onClick={controller.discardWithoutSubmitting}>
+              Discard anyway
+            </Button>
+            <Button
+              type="button"
+              onClick={controller.submitBeforeDiscard}
+              disabled={!controller.canSubmitTablePlay}
+            >
+              Submit staged cards
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

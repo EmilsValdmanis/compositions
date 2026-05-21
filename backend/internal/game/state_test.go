@@ -795,20 +795,35 @@ func TestGameStateDrawFromDeckRecyclesDiscardPileWhenDrawPileIsEmpty(t *testing.
 	if drawn := currentPlayer.hand.cards[len(currentPlayer.hand.cards)-1]; drawn.rank != Ace || drawn.suit != Hearts {
 		t.Fatalf("drawn card = %+v; want Ace of Hearts", drawn)
 	}
-	if len(state.drawPile.cards) != 2 {
-		t.Fatalf("len(state.drawPile.cards) = %d; want 2", len(state.drawPile.cards))
+	if len(state.drawPile.cards) != 1 {
+		t.Fatalf("len(state.drawPile.cards) = %d; want 1", len(state.drawPile.cards))
 	}
 	if top := state.drawPile.cards[0]; top.rank != Five || top.suit != Clubs {
 		t.Fatalf("drawPile.cards[0] = %+v; want Five of Clubs", top)
 	}
-	if next := state.drawPile.cards[1]; next.rank != Queen || next.suit != Spades {
-		t.Fatalf("drawPile.cards[1] = %+v; want Queen of Spades", next)
+	if len(state.discardPile.cards) != 1 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
 	}
-	if len(state.discardPile.cards) != 0 {
-		t.Fatalf("len(state.discardPile.cards) = %d; want 0", len(state.discardPile.cards))
+	if top := state.discardPile.cards[0]; top.rank != Queen || top.suit != Spades {
+		t.Fatalf("discardPile.cards[0] = %+v; want Queen of Spades", top)
 	}
 	if !state.turn.hasDrawn {
 		t.Fatal("state.turn.hasDrawn = false; want true")
+	}
+}
+
+func TestGameStateDrawFromDeckDoesNotRecycleLastDiscardCard(t *testing.T) {
+	state := newTurnTestState()
+	state.drawPile = &CardPile{cards: []Card{}}
+	state.discardPile = &CardPile{cards: []Card{{rank: Queen, suit: Spades}}}
+
+	err := state.DrawFromDeck()
+
+	if !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
+		t.Fatalf("DrawFromDeck() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)
+	}
+	if len(state.discardPile.cards) != 1 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
 	}
 }
 
@@ -1901,17 +1916,17 @@ func TestGameStateDiscardFromHandRecyclesDiscardPileAtTurnStartWhenDrawPileIsEmp
 	if state.turn.hasDrawn {
 		t.Fatal("state.turn.hasDrawn = true; want false")
 	}
-	if len(state.discardPile.cards) != 0 {
-		t.Fatalf("len(state.discardPile.cards) = %d; want 0", len(state.discardPile.cards))
+	if len(state.discardPile.cards) != 1 {
+		t.Fatalf("len(state.discardPile.cards) = %d; want 1", len(state.discardPile.cards))
 	}
-	if len(state.drawPile.cards) != 2 {
-		t.Fatalf("len(state.drawPile.cards) = %d; want 2", len(state.drawPile.cards))
+	if top := state.discardPile.cards[0]; top.rank != King || top.suit != Spades {
+		t.Fatalf("discardPile.cards[0] = %+v; want King of Spades", top)
+	}
+	if len(state.drawPile.cards) != 1 {
+		t.Fatalf("len(state.drawPile.cards) = %d; want 1", len(state.drawPile.cards))
 	}
 	if top := state.drawPile.cards[0]; top.rank != Four || top.suit != Diamonds {
 		t.Fatalf("drawPile.cards[0] = %+v; want Four of Diamonds", top)
-	}
-	if next := state.drawPile.cards[1]; next.rank != King || next.suit != Spades {
-		t.Fatalf("drawPile.cards[1] = %+v; want King of Spades", next)
 	}
 }
 

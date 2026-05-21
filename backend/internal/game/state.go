@@ -558,17 +558,17 @@ func (gs *GameState) resetDiscardDrawState() {
 }
 
 func (gs *GameState) recycleDiscardIntoDrawPileIfNeeded() {
-	if len(gs.drawPile.cards) != 0 || len(gs.discardPile.cards) == 0 {
+	if len(gs.drawPile.cards) != 0 || len(gs.discardPile.cards) <= 1 {
 		return
 	}
 
-	recycled := make([]Card, len(gs.discardPile.cards))
-	for i := range gs.discardPile.cards {
+	recycled := make([]Card, len(gs.discardPile.cards)-1)
+	for i := range recycled {
 		recycled[i] = gs.discardPile.cards[len(gs.discardPile.cards)-1-i]
 	}
 
 	gs.drawPile.cards = recycled
-	gs.discardPile.cards = gs.discardPile.cards[:0]
+	gs.discardPile.cards = gs.discardPile.cards[:1]
 }
 
 func (gs *GameState) canTakeDiscardNow() bool {

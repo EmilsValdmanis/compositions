@@ -4,6 +4,7 @@ import {
   buildHandEntries,
   buildTablePlayRequest,
   inferPlannedJokerReclaims,
+  insertHandKeyIntoDraft,
 } from "#/components/game/game-board-view-state";
 
 describe("applyHandEntryOrder", () => {
@@ -104,5 +105,30 @@ describe("buildTablePlayRequest", () => {
         cards: [{ rank: 5, suit: 0 }],
       },
     ]);
+  });
+});
+
+describe("insertHandKeyIntoDraft", () => {
+  it("reorders cards within the same draft composition", () => {
+    const entries = buildHandEntries([
+      { rank: 1, suit: 1 },
+      { rank: 2, suit: 1 },
+      { rank: 3, suit: 1 },
+    ]);
+
+    const reordered = insertHandKeyIntoDraft(
+      [
+        {
+          id: "draft-1",
+          tableIndex: null,
+          handKeys: entries.map((entry) => entry.key),
+        },
+      ],
+      entries[0]!.key,
+      "draft-1",
+      entries[2]!.key,
+    );
+
+    expect(reordered[0]?.handKeys).toEqual([entries[1]!.key, entries[2]!.key, entries[0]!.key]);
   });
 });

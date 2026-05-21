@@ -250,6 +250,36 @@ export function insertHandKeyIntoDraft(
   targetCompositionId: string,
   overHandKey?: string,
 ) {
+  const sourceComposition = compositions.find((composition) =>
+    composition.handKeys.includes(handKey),
+  );
+  const targetComposition = compositions.find(
+    (composition) => composition.id === targetCompositionId,
+  );
+
+  if (
+    sourceComposition &&
+    targetComposition &&
+    sourceComposition.id === targetComposition.id &&
+    overHandKey
+  ) {
+    const oldIndex = sourceComposition.handKeys.indexOf(handKey);
+    const newIndex = sourceComposition.handKeys.indexOf(overHandKey);
+
+    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) {
+      return compositions;
+    }
+
+    return compositions.map((composition) =>
+      composition.id === sourceComposition.id
+        ? {
+            ...composition,
+            handKeys: arrayMove(composition.handKeys, oldIndex, newIndex),
+          }
+        : composition,
+    );
+  }
+
   const next = removeHandKeyFromDrafts(compositions, handKey);
   const targetIndex = next.findIndex((composition) => composition.id === targetCompositionId);
 
