@@ -552,12 +552,12 @@ export function GameBoardView({
       onDragEnd={controller.handleDragEnd}
       onDragCancel={controller.handleDragCancel}
     >
-        <GameBoardLayout
-          game={game}
-          tableCompositions={controller.tableCompositions}
-          newCompositions={controller.newCompositions}
-          turnState={turnState}
-          topDiscardCard={topDiscardCard}
+      <GameBoardLayout
+        game={game}
+        tableCompositions={controller.tableCompositions}
+        newCompositions={controller.newCompositions}
+        turnState={turnState}
+        topDiscardCard={topDiscardCard}
         players={players}
         connectedPlayers={connectedPlayers}
         availableHandEntries={controller.availableHandEntries}

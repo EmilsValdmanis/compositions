@@ -81,7 +81,9 @@ export function CompositionRow({
               <GameCard
                 card={card}
                 size="compact"
-                className={cn(reclaim ? "ring-2 ring-primary/60 ring-offset-1 ring-offset-card" : null)}
+                className={cn(
+                  reclaim ? "ring-2 ring-primary/60 ring-offset-1 ring-offset-card" : null,
+                )}
               />
               {reclaim ? (
                 <span className="text-center text-[0.6rem] leading-tight text-primary">

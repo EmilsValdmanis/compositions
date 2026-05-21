@@ -26,7 +26,10 @@ describe("applyHandEntryOrder", () => {
 
 describe("inferPlannedJokerReclaims", () => {
   it("treats matching cards as joker reclaims instead of additions", () => {
-    const entries = buildHandEntries([{ rank: 8, suit: 3 }, { rank: 5, suit: 0 }]);
+    const entries = buildHandEntries([
+      { rank: 8, suit: 3 },
+      { rank: 5, suit: 0 },
+    ]);
 
     const result = inferPlannedJokerReclaims(
       {
@@ -55,7 +58,10 @@ describe("inferPlannedJokerReclaims", () => {
 
 describe("buildTablePlayRequest", () => {
   it("sends reclaims separately from additions", () => {
-    const entries = buildHandEntries([{ rank: 8, suit: 3 }, { rank: 5, suit: 0 }]);
+    const entries = buildHandEntries([
+      { rank: 8, suit: 3 },
+      { rank: 5, suit: 0 },
+    ]);
 
     const request = buildTablePlayRequest(
       [
