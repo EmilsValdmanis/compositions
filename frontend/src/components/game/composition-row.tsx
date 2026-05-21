@@ -12,6 +12,7 @@ import { Badge } from "#/components/ui/badge";
 import { cn } from "#/lib/utils";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
+const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
 
 function compositionCardKey(card: CompositionSnapshot["cards"][number]) {
   if (card.isJoker) {
@@ -39,7 +40,7 @@ export function CompositionRow({
   composition,
   index,
   stagedEntries = EMPTY_STAGED_ENTRIES,
-  reclaims = [],
+  reclaims = EMPTY_RECLAIMS,
 }: {
   composition: CompositionSnapshot;
   index: number;
