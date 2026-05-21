@@ -612,7 +612,6 @@ func TestCompositionIsCompleteSet(t *testing.T) {
 	}
 }
 
-
 func TestCompositionIsNotCompleteSetWithJoker(t *testing.T) {
 	comp, ok := NewSet([]Card{
 		card(Ace, Hearts),
@@ -660,7 +659,6 @@ func TestCompositionIsCompleteRun(t *testing.T) {
 		t.Fatal("isCompleteSet() = true; want false")
 	}
 }
-
 
 func TestCompositionIsNotCompleteRunWithJoker(t *testing.T) {
 	comp, ok := NewRun([]Card{

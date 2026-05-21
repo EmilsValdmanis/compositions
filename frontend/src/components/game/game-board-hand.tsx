@@ -18,29 +18,39 @@ import {
 } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
-export function GameBoardHand({
-  hasGame,
-  isMyTurn,
-  turnPlayerName,
-  availableHandEntries,
-  sortableIds,
-  activeDrag,
-  hasDraftedCompositions,
-  canSubmitTablePlay,
-  onResetTablePlay,
-  onSubmitTablePlay,
-}: {
+type HandStatus = {
   hasGame: boolean;
   isMyTurn: boolean;
   turnPlayerName: string;
+};
+
+type TablePlayState = {
+  hasDraftedCompositions: boolean;
+  canSubmitTablePlay: boolean;
+};
+
+type GameBoardHandProps = {
+  status: HandStatus;
   availableHandEntries: HandEntry[];
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
-  hasDraftedCompositions: boolean;
-  canSubmitTablePlay: boolean;
+  tablePlayState: TablePlayState;
   onResetTablePlay: () => void;
   onSubmitTablePlay: () => void;
-}) {
+};
+
+export function GameBoardHand({
+  status,
+  availableHandEntries,
+  sortableIds,
+  activeDrag,
+  tablePlayState,
+  onResetTablePlay,
+  onSubmitTablePlay,
+}: GameBoardHandProps) {
+  const { hasGame, isMyTurn, turnPlayerName } = status;
+  const { hasDraftedCompositions, canSubmitTablePlay } = tablePlayState;
+
   return (
     <Card>
       <CardHeader>

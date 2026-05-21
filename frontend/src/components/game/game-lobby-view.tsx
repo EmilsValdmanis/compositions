@@ -19,43 +19,28 @@ import { Input } from "#/components/ui/input";
 
 type AsyncAction = () => Promise<void> | void;
 
-export function GameLobbyView({
-  room,
-  game,
-  players,
-  roomCode,
-  playerId,
-  sessionId,
-  canCreateRoom,
-  canJoinRoom,
-  canLeaveRoom,
-  canStartGame,
-  pendingDealChoice,
-  dealChooserName,
-  isDealChooser,
-  onRoomCodeChange,
-  onCreateRoom,
-  onJoinRoom,
-  onStartGame,
-  onChooseDealing,
-  onLeaveRoom,
-  onCopyRoomCode,
-  onCopyRoomLink,
-  onShareRoom,
-}: {
+type RoomActions = {
+  canCreateRoom: boolean;
+  canJoinRoom: boolean;
+  canLeaveRoom: boolean;
+  canStartGame: boolean;
+};
+
+type DealChoiceState = {
+  pendingDealChoice: PendingDealChoiceSnapshot | null;
+  dealChooserName: string | null;
+  isDealChooser: boolean;
+};
+
+type GameLobbyViewProps = {
   room: RoomSnapshot | null;
   game: GameSnapshot | null;
   players: PlayerSnapshot[];
   roomCode: string;
   playerId: string;
   sessionId: string;
-  canCreateRoom: boolean;
-  canJoinRoom: boolean;
-  canLeaveRoom: boolean;
-  canStartGame: boolean;
-  pendingDealChoice: PendingDealChoiceSnapshot | null;
-  dealChooserName: string | null;
-  isDealChooser: boolean;
+  roomActions: RoomActions;
+  dealChoice: DealChoiceState;
   onRoomCodeChange: (roomCode: string) => void;
   onCreateRoom: () => void;
   onJoinRoom: (roomCode: string) => void;
@@ -65,7 +50,30 @@ export function GameLobbyView({
   onCopyRoomCode: AsyncAction;
   onCopyRoomLink: AsyncAction;
   onShareRoom: AsyncAction;
-}) {
+};
+
+export function GameLobbyView({
+  room,
+  game,
+  players,
+  roomCode,
+  playerId,
+  sessionId,
+  roomActions,
+  dealChoice,
+  onRoomCodeChange,
+  onCreateRoom,
+  onJoinRoom,
+  onStartGame,
+  onChooseDealing,
+  onLeaveRoom,
+  onCopyRoomCode,
+  onCopyRoomLink,
+  onShareRoom,
+}: GameLobbyViewProps) {
+  const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame } = roomActions;
+  const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
       <Card>

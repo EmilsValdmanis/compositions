@@ -66,7 +66,7 @@ type compositionRequest struct {
 }
 
 type playRequest struct {
-	Compositions []compositionRequest `json:"compositions"`
+	Compositions []compositionRequest         `json:"compositions"`
 	Additions    []compositionAdditionRequest `json:"additions,omitempty"`
 	Reclaims     []reclaimRequest             `json:"reclaims,omitempty"`
 }

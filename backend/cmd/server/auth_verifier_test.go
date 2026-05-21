@@ -85,17 +85,17 @@ func TestBetterAuthSessionVerifierVerifySession(t *testing.T) {
 		}
 
 		_, err := verifier.VerifySession(context.Background(), " token-123 ")
-			if err == nil || !strings.Contains(err.Error(), "network boom") {
-				t.Fatalf("VerifySession() error = %v; want wrapped network boom", err)
+		if err == nil || !strings.Contains(err.Error(), "network boom") {
+			t.Fatalf("VerifySession() error = %v; want wrapped network boom", err)
 		}
 	})
 
 	testCases := []struct {
-		name        string
-		statusCode  int
-		body        string
-		wantErr     string
-		wantUser    authenticatedUser
+		name       string
+		statusCode int
+		body       string
+		wantErr    string
+		wantUser   authenticatedUser
 	}{
 		{
 			name:       "unauthorized response",

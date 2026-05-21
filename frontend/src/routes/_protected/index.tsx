@@ -20,7 +20,7 @@ function GameRouteLoadingScreen() {
         <Spinner className="size-8" />
         <div className="space-y-1">
           <p className="text-sm font-medium">Reconnecting to your game</p>
-          <p className="text-muted-foreground text-sm">Loading the latest room state...</p>
+          <p className="text-muted-foreground text-sm">Loading the latest room state…</p>
         </div>
       </div>
     </section>
@@ -203,13 +203,12 @@ function HydratedHome() {
             roomCode={roomCode}
             playerId={state.playerId}
             sessionId={state.sessionId}
-            canCreateRoom={canCreateRoom}
-            canJoinRoom={canJoinRoom}
-            canLeaveRoom={canLeaveRoom}
-            canStartGame={canStartGame}
-            pendingDealChoice={pendingDealChoice}
-            dealChooserName={dealChooser?.name ?? null}
-            isDealChooser={Boolean(isDealChooser)}
+            roomActions={{ canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame }}
+            dealChoice={{
+              pendingDealChoice,
+              dealChooserName: dealChooser?.name ?? null,
+              isDealChooser: Boolean(isDealChooser),
+            }}
             onRoomCodeChange={setRoomCode}
             onCreateRoom={createRoom}
             onJoinRoom={joinRoom}
@@ -229,10 +228,13 @@ function HydratedHome() {
             playerId={state.playerId}
             players={players}
             connectedPlayers={connectedPlayers}
-            canDrawDeck={canDrawDeck}
-            canDrawDiscard={canDrawDiscard}
-            canDiscard={canDiscard}
-            isMyTurn={isMyTurn}
+            turnState={{
+              canDrawDeck,
+              canDrawDiscard,
+              canDiscard,
+              isMyTurn,
+              turnPlayerName,
+            }}
             topDiscardCard={topDiscardCard}
             onDragEnd={handleDragEnd}
             onDrawFromDeck={drawFromDeck}

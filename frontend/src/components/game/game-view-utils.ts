@@ -11,11 +11,17 @@ export function formatLabel(value: string | number | null | undefined) {
   const label =
     typeof value === "number" ? (gamePhaseLabels[value] ?? String(value)) : (value ?? "");
 
-  return label
-    .split("_")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  const words: string[] = [];
+
+  for (const part of label.split("_")) {
+    if (!part) {
+      continue;
+    }
+
+    words.push(part.charAt(0).toUpperCase() + part.slice(1));
+  }
+
+  return words.join(" ");
 }
 
 export function compactId(value: string) {

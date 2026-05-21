@@ -3,14 +3,15 @@ import { Button } from "#/components/ui/button";
 import { Login01Icon } from "@hugeicons/core-free-icons";
 import { authClient } from "#/lib/auth-client";
 import { Spinner } from "#/components/ui/spinner";
-import { useState } from "react";
+import { useTransition } from "react";
 
 export default function SignInButton() {
-  const [isPending, setIsPending] = useState<boolean>(false);
+  const [isPending, startTransition] = useTransition();
 
-  const handleGoogleSignIn = async () => {
-    setIsPending(true);
-    await authClient.signIn.social({ provider: "google" });
+  const handleGoogleSignIn = () => {
+    startTransition(() => {
+      void authClient.signIn.social({ provider: "google" });
+    });
   };
 
   return (
