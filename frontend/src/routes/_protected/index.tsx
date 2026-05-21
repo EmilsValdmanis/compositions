@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { type DragEndEvent } from "@dnd-kit/core";
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardHeader } from "#/components/game/game-board-header";
@@ -160,20 +159,13 @@ function HydratedHome() {
     }
   }
 
-  function handleDragEnd(event: DragEndEvent) {
-    if (event.over?.id !== "discard-pile") {
-      return;
-    }
-
+  function handleDiscardCard(cardIndex: number) {
     if (!canDiscard) {
       toast.error("Draw before discarding");
       return;
     }
 
-    const cardIndex = event.active.data.current?.cardIndex;
-    if (typeof cardIndex === "number") {
-      discardCard(cardIndex);
-    }
+    discardCard(cardIndex);
   }
 
   if (isBootstrappingConnection) {
@@ -236,7 +228,7 @@ function HydratedHome() {
               turnPlayerName,
             }}
             topDiscardCard={topDiscardCard}
-            onDragEnd={handleDragEnd}
+            onDiscardCard={handleDiscardCard}
             onDrawFromDeck={drawFromDeck}
             onDrawFromDiscard={drawFromDiscard}
             onPlayTable={playTable}

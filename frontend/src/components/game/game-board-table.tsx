@@ -10,10 +10,11 @@ import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
 import {
   Card,
-  CardContent,
   CardAction,
+  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -24,11 +25,19 @@ export function GameBoardTable({
   tableCompositions,
   newCompositions,
   canCompose,
+  hasDraftedCompositions,
+  canSubmitTablePlay,
+  onResetTablePlay,
+  onSubmitTablePlay,
 }: {
   game: GameSnapshot | null;
   tableCompositions: TableCompositionView[];
   newCompositions: DraftedCompositionView[];
   canCompose: boolean;
+  hasDraftedCompositions: boolean;
+  canSubmitTablePlay: boolean;
+  onResetTablePlay: () => void;
+  onSubmitTablePlay: () => void;
 }) {
   const tablePoints = (game?.activeCompositions ?? []).reduce(
     (total, composition) => total + composition.points,
@@ -108,6 +117,37 @@ export function GameBoardTable({
                 ? "Additions to table compositions are shown above."
                 : "Waiting for a composition to be played."}
           </GameBoardDraftDropZone>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border/70 bg-muted/15 p-3">
+          <div className="space-y-1 text-sm">
+            <div className="font-medium">New compositions</div>
+            <div className="text-muted-foreground">
+              {hasDraftedCompositions
+                ? "Review your staged cards, then submit them to the table."
+                : "Build a new composition or add cards to one already on the table."}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={onResetTablePlay}
+              disabled={!hasDraftedCompositions}
+            >
+              Reset
+            </Button>
+            <Button
+              type="button"
+              size="default"
+              onClick={onSubmitTablePlay}
+              disabled={!canSubmitTablePlay}
+              className="shadow-sm"
+            >
+              Submit table play
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
