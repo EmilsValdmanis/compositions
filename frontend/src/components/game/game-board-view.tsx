@@ -8,14 +8,12 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from "@dnd-kit/sortable";
-
 import {
   type CardSnapshot,
   type GameSnapshot,
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
 import { CompositionRow } from "#/components/game/composition-row";
-import { DebugJsonView } from "#/components/game/debug-json-view";
 import { DiscardDropZone } from "#/components/game/discard-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { formatLabel, playerName } from "#/components/game/game-view-utils";
@@ -85,7 +83,6 @@ function moveHandEntry(current: HandEntry[], handKey: string, overHandKey: strin
 }
 
 export function GameBoardView({
-  debugValue,
   game,
   phase,
   players,
@@ -99,7 +96,6 @@ export function GameBoardView({
   onDrawFromDeck,
   onDrawFromDiscard,
 }: {
-  debugValue: unknown;
   game: GameSnapshot | null;
   phase: string;
   players: PlayerSnapshot[];
@@ -230,9 +226,7 @@ export function GameBoardView({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="grid items-stretch gap-4 xl:grid-cols-[22rem_minmax(0,1fr)_22rem]">
-        <DebugJsonView value={debugValue} />
-
+      <div className="flex gap-4">
         <div className="grid gap-4">
           <Card>
             <CardHeader>
@@ -265,7 +259,7 @@ export function GameBoardView({
             <CardContent>
               {game ? (
                 <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
-                  <div className="flex min-h-36 gap-3 overflow-x-auto pb-2">
+                  <div className="flex min-h-36 gap-3 overflow-auto pb-2">
                     {handEntries.map((entry) => (
                       <GameCard
                         key={entry.key}

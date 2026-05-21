@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { type DragEndEvent } from "@dnd-kit/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
@@ -68,16 +67,6 @@ function Home() {
   const topDiscardCard = state.game?.discardPile[0] ?? null;
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
-  const debugValue = {
-    connectionStatus: state.connectionStatus,
-    sessionId: state.sessionId,
-    playerId: state.playerId,
-    room: state.room,
-    game: state.game,
-    lastActionResult: state.lastActionResult,
-    lastError: state.lastError,
-    lastEvent: state.lastEvent,
-  };
 
   useEffect(() => {
     const urlRoomCode = new URLSearchParams(window.location.search).get("room");
@@ -229,7 +218,6 @@ function Home() {
       ) : (
         <div key="game">
           <GameBoardView
-            debugValue={debugValue}
             game={state.game}
             phase={phase}
             players={players}
