@@ -75,9 +75,13 @@ function AutoConnectWebSocket() {
   return null;
 }
 
-function RootDocument({ children }: { children: React.ReactNode }) {
+function ThemeAwareToaster() {
   const { theme } = useTheme();
 
+  return <Toaster richColors theme={theme} />;
+}
+
+function RootDocument({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     InjectVercelAnalytics();
     InjectVercelSpeedInsights();
@@ -98,7 +102,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
               {children}
               <AutoConnectWebSocket />
             </GameWebSocketProvider>
-            <Toaster richColors theme={theme} />
+            <ThemeAwareToaster />
           </ThemeProvider>
           <TanStackDevtools
             config={{
