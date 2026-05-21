@@ -25,7 +25,7 @@ func newComposition(cards []Card, variant compositionVariant, requireOrderedRun 
 		return nil, false
 	}
 	if c.variant == run {
-		if requireOrderedRun && !runCardsAreOrdered(c.cards) {
+		if requireOrderedRun && !runCardsAreOrdered(c.cards) && !runCardsAreReverseOrdered(c.cards) {
 			return nil, false
 		}
 		c.normalizeRunCards()
@@ -669,6 +669,12 @@ func bestRunOrder(cards []Card) ([]Card, map[int]Card, bool, bool) {
 func runCardsAreOrdered(cards []Card) bool {
 	_, _, ordered, ok := bestRunOrder(cards)
 	return ok && ordered
+}
+
+func runCardsAreReverseOrdered(cards []Card) bool {
+	reversed := slices.Clone(cards)
+	slices.Reverse(reversed)
+	return runCardsAreOrdered(reversed)
 }
 
 func (c *Composition) JokerRepresentation(cardIndex int) (Card, bool) {
