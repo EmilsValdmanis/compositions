@@ -1,6 +1,9 @@
 package game
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func card(rank Rank, suit Suit) Card {
 	return Card{rank: rank, suit: suit}
@@ -278,6 +281,18 @@ func TestNewRun_ValidSimpleSequence(t *testing.T) {
 	}
 }
 
+func TestNewRun_RejectsOutOfOrderSequence(t *testing.T) {
+	cards := []Card{
+		card(Seven, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+	}
+
+	if _, ok := NewRun(cards); ok {
+		t.Fatal("NewRun() returned true; want false for unordered run")
+	}
+}
+
 func TestNewRun_ValidLongerSequence(t *testing.T) {
 	cards := []Card{
 		card(Three, Spades),
@@ -423,6 +438,32 @@ func TestNewRun_AssignsRepresentationsForLongFaceRunWithMultipleJokers(t *testin
 
 	expectJokerRepresentation(t, comp, 2, card(Jack, Diamonds))
 	expectJokerRepresentation(t, comp, 4, card(King, Diamonds))
+}
+
+func TestNewComposition_NormalizesRunOrderForInternalMutations(t *testing.T) {
+	comp, ok := NewComposition([]Card{
+		card(Eight, Hearts),
+		joker(),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Seven, Hearts),
+	}, run)
+	if !ok {
+		t.Fatal("NewComposition() returned false; want true")
+	}
+
+	got := comp.cards
+	want := []Card{
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		joker(),
+	}
+	if !slices.EqualFunc(got, want, sameCard) {
+		t.Fatalf("normalized run = %#v; want %#v", got, want)
+	}
+	expectJokerRepresentation(t, comp, 4, card(Jack, Hearts))
 }
 
 func TestNewRun_ValidWithMultipleJokers(t *testing.T) {
@@ -1146,6 +1187,86 @@ func TestTryFitSequenceRejectsInvalidAllJokerLengthsAndOverflow(t *testing.T) {
 	}
 	if replacements, ok := tryFitSequence([]Card{card(Ace, Hearts), card(Ace, Hearts)}, 13, false); ok || replacements != nil {
 		t.Fatalf("tryFitSequence() = (%v, %v); want (nil, false)", replacements, ok)
+	}
+}
+
+func TestSequenceRanksForCardsRejectsJokerInput(t *testing.T) {
+	if ranks, ok := sequenceRanksForCards([]Card{card(Five, Hearts), joker()}, false); ok || ranks != nil {
+		t.Fatalf("sequenceRanksForCards() = (%v, %v); want (nil, false)", ranks, ok)
+	}
+}
+
+func TestTryFitSequenceRanksRejectsJokerInput(t *testing.T) {
+	if ranks, ok := tryFitSequenceRanks([]Card{card(Five, Hearts), joker()}, 0, false); ok || ranks != nil {
+		t.Fatalf("tryFitSequenceRanks() = (%v, %v); want (nil, false)", ranks, ok)
+	}
+}
+
+func TestBestRunOrder_AllJokersAndInvalidRun(t *testing.T) {
+	ordered, jokerRepresentations, matchesInput, ok := bestRunOrder([]Card{joker(), joker(), joker()})
+	if !ok {
+		t.Fatal("bestRunOrder(all jokers) ok = false; want true")
+	}
+	if !matchesInput {
+		t.Fatal("bestRunOrder(all jokers) matchesInput = false; want true")
+	}
+	if len(ordered) != 3 || len(jokerRepresentations) != 3 {
+		t.Fatalf("bestRunOrder(all jokers) = (%#v, %#v); want 3 ordered cards and representations", ordered, jokerRepresentations)
+	}
+	if jokerRepresentations[0].rank != Ace || jokerRepresentations[1].rank != Two || jokerRepresentations[2].rank != Three {
+		t.Fatalf("jokerRepresentations = %#v; want Ace, Two, Three", jokerRepresentations)
+	}
+
+	if ordered, jokerRepresentations, matchesInput, ok := bestRunOrder([]Card{card(King, Hearts), card(Ace, Hearts), card(Two, Hearts)}); ok || ordered != nil || jokerRepresentations != nil || matchesInput {
+		t.Fatalf("bestRunOrder(invalid) = (%#v, %#v, %v, %v); want (nil, nil, false, false)", ordered, jokerRepresentations, matchesInput, ok)
+	}
+}
+
+func TestBestRunOrder_PrefersClosestCandidateWhenInputIsUnordered(t *testing.T) {
+	ordered, jokerRepresentations, matchesInput, ok := bestRunOrder([]Card{
+		card(Eight, Hearts),
+		card(Seven, Hearts),
+		joker(),
+		card(Ten, Hearts),
+	})
+	if !ok {
+		t.Fatal("bestRunOrder() ok = false; want true")
+	}
+	if matchesInput {
+		t.Fatal("bestRunOrder() matchesInput = true; want false")
+	}
+	want := []Card{card(Seven, Hearts), card(Eight, Hearts), joker(), card(Ten, Hearts)}
+	if !slices.EqualFunc(ordered, want, sameCard) {
+		t.Fatalf("bestRunOrder() ordered = %#v; want %#v", ordered, want)
+	}
+	if replacement := jokerRepresentations[2]; replacement.rank != Nine || replacement.suit != Hearts {
+		t.Fatalf("jokerRepresentations[2] = %#v; want Nine of Hearts", replacement)
+	}
+}
+
+func TestBestRunOrder_RejectsImpossibleJokerCountForWindow(t *testing.T) {
+	ordered, jokerRepresentations, matchesInput, ok := bestRunOrder([]Card{
+		card(Two, Hearts),
+		card(Two, Hearts),
+		joker(),
+	})
+	if ok || ordered != nil || jokerRepresentations != nil || matchesInput {
+		t.Fatalf("bestRunOrder() = (%#v, %#v, %v, %v); want (nil, nil, false, false)", ordered, jokerRepresentations, matchesInput, ok)
+	}
+}
+
+func TestRunCardsAreOrdered(t *testing.T) {
+	if !runCardsAreOrdered([]Card{card(Queen, Diamonds), card(King, Diamonds), card(Ace, Diamonds)}) {
+		t.Fatal("runCardsAreOrdered() = false; want true for ordered ace-high run")
+	}
+	if runCardsAreOrdered([]Card{card(King, Diamonds), card(Queen, Diamonds), card(Ace, Diamonds)}) {
+		t.Fatal("runCardsAreOrdered() = true; want false for unordered ace-high run")
+	}
+	if !runCardsAreOrdered([]Card{card(Eight, Clubs), card(Nine, Clubs), card(Ten, Clubs), joker()}) {
+		t.Fatal("runCardsAreOrdered() = false; want true for ordered run with joker")
+	}
+	if runCardsAreOrdered([]Card{card(Eight, Clubs), joker(), card(Nine, Clubs), card(Ten, Clubs)}) {
+		t.Fatal("runCardsAreOrdered() = true; want false for unordered joker placement")
 	}
 }
 

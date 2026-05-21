@@ -52,7 +52,7 @@ export function GameBoardHand({
   const { hasDraftedCompositions, canSubmitTablePlay } = tablePlayState;
 
   return (
-    <Card>
+    <Card className="min-h-0 overflow-hidden">
       <CardHeader>
         <CardTitle>Hand</CardTitle>
         <CardDescription>{isMyTurn ? "Your turn" : `${turnPlayerName} is up`}</CardDescription>
@@ -79,15 +79,15 @@ export function GameBoardHand({
           </div>
         </CardAction>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-0">
         {hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
             <GameBoardDraftDropZone
               id={HAND_DROP_ID}
-              className="rounded-3xl border border-transparent"
+              className="min-h-0 rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="flex min-h-36 flex-wrap justify-center gap-2 pb-2">
+                <div className="flex flex-wrap justify-center gap-2 pb-2">
                   {availableHandEntries.map((entry) => (
                     <GameCard
                       key={entry.key}

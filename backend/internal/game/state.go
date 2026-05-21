@@ -913,6 +913,9 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		if !comp.isValid() {
 			return tablePlayState{}, ErrInvalidComposition
 		}
+		if comp.variant == run && !runCardsAreOrdered(comp.cards) {
+			return tablePlayState{}, ErrInvalidComposition
+		}
 		playedCards = append(playedCards, comp.cards...)
 		openingPoints += comp.Points()
 	}

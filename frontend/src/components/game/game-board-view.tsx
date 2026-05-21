@@ -149,15 +149,15 @@ function GameBoardLayout({
   onSubmitTablePlay: () => void;
 }) {
   return (
-    <div className="flex min-h-[calc(100vh-10.5rem)] flex-col gap-4">
-      <div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <GameBoardTable
           game={game}
           tableCompositions={tableCompositions}
           canCompose={turnState.canDiscard}
         />
 
-        <div className="grid content-start gap-4">
+        <div className="grid min-h-0 auto-rows-fr gap-4">
           <GameBoardPiles
             drawPileCount={game?.drawPileCount ?? 0}
             topDiscardCard={topDiscardCard}
@@ -169,7 +169,7 @@ function GameBoardLayout({
         </div>
       </div>
 
-      <div className="mt-auto grid gap-4">
+      <div className="grid min-h-0 gap-4">
         <GameBoardHand
           status={{
             hasGame: Boolean(game),
