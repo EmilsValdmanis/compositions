@@ -447,11 +447,12 @@ function inferSetPlannedJokerReclaims(
     };
   }
 
-  const presentSuits = new Set(
-    nonJokerCards
-      .map((card) => card.suit)
-      .filter((suit): suit is number => typeof suit === "number"),
-  );
+  const presentSuits = new Set<number>();
+  for (const card of nonJokerCards) {
+    if (typeof card.suit === "number") {
+      presentSuits.add(card.suit);
+    }
+  }
   const jokerIndices = composition.cards.flatMap((card, index) => (card.isJoker ? [index] : []));
   const remainingEntries: HandEntry[] = [];
   const additions: HandEntry[] = [];
