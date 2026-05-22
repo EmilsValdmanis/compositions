@@ -193,7 +193,7 @@ export function GameBoardTable({
                 ))}
               </div>
             ) : (
-              <div className="grid min-h-32 place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
+              <div className="grid min-h-32 w-fit max-w-full place-items-center self-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
                 No compositions on the table.
               </div>
             )}

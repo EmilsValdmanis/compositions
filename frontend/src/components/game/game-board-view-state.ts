@@ -21,7 +21,11 @@ export type ActiveDrag =
       baselineOrder: string[];
       revealedHandKey: string | null;
     }
-  | { type: "hand"; handKey: string };
+  | {
+      type: "hand";
+      handKey: string;
+      baselineDraftCompositions: DraftComposition[];
+    };
 
 export type DraftComposition = {
   id: string;
