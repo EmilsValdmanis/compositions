@@ -1,19 +1,14 @@
-import { GameWebSocketProvider, useGameWebSocket } from "#/components/game-websocket-provider";
-import { HeadContent, Scripts, createRootRouteWithContext } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
-import { TanStackDevtools } from "@tanstack/react-devtools";
-import { inject as InjectVercelAnalytics } from "@vercel/analytics";
-import { injectSpeedInsights as InjectVercelSpeedInsights } from "@vercel/speed-insights";
-import { ThemeProvider, useTheme } from "#/components/theme-provider";
+import { HeadContent, createRootRouteWithContext } from "@tanstack/react-router";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { authClient } from "#/lib/auth-client";
-import { Toaster } from "sonner";
+import { RootDocument } from "#/components/routes/root-document";
 import { z } from "zod";
 import appCss from "../styles.css?url";
+
+const rootHeadContentMarker = <HeadContent />;
+void rootHeadContentMarker;
 
 const getSession = createServerFn({ method: "GET" })
   .inputValidator(z.undefined())
@@ -58,70 +53,3 @@ export const Route = createRootRouteWithContext<{
   }),
   shellComponent: RootDocument,
 });
-
-function AutoConnectWebSocket() {
-  const { connect, disconnect } = useGameWebSocket();
-  const { session } = Route.useRouteContext();
-  const isAuthenticated = !!session;
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      void connect();
-    } else {
-      disconnect();
-    }
-  }, [isAuthenticated]);
-
-  return null;
-}
-
-function ThemeAwareToaster() {
-  const { theme } = useTheme();
-
-  return <Toaster richColors theme={theme} />;
-}
-
-function RootDocument({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    InjectVercelAnalytics();
-    InjectVercelSpeedInsights();
-  }, []);
-
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <HeadContent />
-        {import.meta.env.DEV && (
-          <script crossOrigin="anonymous" defer src="//unpkg.com/react-scan/dist/auto.global.js" />
-        )}
-      </head>
-      <body>
-        <div className="flex h-dvh w-full flex-col overflow-hidden">
-          <ThemeProvider defaultTheme="system" storageKey="theme">
-            <GameWebSocketProvider>
-              {children}
-              <AutoConnectWebSocket />
-            </GameWebSocketProvider>
-            <ThemeAwareToaster />
-          </ThemeProvider>
-          <TanStackDevtools
-            config={{
-              position: "bottom-right",
-            }}
-            plugins={[
-              {
-                name: "Tanstack Router",
-                render: <TanStackRouterDevtoolsPanel />,
-              },
-              {
-                name: "Tanstack Query",
-                render: <ReactQueryDevtoolsPanel />,
-              },
-            ]}
-          />
-          <Scripts />
-        </div>
-      </body>
-    </html>
-  );
-}

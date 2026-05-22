@@ -39,3 +39,7 @@ export function compactId(value: string) {
 export function playerName(players: PlayerSnapshot[], playerId?: string) {
   return players.find((player) => player.playerId === playerId)?.name ?? "Waiting";
 }
+
+export function playerById(players: PlayerSnapshot[], playerId?: string) {
+  return players.find((player) => player.playerId === playerId) ?? null;
+}

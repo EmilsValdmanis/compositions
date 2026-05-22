@@ -560,6 +560,329 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 	})
 }
 
+func TestRoomTurnTrackingAndActivitySnapshots(t *testing.T) {
+	room := &room{}
+	room.clearTurnTracking()
+	if baseline, activity := room.turnContextForPlayer("other"); baseline != nil || activity != nil {
+		t.Fatalf("turnContextForPlayer() = %#v %#v; want nil nil without tracking", baseline, activity)
+	}
+
+	state := game.NewGameStateWithDeck([]game.Card{})
+	current := newPlayerWithID("current")
+	other := newPlayerWithID("other")
+	state.AddPlayer(current)
+	state.AddPlayer(other)
+	setGameStatePhaseForTest(t, state, game.PhaseInProgress)
+	setField := func(field string, value int) {
+		t.Helper()
+		v := reflect.ValueOf(state).Elem().FieldByName(field)
+		reflect.NewAt(v.Type(), unsafe.Pointer(v.UnsafeAddr())).Elem().SetInt(int64(value))
+	}
+	setField("round", 3)
+	turnField := reflect.ValueOf(state).Elem().FieldByName("turn")
+	turn := reflect.NewAt(turnField.Type(), unsafe.Pointer(turnField.UnsafeAddr())).Elem()
+	turnNumberField := turn.FieldByName("number")
+	reflect.NewAt(turnNumberField.Type(), unsafe.Pointer(turnNumberField.UnsafeAddr())).Elem().SetInt(9)
+	turnPlayerIndexField := turn.FieldByName("playerIndex")
+	reflect.NewAt(turnPlayerIndexField.Type(), unsafe.Pointer(turnPlayerIndexField.UnsafeAddr())).Elem().SetInt(0)
+	comp := mustSetComposition(t, game.NewCard(game.Seven, game.Hearts), game.NewCard(game.Seven, game.Diamonds), game.NewCard(game.Seven, game.Clubs))
+	activeField := reflect.ValueOf(state).Elem().FieldByName("activeCompositions")
+	reflect.NewAt(activeField.Type(), unsafe.Pointer(activeField.UnsafeAddr())).Elem().Set(reflect.ValueOf([]*game.Composition{comp}))
+
+	room.gameState = state
+	room.resetTurnTracking("current")
+	if room.turnBaseline == nil || room.turnActivity == nil {
+		t.Fatal("turn tracking was not initialized")
+	}
+	if room.turnActivity.PlayerID != "current" || room.turnActivity.Round != 3 || room.turnActivity.TurnNumber != 9 {
+		t.Fatalf("turnActivity = %#v; want current player round metadata", room.turnActivity)
+	}
+	if baseline, activity := room.turnContextForPlayer("current"); baseline != nil || activity != nil {
+		t.Fatalf("active player should not receive spectator context, got %#v %#v", baseline, activity)
+	}
+
+	newComp := mustSetComposition(t, game.NewCard(game.King, game.Hearts), game.NewCard(game.King, game.Diamonds), game.NewCard(game.King, game.Spades))
+	room.applySubmittedTurnActivity(
+		"current",
+		[]*game.Composition{newComp},
+		[]game.CompositionAddition{{CompositionIndex: 0, Cards: []game.Card{game.NewCard(game.Ace, game.Hearts)}}},
+		[]game.JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: game.NewCard(game.Queen, game.Hearts)}},
+	)
+	if len(room.turnActivity.DraftCompositions) != 2 {
+		t.Fatalf("len(turnActivity.DraftCompositions) = %d; want 2", len(room.turnActivity.DraftCompositions))
+	}
+	if room.turnActivity.DraftCompositions[1].TableIndex == nil || *room.turnActivity.DraftCompositions[1].TableIndex != 0 {
+		t.Fatalf("addition draft table index = %#v; want 0", room.turnActivity.DraftCompositions[1].TableIndex)
+	}
+	baseline, activity := room.turnContextForPlayer("other")
+	if baseline == nil || activity == nil {
+		t.Fatal("spectator turn context missing")
+	}
+	if len(baseline.ActiveCompositions) != 1 {
+		t.Fatalf("len(baseline.ActiveCompositions) = %d; want 1", len(baseline.ActiveCompositions))
+	}
+	if len(activity.CompositionActivities) != 1 {
+		t.Fatalf("len(activity.CompositionActivities) = %d; want 1", len(activity.CompositionActivities))
+	}
+	if activity.CompositionActivities[0].Kind != "new_composition" || activity.CompositionActivities[0].PlayerID != "current" {
+		t.Fatalf("new composition activity = %#v; want current player new_composition", activity.CompositionActivities[0])
+	}
+	if activity.CompositionActivities[0].CardActivities[2].Kind != "addition" {
+		t.Fatalf("addition activity = %#v; want addition marker", activity.CompositionActivities[0])
+	}
+	if activity.CompositionActivities[0].CardActivities[1].Kind != "joker_reclaim" {
+		t.Fatalf("reclaim activity = %#v; want joker reclaim marker", activity.CompositionActivities[0])
+	}
+	activity.CompositionActivities[0].CardActivities[2] = game.CardActivitySnapshot{Kind: "mutated"}
+	if room.turnActivity.CompositionActivities[0].CardActivities[2].Kind != "addition" {
+		t.Fatal("turnContextForPlayer should clone activity maps")
+	}
+
+	room.clearTurnTracking()
+	if room.turnBaseline != nil || room.turnActivity != nil {
+		t.Fatalf("turn tracking after clear = %#v %#v; want nil nil", room.turnBaseline, room.turnActivity)
+	}
+}
+
+func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
+	t.Run("turn tracking nil and missing player guards", func(t *testing.T) {
+		(*room)(nil).clearTurnTracking()
+		var nilRoom *room
+		nilRoom.resetTurnTracking("player")
+
+		r := &room{gameState: game.NewGameState()}
+		r.resetTurnTracking("missing")
+		if r.turnBaseline != nil || r.turnActivity != nil {
+			t.Fatalf("unexpected tracking for missing player: %#v %#v", r.turnBaseline, r.turnActivity)
+		}
+
+		r.applySubmittedTurnActivity("player", nil, nil, nil)
+	})
+
+	t.Run("merge helpers and submitted draft snapshots", func(t *testing.T) {
+		if got := buildDraftSnapshotsFromSubmitted(nil, nil); len(got) != 0 {
+			t.Fatalf("buildDraftSnapshotsFromSubmitted(nil,nil) len = %d; want 0", len(got))
+		}
+		if got := buildDraftSnapshotsFromSubmitted([]*game.Composition{nil}, nil); len(got) != 0 {
+			t.Fatalf("buildDraftSnapshotsFromSubmitted([nil],nil) len = %d; want 0", len(got))
+		}
+
+		activity := &game.TurnActivitySnapshot{}
+		mergeCompositionActivities(activity, nil)
+		mergeCompositionActivities(nil, []game.CompositionActivitySnapshot{{TableIndex: 1}})
+		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
+			TableIndex:     2,
+			CardActivities: map[int]game.CardActivitySnapshot{0: {Kind: "addition", PlayerID: "p1"}},
+		}})
+		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
+			TableIndex: 2,
+			Kind:       "new_composition",
+			PlayerID:   "p1",
+			CardActivities: map[int]game.CardActivitySnapshot{
+				1: {Kind: "joker_reclaim", PlayerID: "p1"},
+			},
+		}})
+		if len(activity.CompositionActivities) != 1 {
+			t.Fatalf("len(CompositionActivities) = %d; want 1", len(activity.CompositionActivities))
+		}
+		if activity.CompositionActivities[0].Kind != "new_composition" || activity.CompositionActivities[0].PlayerID != "p1" {
+			t.Fatalf("merged activity = %#v; want merged kind/player", activity.CompositionActivities[0])
+		}
+		if len(activity.CompositionActivities[0].CardActivities) != 2 {
+			t.Fatalf("merged card activities = %#v; want 2 entries", activity.CompositionActivities[0].CardActivities)
+		}
+		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
+			TableIndex: 2,
+			Kind:       "ignored_kind",
+			PlayerID:   "ignored_player",
+		}})
+		if activity.CompositionActivities[0].Kind != "new_composition" || activity.CompositionActivities[0].PlayerID != "p1" {
+			t.Fatalf("merge should preserve existing kind/player, got %#v", activity.CompositionActivities[0])
+		}
+		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
+			TableIndex:     2,
+			CardActivities: map[int]game.CardActivitySnapshot{2: {Kind: "new", PlayerID: "p1"}},
+		}})
+		if activity.CompositionActivities[0].CardActivities[2].Kind != "new" {
+			t.Fatalf("merge should add card activities into existing map, got %#v", activity.CompositionActivities[0].CardActivities)
+		}
+		emptyCardMapActivity := &game.TurnActivitySnapshot{CompositionActivities: []game.CompositionActivitySnapshot{{TableIndex: 7}}}
+		mergeCompositionActivities(emptyCardMapActivity, []game.CompositionActivitySnapshot{{
+			TableIndex:     7,
+			CardActivities: map[int]game.CardActivitySnapshot{1: {Kind: "addition", PlayerID: "p2"}},
+		}})
+		if emptyCardMapActivity.CompositionActivities[0].CardActivities[1].Kind != "addition" {
+			t.Fatalf("merge should initialize missing card activity map, got %#v", emptyCardMapActivity.CompositionActivities[0])
+		}
+		negativeNewCountComp := mustSetComposition(t, game.NewCard(game.Four, game.Hearts), game.NewCard(game.Four, game.Diamonds), game.NewCard(game.Four, game.Clubs))
+		activities := buildCompositionActivities("p1", []*game.Composition{nil, negativeNewCountComp}, nil, nil, nil)
+		if len(activities) != 1 || activities[0].TableIndex != 1 {
+			t.Fatalf("buildCompositionActivities(new comps) = %#v; want one activity at table index 1", activities)
+		}
+		additionActivities := buildCompositionActivities(
+			"p1",
+			nil,
+			[]game.CompositionAddition{{CompositionIndex: 0, Cards: []game.Card{game.NewCard(game.Two, game.Spades), game.NewCard(game.Three, game.Spades)}}},
+			nil,
+			[]*game.Composition{mustSetComposition(t, game.NewCard(game.Nine, game.Hearts), game.NewCard(game.Nine, game.Diamonds), game.NewCard(game.Nine, game.Clubs))},
+		)
+		if len(additionActivities) != 1 || additionActivities[0].CardActivities[1].Kind != "addition" {
+			t.Fatalf("buildCompositionActivities(addition overflow) = %#v; want addition markers starting at zero", additionActivities)
+		}
+		negativeStartActivities := buildCompositionActivities(
+			"p1",
+			nil,
+			[]game.CompositionAddition{{CompositionIndex: 0, Cards: []game.Card{
+				game.NewCard(game.Two, game.Spades),
+				game.NewCard(game.Three, game.Spades),
+				game.NewCard(game.Four, game.Spades),
+				game.NewCard(game.Five, game.Spades),
+			}}},
+			nil,
+			[]*game.Composition{mustSetComposition(t, game.NewCard(game.Nine, game.Hearts), game.NewCard(game.Nine, game.Diamonds), game.NewCard(game.Nine, game.Clubs))},
+		)
+		if len(negativeStartActivities) != 1 || negativeStartActivities[0].CardActivities[0].Kind != "addition" || negativeStartActivities[0].CardActivities[3].Kind != "addition" {
+			t.Fatalf("buildCompositionActivities(negative start index) = %#v; want addition markers clamped to zero", negativeStartActivities)
+		}
+		reclaimActivities := buildCompositionActivities("p1", nil, nil, []game.JokerReclaim{{CompositionIndex: 3, JokerIndex: 2}}, nil)
+		if len(reclaimActivities) != 1 || reclaimActivities[0].CardActivities[2].Kind != "joker_reclaim" {
+			t.Fatalf("buildCompositionActivities(reclaim only) = %#v; want reclaim activity", reclaimActivities)
+		}
+
+		state := game.NewGameStateWithDeck([]game.Card{})
+		player := newPlayerWithID("p1")
+		state.AddPlayer(player)
+		setGameStatePhaseForTest(t, state, game.PhaseInProgress)
+		r := &room{gameState: state}
+		r.applySubmittedTurnActivity("p1", nil, nil, nil)
+		if r.turnActivity != nil {
+			t.Fatalf("turnActivity = %#v; want nil without resetTurnTracking", r.turnActivity)
+		}
+		r.turnBaseline = &game.GameSnapshot{}
+		r.turnActivity = &game.TurnActivitySnapshot{PlayerID: "other"}
+		r.applySubmittedTurnActivity("p1", []*game.Composition{mustSetComposition(t, game.NewCard(game.Ace, game.Hearts), game.NewCard(game.Ace, game.Diamonds), game.NewCard(game.Ace, game.Clubs))}, nil, nil)
+		if len(r.turnActivity.DraftCompositions) != 0 {
+			t.Fatalf("wrong-player applySubmittedTurnActivity should not mutate drafts: %#v", r.turnActivity.DraftCompositions)
+		}
+	})
+
+	t.Run("updateDraftActivity guard paths and resets tracking", func(t *testing.T) {
+		lobby := newLobbyServer()
+		if _, _, err := lobby.updateDraftActivity("missing", nil); err == nil || err.Error() != "session not found" {
+			t.Fatalf("updateDraftActivity(missing session) error = %v; want session not found", err)
+		}
+
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		if _, _, err := lobby.updateDraftActivity(event.SessionID, nil); err == nil || err.Error() != "join a room first" {
+			t.Fatalf("updateDraftActivity(no room) error = %v; want join a room first", err)
+		}
+
+		lobby.sessions[event.SessionID].roomCode = "ROOM"
+		lobby.rooms["ROOM"] = &room{code: "ROOM", players: []*roomPlayer{{player: newPlayerWithID(event.PlayerID), sessionID: event.SessionID, connected: true, seat: 0}}}
+		if _, _, err := lobby.updateDraftActivity(event.SessionID, nil); err == nil || err.Error() != "game state not initialized" {
+			t.Fatalf("updateDraftActivity(nil game) error = %v; want game state not initialized", err)
+		}
+
+		state := game.NewGameState()
+		player := newPlayerWithID(event.PlayerID)
+		if err := state.AddPlayer(player); err != nil {
+			t.Fatalf("AddPlayer() error = %v", err)
+		}
+		lobby.rooms["ROOM"].gameState = state
+		if _, _, err := lobby.updateDraftActivity(event.SessionID, nil); err == nil || err != game.ErrGameNotInProgress {
+			t.Fatalf("updateDraftActivity(lobby) error = %v; want ErrGameNotInProgress", err)
+		}
+
+		second := newPlayerWithID("other")
+		if err := state.AddPlayer(second); err != nil {
+			t.Fatalf("AddPlayer(second) error = %v", err)
+		}
+		setGameStatePhaseForTest(t, state, game.PhaseInProgress)
+		turnField := reflect.ValueOf(state).Elem().FieldByName("turn")
+		turn := reflect.NewAt(turnField.Type(), unsafe.Pointer(turnField.UnsafeAddr())).Elem()
+		turnPlayerIndexField := turn.FieldByName("playerIndex")
+		reflect.NewAt(turnPlayerIndexField.Type(), unsafe.Pointer(turnPlayerIndexField.UnsafeAddr())).Elem().SetInt(1)
+		if _, _, err := lobby.updateDraftActivity(event.SessionID, nil); err == nil || err.Error() != "not your turn" {
+			t.Fatalf("updateDraftActivity(not turn) error = %v; want not your turn", err)
+		}
+
+		reflect.NewAt(turnPlayerIndexField.Type(), unsafe.Pointer(turnPlayerIndexField.UnsafeAddr())).Elem().SetInt(0)
+		roomState, recipients, err := lobby.updateDraftActivity(event.SessionID, []game.DraftCompositionSnapshot{{Cards: []game.CardSnapshot{{Rank: game.Ace, Suit: game.Hearts}}}})
+		if err != nil {
+			t.Fatalf("updateDraftActivity(success) error = %v", err)
+		}
+		if roomState.Code != "ROOM" || len(recipients) != 1 {
+			t.Fatalf("updateDraftActivity success = %#v recipients=%d; want ROOM and 1 recipient", roomState, len(recipients))
+		}
+		if lobby.rooms["ROOM"].turnActivity == nil || len(lobby.rooms["ROOM"].turnActivity.DraftCompositions) != 1 {
+			t.Fatalf("turnActivity after draft update = %#v; want 1 draft", lobby.rooms["ROOM"].turnActivity)
+		}
+		roomState, recipients, err = lobby.updateDraftActivity(event.SessionID, []game.DraftCompositionSnapshot{})
+		if err != nil || roomState.Code != "ROOM" || len(recipients) != 1 {
+			t.Fatalf("updateDraftActivity(second success) = %#v %d %v; want ROOM 1 nil", roomState, len(recipients), err)
+		}
+		otherConn, _, otherCleanup := newSocketPair(t)
+		defer otherCleanup()
+		otherEvent, _, _, err := lobby.connect("", otherConn)
+		if err != nil {
+			t.Fatalf("connect(other) error = %v", err)
+		}
+		lobby.sessions[otherEvent.SessionID].roomCode = "ROOM"
+		lobby.rooms["ROOM"].players = append(lobby.rooms["ROOM"].players, &roomPlayer{
+			player:    newPlayerWithID(otherEvent.PlayerID),
+			sessionID: otherEvent.SessionID,
+			connected: true,
+			seat:      1,
+		})
+		if _, _, err := lobby.updateDraftActivity(event.SessionID, nil); err == nil || err.Error() != "game state snapshot failed" {
+			t.Fatalf("updateDraftActivity(snapshot failure) error = %v; want game state snapshot failed", err)
+		}
+	})
+
+	t.Run("applyGameAction afterMutate error and wrapper no-op branches", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn, _, cleanup := newSocketPair(t)
+		defer cleanup()
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatalf("connect() error = %v", err)
+		}
+		state := game.NewGameState()
+		player := newPlayerWithID(event.PlayerID)
+		other := newPlayerWithID("other")
+		state.AddPlayer(player)
+		state.AddPlayer(other)
+		setGameStatePhaseForTest(t, state, game.PhaseInProgress)
+		lobby.rooms["ROOM"] = &room{code: "ROOM", gameState: state, players: []*roomPlayer{{player: player, sessionID: event.SessionID, connected: true, seat: 0}}}
+		lobby.sessions[event.SessionID].roomCode = "ROOM"
+
+		if _, _, _, err := lobby.applyGameAction(event.SessionID, "test", func(*game.GameState) error { return nil }, func(*room, *playerSession) error { return errors.New("after boom") }); err == nil || err.Error() != "after boom" {
+			t.Fatalf("applyGameAction(after error) = %v; want after boom", err)
+		}
+
+		if _, _, _, err := lobby.draw(event.SessionID, "sideways"); err == nil || err.Error() != "unknown draw source" {
+			t.Fatalf("draw(sideways) error = %v; want unknown draw source", err)
+		}
+		if _, _, _, err := lobby.play(event.SessionID, nil, nil, nil); err == nil {
+			t.Fatal("play() error = nil; want invalid composition path")
+		}
+	})
+}
+
+func mustSetComposition(t *testing.T, cards ...game.Card) *game.Composition {
+	t.Helper()
+	comp, ok := game.NewSet(cards)
+	if !ok {
+		t.Fatalf("NewSet(%#v) returned false", cards)
+	}
+	return comp
+}
+
 func TestLobbyLeaveRoomCoverage(t *testing.T) {
 	originalMakeGameState := makeGameState
 	originalAddPlayer := addPlayerToGameState

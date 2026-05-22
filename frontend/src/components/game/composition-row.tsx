@@ -4,10 +4,15 @@ import {
   type PlannedJokerReclaim,
   tableCompositionDropId,
 } from "#/components/game/game-board-view-state";
-import { type CompositionSnapshot } from "#/components/game-websocket-provider";
+import {
+  type CompositionSnapshot,
+  type PlayerSnapshot,
+} from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
-import { GameCard, cardName } from "#/components/game/game-card";
-import { formatLabel } from "#/components/game/game-view-utils";
+import { GameCard } from "#/components/game/game-card";
+import { cardName } from "#/components/game/game-card-utils";
+import { formatLabel } from "#/components/game/game-view-helpers";
+import { PlayerMarker } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { cn } from "#/lib/utils";
 
@@ -41,28 +46,47 @@ export function CompositionRow({
   index,
   stagedEntries = EMPTY_STAGED_ENTRIES,
   reclaims = EMPTY_RECLAIMS,
+  players,
+  activity,
 }: {
   composition: CompositionSnapshot;
   index: number;
   stagedEntries?: HandEntry[];
   reclaims?: PlannedJokerReclaim[];
+  players: PlayerSnapshot[];
+  activity?: {
+    kind?: string;
+    playerId?: string;
+    cardActivities?: Record<number, { kind: string; playerId: string }>;
+  };
 }) {
   const compositionCards = buildCompositionCardViews(composition.cards);
   const reclaimByJokerIndex = new Map(reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim]));
   const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
+  const cardActivities = activity?.cardActivities ?? {};
+  const isNewComposition = activity?.kind === "new_composition";
 
   return (
     <GameBoardDraftDropZone
       id={tableCompositionDropId(index)}
-      className="flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3"
+      className={cn(
+        "flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3",
+        isNewComposition ? "border-primary/40 bg-primary/5" : null,
+      )}
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">#{index + 1}</Badge>
           <Badge variant="outline">{formatLabel(composition.type)}</Badge>
           {composition.complete ? <Badge>Complete</Badge> : null}
+          {isNewComposition ? <Badge variant="outline">New</Badge> : null}
         </div>
-        <span className="text-xs text-muted-foreground">{composition.points} pts</span>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          {activity?.playerId ? (
+            <PlayerMarker players={players} playerId={activity.playerId} />
+          ) : null}
+          <span>{composition.points} pts</span>
+        </div>
       </div>
 
       {reclaims.length > 0 ? (
@@ -76,15 +100,36 @@ export function CompositionRow({
       <div className="flex flex-wrap content-start justify-center gap-2">
         {compositionCards.map(({ card, index: cardIndex, key }) => {
           const reclaim = reclaimByJokerIndex.get(cardIndex);
+          const cardActivity = cardActivities[cardIndex];
 
           return (
             <div key={key} className="flex flex-col items-center gap-1">
               <GameCard
                 card={card}
                 size="compact"
-                className={cn(
-                  reclaim ? "ring-2 ring-primary/60 ring-offset-1 ring-offset-card" : null,
-                )}
+                decoration={{
+                  highlight:
+                    cardActivity?.kind === "new"
+                      ? "new"
+                      : cardActivity?.kind === "addition"
+                        ? "addition"
+                        : cardActivity?.kind === "joker_reclaim"
+                          ? "joker_reclaim"
+                          : reclaim
+                            ? "joker_reclaim"
+                            : undefined,
+                  label:
+                    cardActivity?.kind === "new"
+                      ? "New"
+                      : cardActivity?.kind === "addition"
+                        ? "New"
+                        : cardActivity?.kind === "joker_reclaim"
+                          ? "Joker"
+                          : undefined,
+                  footer: cardActivity?.playerId ? (
+                    <PlayerMarker players={players} playerId={cardActivity.playerId} />
+                  ) : undefined,
+                }}
               />
               {reclaim ? (
                 <span className="text-center text-[0.6rem] leading-tight text-primary">

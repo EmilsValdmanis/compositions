@@ -19,6 +19,32 @@ export type CompositionSnapshot = {
   complete: boolean;
 };
 
+export type CardActivitySnapshot = {
+  kind: string;
+  playerId: string;
+};
+
+export type CompositionActivitySnapshot = {
+  tableIndex: number;
+  kind?: string;
+  playerId?: string;
+  cardActivities?: Record<number, CardActivitySnapshot>;
+};
+
+export type DraftCompositionSnapshot = {
+  tableIndex?: number;
+  cards: CardSnapshot[];
+};
+
+export type TurnActivitySnapshot = {
+  playerId: string;
+  round: number;
+  turnNumber: number;
+  baselineCompositions?: CompositionSnapshot[];
+  draftCompositions?: DraftCompositionSnapshot[];
+  compositionActivities?: CompositionActivitySnapshot[];
+};
+
 export type CompositionDraftRequest = {
   cards: CardSnapshot[];
 };
@@ -38,6 +64,10 @@ export type TablePlayRequest = {
   compositions: CompositionDraftRequest[];
   additions: CompositionAdditionRequest[];
   reclaims: JokerReclaimRequest[];
+};
+
+export type TurnDraftUpdateRequest = {
+  compositions: DraftCompositionSnapshot[];
 };
 
 export type PlayerStateSnapshot = {
@@ -66,6 +96,7 @@ export type GameSnapshot = {
   drawPileCount: number;
   discardPile: CardSnapshot[];
   activeCompositions: CompositionSnapshot[];
+  turnActivity?: TurnActivitySnapshot;
 };
 
 export type PlayerSnapshot = {
@@ -137,6 +168,7 @@ type GameWebSocketContextValue = {
   leaveRoom: () => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
+  updateTurnDrafts: (draft: TurnDraftUpdateRequest) => void;
   playTable: (play: TablePlayRequest) => void;
   discardCard: (cardIndex: number) => void;
 };
@@ -466,6 +498,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     leaveRoom: () => send("leave_room", {}),
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),
+    updateTurnDrafts: (draft) => send("draft_update", draft),
     playTable: (play) => send("play", play),
     discardCard: (cardIndex) => send("discard", { cardIndex }),
   };

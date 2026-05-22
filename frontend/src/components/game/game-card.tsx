@@ -1,4 +1,4 @@
-import { type CSSProperties } from "react";
+import { type CSSProperties, type ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import {
@@ -11,6 +11,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { cardName } from "#/components/game/game-card-utils";
 import { cn } from "#/lib/utils";
 
 const rankLabels: Record<number, string> = {
@@ -36,13 +37,6 @@ const suitIcons = {
   3: SpadesIcon,
 };
 
-const suitNames: Record<number, string> = {
-  0: "Hearts",
-  1: "Diamonds",
-  2: "Clubs",
-  3: "Spades",
-};
-
 function cardRankLabel(card: CardSnapshot) {
   if (card.isJoker) {
     return "J";
@@ -57,16 +51,6 @@ function cardSuitIcon(card: CardSnapshot) {
   }
 
   return suitIcons[card.suit as keyof typeof suitIcons] ?? null;
-}
-
-export function cardName(card: CardSnapshot) {
-  if (card.isJoker) {
-    return "Joker";
-  }
-
-  const rank = rankLabels[card.rank ?? 0] ?? "Unknown";
-  const suit = suitNames[card.suit ?? -1] ?? "Unknown";
-  return `${rank} of ${suit}`;
 }
 
 function cardAccentClass(card: CardSnapshot) {
@@ -173,6 +157,57 @@ function renderGameCardBack() {
   return <span className="absolute inset-1.5 rounded-xl border border-white/10" />;
 }
 
+type GameCardDecoration = {
+  label?: ReactNode;
+  footer?: ReactNode;
+  highlight?: "new" | "addition" | "joker_reclaim";
+};
+
+function decorationRingClassName(highlight?: GameCardDecoration["highlight"]) {
+  switch (highlight) {
+    case "new":
+      return "ring-2 ring-primary/60 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
+    case "addition":
+      return "ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-background";
+    case "joker_reclaim":
+      return "ring-2 ring-amber-500/60 ring-offset-2 ring-offset-background";
+    default:
+      return null;
+  }
+}
+
+function GameCardDecorationLayer({
+  size,
+  decoration,
+}: {
+  size: GameCardSize;
+  decoration?: GameCardDecoration;
+}) {
+  if (!decoration?.label && !decoration?.footer) {
+    return null;
+  }
+
+  return (
+    <>
+      {decoration.label ? (
+        <div
+          className={cn(
+            "absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background/95 px-1.5 py-0.5 text-[0.55rem] font-medium uppercase tracking-wide text-foreground shadow-sm backdrop-blur-sm",
+            size === "hand" ? "text-[0.6rem]" : null,
+          )}
+        >
+          {decoration.label}
+        </div>
+      ) : null}
+      {decoration.footer ? (
+        <div className="absolute bottom-1 left-1/2 z-10 flex -translate-x-1/2 translate-y-1/2 items-center gap-1 rounded-full bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur-sm">
+          {decoration.footer}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function SortableGameCard({
   card,
   id,
@@ -181,6 +216,7 @@ function SortableGameCard({
   className,
   faceDown,
   data,
+  decoration,
 }: {
   card: CardSnapshot;
   id: string;
@@ -189,6 +225,7 @@ function SortableGameCard({
   className?: string;
   faceDown?: boolean;
   data?: Record<string, unknown>;
+  decoration?: GameCardDecoration;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
@@ -214,6 +251,7 @@ function SortableGameCard({
         faceDown
           ? faceDownGameCardClassName(size, className)
           : gameCardClassName(card, size, className),
+        decorationRingClassName(decoration?.highlight),
         "touch-none cursor-grab active:cursor-grabbing",
       )}
       title={accessibleName}
@@ -222,6 +260,7 @@ function SortableGameCard({
       {...attributes}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
+      <GameCardDecorationLayer size={size} decoration={decoration} />
     </button>
   );
 }
@@ -234,6 +273,7 @@ function DraggableGameCard({
   disabled,
   faceDown,
   data,
+  decoration,
 }: {
   card: CardSnapshot;
   id: string;
@@ -242,6 +282,7 @@ function DraggableGameCard({
   disabled?: boolean;
   faceDown?: boolean;
   data?: Record<string, unknown>;
+  decoration?: GameCardDecoration;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
@@ -266,6 +307,7 @@ function DraggableGameCard({
         faceDown
           ? faceDownGameCardClassName(size, className)
           : gameCardClassName(card, size, className),
+        decorationRingClassName(decoration?.highlight),
         disabled ? "cursor-default opacity-50" : "touch-none cursor-grab active:cursor-grabbing",
       )}
       title={accessibleName}
@@ -274,6 +316,7 @@ function DraggableGameCard({
       {...attributes}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
+      <GameCardDecorationLayer size={size} decoration={decoration} />
     </button>
   );
 }
@@ -285,6 +328,7 @@ export function GameCard({
   draggable,
   dragSource,
   faceDown,
+  decoration,
 }: {
   card: CardSnapshot;
   size?: GameCardSize;
@@ -300,6 +344,7 @@ export function GameCard({
     data?: Record<string, unknown>;
   };
   faceDown?: boolean;
+  decoration?: GameCardDecoration;
 }) {
   if (draggable) {
     return (
@@ -311,6 +356,7 @@ export function GameCard({
         className={className}
         faceDown={faceDown}
         data={{ isVirtual: draggable.isVirtual }}
+        decoration={decoration}
       />
     );
   }
@@ -325,6 +371,7 @@ export function GameCard({
         disabled={dragSource.disabled}
         data={dragSource.data}
         faceDown={faceDown}
+        decoration={decoration}
       />
     );
   }
@@ -335,13 +382,21 @@ export function GameCard({
     <div
       className={
         faceDown
-          ? faceDownGameCardClassName(size, className)
-          : gameCardClassName(card, size, className)
+          ? faceDownGameCardClassName(
+              size,
+              cn(className, decorationRingClassName(decoration?.highlight)),
+            )
+          : gameCardClassName(
+              card,
+              size,
+              cn(className, decorationRingClassName(decoration?.highlight)),
+            )
       }
       title={accessibleName}
       aria-label={accessibleName}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
+      <GameCardDecorationLayer size={size} decoration={decoration} />
     </div>
   );
 }
