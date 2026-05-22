@@ -168,9 +168,9 @@ function decorationRingClassName(highlight?: GameCardDecoration["highlight"]) {
     case "new":
       return "ring-2 ring-primary/60 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
     case "addition":
-      return "ring-2 ring-emerald-500/50 ring-offset-2 ring-offset-background";
+      return "ring-2 ring-primary/75 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
     case "joker_reclaim":
-      return "ring-2 ring-amber-500/60 ring-offset-2 ring-offset-background";
+      return "ring-2 ring-primary/75 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
     default:
       return null;
   }
@@ -192,8 +192,8 @@ function GameCardDecorationLayer({
       {decoration.label ? (
         <div
           className={cn(
-            "absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-background/95 px-1.5 py-0.5 text-[0.55rem] font-medium uppercase tracking-wide text-foreground shadow-sm backdrop-blur-sm",
-            size === "hand" ? "text-[0.6rem]" : null,
+            "absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-[calc(100%+0.1rem)] whitespace-nowrap",
+            size === "hand" ? "text-[0.7rem]" : null,
           )}
         >
           {decoration.label}

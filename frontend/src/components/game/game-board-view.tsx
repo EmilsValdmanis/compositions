@@ -207,6 +207,7 @@ function GameBoardLayout({
   availableHandEntries,
   sortableIds,
   activeDrag,
+  drawnHandKey,
   draftedCompositionsCount,
   spectatorDrafts,
   canSubmitTablePlay,
@@ -224,6 +225,7 @@ function GameBoardLayout({
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
+  drawnHandKey: string | null;
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
   canSubmitTablePlay: boolean;
@@ -283,6 +285,7 @@ function GameBoardLayout({
           availableHandEntries={availableHandEntries}
           sortableIds={sortableIds}
           activeDrag={activeDrag}
+          drawnHandKey={drawnHandKey}
           tablePlayState={{
             hasDraftedCompositions: draftedCompositionsCount > 0,
           }}
@@ -295,6 +298,7 @@ function GameBoardLayout({
 type GameBoardController = {
   activeDrag: ActiveDrag | null;
   activeEntry: ReturnType<typeof buildHandEntries>[number] | null;
+  drawnHandKey: string | null;
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
@@ -377,6 +381,10 @@ function useGameBoardController({
           activeDrag.baselineEntries,
           applyHandEntryOrder(rawHandEntries, activeDrag.baselineOrder),
         )
+      : null;
+  const drawnHandKey =
+    turnState.canDiscard && activeDrag?.type === "draw" && activeDrag.source === "deck"
+      ? (activeDrawEntry?.key ?? null)
       : null;
 
   function updateDraftCompositions(updater: (current: DraftComposition[]) => DraftComposition[]) {
@@ -531,6 +539,7 @@ function useGameBoardController({
     if (drawSource === "deck") {
       setActiveDrag({
         type: "draw",
+        source: "deck",
         card: null,
         baselineEntries: handEntries,
         baselineOrder: handEntryOrder(handEntries),
@@ -543,6 +552,7 @@ function useGameBoardController({
     if (drawSource === "discard" && topDiscardCard) {
       setActiveDrag({
         type: "draw",
+        source: "discard",
         card: topDiscardCard,
         baselineEntries: handEntries,
         baselineOrder: handEntryOrder(handEntries),
@@ -704,6 +714,7 @@ function useGameBoardController({
   return {
     activeDrag: displayActiveDrag,
     activeEntry,
+    drawnHandKey,
     availableHandEntries,
     sortableIds,
     tableCompositions,
@@ -780,6 +791,7 @@ export function GameBoardView({
           availableHandEntries={controller.availableHandEntries}
           sortableIds={controller.sortableIds}
           activeDrag={controller.activeDrag}
+          drawnHandKey={controller.drawnHandKey}
           draftedCompositionsCount={controller.draftedCompositionsCount}
           spectatorDrafts={spectatorDrafts}
           canSubmitTablePlay={controller.canSubmitTablePlay}

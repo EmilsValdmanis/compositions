@@ -15,6 +15,7 @@ export type HandEntry = {
 export type ActiveDrag =
   | {
       type: "draw";
+      source: "deck" | "discard";
       card: CardSnapshot | null;
       baselineEntries: HandEntry[];
       baselineOrder: string[];

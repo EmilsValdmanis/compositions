@@ -1,7 +1,11 @@
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   NEW_COMPOSITION_DROP_ID,
+  buildHandEntries,
+  inferPlannedJokerReclaims,
   type DraftedCompositionView,
+  type HandEntry,
+  type PlannedJokerReclaim,
   type TableCompositionView,
   draftCompositionDropId,
 } from "#/components/game/game-board-view-state";
@@ -15,7 +19,7 @@ import {
 import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { PlayerMarker } from "#/components/game/game-view-utils";
+import { ActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
@@ -45,6 +49,20 @@ function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
       key: `${baseKey}-${duplicateCount}`,
     };
   });
+}
+
+function draftPreviewForComposition(
+  tableComposition: TableCompositionView | undefined,
+  cards: DraftCompositionSnapshot["cards"],
+) {
+  const stagedEntries = buildHandEntries(cards) as HandEntry[];
+
+  if (!tableComposition) {
+    return { stagedEntries, reclaims: [] as PlannedJokerReclaim[] };
+  }
+
+  const { reclaims } = inferPlannedJokerReclaims(tableComposition.snapshot, stagedEntries);
+  return { stagedEntries, reclaims };
 }
 
 export function GameBoardTable({
@@ -83,6 +101,27 @@ export function GameBoardTable({
     ]),
   );
   const stagedDrafts = turnActivity?.draftCompositions ?? [];
+  const tableCompositionsByIndex = new Map(
+    tableCompositions.map((composition) => [composition.tableIndex, composition]),
+  );
+  const spectatorDraftsByTableIndex = new Map<
+    number,
+    { stagedEntries: HandEntry[]; reclaims: PlannedJokerReclaim[]; playerId?: string }
+  >();
+  const stagedNewDrafts = stagedDrafts.filter(
+    (composition) => composition.tableIndex === undefined,
+  );
+
+  for (const draft of stagedDrafts) {
+    if (draft.tableIndex === undefined) {
+      continue;
+    }
+
+    spectatorDraftsByTableIndex.set(draft.tableIndex, {
+      ...draftPreviewForComposition(tableCompositionsByIndex.get(draft.tableIndex), draft.cards),
+      playerId: turnActivity?.playerId,
+    });
+  }
 
   return (
     <Card className="min-h-0 overflow-y-scroll xl:flex-1">
@@ -98,14 +137,30 @@ export function GameBoardTable({
             <div className="flex min-h-0 flex-wrap items-start gap-3">
               {tableCompositions.map((composition) => (
                 <div key={composition.key} className="w-fit shrink-0">
-                  <CompositionRow
-                    composition={composition.snapshot}
-                    index={composition.tableIndex}
-                    stagedEntries={composition.stagedEntries}
-                    reclaims={composition.reclaims}
-                    players={players}
-                    activity={activityByIndex.get(composition.tableIndex)}
-                  />
+                  {(() => {
+                    const spectatorDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
+                    const stagedEntries =
+                      composition.stagedEntries.length > 0
+                        ? composition.stagedEntries
+                        : (spectatorDraft?.stagedEntries ?? []);
+                    const reclaims =
+                      composition.reclaims.length > 0
+                        ? composition.reclaims
+                        : (spectatorDraft?.reclaims ?? []);
+
+                    return (
+                      <CompositionRow
+                        composition={composition.snapshot}
+                        index={composition.tableIndex}
+                        stagedEntries={stagedEntries}
+                        reclaims={reclaims}
+                        players={players}
+                        stagedEntryPlayerId={spectatorDraft?.playerId}
+                        stagedEntriesInteractive={composition.stagedEntries.length > 0}
+                        activity={activityByIndex.get(composition.tableIndex)}
+                      />
+                    );
+                  })()}
                 </div>
               ))}
             </div>
@@ -117,22 +172,15 @@ export function GameBoardTable({
         </div>
 
         <div className="flex flex-wrap justify-center gap-3">
-          {stagedDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
+          {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
             <div
               key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
-              className="flex w-fit shrink-0 flex-col rounded-3xl border border-dashed border-primary/40 bg-primary/5 p-3"
+              className="relative flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3 pt-5"
             >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">
-                    {composition.tableIndex === undefined
-                      ? "New"
-                      : `Adding to #${composition.tableIndex + 1}`}
-                  </Badge>
-                  {turnActivity?.playerId ? (
-                    <PlayerMarker players={players} playerId={turnActivity.playerId} />
-                  ) : null}
-                </div>
+              <div className="absolute left-3 top-2 z-10">
+                <ActivityLabel players={players} playerId={turnActivity?.playerId} />
+              </div>
+              <div className="mb-3 flex items-center justify-end gap-2">
                 <Badge variant="outline">{composition.cards.length} cards</Badge>
               </div>
               <div className="flex items-start gap-2">
@@ -141,13 +189,6 @@ export function GameBoardTable({
                     key={`${composition.tableIndex ?? "new"}-${key}`}
                     card={card}
                     size="compact"
-                    decoration={{
-                      highlight: composition.tableIndex === undefined ? "new" : "addition",
-                      label: composition.tableIndex === undefined ? "New" : undefined,
-                      footer: turnActivity?.playerId ? (
-                        <PlayerMarker players={players} playerId={turnActivity.playerId} />
-                      ) : undefined,
-                    }}
                   />
                 ))}
               </div>
@@ -158,10 +199,12 @@ export function GameBoardTable({
             <GameBoardDraftDropZone
               key={composition.id}
               id={draftCompositionDropId(composition.id)}
-              className="flex w-fit flex-col shrink-0 rounded-3xl border border-dashed border-border/70 bg-muted/10 p-3"
+              className="relative flex w-fit flex-col shrink-0 rounded-3xl border border-primary/70 bg-primary/5 p-3 pt-5"
             >
-              <div className="mb-3 flex justify-between items-center gap-2">
-                <Badge variant="secondary">New</Badge>
+              <div className="absolute left-3 top-2 z-10">
+                <ActivityLabel players={players} />
+              </div>
+              <div className="mb-3 flex items-center justify-end gap-2">
                 <Badge variant="outline">{composition.entries.length} cards</Badge>
               </div>
               <SortableContext
@@ -174,10 +217,6 @@ export function GameBoardTable({
                       key={entry.key}
                       card={entry.card}
                       size="compact"
-                      decoration={{
-                        highlight: "new",
-                        label: "New",
-                      }}
                       draggable={{
                         id: entry.key,
                         cardIndex: entry.sourceIndex,
