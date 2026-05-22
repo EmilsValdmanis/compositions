@@ -930,6 +930,36 @@ func TestCompositionWithAddedCards_RejectsInvalidAddition(t *testing.T) {
 	}
 }
 
+func TestCompositionWithInsertedCards(t *testing.T) {
+	base, ok := NewRun([]Card{
+		card(Queen, Hearts),
+		card(King, Hearts),
+		card(Ace, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	inserted, ok := base.WithInsertedCards(0, []Card{joker(), card(Jack, Hearts)})
+	if !ok {
+		t.Fatal("WithInsertedCards() returned false; want true")
+	}
+	if len(inserted.cards) != 5 {
+		t.Fatalf("len(inserted.cards) = %d; want 5", len(inserted.cards))
+	}
+	want := []Card{joker(), card(Jack, Hearts), card(Queen, Hearts), card(King, Hearts), card(Ace, Hearts)}
+	if !slices.EqualFunc(inserted.cards, want, sameCard) {
+		t.Fatalf("inserted.cards = %#v; want %#v", inserted.cards, want)
+	}
+
+	if _, ok := base.WithInsertedCards(-1, []Card{card(Jack, Hearts)}); ok {
+		t.Fatal("WithInsertedCards(-1) returned true; want false")
+	}
+	if _, ok := base.WithInsertedCards(len(base.cards)+1, []Card{card(Jack, Hearts)}); ok {
+		t.Fatal("WithInsertedCards(out of bounds) returned true; want false")
+	}
+}
+
 func TestCompositionAddedCardsPoints_UsesContextualAceValue(t *testing.T) {
 	base, ok := NewRun([]Card{
 		card(Two, Clubs),

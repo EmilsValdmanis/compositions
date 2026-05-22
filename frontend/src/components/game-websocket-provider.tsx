@@ -33,6 +33,7 @@ export type CompositionActivitySnapshot = {
 
 export type DraftCompositionSnapshot = {
   tableIndex?: number;
+  insertIndex?: number;
   cards: CardSnapshot[];
 };
 
@@ -51,6 +52,7 @@ export type CompositionDraftRequest = {
 
 export type CompositionAdditionRequest = {
   compositionIndex: number;
+  insertIndex?: number;
   cards: CardSnapshot[];
 };
 

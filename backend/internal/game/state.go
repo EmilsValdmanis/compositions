@@ -39,6 +39,7 @@ type DealTypes int
 
 type CompositionAddition struct {
 	CompositionIndex int
+	InsertIndex      *int
 	Cards            []Card
 }
 
@@ -69,6 +70,7 @@ type tablePlayState struct {
 
 type selectedAddition struct {
 	compositionIndex int
+	insertIndex      *int
 	mask             uint32
 }
 
@@ -679,18 +681,25 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 		}
 
 		for compositionIndex, target := range baseState.activeCompositions {
-			if target == nil || !canAddCardsToComposition(target, cards, scratch.combinedBuf) {
+			if target == nil {
 				continue
 			}
 
-			selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, mask: mask})
-			if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, mask, true, scratch) {
-				return true
+			for insertIndex := 0; insertIndex <= len(target.cards); insertIndex++ {
+				insertIndex := insertIndex
+				if !canInsertCardsIntoComposition(target, insertIndex, cards, scratch.combinedBuf) {
+					continue
+				}
+
+				selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, insertIndex: &insertIndex, mask: mask})
+				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, mask, true, scratch) {
+					return true
+				}
+				if searchSupportCandidates(baseState, discardMask, 1, mask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+					return true
+				}
+				selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
 			}
-			if searchSupportCandidates(baseState, discardMask, 1, mask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
-				return true
-			}
-			selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
 		}
 	}
 
@@ -726,19 +735,26 @@ func searchSupportCandidates(baseState tablePlayState, discardMask uint32, start
 		}
 
 		for compositionIndex, target := range baseState.activeCompositions {
-			if target == nil || !canAddCardsToComposition(target, cards, scratch.combinedBuf) {
+			if target == nil {
 				continue
 			}
 
-			selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, mask: mask})
-			if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
-				return true
-			}
+			for insertIndex := 0; insertIndex <= len(target.cards); insertIndex++ {
+				insertIndex := insertIndex
+				if !canInsertCardsIntoComposition(target, insertIndex, cards, scratch.combinedBuf) {
+					continue
+				}
 
-			if searchSupportCandidates(baseState, discardMask, mask+1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
-				return true
+				selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, insertIndex: &insertIndex, mask: mask})
+				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
+					return true
+				}
+
+				if searchSupportCandidates(baseState, discardMask, mask+1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+					return true
+				}
+				selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
 			}
-			selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
 		}
 	}
 
@@ -754,6 +770,19 @@ func canAddCardsToComposition(comp *Composition, cards []Card, combinedBuf []Car
 	combined := combinedBuf[:0]
 	combined = append(combined, comp.cards...)
 	combined = append(combined, cards...)
+	extended := Composition{variant: comp.variant, cards: combined}
+	return extended.isValid()
+}
+
+func canInsertCardsIntoComposition(comp *Composition, insertIndex int, cards []Card, combinedBuf []Card) bool {
+	if insertIndex < 0 || insertIndex > len(comp.cards) {
+		return false
+	}
+
+	combined := combinedBuf[:0]
+	combined = append(combined, comp.cards[:insertIndex]...)
+	combined = append(combined, cards...)
+	combined = append(combined, comp.cards[insertIndex:]...)
 	extended := Composition{variant: comp.variant, cards: combined}
 	return extended.isValid()
 }
@@ -801,6 +830,34 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		updatedCount++
 	}
 
+	for _, addition := range additions {
+		if addition.compositionIndex < 0 || addition.compositionIndex >= len(baseState.activeCompositions) {
+			return false
+		}
+
+		cards := cardsForMask(baseState.handCards, addition.mask, scratch.maskCards)
+		if len(cards) == 0 {
+			return false
+		}
+
+		target := currentComposition(addition.compositionIndex)
+		if target == nil {
+			return false
+		}
+
+		insertIndex := len(target.cards)
+		if addition.insertIndex != nil {
+			insertIndex = *addition.insertIndex
+		}
+
+		extended, ok := target.WithInsertedCards(insertIndex, cards)
+		if !ok {
+			return false
+		}
+		openingPoints += extended.Points() - target.Points()
+		storeComposition(addition.compositionIndex, extended)
+	}
+
 	for _, reclaim := range reclaims {
 		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(baseState.activeCompositions) {
 			return false
@@ -818,29 +875,6 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		openingPoints += reclaimPoints
 		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
 		storeComposition(reclaim.CompositionIndex, updated)
-	}
-
-	for _, addition := range additions {
-		if addition.compositionIndex < 0 || addition.compositionIndex >= len(baseState.activeCompositions) {
-			return false
-		}
-
-		cards := cardsForMask(baseState.handCards, addition.mask, scratch.maskCards)
-		if len(cards) == 0 {
-			return false
-		}
-
-		target := currentComposition(addition.compositionIndex)
-		if target == nil {
-			return false
-		}
-
-		extended, ok := target.WithAddedCards(cards)
-		if !ok {
-			return false
-		}
-		openingPoints += extended.Points() - target.Points()
-		storeComposition(addition.compositionIndex, extended)
 	}
 
 	if !baseState.hasOpened && len(compMasks) == 0 {
@@ -925,6 +959,35 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 
 	updatedCompositions := make([]*Composition, len(state.activeCompositions))
 	copy(updatedCompositions, state.activeCompositions)
+
+	for _, addition := range additions {
+		if len(addition.Cards) == 0 {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+		if addition.CompositionIndex < 0 || addition.CompositionIndex >= len(updatedCompositions) {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		target := updatedCompositions[addition.CompositionIndex]
+		if target == nil {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		insertIndex := len(target.cards)
+		if addition.InsertIndex != nil {
+			insertIndex = *addition.InsertIndex
+		}
+
+		extended, ok := target.WithInsertedCards(insertIndex, addition.Cards)
+		if !ok {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		updatedCompositions[addition.CompositionIndex] = extended
+		playedCards = append(playedCards, addition.Cards...)
+		openingPoints += extended.Points() - target.Points()
+	}
+
 	for _, reclaim := range reclaims {
 		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
 			return tablePlayState{}, ErrInvalidComposition
@@ -945,29 +1008,6 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		playedCards = append(playedCards, reclaim.ReplacementCard)
 		openingPoints += reclaimPoints
 		updatedCompositions[reclaim.CompositionIndex] = updated
-	}
-
-	for _, addition := range additions {
-		if len(addition.Cards) == 0 {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-		if addition.CompositionIndex < 0 || addition.CompositionIndex >= len(updatedCompositions) {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
-		target := updatedCompositions[addition.CompositionIndex]
-		if target == nil {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
-		extended, ok := target.WithAddedCards(addition.Cards)
-		if !ok {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
-		updatedCompositions[addition.CompositionIndex] = extended
-		playedCards = append(playedCards, addition.Cards...)
-		openingPoints += extended.Points() - target.Points()
 	}
 
 	if !state.hasOpened && len(comps) == 0 {

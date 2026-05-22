@@ -5,6 +5,7 @@ import {
   type HandEntry,
   type PlannedJokerReclaim,
   tableCompositionDropId,
+  tableCompositionEdgeDropId,
 } from "#/components/game/game-board-view-state";
 import {
   type CompositionSnapshot,
@@ -45,11 +46,63 @@ function buildCompositionCardViews(cards: CompositionSnapshot["cards"]) {
   return cardViews;
 }
 
+function CompositionEdgeDraftZone({
+  compositionIndex,
+  edge,
+  entries,
+  interactive,
+  players,
+  playerId,
+}: {
+  compositionIndex: number;
+  edge: "start" | "end";
+  entries: HandEntry[];
+  interactive: boolean;
+  players: PlayerSnapshot[];
+  playerId?: string;
+}) {
+  return (
+    <GameBoardDraftDropZone
+      id={tableCompositionEdgeDropId(compositionIndex, edge)}
+      className={cn(
+        "flex min-h-24 min-w-12 items-center justify-center rounded-2xl border border-dashed border-border/60 bg-background/20 px-2 py-2 transition",
+        entries.length > 0 ? "border-primary/60 bg-primary/5" : "hover:border-primary/50",
+      )}
+    >
+      <SortableContext items={entries.map((entry) => entry.key)} strategy={horizontalListSortingStrategy}>
+        <div className="flex items-center gap-2">
+          {entries.map((entry) => (
+            <GameCard
+              key={entry.key}
+              card={entry.card}
+              size="default"
+              draggable={
+                interactive
+                  ? {
+                      id: entry.key,
+                      cardIndex: entry.sourceIndex,
+                      isVirtual: entry.isVirtual,
+                    }
+                  : undefined
+              }
+              decoration={{
+                highlight: "addition",
+                label: <ActivityLabel players={players} playerId={playerId} label="Add" />,
+              }}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </GameBoardDraftDropZone>
+  );
+}
+
 export function CompositionRow({
   composition,
   index,
   stagedEntries = EMPTY_STAGED_ENTRIES,
   reclaims = EMPTY_RECLAIMS,
+  insertIndex,
   players,
   stagedEntryPlayerId,
   stagedEntriesInteractive = true,
@@ -59,6 +112,7 @@ export function CompositionRow({
   index: number;
   stagedEntries?: HandEntry[];
   reclaims?: PlannedJokerReclaim[];
+  insertIndex?: number;
   players: PlayerSnapshot[];
   stagedEntryPlayerId?: string;
   stagedEntriesInteractive?: boolean;
@@ -75,20 +129,23 @@ export function CompositionRow({
   const cardActivities = activity?.cardActivities ?? {};
   const isNewComposition = activity?.kind === "new_composition";
   const isHighlightedComposition = isNewComposition || composition.complete;
+  const additionsAtStart = insertIndex === 0 ? additionEntries : EMPTY_STAGED_ENTRIES;
+  const additionsAtEnd = insertIndex === 0 ? EMPTY_STAGED_ENTRIES : additionEntries;
 
   return (
     <GameBoardDraftDropZone
       id={tableCompositionDropId(index)}
       className={cn(
-        "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3",
+        "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-4",
         isHighlightedComposition ? "mt-5 border-primary/70 bg-primary/5" : null,
       )}
     >
       {composition.complete ? (
-        <div className="absolute -top-1 -right-1 z-10 transform translate-x-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded-full bg-primary/5 text-primary/70 shadow-sm border border-primary/70">
+        <div className="absolute -top-1 -right-1 z-10 flex size-5 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-primary/70 bg-primary/5 text-primary/70 shadow-sm">
           <HugeiconsIcon icon={Tick01FreeIcons} className="size-3" strokeWidth={2} />
         </div>
       ) : null}
+
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">#{index + 1}</Badge>
@@ -101,7 +158,16 @@ export function CompositionRow({
         </div>
       </div>
 
-      <div className="flex flex-wrap content-start justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <CompositionEdgeDraftZone
+          compositionIndex={index}
+          edge="start"
+          entries={additionsAtStart}
+          interactive={stagedEntriesInteractive}
+          players={players}
+          playerId={stagedEntryPlayerId}
+        />
+
         {compositionCards.map(({ card, index: cardIndex, key }) => {
           const reclaim = reclaimByJokerIndex.get(cardIndex);
           const cardActivity = cardActivities[cardIndex];
@@ -118,7 +184,7 @@ export function CompositionRow({
             <div key={key} className="flex flex-col items-center gap-1">
               <GameCard
                 card={previewCard}
-                size="compact"
+                size="default"
                 draggable={
                   reclaim && stagedEntriesInteractive
                     ? {
@@ -136,11 +202,7 @@ export function CompositionRow({
                           (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
                             <ReclaimActivityLabel players={players} playerId={previewPlayerId} />
                           ) : (
-                            <ActivityLabel
-                              players={players}
-                              playerId={previewPlayerId}
-                              label="Add"
-                            />
+                            <ActivityLabel players={players} playerId={previewPlayerId} label="Add" />
                           ),
                       }
                     : undefined
@@ -149,34 +211,15 @@ export function CompositionRow({
             </div>
           );
         })}
-        <SortableContext
-          items={additionEntries.map((entry) => entry.key)}
-          strategy={horizontalListSortingStrategy}
-        >
-          {additionEntries.map((entry) => (
-            <div key={entry.key} className="flex flex-col items-center gap-1">
-              <GameCard
-                card={entry.card}
-                size="compact"
-                draggable={
-                  stagedEntriesInteractive
-                    ? {
-                        id: entry.key,
-                        cardIndex: entry.sourceIndex,
-                        isVirtual: entry.isVirtual,
-                      }
-                    : undefined
-                }
-                decoration={{
-                  highlight: "addition",
-                  label: (
-                    <ActivityLabel players={players} playerId={stagedEntryPlayerId} label="Add" />
-                  ),
-                }}
-              />
-            </div>
-          ))}
-        </SortableContext>
+
+        <CompositionEdgeDraftZone
+          compositionIndex={index}
+          edge="end"
+          entries={additionsAtEnd}
+          interactive={stagedEntriesInteractive}
+          players={players}
+          playerId={stagedEntryPlayerId}
+        />
       </div>
     </GameBoardDraftDropZone>
   );

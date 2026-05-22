@@ -27,6 +27,7 @@ export type DraftComposition = {
   id: string;
   handKeys: string[];
   tableIndex: number | null;
+  insertIndex?: number;
 };
 
 export type DraftedCompositionView = DraftComposition & {
@@ -38,13 +39,21 @@ export type PlannedJokerReclaim = {
   replacementEntry: HandEntry;
 };
 
+type JokerReclaimPlan = {
+  additions: HandEntry[];
+  reclaims: PlannedJokerReclaim[];
+};
+
 export type TableCompositionView = {
   tableIndex: number;
   key: string;
   snapshot: CompositionSnapshot;
   stagedEntries: HandEntry[];
   reclaims: PlannedJokerReclaim[];
+  insertIndex: number;
 };
+
+export type TableCompositionEdge = "start" | "end";
 
 export type VirtualReclaimedJoker = {
   key: string;
@@ -58,6 +67,7 @@ export const NEW_COMPOSITION_DROP_ID = "new-composition-drop-zone";
 
 const DRAFT_COMPOSITION_DROP_ID_PREFIX = "draft-composition-";
 const TABLE_COMPOSITION_DROP_ID_PREFIX = "table-composition-";
+const TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX = "table-composition-edge-";
 
 function handCardKey(card: CardSnapshot) {
   if (card.isJoker) {
@@ -171,6 +181,13 @@ export function tableCompositionDropId(compositionIndex: number) {
   return `${TABLE_COMPOSITION_DROP_ID_PREFIX}${compositionIndex}`;
 }
 
+export function tableCompositionEdgeDropId(
+  compositionIndex: number,
+  edge: TableCompositionEdge,
+) {
+  return `${TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX}${compositionIndex}-${edge}`;
+}
+
 export function tableCompositionIndexFromDropId(dropId: string) {
   if (!dropId.startsWith(TABLE_COMPOSITION_DROP_ID_PREFIX)) {
     return null;
@@ -178,6 +195,34 @@ export function tableCompositionIndexFromDropId(dropId: string) {
 
   const compositionIndex = Number(dropId.slice(TABLE_COMPOSITION_DROP_ID_PREFIX.length));
   return Number.isInteger(compositionIndex) && compositionIndex >= 0 ? compositionIndex : null;
+}
+
+export function tableCompositionEdgeTargetFromDropId(dropId: string) {
+  if (!dropId.startsWith(TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX)) {
+    return null;
+  }
+
+  const target = dropId.slice(TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX.length);
+  const separatorIndex = target.indexOf("-");
+  if (separatorIndex < 0) {
+    return null;
+  }
+
+  const compositionIndex = Number(target.slice(0, separatorIndex));
+  const edge = target.slice(separatorIndex + 1);
+
+  if (!Number.isInteger(compositionIndex) || compositionIndex < 0) {
+    return null;
+  }
+
+  if (edge !== "start" && edge !== "end") {
+    return null;
+  }
+
+  return {
+    compositionIndex,
+    edge,
+  } as const;
 }
 
 export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKey: string) {
@@ -310,6 +355,21 @@ export function insertHandKeyIntoDraft(
   return next;
 }
 
+export function moveDraftCompositionInsertIndex(
+  compositions: DraftComposition[],
+  compositionId: string,
+  insertIndex: number,
+) {
+  return compositions.map((composition) =>
+    composition.id === compositionId
+      ? {
+          ...composition,
+          insertIndex,
+        }
+      : composition,
+  );
+}
+
 function cardsEqual(a: CardSnapshot, b: CardSnapshot) {
   return (
     Boolean(a.isJoker) === Boolean(b.isJoker) &&
@@ -318,48 +378,123 @@ function cardsEqual(a: CardSnapshot, b: CardSnapshot) {
   );
 }
 
-export function inferPlannedJokerReclaims(
-  composition: CompositionSnapshot,
-  stagedEntries: HandEntry[],
-) {
-  const availableReclaimIndices = new Set<number>();
+function jokerReclaimOptions(composition: CompositionSnapshot) {
+  const options: Array<{ jokerIndex: number; replacementCard: CardSnapshot }> = [];
 
-  for (const [indexKey, options] of Object.entries(composition.jokerRepresentations ?? {})) {
+  for (const [indexKey, cards] of Object.entries(composition.jokerRepresentations ?? {})) {
     const jokerIndex = Number(indexKey);
+    const replacementCard = cards[0];
 
     if (
       Number.isInteger(jokerIndex) &&
       jokerIndex >= 0 &&
       composition.cards[jokerIndex]?.isJoker &&
-      options.length === 1
+      cards.length === 1 &&
+      replacementCard
     ) {
-      availableReclaimIndices.add(jokerIndex);
+      options.push({ jokerIndex, replacementCard });
+    }
+  }
+
+  return options;
+}
+
+function isAmbiguousRunInsertion(composition: CompositionSnapshot, insertIndex: number) {
+  if (composition.type !== "run") {
+    return false;
+  }
+
+  return insertIndex > 0 && insertIndex < composition.cards.length;
+}
+
+export function tableCompositionInsertIndexForEdge(
+  composition: CompositionSnapshot,
+  edge: TableCompositionEdge,
+) {
+  return edge === "start" ? 0 : composition.cards.length;
+}
+
+function inferSetPlannedJokerReclaims(
+  composition: CompositionSnapshot,
+  stagedEntries: HandEntry[],
+): JokerReclaimPlan {
+  const nonJokerCards = composition.cards.filter((card) => !card.isJoker);
+  const setRank = nonJokerCards[0]?.rank ?? null;
+
+  if (setRank === null) {
+    return {
+      additions: stagedEntries,
+      reclaims: [],
+    };
+  }
+
+  const presentSuits = new Set(
+    nonJokerCards
+      .map((card) => card.suit)
+      .filter((suit): suit is number => typeof suit === "number"),
+  );
+  const jokerIndices = composition.cards.flatMap((card, index) => (card.isJoker ? [index] : []));
+  const remainingEntries: HandEntry[] = [];
+  const additions: HandEntry[] = [];
+  let additionsRemaining = Math.max(0, 4 - composition.cards.length);
+
+  for (const entry of stagedEntries) {
+    const suit = entry.card.suit;
+    if (
+      entry.card.isJoker ||
+      entry.card.rank !== setRank ||
+      typeof suit !== "number" ||
+      presentSuits.has(suit)
+    ) {
+      remainingEntries.push(entry);
+      continue;
+    }
+
+    if (additionsRemaining > 0) {
+      additions.push(entry);
+      presentSuits.add(suit);
+      additionsRemaining -= 1;
+      continue;
+    }
+
+    remainingEntries.push(entry);
+  }
+
+  const availableOptions = jokerReclaimOptions(composition);
+  if (availableOptions.length === 0 && jokerIndices.length === 1) {
+    const missingSuits = [0, 1, 2, 3].filter((suit) => !presentSuits.has(suit));
+    if (missingSuits.length === 1) {
+      availableOptions.push({
+        jokerIndex: jokerIndices[0],
+        replacementCard: { rank: setRank, suit: missingSuits[0] },
+      });
     }
   }
 
   const reclaims: PlannedJokerReclaim[] = [];
-  const additions: HandEntry[] = [];
+  const optionIndexByCardKey = new Map(
+    availableOptions.map((option) => [
+      `${option.replacementCard.rank ?? "?"}-${option.replacementCard.suit ?? "?"}-${Boolean(option.replacementCard.isJoker)}`,
+      option,
+    ]),
+  );
 
-  for (const entry of stagedEntries) {
-    let matchedJokerIndex: number | null = null;
+  for (const entry of remainingEntries) {
+    const matchedOption = optionIndexByCardKey.get(
+      `${entry.card.rank ?? "?"}-${entry.card.suit ?? "?"}-${Boolean(entry.card.isJoker)}`,
+    );
 
-    for (const jokerIndex of availableReclaimIndices) {
-      const replacementCard = composition.jokerRepresentations?.[jokerIndex]?.[0];
-
-      if (replacementCard && cardsEqual(replacementCard, entry.card)) {
-        matchedJokerIndex = jokerIndex;
-        break;
-      }
-    }
-
-    if (matchedJokerIndex === null) {
+    if (!matchedOption || !cardsEqual(matchedOption.replacementCard, entry.card)) {
       additions.push(entry);
       continue;
     }
 
-    availableReclaimIndices.delete(matchedJokerIndex);
+    optionIndexByCardKey.delete(
+      `${matchedOption.replacementCard.rank ?? "?"}-${matchedOption.replacementCard.suit ?? "?"}-${Boolean(matchedOption.replacementCard.isJoker)}`,
+    );
+
     reclaims.push({
-      jokerIndex: matchedJokerIndex,
+      jokerIndex: matchedOption.jokerIndex,
       replacementEntry: entry,
     });
   }
@@ -367,6 +502,96 @@ export function inferPlannedJokerReclaims(
   return {
     additions,
     reclaims,
+  };
+}
+
+function inferPlannedJokerReclaimsForInsertIndex(
+  composition: CompositionSnapshot,
+  stagedEntries: HandEntry[],
+  insertIndex: number,
+): JokerReclaimPlan {
+  if (composition.type === "set") {
+    return inferSetPlannedJokerReclaims(composition, stagedEntries);
+  }
+
+  const availableOptions = jokerReclaimOptions(composition);
+
+  if (availableOptions.length === 0 || isAmbiguousRunInsertion(composition, insertIndex)) {
+    return {
+      additions: stagedEntries,
+      reclaims: [],
+    };
+  }
+
+  const reclaims: PlannedJokerReclaim[] = [];
+  const additions: HandEntry[] = [];
+  const optionIndexByCardKey = new Map(
+    availableOptions.map((option, optionIndex) => [
+      `${option.replacementCard.rank ?? "?"}-${option.replacementCard.suit ?? "?"}-${Boolean(option.replacementCard.isJoker)}`,
+      optionIndex,
+    ]),
+  );
+
+  for (const entry of stagedEntries) {
+    const cardKey = `${entry.card.rank ?? "?"}-${entry.card.suit ?? "?"}-${Boolean(entry.card.isJoker)}`;
+    const matchedOptionIndex = optionIndexByCardKey.get(cardKey) ?? -1;
+
+    if (matchedOptionIndex < 0) {
+      additions.push(entry);
+      continue;
+    }
+
+    const [matchedOption] = availableOptions.splice(matchedOptionIndex, 1);
+    if (!matchedOption) {
+      additions.push(entry);
+      continue;
+    }
+
+    optionIndexByCardKey.delete(cardKey);
+
+    reclaims.push({
+      jokerIndex: matchedOption.jokerIndex,
+      replacementEntry: entry,
+    });
+  }
+
+  return {
+    additions,
+    reclaims,
+  };
+}
+
+export function inferPlannedJokerReclaims(
+  composition: CompositionSnapshot,
+  stagedEntries: HandEntry[],
+  insertIndex = composition.cards.length,
+) {
+  return inferPlannedJokerReclaimsForInsertIndex(composition, stagedEntries, insertIndex);
+}
+
+function buildOrderedAdditionEntries(
+  composition: CompositionSnapshot,
+  stagedEntries: HandEntry[],
+  insertIndex: number,
+) {
+  const { additions, reclaims } = inferPlannedJokerReclaimsForInsertIndex(
+    composition,
+    stagedEntries,
+    insertIndex,
+  );
+
+  if (reclaims.length === 0) {
+    return {
+      additions,
+      reclaims,
+      orderedEntries: additions,
+    };
+  }
+
+  return {
+    additions,
+    reclaims,
+    orderedEntries: additions,
   };
 }
 
@@ -387,14 +612,16 @@ export function buildTablePlayRequest(
     }
 
     const activeComposition = activeCompositions[composition.tableIndex];
-    const { additions: stagedAdditions, reclaims: stagedReclaims } = activeComposition
-      ? inferPlannedJokerReclaims(activeComposition, composition.entries)
-      : { additions: composition.entries, reclaims: [] };
+    const insertIndex = composition.insertIndex ?? activeComposition?.cards.length ?? 0;
+    const { reclaims: stagedReclaims, orderedEntries } = activeComposition
+      ? buildOrderedAdditionEntries(activeComposition, composition.entries, insertIndex)
+      : { reclaims: [], orderedEntries: composition.entries };
 
-    if (stagedAdditions.length > 0) {
+    if (orderedEntries.length > 0) {
       additions.push({
         compositionIndex: composition.tableIndex,
-        cards: stagedAdditions.map((entry) => entry.card),
+        insertIndex,
+        cards: orderedEntries.map((entry) => entry.card),
       });
     }
 
@@ -425,6 +652,7 @@ export function buildTableCompositionViews(
     snapshot: composition,
     stagedEntries: [],
     reclaims: [],
+    insertIndex: composition.cards.length,
   }));
 
   for (const composition of draftCompositions) {
@@ -435,9 +663,12 @@ export function buildTableCompositionViews(
     const existing = views[composition.tableIndex];
     if (existing) {
       existing.stagedEntries = mapHandKeysToEntries(composition.handKeys, entryByKey);
+      const insertIndex = composition.insertIndex ?? existing.snapshot.cards.length;
+      existing.insertIndex = insertIndex;
       existing.reclaims = inferPlannedJokerReclaims(
         existing.snapshot,
         existing.stagedEntries,
+        insertIndex,
       ).reclaims;
     }
   }

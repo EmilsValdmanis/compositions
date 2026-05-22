@@ -28,6 +28,7 @@ type CompositionActivitySnapshot struct {
 
 type DraftCompositionSnapshot struct {
 	TableIndex *int           `json:"tableIndex,omitempty"`
+	InsertIndex *int          `json:"insertIndex,omitempty"`
 	Cards      []CardSnapshot `json:"cards"`
 }
 

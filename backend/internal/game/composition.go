@@ -61,6 +61,19 @@ func (c *Composition) WithAddedCards(cards []Card) (*Composition, bool) {
 	return newComposition(combined, c.variant, false)
 }
 
+func (c *Composition) WithInsertedCards(insertIndex int, cards []Card) (*Composition, bool) {
+	if insertIndex < 0 || insertIndex > len(c.cards) {
+		return nil, false
+	}
+
+	combined := make([]Card, 0, len(c.cards)+len(cards))
+	combined = append(combined, c.cards[:insertIndex]...)
+	combined = append(combined, cards...)
+	combined = append(combined, c.cards[insertIndex:]...)
+
+	return newComposition(combined, c.variant, false)
+}
+
 func (c *Composition) ReclaimJoker(cardIndex int, replacement Card) (*Composition, bool) {
 	if cardIndex < 0 || cardIndex >= len(c.cards) {
 		return nil, false

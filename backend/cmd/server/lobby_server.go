@@ -910,7 +910,7 @@ func buildDraftSnapshotsFromSubmitted(comps []*game.Composition, additions []gam
 			cards = append(cards, card.Snapshot())
 		}
 		index := addition.CompositionIndex
-		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: &index, Cards: cards})
+		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: &index, InsertIndex: addition.InsertIndex, Cards: cards})
 	}
 	return drafts
 }
@@ -1045,6 +1045,10 @@ func cloneDraftCompositionSnapshots(source []game.DraftCompositionSnapshot) []ga
 		if draft.TableIndex != nil {
 			index := *draft.TableIndex
 			next.TableIndex = &index
+		}
+		if draft.InsertIndex != nil {
+			index := *draft.InsertIndex
+			next.InsertIndex = &index
 		}
 		cloned = append(cloned, next)
 	}

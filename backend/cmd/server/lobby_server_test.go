@@ -284,6 +284,30 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		}
 	})
 
+	t.Run("cloneDraftCompositionSnapshots clones insert index", func(t *testing.T) {
+		tableIndex := 2
+		insertIndex := 1
+		source := []game.DraftCompositionSnapshot{{
+			TableIndex:  &tableIndex,
+			InsertIndex: &insertIndex,
+			Cards:       []game.CardSnapshot{{Rank: game.Ace, Suit: game.Spades}},
+		}}
+		cloned := cloneDraftCompositionSnapshots(source)
+
+		if len(cloned) != 1 {
+			t.Fatalf("len(cloned) = %d; want 1", len(cloned))
+		}
+		if cloned[0].TableIndex == nil || *cloned[0].TableIndex != tableIndex {
+			t.Fatalf("cloned[0].TableIndex = %#v; want %d", cloned[0].TableIndex, tableIndex)
+		}
+		if cloned[0].InsertIndex == nil || *cloned[0].InsertIndex != insertIndex {
+			t.Fatalf("cloned[0].InsertIndex = %#v; want %d", cloned[0].InsertIndex, insertIndex)
+		}
+		if &cloned[0].Cards[0] == &source[0].Cards[0] {
+			t.Fatal("cloneDraftCompositionSnapshots() reused card backing array")
+		}
+	})
+
 	t.Run("authenticated reconnect requires authenticated user", func(t *testing.T) {
 		lobby := newLobbyServer()
 		conn, _, cleanup := newSocketPair(t)

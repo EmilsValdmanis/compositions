@@ -57,6 +57,49 @@ describe("inferPlannedJokerReclaims", () => {
     expect(result.reclaims[0]?.replacementEntry.key).toBe(entries[0]?.key);
     expect(result.additions.map((entry) => entry.key)).toEqual([entries[1]?.key]);
   });
+
+  it("treats matching run cards as reclaims at the end of the run", () => {
+    const entries = buildHandEntries([{ rank: 6, suit: 0 }]);
+
+    const result = inferPlannedJokerReclaims(
+      {
+        type: "run",
+        cards: [{ rank: 5, suit: 0 }, { isJoker: true }, { rank: 7, suit: 0 }],
+        jokerRepresentations: {
+          1: [{ rank: 6, suit: 0 }],
+        },
+        points: 18,
+        complete: false,
+      },
+      entries,
+      3,
+    );
+
+    expect(result.reclaims).toHaveLength(1);
+    expect(result.reclaims[0]?.jokerIndex).toBe(1);
+    expect(result.reclaims[0]?.replacementEntry.key).toBe(entries[0]?.key);
+  });
+
+  it("does not allow run reclaims from the middle", () => {
+    const entries = buildHandEntries([{ rank: 6, suit: 0 }]);
+
+    const result = inferPlannedJokerReclaims(
+      {
+        type: "run",
+        cards: [{ rank: 5, suit: 0 }, { isJoker: true }, { rank: 7, suit: 0 }],
+        jokerRepresentations: {
+          1: [{ rank: 6, suit: 0 }],
+        },
+        points: 18,
+        complete: false,
+      },
+      entries,
+      1,
+    );
+
+    expect(result.reclaims).toEqual([]);
+    expect(result.additions.map((entry) => entry.key)).toEqual([entries[0]!.key]);
+  });
 });
 
 describe("buildTablePlayRequest", () => {
@@ -104,7 +147,53 @@ describe("buildTablePlayRequest", () => {
     expect(request.additions).toEqual([
       {
         compositionIndex: 0,
+        insertIndex: 4,
         cards: [{ rank: 5, suit: 0 }],
+      },
+    ]);
+  });
+
+  it("preserves insert position and reuses reclaimed joker for duplicate-card cases", () => {
+    const entries = buildHandEntries([
+      { rank: 1, suit: 0 },
+      { rank: 1, suit: 3 },
+    ]);
+
+    const request = buildTablePlayRequest(
+      [
+        {
+          type: "run",
+          cards: [{ rank: 1, suit: 0 }, { rank: 1, suit: 1 }, { isJoker: true }],
+          jokerRepresentations: {
+            2: [{ rank: 1, suit: 3 }],
+          },
+          points: 30,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          insertIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          entries,
+        },
+      ],
+    );
+
+    expect(request.reclaims).toEqual([
+      {
+        compositionIndex: 0,
+        jokerIndex: 2,
+        replacementCard: { rank: 1, suit: 3 },
+      },
+    ]);
+    expect(request.additions).toEqual([
+      {
+        compositionIndex: 0,
+        insertIndex: 0,
+        cards: [{ rank: 1, suit: 0 }],
       },
     ]);
   });
