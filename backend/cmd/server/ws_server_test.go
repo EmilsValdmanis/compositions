@@ -845,10 +845,94 @@ func TestHandleConnectionSendsHeartbeatPing(t *testing.T) {
 		t.Fatal("timed out waiting for heartbeat ping")
 	}
 
+	if err := serverConn.Close(); err != nil {
+		t.Fatalf("serverConn.Close() error = %v", err)
+	}
 	if err := clientConn.Close(); err != nil {
 		t.Fatalf("clientConn.Close() error = %v", err)
 	}
 	<-done
+}
+
+func TestHandleConnectionReturnsWhenHeartbeatPingWriteFails(t *testing.T) {
+	server := newWSServer()
+	serverConn, clientConn, cleanup := newSocketPair(t)
+	defer cleanup()
+
+	originalPingInterval := defaultWSPingInterval
+	originalReadTimeout := defaultWSReadTimeout
+	originalWriteControl := writeControl
+	defer func() {
+		defaultWSPingInterval = originalPingInterval
+		defaultWSReadTimeout = originalReadTimeout
+		writeControl = originalWriteControl
+	}()
+	defaultWSPingInterval = 10 * time.Millisecond
+	defaultWSReadTimeout = 5 * time.Second
+	writeControl = func(conn *websocket.Conn, messageType int, data []byte, deadline time.Time) error {
+		return errors.New("forced ping failure")
+	}
+
+	if err := clientConn.Close(); err != nil {
+		t.Fatalf("clientConn.Close() error = %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		server.handleConnection(serverConn)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for heartbeat ping failure to stop connection")
+	}
+}
+
+func TestRunHeartbeatPingLoopReturnsOnPingDone(t *testing.T) {
+	conn, _, cleanup := newSocketPair(t)
+	defer cleanup()
+
+	pingDone := make(chan struct{})
+	ticks := make(chan time.Time)
+	done := make(chan struct{})
+	go func() {
+		runHeartbeatPingLoop(conn, pingDone, ticks)
+		close(done)
+	}()
+
+	close(pingDone)
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for ping loop to stop on pingDone")
+	}
+}
+
+func TestRunHeartbeatPingLoopReturnsOnWriteFailure(t *testing.T) {
+	originalWriteControl := writeControl
+	defer func() { writeControl = originalWriteControl }()
+	writeControl = func(conn *websocket.Conn, messageType int, data []byte, deadline time.Time) error {
+		return errors.New("forced ping failure")
+	}
+
+	pingDone := make(chan struct{})
+	ticks := make(chan time.Time, 1)
+	done := make(chan struct{})
+	go func() {
+		runHeartbeatPingLoop(nil, pingDone, ticks)
+		close(done)
+	}()
+
+	ticks <- time.Now()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for ping loop to stop on write failure")
+	}
 }
 
 func TestHandleConnectionReturnsWhenRoomStateWriteFailsAfterReconnect(t *testing.T) {

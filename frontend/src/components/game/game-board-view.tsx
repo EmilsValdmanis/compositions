@@ -42,8 +42,12 @@ import {
   insertHandKeyIntoDraft,
   mapHandKeysToEntries,
   moveHandEntry,
+  moveDraftCompositionInsertIndex,
   pruneDraftCompositions,
   removeHandKeyFromDrafts,
+  setDraftCardInsertIndex,
+  tableCompositionEdgeTargetFromDropId,
+  tableCompositionInsertIndexForEdge,
   tableCompositionIndexFromDropId,
 } from "#/components/game/game-board-view-state";
 import { Button } from "#/components/ui/button";
@@ -479,6 +483,7 @@ function useGameBoardController({
           (composition) =>
             ({
               tableIndex: composition.tableIndex ?? undefined,
+              insertIndex: composition.insertIndex,
               cards: composition.entries.map((entry) => entry.card),
             }) satisfies DraftCompositionSnapshot,
         ),
@@ -609,6 +614,7 @@ function useGameBoardController({
       overId !== null && availableHandEntries.some((entry) => entry.key === overId);
     const droppedOnDraftContainer = overId ? compositionIdFromDropId(overId) : null;
     const droppedOnTableComposition = overId ? tableCompositionIndexFromDropId(overId) : null;
+    const droppedOnTableEdgeTarget = overId ? tableCompositionEdgeTargetFromDropId(overId) : null;
 
     if (event.over?.id === "discard-pile") {
       if (draftCompositions.some((composition) => composition.handKeys.includes(draggedHandKey))) {
@@ -637,13 +643,24 @@ function useGameBoardController({
       return;
     }
 
-    if (droppedOnTableComposition !== null && draggedEntry) {
+    if (droppedOnTableEdgeTarget !== null && draggedEntry) {
       updateDraftCompositions((current) => {
         const existing = current.find(
-          (composition) => composition.tableIndex === droppedOnTableComposition,
+          (composition) => composition.tableIndex === droppedOnTableEdgeTarget.compositionIndex,
         );
+        const targetComposition =
+          game?.activeCompositions?.[droppedOnTableEdgeTarget.compositionIndex];
+        const insertIndex = targetComposition
+          ? tableCompositionInsertIndexForEdge(targetComposition, droppedOnTableEdgeTarget.edge)
+          : 0;
+
         if (existing) {
-          return insertHandKeyIntoDraft(current, draggedHandKey, existing.id);
+          return setDraftCardInsertIndex(
+            insertHandKeyIntoDraft(current, draggedHandKey, existing.id),
+            existing.id,
+            draggedHandKey,
+            insertIndex,
+          );
         }
 
         const compositionId = `draft-${nextDraftIdRef.current}`;
@@ -651,7 +668,42 @@ function useGameBoardController({
 
         return [
           ...removeHandKeyFromDrafts(current, draggedHandKey),
-          { id: compositionId, handKeys: [draggedHandKey], tableIndex: droppedOnTableComposition },
+          {
+            id: compositionId,
+            handKeys: [draggedHandKey],
+            tableIndex: droppedOnTableEdgeTarget.compositionIndex,
+            insertIndex: targetComposition?.cards.length ?? 0,
+            cardInsertIndices: { [draggedHandKey]: insertIndex },
+          },
+        ];
+      });
+      return;
+    }
+
+    if (droppedOnTableComposition !== null && draggedEntry) {
+      updateDraftCompositions((current) => {
+        const existing = current.find(
+          (composition) => composition.tableIndex === droppedOnTableComposition,
+        );
+        if (existing) {
+          return moveDraftCompositionInsertIndex(
+            insertHandKeyIntoDraft(current, draggedHandKey, existing.id),
+            existing.id,
+            existing.insertIndex ?? existing.handKeys.length,
+          );
+        }
+
+        const compositionId = `draft-${nextDraftIdRef.current}`;
+        nextDraftIdRef.current += 1;
+
+        return [
+          ...removeHandKeyFromDrafts(current, draggedHandKey),
+          {
+            id: compositionId,
+            handKeys: [draggedHandKey],
+            tableIndex: droppedOnTableComposition,
+            insertIndex: game?.activeCompositions?.[droppedOnTableComposition]?.cards.length,
+          },
         ];
       });
       return;
@@ -676,9 +728,20 @@ function useGameBoardController({
     }
 
     if (droppedOnDraftContainer) {
-      updateDraftCompositions((current) =>
-        insertHandKeyIntoDraft(current, draggedHandKey, droppedOnDraftContainer),
-      );
+      updateDraftCompositions((current) => {
+        const target = current.find((composition) => composition.id === droppedOnDraftContainer);
+        const next = insertHandKeyIntoDraft(current, draggedHandKey, droppedOnDraftContainer);
+
+        if (target && target.tableIndex !== null) {
+          return moveDraftCompositionInsertIndex(
+            next,
+            droppedOnDraftContainer,
+            target.insertIndex ?? target.handKeys.length,
+          );
+        }
+
+        return next;
+      });
       return;
     }
 

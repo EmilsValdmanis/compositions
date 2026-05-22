@@ -53,16 +53,26 @@ function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
 
 function draftPreviewForComposition(
   tableComposition: TableCompositionView | undefined,
+  draft: DraftCompositionSnapshot,
   cards: DraftCompositionSnapshot["cards"],
 ) {
   const stagedEntries = buildHandEntries(cards) as HandEntry[];
 
   if (!tableComposition) {
-    return { stagedEntries, reclaims: [] as PlannedJokerReclaim[] };
+    return {
+      stagedEntries,
+      reclaims: [] as PlannedJokerReclaim[],
+      insertIndex: draft.insertIndex,
+    };
   }
 
-  const { reclaims } = inferPlannedJokerReclaims(tableComposition.snapshot, stagedEntries);
-  return { stagedEntries, reclaims };
+  const insertIndex = draft.insertIndex ?? tableComposition.snapshot.cards.length;
+  const { reclaims } = inferPlannedJokerReclaims(
+    tableComposition.snapshot,
+    stagedEntries,
+    insertIndex,
+  );
+  return { stagedEntries, reclaims, insertIndex };
 }
 
 export function GameBoardTable({
@@ -106,7 +116,12 @@ export function GameBoardTable({
   );
   const spectatorDraftsByTableIndex = new Map<
     number,
-    { stagedEntries: HandEntry[]; reclaims: PlannedJokerReclaim[]; playerId?: string }
+    {
+      stagedEntries: HandEntry[];
+      reclaims: PlannedJokerReclaim[];
+      insertIndex?: number;
+      playerId?: string;
+    }
   >();
   const stagedNewDrafts = stagedDrafts.filter(
     (composition) => composition.tableIndex === undefined,
@@ -118,13 +133,17 @@ export function GameBoardTable({
     }
 
     spectatorDraftsByTableIndex.set(draft.tableIndex, {
-      ...draftPreviewForComposition(tableCompositionsByIndex.get(draft.tableIndex), draft.cards),
+      ...draftPreviewForComposition(
+        tableCompositionsByIndex.get(draft.tableIndex),
+        draft,
+        draft.cards,
+      ),
       playerId: turnActivity?.playerId,
     });
   }
 
   return (
-    <Card className="min-h-0 overflow-y-scroll xl:flex-1">
+    <Card className="min-h-0 overflow-y-auto xl:flex-1">
       <CardHeader>
         <CardTitle>Table</CardTitle>
         <CardAction>
@@ -150,6 +169,10 @@ export function GameBoardTable({
                         composition.reclaims.length > 0
                           ? composition.reclaims
                           : (spectatorDraft?.reclaims ?? []);
+                      const insertIndex =
+                        composition.stagedEntries.length > 0
+                          ? composition.insertIndex
+                          : spectatorDraft?.insertIndex;
 
                       return (
                         <CompositionRow
@@ -157,6 +180,8 @@ export function GameBoardTable({
                           index={composition.tableIndex}
                           stagedEntries={stagedEntries}
                           reclaims={reclaims}
+                          insertIndex={insertIndex}
+                          cardInsertIndices={composition.cardInsertIndices}
                           players={players}
                           stagedEntryPlayerId={spectatorDraft?.playerId}
                           stagedEntriesInteractive={composition.stagedEntries.length > 0}
@@ -189,7 +214,7 @@ export function GameBoardTable({
                     <GameCard
                       key={`${composition.tableIndex ?? "new"}-${key}`}
                       card={card}
-                      size="compact"
+                      size="default"
                     />
                   ))}
                 </div>
@@ -215,7 +240,7 @@ export function GameBoardTable({
                       <GameCard
                         key={entry.key}
                         card={entry.card}
-                        size="compact"
+                        size="default"
                         draggable={{
                           id: entry.key,
                           cardIndex: entry.sourceIndex,

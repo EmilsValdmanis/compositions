@@ -1899,6 +1899,59 @@ func TestGameStatePlayTableAllowsOpeningWithReclaimAndReusedJoker(t *testing.T) 
 	}
 }
 
+func TestGameStatePlayTableAppliesInsertionBeforeReclaim(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+
+	base, ok := NewRun([]Card{
+		{rank: Queen, suit: Hearts},
+		{rank: King, suit: Hearts},
+		{isJoker: true},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	insertIndex := 0
+	state.players[0].hand.cards = []Card{
+		{rank: Jack, suit: Hearts},
+		{rank: Ace, suit: Hearts},
+		{rank: Two, suit: Clubs},
+	}
+
+	err := state.PlayTable(nil, []CompositionAddition{{
+		CompositionIndex: 0,
+		InsertIndex:      &insertIndex,
+		Cards:            []Card{{rank: Jack, suit: Hearts}, {isJoker: true}},
+	}}, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       4,
+		ReplacementCard:  Card{rank: Ace, suit: Hearts},
+	})
+
+	if err != nil {
+		t.Fatalf("PlayTable() error = %v", err)
+	}
+	want := []Card{
+		{isJoker: true},
+		{rank: Jack, suit: Hearts},
+		{rank: Queen, suit: Hearts},
+		{rank: King, suit: Hearts},
+		{rank: Ace, suit: Hearts},
+	}
+	if !slices.EqualFunc(state.activeCompositions[0].cards, want, sameCard) {
+		t.Fatalf("state.activeCompositions[0].cards = %#v; want %#v", state.activeCompositions[0].cards, want)
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Two || remaining.suit != Clubs {
+		t.Fatalf("remaining hand card = %+v; want Two of Clubs", remaining)
+	}
+}
+
 func TestGameStatePlayTableWithReclaimsRejectsAmbiguousSetJoker(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
@@ -3393,6 +3446,38 @@ func TestSearchSupportCandidatesRecursiveAdditionPath(t *testing.T) {
 
 	if !searchSupportCandidates(base, 1<<4, 1, 0, nil, nil, nil, nil, scratch) {
 		t.Fatal("searchSupportCandidates() = false; want true via recursive addition path")
+	}
+}
+
+func TestAdditionHelpers(t *testing.T) {
+	buf := make([]Card, 0, 8)
+	base := mustRun(t, card(Queen, Hearts), card(King, Hearts), card(Ace, Hearts))
+
+	if !canAddCardsToComposition(base, []Card{card(Jack, Hearts), joker()}, buf) {
+		t.Fatal("canAddCardsToComposition() = false; want true")
+	}
+	if canInsertCardsIntoComposition(base, -1, []Card{card(Jack, Hearts)}, buf) {
+		t.Fatal("canInsertCardsIntoComposition(-1) = true; want false")
+	}
+	if canInsertCardsIntoComposition(base, len(base.cards)+1, []Card{card(Jack, Hearts)}, buf) {
+		t.Fatal("canInsertCardsIntoComposition(out of bounds) = true; want false")
+	}
+	if !canInsertCardsIntoComposition(base, 0, []Card{joker(), card(Jack, Hearts)}, buf) {
+		t.Fatal("canInsertCardsIntoComposition() = false; want true at insert index 0")
+	}
+	if searchSupportCandidates(tablePlayState{
+		handCards:          []Card{card(Two, Clubs)},
+		hasOpened:          true,
+		activeCompositions: []*Composition{base},
+	}, 1<<0, 1, 0, nil, nil, nil, nil, searchScratch{maskCards: make([]Card, 0, 4), combinedBuf: make([]Card, 0, 8)}) {
+		t.Fatal("searchSupportCandidates() = true; want false for invalid inserted addition")
+	}
+	if searchSupportCandidates(tablePlayState{
+		handCards:          []Card{card(Two, Clubs), card(Three, Diamonds)},
+		hasOpened:          true,
+		activeCompositions: []*Composition{nil, base},
+	}, 1<<1, 1, 0, nil, nil, nil, nil, searchScratch{maskCards: make([]Card, 0, 4), combinedBuf: make([]Card, 0, 8)}) {
+		t.Fatal("searchSupportCandidates() = true; want false after nil composition skip")
 	}
 }
 

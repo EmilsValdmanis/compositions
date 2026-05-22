@@ -16,12 +16,28 @@ import (
 
 var errSocketClosed = errors.New("socket closed")
 var emitEvent = writeEvent
+var writeControl = func(conn *websocket.Conn, messageType int, data []byte, deadline time.Time) error {
+	return conn.WriteControl(messageType, data, deadline)
+}
 
 var (
 	defaultWSReadTimeout  = 75 * time.Second
 	defaultWSPingInterval = 25 * time.Second
 	defaultWSWriteTimeout = 10 * time.Second
 )
+
+func runHeartbeatPingLoop(conn *websocket.Conn, pingDone <-chan struct{}, ticks <-chan time.Time) {
+	for {
+		select {
+		case <-ticks:
+			if err := writeControl(conn, websocket.PingMessage, nil, time.Now().Add(defaultWSWriteTimeout)); err != nil {
+				return
+			}
+		case <-pingDone:
+			return
+		}
+	}
+}
 
 type wsEnvelope struct {
 	Type string          `json:"type"`
@@ -79,12 +95,14 @@ type draftUpdateRequest struct {
 }
 
 type draftCompositionRequest struct {
-	TableIndex *int          `json:"tableIndex,omitempty"`
-	Cards      []cardRequest `json:"cards"`
+	TableIndex  *int          `json:"tableIndex,omitempty"`
+	InsertIndex *int          `json:"insertIndex,omitempty"`
+	Cards       []cardRequest `json:"cards"`
 }
 
 type compositionAdditionRequest struct {
 	CompositionIndex int           `json:"compositionIndex"`
+	InsertIndex      *int          `json:"insertIndex,omitempty"`
 	Cards            []cardRequest `json:"cards"`
 }
 
@@ -263,17 +281,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 	go func() {
 		ticker := time.NewTicker(defaultWSPingInterval)
 		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(defaultWSWriteTimeout)); err != nil {
-					return
-				}
-			case <-pingDone:
-				return
-			}
-		}
+		runHeartbeatPingLoop(conn, pingDone, ticker.C)
 	}()
 
 	sessionID := ""
@@ -719,7 +727,7 @@ func additionsFromRequest(requests []compositionAdditionRequest) ([]game.Composi
 		if err != nil {
 			return nil, err
 		}
-		additions = append(additions, game.CompositionAddition{CompositionIndex: req.CompositionIndex, Cards: cards})
+		additions = append(additions, game.CompositionAddition{CompositionIndex: req.CompositionIndex, InsertIndex: req.InsertIndex, Cards: cards})
 	}
 	return additions, nil
 }
@@ -755,7 +763,7 @@ func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.Dr
 		for _, card := range cards {
 			snapshots = append(snapshots, card.Snapshot())
 		}
-		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: req.TableIndex, Cards: snapshots})
+		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: req.TableIndex, InsertIndex: req.InsertIndex, Cards: snapshots})
 	}
 	return drafts, nil
 }

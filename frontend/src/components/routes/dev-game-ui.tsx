@@ -22,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
-import { Separator } from "#/components/ui/separator";
 
 const scenarios = mockScenarios;
 
@@ -196,7 +195,8 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
     addition.cards.forEach(removeCard);
     const target = nextCompositions[addition.compositionIndex];
     if (target) {
-      target.cards.push(...cloneCards(addition.cards));
+      const insertIndex = addition.insertIndex ?? target.cards.length;
+      target.cards.splice(insertIndex, 0, ...cloneCards(addition.cards));
       target.points += addition.cards.length * 5;
       target.complete = target.cards.length >= 3;
     }
@@ -243,10 +243,17 @@ export function DevGameUi() {
 
   const players = scenario?.players ?? [];
   const room = scenario ? cloneRoom(scenario.room) : null;
-  const game = useMemo(
+  const rawGame = useMemo(
     () => (gameOverride ? cloneGame(gameOverride) : scenario ? cloneGame(scenario.game) : null),
     [gameOverride, scenario],
   );
+  const game = useMemo(() => {
+    if (!rawGame) return null;
+    return {
+      ...rawGame,
+      activeCompositions: rawGame.activeCompositions.filter((c) => c.complete),
+    };
+  }, [rawGame]);
 
   const availablePerspectiveIds = useMemo(
     () => (scenario ? perspectivePlayerIds(scenario.players, scenario.controlledPlayerId) : []),
@@ -367,102 +374,39 @@ export function DevGameUi() {
         </CardContent>
       </Card>
 
-      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)] xl:grid-cols-[22rem_minmax(0,1fr)]">
-        <Card className="min-h-0 overflow-y-auto">
-          <CardHeader>
-            <CardTitle>Scenario Notes</CardTitle>
-            <CardDescription>Quick controls for iterating on the mock turn state.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Current turn</p>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{turnPlayerName}</Badge>
-                <Badge variant="outline">Turn {game.turn.number}</Badge>
-                <Badge variant="outline">Round {game.round}</Badge>
-                <Badge variant="outline">{game.turn.hasDrawn ? "Has drawn" : "Needs draw"}</Badge>
-              </div>
-            </div>
-            <Separator />
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">Quick actions</p>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canDrawDeck}
-                  onClick={() => updateGame(drawFromDeck)}
-                >
-                  Draw from deck
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canDrawDiscard}
-                  onClick={() => updateGame(drawFromDiscard)}
-                >
-                  Draw discard
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canDiscard}
-                  onClick={() =>
-                    updateGame((current) => discardFromHand(current, current.hand.length - 1))
-                  }
-                >
-                  Discard last card
-                </Button>
-              </div>
-            </div>
-            <Separator />
-            <div className="space-y-2 text-sm">
-              <p className="font-medium text-foreground">What this scenario shows</p>
-              <ul className="space-y-1 text-muted-foreground">
-                <li>Joker reclaim highlights</li>
-                <li>New composition cards and table activity labels</li>
-                <li>Drafted new compositions not yet submitted</li>
-                <li>Additions staged onto existing compositions</li>
-                <li>Existing table compositions from previous turns</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        <GameBoardHeader
+          phase={phase}
+          roomCode={room.code}
+          isLobbyPhase={false}
+          isMyTurn={Boolean(isMyTurn)}
+          turnPlayerName={turnPlayerName}
+          game={game}
+        />
 
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-          <GameBoardHeader
-            phase={phase}
-            roomCode={room.code}
-            isLobbyPhase={false}
-            isMyTurn={Boolean(isMyTurn)}
-            turnPlayerName={turnPlayerName}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <GameBoardView
             game={game}
+            roomCode={room.code}
+            playerId={resolvedPerspectiveId}
+            players={players}
+            connectedPlayers={connectedPlayers}
+            turnState={{
+              canDrawDeck,
+              canDrawDiscard,
+              canDiscard,
+              isMyTurn,
+              turnPlayerName,
+            }}
+            topDiscardCard={topDiscardCard}
+            onDiscardCard={(cardIndex) =>
+              updateGame((current) => discardFromHand(current, cardIndex))
+            }
+            onDrawFromDeck={() => updateGame(drawFromDeck)}
+            onDrawFromDiscard={() => updateGame(drawFromDiscard)}
+            onPlayTable={(play) => updateGame((current) => applyTablePlay(current, play))}
+            disableDraftSync
           />
-
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <GameBoardView
-              game={game}
-              roomCode={room.code}
-              playerId={resolvedPerspectiveId}
-              players={players}
-              connectedPlayers={connectedPlayers}
-              turnState={{
-                canDrawDeck,
-                canDrawDiscard,
-                canDiscard,
-                isMyTurn,
-                turnPlayerName,
-              }}
-              topDiscardCard={topDiscardCard}
-              onDiscardCard={(cardIndex) =>
-                updateGame((current) => discardFromHand(current, cardIndex))
-              }
-              onDrawFromDeck={() => updateGame(drawFromDeck)}
-              onDrawFromDiscard={() => updateGame(drawFromDiscard)}
-              onPlayTable={(play) => updateGame((current) => applyTablePlay(current, play))}
-              disableDraftSync
-            />
-          </div>
         </div>
       </div>
     </section>
