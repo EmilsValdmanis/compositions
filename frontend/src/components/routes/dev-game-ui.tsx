@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardHeader } from "#/components/game/game-board-header";
@@ -249,19 +249,16 @@ export function DevGameUi() {
   );
 
   const availablePerspectiveIds = useMemo(
-    () => (scenario ? perspectivePlayerIds(players, scenario.controlledPlayerId) : []),
-    [players, scenario],
+    () => (scenario ? perspectivePlayerIds(scenario.players, scenario.controlledPlayerId) : []),
+    [scenario],
   );
 
-  useEffect(() => {
-    if (!availablePerspectiveIds.includes(perspectivePlayerId)) {
-      setPerspectivePlayerId(availablePerspectiveIds[0] ?? "");
-    }
-  }, [availablePerspectiveIds, perspectivePlayerId]);
+  const resolvedPerspectiveId = availablePerspectiveIds.includes(perspectivePlayerId)
+    ? perspectivePlayerId
+    : (availablePerspectiveIds[0] ?? "");
 
   const selectedPerspective =
-    players.find((player) => player.playerId === perspectivePlayerId) ?? players[0] ?? null;
-  const resolvedPerspectiveId = selectedPerspective?.playerId ?? "";
+    players.find((player) => player.playerId === resolvedPerspectiveId) ?? players[0] ?? null;
   const connectedPlayers = players.filter((player) => player.connected).length;
   const phase = room?.phase ?? "in_progress";
   const isMyTurn = game?.turn.playerId === resolvedPerspectiveId;

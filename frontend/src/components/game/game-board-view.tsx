@@ -67,7 +67,6 @@ type GameBoardTurnState = {
 type HandOrderState = {
   scopeKey: string | null;
   order: string[] | null;
-  lastDrawnKey: string | null;
 };
 
 type DraftCompositionState = {
@@ -212,7 +211,6 @@ function GameBoardLayout({
   availableHandEntries,
   sortableIds,
   activeDrag,
-  drawnHandKey,
   draftedCompositionsCount,
   spectatorDrafts,
   canSubmitTablePlay,
@@ -230,7 +228,6 @@ function GameBoardLayout({
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
-  drawnHandKey: string | null;
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
   canSubmitTablePlay: boolean;
@@ -290,7 +287,6 @@ function GameBoardLayout({
           availableHandEntries={availableHandEntries}
           sortableIds={sortableIds}
           activeDrag={activeDrag}
-          drawnHandKey={drawnHandKey}
           tablePlayState={{
             hasDraftedCompositions: draftedCompositionsCount > 0,
           }}
@@ -303,7 +299,6 @@ function GameBoardLayout({
 type GameBoardController = {
   activeDrag: ActiveDrag | null;
   activeEntry: ReturnType<typeof buildHandEntries>[number] | null;
-  drawnHandKey: string | null;
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
@@ -355,7 +350,6 @@ function useGameBoardController({
   const [handOrderState, setHandOrderState] = useState<HandOrderState>({
     scopeKey: null,
     order: null,
-    lastDrawnKey: null,
   });
   const [activeDrag, setActiveDrag] = useState<ActiveDrag | null>(null);
   const [draftCompositionState, setDraftCompositionState] = useState<DraftCompositionState>({
@@ -369,8 +363,6 @@ function useGameBoardController({
     handOrderState.scopeKey === handOrderScopeKey && handOrderState.order
       ? handOrderState.order
       : persistedHandOrder;
-  const persistedDrawnHandKey =
-    handOrderState.scopeKey === handOrderScopeKey ? handOrderState.lastDrawnKey : null;
   const handEntries = useMemo(
     () => applyHandEntryOrder(rawHandEntries, handOrder),
     [handOrder, rawHandEntries],
@@ -378,11 +370,10 @@ function useGameBoardController({
   const currentDraftScopeKey = draftScopeKey(game, playerId, turnState.isMyTurn);
 
   function updateHandOrder(order: string[]) {
-    setHandOrderState((current) => ({
+    setHandOrderState({
       scopeKey: handOrderScopeKey,
       order,
-      lastDrawnKey: current.scopeKey === handOrderScopeKey ? current.lastDrawnKey : null,
-    }));
+    });
     setPersistedHandOrder(handOrderScopeKey, order);
   }
 
@@ -393,11 +384,6 @@ function useGameBoardController({
           applyHandEntryOrder(rawHandEntries, activeDrag.baselineOrder),
         )
       : null;
-  const activeDrawSource = activeDrag?.type === "draw" ? activeDrag.source : null;
-  const drawnHandKey =
-    turnState.canDiscard && activeDrag?.type === "draw" && activeDrawSource === "deck"
-      ? (activeDrawEntry?.key ?? null)
-      : persistedDrawnHandKey;
 
   function updateDraftCompositions(updater: (current: DraftComposition[]) => DraftComposition[]) {
     setDraftCompositionState((current) => {
@@ -511,32 +497,6 @@ function useGameBoardController({
     syncTurnDrafts(JSON.parse(serializedDrafts) as DraftCompositionSnapshot[]);
   }, [disableDraftSync, serializedDrafts, turnState.isMyTurn]);
 
-  useEffect(() => {
-    setHandOrderState((current) => {
-      const scopeMatches = current.scopeKey === handOrderScopeKey;
-      const nextDrawnKey =
-        activeDrag?.type === "draw" && activeDrawSource === "deck"
-          ? (activeDrawEntry?.key ?? null)
-          : current.lastDrawnKey;
-      const resolvedDrawnKey =
-        nextDrawnKey && validHandKeys.has(nextDrawnKey) ? nextDrawnKey : null;
-
-      if (
-        current.scopeKey === handOrderScopeKey &&
-        current.lastDrawnKey === resolvedDrawnKey &&
-        scopeMatches
-      ) {
-        return current;
-      }
-
-      return {
-        scopeKey: handOrderScopeKey,
-        order: scopeMatches ? current.order : null,
-        lastDrawnKey: resolvedDrawnKey,
-      };
-    });
-  }, [activeDrag?.type, activeDrawSource, activeDrawEntry?.key, handOrderScopeKey, validHandKeys]);
-
   function resetDraftCompositions() {
     setDraftCompositionState({
       scopeKey: currentDraftScopeKey,
@@ -556,21 +516,12 @@ function useGameBoardController({
     setPendingDiscardIndex(null);
   }
 
-  function clearLastDrawnKey() {
-    setHandOrderState((current) => ({
-      scopeKey: handOrderScopeKey,
-      order: current.scopeKey === handOrderScopeKey ? current.order : null,
-      lastDrawnKey: null,
-    }));
-  }
-
   function discardWithoutSubmitting() {
     if (pendingDiscardIndex === null) {
       return;
     }
 
     resetDraftCompositions();
-    clearLastDrawnKey();
     onDiscardCard(pendingDiscardIndex);
     closePendingDiscardDialog();
   }
@@ -673,7 +624,6 @@ function useGameBoardController({
         if (draftedCompositionsView.length > 0) {
           setPendingDiscardIndex(cardIndex);
         } else {
-          clearLastDrawnKey();
           onDiscardCard(cardIndex);
         }
       }
@@ -762,7 +712,6 @@ function useGameBoardController({
   return {
     activeDrag: displayActiveDrag,
     activeEntry,
-    drawnHandKey,
     availableHandEntries,
     sortableIds,
     tableCompositions,
@@ -841,7 +790,6 @@ export function GameBoardView({
           availableHandEntries={controller.availableHandEntries}
           sortableIds={controller.sortableIds}
           activeDrag={controller.activeDrag}
-          drawnHandKey={controller.drawnHandKey}
           draftedCompositionsCount={controller.draftedCompositionsCount}
           spectatorDrafts={spectatorDrafts}
           canSubmitTablePlay={controller.canSubmitTablePlay}

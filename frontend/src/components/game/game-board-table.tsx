@@ -131,110 +131,114 @@ export function GameBoardTable({
           <Badge variant="outline">{tablePoints} pts</Badge>
         </CardAction>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
-        <div className="min-h-0">
-          {hasVisibleCompositions ? (
-            <div className="flex min-h-0 flex-wrap items-start gap-3">
-              {tableCompositions.map((composition) => (
-                <div key={composition.key} className="w-fit shrink-0">
-                  {(() => {
-                    const spectatorDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
-                    const stagedEntries =
-                      composition.stagedEntries.length > 0
-                        ? composition.stagedEntries
-                        : (spectatorDraft?.stagedEntries ?? []);
-                    const reclaims =
-                      composition.reclaims.length > 0
-                        ? composition.reclaims
-                        : (spectatorDraft?.reclaims ?? []);
+      <CardContent className="min-h-0 flex-1">
+        <div className="flex min-h-full flex-col justify-center gap-4">
+          <div className="min-h-0">
+            {hasVisibleCompositions ? (
+              <div className="flex min-h-0 flex-wrap items-center justify-center gap-3">
+                {tableCompositions.map((composition) => (
+                  <div key={composition.key} className="w-fit shrink-0">
+                    {(() => {
+                      const spectatorDraft = spectatorDraftsByTableIndex.get(
+                        composition.tableIndex,
+                      );
+                      const stagedEntries =
+                        composition.stagedEntries.length > 0
+                          ? composition.stagedEntries
+                          : (spectatorDraft?.stagedEntries ?? []);
+                      const reclaims =
+                        composition.reclaims.length > 0
+                          ? composition.reclaims
+                          : (spectatorDraft?.reclaims ?? []);
 
-                    return (
-                      <CompositionRow
-                        composition={composition.snapshot}
-                        index={composition.tableIndex}
-                        stagedEntries={stagedEntries}
-                        reclaims={reclaims}
-                        players={players}
-                        stagedEntryPlayerId={spectatorDraft?.playerId}
-                        stagedEntriesInteractive={composition.stagedEntries.length > 0}
-                        activity={activityByIndex.get(composition.tableIndex)}
-                      />
-                    );
-                  })()}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid min-h-32 place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
-              No compositions on the table.
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-3">
-          {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
-            <div
-              key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
-              className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
-            >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
-                <Badge variant="outline">{composition.cards.length} cards</Badge>
-              </div>
-              <div className="flex items-start gap-2">
-                {draftCardInstances(composition.cards).map(({ card, key }) => (
-                  <GameCard
-                    key={`${composition.tableIndex ?? "new"}-${key}`}
-                    card={card}
-                    size="compact"
-                  />
+                      return (
+                        <CompositionRow
+                          composition={composition.snapshot}
+                          index={composition.tableIndex}
+                          stagedEntries={stagedEntries}
+                          reclaims={reclaims}
+                          players={players}
+                          stagedEntryPlayerId={spectatorDraft?.playerId}
+                          stagedEntriesInteractive={composition.stagedEntries.length > 0}
+                          activity={activityByIndex.get(composition.tableIndex)}
+                        />
+                      );
+                    })()}
+                  </div>
                 ))}
               </div>
-            </div>
-          ))}
-
-          {newCompositions.map((composition) => (
-            <GameBoardDraftDropZone
-              key={composition.id}
-              id={draftCompositionDropId(composition.id)}
-              className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
-            >
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <NewActivityLabel players={players} />
-                <Badge variant="outline">{composition.entries.length} cards</Badge>
+            ) : (
+              <div className="grid min-h-32 place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
+                No compositions on the table.
               </div>
-              <SortableContext
-                items={composition.entries.map((entry) => entry.key)}
-                strategy={horizontalListSortingStrategy}
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
+              <div
+                key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
+                className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
               >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
+                  <Badge variant="outline">{composition.cards.length} cards</Badge>
+                </div>
                 <div className="flex items-start gap-2">
-                  {composition.entries.map((entry) => (
+                  {draftCardInstances(composition.cards).map(({ card, key }) => (
                     <GameCard
-                      key={entry.key}
-                      card={entry.card}
+                      key={`${composition.tableIndex ?? "new"}-${key}`}
+                      card={card}
                       size="compact"
-                      draggable={{
-                        id: entry.key,
-                        cardIndex: entry.sourceIndex,
-                        isVirtual: entry.isVirtual,
-                      }}
                     />
                   ))}
                 </div>
-              </SortableContext>
-            </GameBoardDraftDropZone>
-          ))}
+              </div>
+            ))}
 
-          <GameBoardDraftDropZone
-            id={NEW_COMPOSITION_DROP_ID}
-            className="grid min-h-32 w-full max-w-80 min-w-64 shrink-0 place-items-center rounded-3xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground"
-          >
-            {canCompose
-              ? "Drop cards here to start a new composition."
-              : hasVisibleCompositions
-                ? "Additions to table compositions are shown above."
-                : "Waiting for a composition to be played."}
-          </GameBoardDraftDropZone>
+            {newCompositions.map((composition) => (
+              <GameBoardDraftDropZone
+                key={composition.id}
+                id={draftCompositionDropId(composition.id)}
+                className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <NewActivityLabel players={players} />
+                  <Badge variant="outline">{composition.entries.length} cards</Badge>
+                </div>
+                <SortableContext
+                  items={composition.entries.map((entry) => entry.key)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <div className="flex items-start gap-2">
+                    {composition.entries.map((entry) => (
+                      <GameCard
+                        key={entry.key}
+                        card={entry.card}
+                        size="compact"
+                        draggable={{
+                          id: entry.key,
+                          cardIndex: entry.sourceIndex,
+                          isVirtual: entry.isVirtual,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </GameBoardDraftDropZone>
+            ))}
+
+            <GameBoardDraftDropZone
+              id={NEW_COMPOSITION_DROP_ID}
+              className="grid min-h-32 w-full max-w-80 min-w-64 shrink-0 place-items-center rounded-3xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground"
+            >
+              {canCompose
+                ? "Drop cards here to start a new composition."
+                : hasVisibleCompositions
+                  ? "Additions to table compositions are shown above."
+                  : "Waiting for a composition to be played."}
+            </GameBoardDraftDropZone>
+          </div>
         </div>
       </CardContent>
       <CardFooter className="flex justify-between">
