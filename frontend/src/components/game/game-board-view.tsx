@@ -405,28 +405,24 @@ function useGameBoardController({
     () => new Set(handEntries.map((entry) => entry.key)),
     [handEntries],
   );
-  const draftCompositions = useMemo(
+  const scopedDraftCompositions = useMemo(
     () =>
-      pruneDraftCompositions(
-        draftCompositionState.scopeKey === currentDraftScopeKey
-          ? draftCompositionState.compositions
-          : [],
-        validHandKeys,
-      ),
-    [
-      currentDraftScopeKey,
-      draftCompositionState.compositions,
-      draftCompositionState.scopeKey,
-      validHandKeys,
-    ],
+      draftCompositionState.scopeKey === currentDraftScopeKey
+        ? draftCompositionState.compositions
+        : [],
+    [currentDraftScopeKey, draftCompositionState.compositions, draftCompositionState.scopeKey],
+  );
+  const draftCompositionsFromHand = useMemo(
+    () => pruneDraftCompositions(scopedDraftCompositions, validHandKeys),
+    [scopedDraftCompositions, validHandKeys],
   );
   const entryByKey = useMemo(
     () => new Map(handEntries.map((entry) => [entry.key, entry])),
     [handEntries],
   );
   const draftedCompositionsViewFromHand = useMemo(
-    () => buildDraftedCompositionViews(draftCompositions, entryByKey),
-    [draftCompositions, entryByKey],
+    () => buildDraftedCompositionViews(draftCompositionsFromHand, entryByKey),
+    [draftCompositionsFromHand, entryByKey],
   );
   const tableCompositions = useMemo(
     () =>
@@ -444,6 +440,14 @@ function useGameBoardController({
   const allHandEntries = useMemo(
     () => [...handEntries, ...virtualReclaimedJokers.map((joker) => joker.entry)],
     [handEntries, virtualReclaimedJokers],
+  );
+  const allValidHandKeys = useMemo(
+    () => new Set(allHandEntries.map((entry) => entry.key)),
+    [allHandEntries],
+  );
+  const draftCompositions = useMemo(
+    () => pruneDraftCompositions(scopedDraftCompositions, allValidHandKeys),
+    [allValidHandKeys, scopedDraftCompositions],
   );
   const activeEntry =
     activeDrag?.type === "hand"
@@ -566,28 +570,75 @@ function useGameBoardController({
     }
 
     const handKey = typeof event.active.id === "string" ? event.active.id : null;
-    setActiveDrag(handKey ? { type: "hand", handKey } : null);
+    setActiveDrag(
+      handKey
+        ? {
+            type: "hand",
+            handKey,
+            baselineDraftCompositions: draftCompositions,
+          }
+        : null,
+    );
   }
 
   function handleDragOver(event: DragOverEvent) {
-    if (activeDrag?.type !== "draw" || activeDrawEntry === null) {
+    if (activeDrag?.type === "draw") {
+      if (activeDrawEntry === null) {
+        return;
+      }
+
+      const overHandKey = typeof event.over?.id === "string" ? event.over.id : null;
+
+      if (overHandKey === null || overHandKey === "discard-pile") {
+        updateHandOrder(activeDrag.baselineOrder);
+        return;
+      }
+
+      updateHandOrder(handEntryOrder(moveHandEntry(handEntries, activeDrawEntry.key, overHandKey)));
       return;
     }
 
-    const overHandKey = typeof event.over?.id === "string" ? event.over.id : null;
-
-    if (overHandKey === null || overHandKey === "discard-pile") {
-      updateHandOrder(activeDrag.baselineOrder);
+    if (activeDrag?.type !== "hand" || !canCompose) {
       return;
     }
 
-    updateHandOrder(handEntryOrder(moveHandEntry(handEntries, activeDrawEntry.key, overHandKey)));
+    const overId = typeof event.over?.id === "string" ? event.over.id : null;
+    if (overId === null) {
+      return;
+    }
+
+    const droppedOnDraftCard = draftCompositions.find((composition) =>
+      composition.handKeys.includes(overId),
+    );
+    if (droppedOnDraftCard?.tableIndex === null) {
+      updateDraftCompositions((current) =>
+        insertHandKeyIntoDraft(current, activeDrag.handKey, droppedOnDraftCard.id, overId),
+      );
+      return;
+    }
+
+    const droppedOnDraftContainer = compositionIdFromDropId(overId);
+    if (!droppedOnDraftContainer) {
+      return;
+    }
+
+    const target = draftCompositions.find(
+      (composition) => composition.id === droppedOnDraftContainer,
+    );
+    if (target?.tableIndex !== null) {
+      return;
+    }
+
+    updateDraftCompositions((current) =>
+      insertHandKeyIntoDraft(current, activeDrag.handKey, droppedOnDraftContainer),
+    );
   }
 
   function handleDragEnd(event: DragEndEvent) {
     const currentDrag = activeDrag;
     const draggedHandKey = typeof event.active.id === "string" ? event.active.id : null;
     const overHandKey = typeof event.over?.id === "string" ? event.over.id : null;
+    const overId = typeof event.over?.id === "string" ? event.over.id : null;
 
     setActiveDrag(null);
 
@@ -604,8 +655,15 @@ function useGameBoardController({
       return;
     }
 
-    const overId = typeof event.over?.id === "string" ? event.over.id : null;
-    const draggedEntry = entryByKey.get(draggedHandKey) ?? null;
+    if (overId === null) {
+      setDraftCompositionState({
+        scopeKey: currentDraftScopeKey,
+        compositions: currentDrag.baselineDraftCompositions,
+      });
+      return;
+    }
+
+    const draggedEntry = allEntryByKey.get(draggedHandKey) ?? null;
     const droppedOnDraftCard =
       overId === null
         ? null
@@ -762,6 +820,11 @@ function useGameBoardController({
   function handleDragCancel() {
     if (activeDrag?.type === "draw") {
       updateHandOrder(activeDrag.baselineOrder);
+    } else if (activeDrag?.type === "hand") {
+      setDraftCompositionState({
+        scopeKey: currentDraftScopeKey,
+        compositions: activeDrag.baselineDraftCompositions,
+      });
     }
 
     setActiveDrag(null);

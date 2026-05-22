@@ -197,6 +197,68 @@ describe("buildTablePlayRequest", () => {
       },
     ]);
   });
+
+  it("allows a staged reclaimed joker to be used in a new composition", () => {
+    const entries = buildHandEntries([
+      { rank: 10, suit: 2 },
+      { rank: 11, suit: 2 },
+      { rank: 12, suit: 2 },
+    ]);
+
+    const request = buildTablePlayRequest(
+      [
+        {
+          type: "run",
+          cards: [{ rank: 8, suit: 0 }, { isJoker: true }, { rank: 10, suit: 0 }],
+          jokerRepresentations: {
+            1: [{ rank: 9, suit: 0 }],
+          },
+          points: 27,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-reclaim",
+          tableIndex: 0,
+          handKeys: ["9-0-1"],
+          entries: [{ key: "9-0-1", card: { rank: 9, suit: 0 }, sourceIndex: 0 }],
+        },
+        {
+          id: "draft-new",
+          tableIndex: null,
+          handKeys: [...entries.map((entry) => entry.key), "reclaimed-joker-0-1"],
+          entries: [
+            ...entries,
+            {
+              key: "reclaimed-joker-0-1",
+              card: { isJoker: true },
+              sourceIndex: -1,
+              isVirtual: true,
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(request.reclaims).toEqual([
+      {
+        compositionIndex: 0,
+        jokerIndex: 1,
+        replacementCard: { rank: 9, suit: 0 },
+      },
+    ]);
+    expect(request.compositions).toEqual([
+      {
+        cards: [
+          { rank: 10, suit: 2 },
+          { rank: 11, suit: 2 },
+          { rank: 12, suit: 2 },
+          { isJoker: true },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("buildVirtualReclaimedJokers", () => {
