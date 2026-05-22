@@ -796,6 +796,61 @@ func TestHandleConnectionReturnsWhenInitialConnectedWriteFails(t *testing.T) {
 	<-done
 }
 
+func TestHandleConnectionSendsHeartbeatPing(t *testing.T) {
+	server := newWSServer()
+	serverConn, clientConn, cleanup := newSocketPair(t)
+	defer cleanup()
+
+	originalPingInterval := defaultWSPingInterval
+	originalReadTimeout := defaultWSReadTimeout
+	defer func() {
+		defaultWSPingInterval = originalPingInterval
+		defaultWSReadTimeout = originalReadTimeout
+	}()
+	defaultWSPingInterval = 10 * time.Millisecond
+	defaultWSReadTimeout = 50 * time.Millisecond
+
+	done := make(chan struct{})
+	go func() {
+		server.handleConnection(serverConn)
+		close(done)
+	}()
+
+	pingReceived := make(chan struct{}, 1)
+	clientConn.SetPingHandler(func(appData string) error {
+		select {
+		case pingReceived <- struct{}{}:
+		default:
+		}
+		return clientConn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(time.Second))
+	})
+	if err := clientConn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline() error = %v", err)
+	}
+	readDone := make(chan error, 1)
+	go func() {
+		for {
+			if _, _, err := clientConn.ReadMessage(); err != nil {
+				readDone <- err
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-pingReceived:
+	case err := <-readDone:
+		t.Fatalf("ReadMessage() error before ping = %v", err)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for heartbeat ping")
+	}
+
+	if err := clientConn.Close(); err != nil {
+		t.Fatalf("clientConn.Close() error = %v", err)
+	}
+	<-done
+}
+
 func TestHandleConnectionReturnsWhenRoomStateWriteFailsAfterReconnect(t *testing.T) {
 	originalEmit := emitEvent
 	defer func() { emitEvent = originalEmit }()
