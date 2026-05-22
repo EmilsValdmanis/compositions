@@ -303,17 +303,17 @@ export function GameCard({
 }) {
   if (draggable) {
     return (
-        <SortableGameCard
-          card={card}
-          id={draggable.id}
-          cardIndex={draggable.cardIndex}
-          size={size}
-          className={className}
-          faceDown={faceDown}
-          data={{ isVirtual: draggable.isVirtual }}
-        />
-      );
-    }
+      <SortableGameCard
+        card={card}
+        id={draggable.id}
+        cardIndex={draggable.cardIndex}
+        size={size}
+        className={className}
+        faceDown={faceDown}
+        data={{ isVirtual: draggable.isVirtual }}
+      />
+    );
+  }
 
   if (dragSource) {
     return (
