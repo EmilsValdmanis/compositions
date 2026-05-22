@@ -235,7 +235,7 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	mustReadError(t, hijackConn, "session belongs to a different user")
 }
 
-func TestAuthenticatedWebSocketRejectsSecondLiveSocketForSameUser(t *testing.T) {
+func TestAuthenticatedWebSocketReplacesSecondLiveSocketForSameUser(t *testing.T) {
 	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
 		"same-user-token": {ID: "same-user", Name: "Same Account", Email: "same@example.com"},
 	}})
@@ -249,13 +249,21 @@ func TestAuthenticatedWebSocketRejectsSecondLiveSocketForSameUser(t *testing.T) 
 	secondConn := mustDialWS(t, httpServer.URL)
 	defer secondConn.Close()
 	mustSendEnvelope(t, secondConn, "connect", connectRequest{AuthToken: "same-user-token"})
-	mustReadError(t, secondConn, "session already connected")
+	secondConnected := mustReadConnectedEvent(t, secondConn)
+	if secondConnected.SessionID != firstConnected.SessionID {
+		t.Fatalf("secondConnected.SessionID = %q; want %q", secondConnected.SessionID, firstConnected.SessionID)
+	}
+	if secondConnected.PlayerID != firstConnected.PlayerID {
+		t.Fatalf("secondConnected.PlayerID = %q; want %q", secondConnected.PlayerID, firstConnected.PlayerID)
+	}
 	if len(server.lobby.sessions) != 1 {
 		t.Fatalf("len(server.lobby.sessions) = %d; want 1", len(server.lobby.sessions))
 	}
 
 	mustSendEnvelope(t, firstConn, "create_room", createRoomRequest{Name: "Should Work"})
-	room := mustReadRoomState(t, firstConn)
+	mustReadError(t, firstConn, "session not active on this connection")
+	mustSendEnvelope(t, secondConn, "create_room", createRoomRequest{Name: "Should Work"})
+	room := mustReadRoomState(t, secondConn)
 	if room.HostPlayerID != firstConnected.PlayerID {
 		t.Fatalf("room.HostPlayerID = %q; want %q", room.HostPlayerID, firstConnected.PlayerID)
 	}
@@ -525,7 +533,7 @@ func TestWebSocketLeaveRoomFlow(t *testing.T) {
 	mustReadError(t, guestConn, "join a room first")
 }
 
-func TestSecondLiveWebSocketConnectionForSessionIsRejected(t *testing.T) {
+func TestSecondLiveWebSocketConnectionForSessionReplacesActiveSocket(t *testing.T) {
 	server := newWSServer()
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
@@ -539,10 +547,22 @@ func TestSecondLiveWebSocketConnectionForSessionIsRejected(t *testing.T) {
 	replacementConn := mustDialWS(t, httpServer.URL)
 	defer replacementConn.Close()
 	mustSendEnvelope(t, replacementConn, "connect", connectRequest{SessionID: hostConnected.SessionID})
-	mustReadError(t, replacementConn, "session already connected")
+	replacementConnected := mustReadConnectedEvent(t, replacementConn)
+	if replacementConnected.SessionID != hostConnected.SessionID {
+		t.Fatalf("replacementConnected.SessionID = %q; want %q", replacementConnected.SessionID, hostConnected.SessionID)
+	}
+	if replacementConnected.PlayerID != hostConnected.PlayerID {
+		t.Fatalf("replacementConnected.PlayerID = %q; want %q", replacementConnected.PlayerID, hostConnected.PlayerID)
+	}
+	replacementRoom := mustReadRoomState(t, replacementConn)
+	if replacementRoom.Code != hostRoom.Code {
+		t.Fatalf("replacementRoom.Code = %q; want %q", replacementRoom.Code, hostRoom.Code)
+	}
 
 	mustSendEnvelope(t, hostConn, "leave_room", leaveRoomRequest{})
-	left := mustReadLeftRoom(t, hostConn)
+	mustReadError(t, hostConn, "session not active on this connection")
+	mustSendEnvelope(t, replacementConn, "leave_room", leaveRoomRequest{})
+	left := mustReadLeftRoom(t, replacementConn)
 	if left.RoomCode != hostRoom.Code {
 		t.Fatalf("left.RoomCode = %q; want %q", left.RoomCode, hostRoom.Code)
 	}
@@ -694,20 +714,23 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	mustReadError(t, rawConn, "unknown message type")
 
 	mustSendEnvelope(t, rawConn, "connect", connectRequest{SessionID: hostConnected.SessionID})
-	connectedEnvelope := mustReadEnvelopeFromConn(t, rawConn)
-	if connectedEnvelope.Type != "error" {
-		t.Fatalf("connectedEnvelope.Type = %q; want error", connectedEnvelope.Type)
+	reconnected := mustReadConnectedEvent(t, rawConn)
+	if reconnected.SessionID != hostConnected.SessionID {
+		t.Fatalf("reconnected.SessionID = %q; want %q", reconnected.SessionID, hostConnected.SessionID)
 	}
-	var reconnectError errorEvent
-	if err := json.Unmarshal(connectedEnvelope.Data, &reconnectError); err != nil {
-		t.Fatalf("json.Unmarshal(error event) error = %v", err)
+	reconnectedRoom := mustReadRoomState(t, rawConn)
+	if reconnectedRoom.Code != hostRoom.Code {
+		t.Fatalf("reconnectedRoom.Code = %q; want %q", reconnectedRoom.Code, hostRoom.Code)
 	}
-	if reconnectError.Message != "session already connected" {
-		t.Fatalf("reconnectError.Message = %q; want session already connected", reconnectError.Message)
+	guestRoomAfterReconnect := mustReadRoomState(t, guestConn)
+	if len(guestRoomAfterReconnect.Players) != 2 {
+		t.Fatalf("len(guestRoomAfterReconnect.Players) = %d; want 2", len(guestRoomAfterReconnect.Players))
 	}
-
 	mustSendEnvelope(t, hostConn, "leave_room", leaveRoomRequest{})
-	_ = mustReadLeftRoom(t, hostConn)
+	mustReadError(t, hostConn, "session not active on this connection")
+
+	mustSendEnvelope(t, rawConn, "leave_room", leaveRoomRequest{})
+	_ = mustReadLeftRoom(t, rawConn)
 	updatedGuestRoom := mustReadRoomState(t, guestConn)
 	if len(updatedGuestRoom.Players) != 1 {
 		t.Fatalf("len(updatedGuestRoom.Players) = %d; want 1", len(updatedGuestRoom.Players))

@@ -302,7 +302,7 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		}
 	})
 
-	t.Run("authenticated connect rejects second live socket", func(t *testing.T) {
+	t.Run("authenticated connect replaces second live socket", func(t *testing.T) {
 		lobby := newLobbyServer()
 		firstConn, _, firstCleanup := newSocketPair(t)
 		defer firstCleanup()
@@ -325,11 +325,14 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		defer secondCleanup()
 
 		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "Updated Name", Image: "https://cdn.example.com/updated.png"}, secondConn)
-		if err == nil || err.Error() != "session already connected" {
-			t.Fatalf("connectWithUser(second) error = %v; want session already connected", err)
+		if err != nil {
+			t.Fatalf("connectWithUser(second) error = %v", err)
 		}
-		if secondEvent != (connectedEvent{}) {
-			t.Fatalf("secondEvent = %#v; want zero value", secondEvent)
+		if secondEvent.SessionID != firstEvent.SessionID {
+			t.Fatalf("secondEvent.SessionID = %q; want %q", secondEvent.SessionID, firstEvent.SessionID)
+		}
+		if secondEvent.PlayerID != firstEvent.PlayerID {
+			t.Fatalf("secondEvent.PlayerID = %q; want %q", secondEvent.PlayerID, firstEvent.PlayerID)
 		}
 		if secondRoomState != nil {
 			t.Fatalf("secondRoomState = %#v; want nil", secondRoomState)
@@ -338,21 +341,24 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 			t.Fatalf("len(secondRecipients) = %d; want 0", len(secondRecipients))
 		}
 		if len(lobby.sessions) != 1 {
-			t.Fatalf("len(lobby.sessions) = %d; want 1 after rejected second socket", len(lobby.sessions))
+			t.Fatalf("len(lobby.sessions) = %d; want 1 after replacing second socket", len(lobby.sessions))
 		}
 
 		session := lobby.sessions[firstEvent.SessionID]
 		if session == nil {
 			t.Fatal("session = nil; want existing session")
 		}
-		if session.conn != firstConn {
-			t.Fatal("session.conn changed; want first connection to stay active")
+		if session.conn != secondConn {
+			t.Fatal("session.conn changed; want second connection to become active")
 		}
-		if session.displayName != "First Name" {
-			t.Fatalf("session.displayName = %q; want First Name", session.displayName)
+		if session.displayName != "Updated Name" {
+			t.Fatalf("session.displayName = %q; want Updated Name", session.displayName)
 		}
-		if session.imageURL != "https://cdn.example.com/first.png" {
-			t.Fatalf("session.imageURL = %q; want https://cdn.example.com/first.png", session.imageURL)
+		if session.imageURL != "https://cdn.example.com/updated.png" {
+			t.Fatalf("session.imageURL = %q; want https://cdn.example.com/updated.png", session.imageURL)
+		}
+		if err := lobby.requireActiveSessionConnection(firstEvent.SessionID, firstConn); err == nil || err.Error() != "session not active on this connection" {
+			t.Fatalf("requireActiveSessionConnection(stale) error = %v; want session not active on this connection", err)
 		}
 	})
 
