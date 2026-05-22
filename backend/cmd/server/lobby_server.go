@@ -133,8 +133,7 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 		return connectedEvent{}, nil, nil, errors.New("session belongs to a different user")
 	}
 	if session.conn != nil && session.conn != conn {
-		slog.Warn("session already connected", "sessionID", existingSessionID)
-		return connectedEvent{}, nil, nil, errors.New("session already connected")
+		slog.Warn("session connection replaced", "sessionID", existingSessionID)
 	}
 	if session.authenticated {
 		session.displayName = user.displayName()
