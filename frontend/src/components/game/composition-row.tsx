@@ -1,3 +1,4 @@
+import { useDndContext } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { Tick01FreeIcons } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -61,15 +62,23 @@ function CompositionEdgeDraftZone({
   players: PlayerSnapshot[];
   playerId?: string;
 }) {
+  const hasEntries = entries.length > 0;
+
   return (
     <GameBoardDraftDropZone
       id={tableCompositionEdgeDropId(compositionIndex, edge)}
+      activeClassName={null}
       className={cn(
-        "flex min-h-24 min-w-12 items-center justify-center rounded-2xl border border-dashed border-border/60 bg-background/20 px-2 py-2 transition",
-        entries.length > 0 ? "border-primary/60 bg-primary/5" : "hover:border-primary/50",
+        "flex h-24 w-16 shrink-0 items-center justify-center overflow-visible p-0 transition-[opacity,border-color,background-color] duration-150",
+        hasEntries
+          ? "border-transparent bg-transparent"
+          : "rounded-2xl border border-dashed border-border/50 bg-background/10 data-[over=true]:border-primary/60 data-[over=true]:bg-primary/5",
       )}
     >
-      <SortableContext items={entries.map((entry) => entry.key)} strategy={horizontalListSortingStrategy}>
+      <SortableContext
+        items={entries.map((entry) => entry.key)}
+        strategy={horizontalListSortingStrategy}
+      >
         <div className="flex items-center gap-2">
           {entries.map((entry) => (
             <GameCard
@@ -122,6 +131,7 @@ export function CompositionRow({
     cardActivities?: Record<number, { kind: string; playerId: string }>;
   };
 }) {
+  const { active, over } = useDndContext();
   const compositionCards = buildCompositionCardViews(composition.cards);
   const reclaimByJokerIndex = new Map(reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim]));
   const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
@@ -131,10 +141,19 @@ export function CompositionRow({
   const isHighlightedComposition = isNewComposition || composition.complete;
   const additionsAtStart = insertIndex === 0 ? additionEntries : EMPTY_STAGED_ENTRIES;
   const additionsAtEnd = insertIndex === 0 ? EMPTY_STAGED_ENTRIES : additionEntries;
+  const compositionDropId = tableCompositionDropId(index);
+  const startEdgeDropId = tableCompositionEdgeDropId(index, "start");
+  const endEdgeDropId = tableCompositionEdgeDropId(index, "end");
+  const overId = over ? String(over.id) : null;
+  const isDraggingOverComposition =
+    active !== null &&
+    (overId === compositionDropId || overId === startEdgeDropId || overId === endEdgeDropId);
+  const showStartEdgeDropZone = isDraggingOverComposition || additionsAtStart.length > 0;
+  const showEndEdgeDropZone = isDraggingOverComposition || additionsAtEnd.length > 0;
 
   return (
     <GameBoardDraftDropZone
-      id={tableCompositionDropId(index)}
+      id={compositionDropId}
       className={cn(
         "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-4",
         isHighlightedComposition ? "mt-5 border-primary/70 bg-primary/5" : null,
@@ -159,14 +178,16 @@ export function CompositionRow({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <CompositionEdgeDraftZone
-          compositionIndex={index}
-          edge="start"
-          entries={additionsAtStart}
-          interactive={stagedEntriesInteractive}
-          players={players}
-          playerId={stagedEntryPlayerId}
-        />
+        {showStartEdgeDropZone ? (
+          <CompositionEdgeDraftZone
+            compositionIndex={index}
+            edge="start"
+            entries={additionsAtStart}
+            interactive={stagedEntriesInteractive}
+            players={players}
+            playerId={stagedEntryPlayerId}
+          />
+        ) : null}
 
         {compositionCards.map(({ card, index: cardIndex, key }) => {
           const reclaim = reclaimByJokerIndex.get(cardIndex);
@@ -202,7 +223,11 @@ export function CompositionRow({
                           (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
                             <ReclaimActivityLabel players={players} playerId={previewPlayerId} />
                           ) : (
-                            <ActivityLabel players={players} playerId={previewPlayerId} label="Add" />
+                            <ActivityLabel
+                              players={players}
+                              playerId={previewPlayerId}
+                              label="Add"
+                            />
                           ),
                       }
                     : undefined
@@ -212,14 +237,16 @@ export function CompositionRow({
           );
         })}
 
-        <CompositionEdgeDraftZone
-          compositionIndex={index}
-          edge="end"
-          entries={additionsAtEnd}
-          interactive={stagedEntriesInteractive}
-          players={players}
-          playerId={stagedEntryPlayerId}
-        />
+        {showEndEdgeDropZone ? (
+          <CompositionEdgeDraftZone
+            compositionIndex={index}
+            edge="end"
+            entries={additionsAtEnd}
+            interactive={stagedEntriesInteractive}
+            players={players}
+            playerId={stagedEntryPlayerId}
+          />
+        ) : null}
       </div>
     </GameBoardDraftDropZone>
   );

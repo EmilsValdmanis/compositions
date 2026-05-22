@@ -5,10 +5,12 @@ import { cn } from "#/lib/utils";
 export function GameBoardDraftDropZone({
   id,
   className,
+  activeClassName = "border-primary bg-primary/10 ring-1 ring-primary/30",
   children,
 }: {
   id: string;
   className?: string;
+  activeClassName?: string | null;
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -16,10 +18,8 @@ export function GameBoardDraftDropZone({
   return (
     <div
       ref={setNodeRef}
-      className={cn(
-        className,
-        isOver ? "border-primary bg-primary/10 ring-1 ring-primary/30" : undefined,
-      )}
+      data-over={isOver ? "true" : "false"}
+      className={cn(className, isOver ? activeClassName : undefined)}
     >
       {children}
     </div>
