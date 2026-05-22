@@ -6,7 +6,6 @@ import {
   HAND_DROP_ID,
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
-import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Card, CardContent } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
@@ -25,7 +24,6 @@ type GameBoardHandProps = {
   availableHandEntries: HandEntry[];
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
-  drawnHandKey: string | null;
   tablePlayState: TablePlayState;
 };
 
@@ -34,7 +32,6 @@ export function GameBoardHand({
   availableHandEntries,
   sortableIds,
   activeDrag,
-  drawnHandKey,
   tablePlayState,
 }: GameBoardHandProps) {
   const { hasGame } = status;
@@ -67,14 +64,6 @@ export function GameBoardHand({
                             ? "invisible"
                             : undefined,
                         )}
-                        decoration={
-                          drawnHandKey === entry.key
-                            ? {
-                                highlight: "new",
-                                label: <NewActivityLabel players={[]} />,
-                              }
-                            : undefined
-                        }
                       />
                     ))}
                   </div>

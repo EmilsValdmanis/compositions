@@ -212,7 +212,6 @@ function GameBoardLayout({
   availableHandEntries,
   sortableIds,
   activeDrag,
-  drawnHandKey,
   draftedCompositionsCount,
   spectatorDrafts,
   canSubmitTablePlay,
@@ -230,7 +229,6 @@ function GameBoardLayout({
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
-  drawnHandKey: string | null;
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
   canSubmitTablePlay: boolean;
@@ -290,7 +288,6 @@ function GameBoardLayout({
           availableHandEntries={availableHandEntries}
           sortableIds={sortableIds}
           activeDrag={activeDrag}
-          drawnHandKey={drawnHandKey}
           tablePlayState={{
             hasDraftedCompositions: draftedCompositionsCount > 0,
           }}
@@ -303,7 +300,6 @@ function GameBoardLayout({
 type GameBoardController = {
   activeDrag: ActiveDrag | null;
   activeEntry: ReturnType<typeof buildHandEntries>[number] | null;
-  drawnHandKey: string | null;
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
@@ -369,8 +365,6 @@ function useGameBoardController({
     handOrderState.scopeKey === handOrderScopeKey && handOrderState.order
       ? handOrderState.order
       : persistedHandOrder;
-  const persistedDrawnHandKey =
-    handOrderState.scopeKey === handOrderScopeKey ? handOrderState.lastDrawnKey : null;
   const handEntries = useMemo(
     () => applyHandEntryOrder(rawHandEntries, handOrder),
     [handOrder, rawHandEntries],
@@ -394,10 +388,6 @@ function useGameBoardController({
         )
       : null;
   const activeDrawSource = activeDrag?.type === "draw" ? activeDrag.source : null;
-  const drawnHandKey =
-    turnState.canDiscard && activeDrag?.type === "draw" && activeDrawSource === "deck"
-      ? (activeDrawEntry?.key ?? null)
-      : persistedDrawnHandKey;
 
   function updateDraftCompositions(updater: (current: DraftComposition[]) => DraftComposition[]) {
     setDraftCompositionState((current) => {
@@ -762,7 +752,6 @@ function useGameBoardController({
   return {
     activeDrag: displayActiveDrag,
     activeEntry,
-    drawnHandKey,
     availableHandEntries,
     sortableIds,
     tableCompositions,
@@ -841,7 +830,6 @@ export function GameBoardView({
           availableHandEntries={controller.availableHandEntries}
           sortableIds={controller.sortableIds}
           activeDrag={controller.activeDrag}
-          drawnHandKey={controller.drawnHandKey}
           draftedCompositionsCount={controller.draftedCompositionsCount}
           spectatorDrafts={spectatorDrafts}
           canSubmitTablePlay={controller.canSubmitTablePlay}

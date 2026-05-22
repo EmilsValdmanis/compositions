@@ -1,4 +1,6 @@
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { Tick01FreeIcons } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type HandEntry,
   type PlannedJokerReclaim,
@@ -10,14 +12,13 @@ import {
 } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { formatLabel } from "#/components/game/game-view-helpers";
 import {
   ActivityLabel,
   NewActivityLabel,
   ReclaimActivityLabel,
 } from "#/components/game/game-view-utils";
-import { Badge } from "#/components/ui/badge";
 import { cn } from "#/lib/utils";
+import { Badge } from "../ui/badge";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
 const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
@@ -73,20 +74,24 @@ export function CompositionRow({
   const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
   const cardActivities = activity?.cardActivities ?? {};
   const isNewComposition = activity?.kind === "new_composition";
+  const isHighlightedComposition = isNewComposition || composition.complete;
 
   return (
     <GameBoardDraftDropZone
       id={tableCompositionDropId(index)}
       className={cn(
         "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3",
-        isNewComposition ? "border-primary/70 bg-primary/5" : null,
+        isHighlightedComposition ? "mt-5 border-primary/70 bg-primary/5" : null,
       )}
     >
+      {composition.complete ? (
+        <div className="absolute -top-1 -right-1 z-10 transform translate-x-1/2 -translate-y-1/2 flex size-5 items-center justify-center rounded-full bg-primary/5 text-primary/70 shadow-sm border border-primary/70">
+          <HugeiconsIcon icon={Tick01FreeIcons} className="size-3" strokeWidth={2} />
+        </div>
+      ) : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">#{index + 1}</Badge>
-          <Badge variant="outline">{formatLabel(composition.type)}</Badge>
-          {composition.complete ? <Badge>Complete</Badge> : null}
+          <Badge variant="outline">#{index + 1}</Badge>
           {isNewComposition ? (
             <NewActivityLabel players={players} playerId={activity?.playerId} />
           ) : null}
