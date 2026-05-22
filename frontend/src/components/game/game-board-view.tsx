@@ -665,7 +665,7 @@ export function GameBoardView({
               onClick={controller.submitBeforeDiscard}
               disabled={!controller.canSubmitTablePlay}
             >
-              Submit
+              Submit staged cards
             </Button>
           </DialogFooter>
         </DialogContent>

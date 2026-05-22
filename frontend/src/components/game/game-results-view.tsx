@@ -16,8 +16,8 @@ type GameResultsViewProps = {
 };
 
 function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
-  return [...game.players]
-    .sort((left, right) => left.totalPoints - right.totalPoints)
+  return game.players
+    .toSorted((left, right) => left.totalPoints - right.totalPoints)
     .map((playerState, index) => ({
       rank: index + 1,
       player: players.find((player) => player.playerId === playerState.playerId) ?? null,
