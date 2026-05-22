@@ -166,11 +166,11 @@ type GameCardDecoration = {
 function decorationRingClassName(highlight?: GameCardDecoration["highlight"]) {
   switch (highlight) {
     case "new":
-      return "ring-2 ring-primary/60 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
+      return "border-primary/60 ring-1 ring-primary/60 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.2)]";
     case "addition":
-      return "ring-2 ring-primary/75 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
+      return "border-primary/70 ring-2 ring-primary ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.35)]";
     case "joker_reclaim":
-      return "ring-2 ring-primary/75 ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.15)]";
+      return "border-primary/70 ring-2 ring-primary ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--primary)/0.35)]";
     default:
       return null;
   }
@@ -192,7 +192,7 @@ function GameCardDecorationLayer({
       {decoration.label ? (
         <div
           className={cn(
-            "absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-[calc(100%+0.1rem)] whitespace-nowrap",
+            "absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-[calc(100%+0.16rem)] whitespace-nowrap",
             size === "hand" ? "text-[0.7rem]" : null,
           )}
         >
@@ -384,12 +384,18 @@ export function GameCard({
         faceDown
           ? faceDownGameCardClassName(
               size,
-              cn(className, decorationRingClassName(decoration?.highlight)),
+              cn(
+                className,
+                decorationRingClassName(decoration?.highlight),
+              ),
             )
           : gameCardClassName(
               card,
               size,
-              cn(className, decorationRingClassName(decoration?.highlight)),
+              cn(
+                className,
+                decorationRingClassName(decoration?.highlight),
+              ),
             )
       }
       title={accessibleName}
