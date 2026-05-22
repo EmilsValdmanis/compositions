@@ -3,8 +3,6 @@ import { HeadContent, Scripts } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
 import { TanStackDevtools } from "@tanstack/react-devtools";
-import { inject as InjectVercelAnalytics } from "@vercel/analytics";
-import { injectSpeedInsights as InjectVercelSpeedInsights } from "@vercel/speed-insights";
 import { GameWebSocketProvider } from "#/components/game-websocket-provider";
 import { ThemeProvider } from "#/components/theme-provider";
 import { AutoConnectWebSocket } from "#/components/routes/auto-connect-websocket";
@@ -12,8 +10,10 @@ import { ThemeAwareToaster } from "#/components/routes/theme-aware-toaster";
 
 export function RootDocument({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    InjectVercelAnalytics();
-    InjectVercelSpeedInsights();
+    if (import.meta.env.PROD) {
+      import("@vercel/analytics").then(({ inject }) => inject());
+      import("@vercel/speed-insights").then(({ injectSpeedInsights }) => injectSpeedInsights());
+    }
   }, []);
 
   return (
