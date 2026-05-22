@@ -87,7 +87,9 @@ export function CompositionRow({
           <Badge variant="secondary">#{index + 1}</Badge>
           <Badge variant="outline">{formatLabel(composition.type)}</Badge>
           {composition.complete ? <Badge>Complete</Badge> : null}
-          {isNewComposition ? <NewActivityLabel players={players} playerId={activity?.playerId} /> : null}
+          {isNewComposition ? (
+            <NewActivityLabel players={players} playerId={activity?.playerId} />
+          ) : null}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{composition.points} pts</span>
@@ -129,7 +131,11 @@ export function CompositionRow({
                           (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
                             <ReclaimActivityLabel players={players} playerId={previewPlayerId} />
                           ) : (
-                            <ActivityLabel players={players} playerId={previewPlayerId} label="Add" />
+                            <ActivityLabel
+                              players={players}
+                              playerId={previewPlayerId}
+                              label="Add"
+                            />
                           ),
                       }
                     : undefined
@@ -158,7 +164,9 @@ export function CompositionRow({
                 }
                 decoration={{
                   highlight: "addition",
-                  label: <ActivityLabel players={players} playerId={stagedEntryPlayerId} label="Add" />,
+                  label: (
+                    <ActivityLabel players={players} playerId={stagedEntryPlayerId} label="Add" />
+                  ),
                 }}
               />
             </div>

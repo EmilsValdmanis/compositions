@@ -155,11 +155,8 @@ export function ProtectedHome() {
     <ClientOnly fallback={<GameRouteLoadingScreen />}>
       <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden">
         <GameBoardHeader
-          connectionStatus={state.connectionStatus}
           phase={phase}
           roomCode={state.room?.code}
-          connectedPlayers={connectedPlayers}
-          playerCount={players.length}
           isLobbyPhase={isLobbyPhase}
           isMyTurn={Boolean(isMyTurn)}
           turnPlayerName={turnPlayerName}

@@ -384,18 +384,12 @@ export function GameCard({
         faceDown
           ? faceDownGameCardClassName(
               size,
-              cn(
-                className,
-                decorationRingClassName(decoration?.highlight),
-              ),
+              cn(className, decorationRingClassName(decoration?.highlight)),
             )
           : gameCardClassName(
               card,
               size,
-              cn(
-                className,
-                decorationRingClassName(decoration?.highlight),
-              ),
+              cn(className, decorationRingClassName(decoration?.highlight)),
             )
       }
       title={accessibleName}

@@ -55,7 +55,9 @@ export function ActivityLabel({
   );
 }
 
-export function NewActivityLabel(props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">) {
+export function NewActivityLabel(
+  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
+) {
   return <ActivityLabel {...props} label="New" icon={SparklesIcon} />;
 }
 

@@ -151,7 +151,11 @@ export const mockScenarios: MockScenario[] = [
         { rank: 12, suit: 2 },
       ],
       drawPileCount: 27,
-      discardPile: [{ rank: 7, suit: 3 }, { rank: 2, suit: 0 }, { rank: 13, suit: 1 }],
+      discardPile: [
+        { rank: 7, suit: 3 },
+        { rank: 2, suit: 0 },
+        { rank: 13, suit: 1 },
+      ],
       activeCompositions: [
         {
           type: "run",
@@ -191,7 +195,11 @@ export const mockScenarios: MockScenario[] = [
         },
         {
           type: "set",
-          cards: [{ rank: 5, suit: 0 }, { rank: 5, suit: 2 }, { rank: 5, suit: 3 }],
+          cards: [
+            { rank: 5, suit: 0 },
+            { rank: 5, suit: 2 },
+            { rank: 5, suit: 3 },
+          ],
           points: 20,
           complete: true,
         },
@@ -235,7 +243,11 @@ export const mockScenarios: MockScenario[] = [
         ],
         draftCompositions: [
           {
-            cards: [{ rank: 4, suit: 1 }, { rank: 5, suit: 1 }, { rank: 6, suit: 1 }],
+            cards: [
+              { rank: 4, suit: 1 },
+              { rank: 5, suit: 1 },
+              { rank: 6, suit: 1 },
+            ],
           },
           {
             tableIndex: 2,
@@ -413,7 +425,10 @@ export const mockScenarios: MockScenario[] = [
         { rank: 8, suit: 2 },
       ],
       drawPileCount: 18,
-      discardPile: [{ rank: 6, suit: 3 }, { rank: 11, suit: 0 }],
+      discardPile: [
+        { rank: 6, suit: 3 },
+        { rank: 11, suit: 0 },
+      ],
       activeCompositions: [
         {
           type: "run",
@@ -428,7 +443,11 @@ export const mockScenarios: MockScenario[] = [
         },
         {
           type: "set",
-          cards: [{ rank: 8, suit: 0 }, { rank: 8, suit: 1 }, { rank: 8, suit: 3 }],
+          cards: [
+            { rank: 8, suit: 0 },
+            { rank: 8, suit: 1 },
+            { rank: 8, suit: 3 },
+          ],
           points: 30,
           complete: true,
         },
@@ -451,14 +470,22 @@ export const mockScenarios: MockScenario[] = [
           },
           {
             type: "set",
-            cards: [{ rank: 8, suit: 0 }, { rank: 8, suit: 1 }, { rank: 8, suit: 3 }],
+            cards: [
+              { rank: 8, suit: 0 },
+              { rank: 8, suit: 1 },
+              { rank: 8, suit: 3 },
+            ],
             points: 30,
             complete: true,
           },
         ],
         draftCompositions: [
           {
-            cards: [{ rank: 2, suit: 1 }, { rank: 3, suit: 1 }, { rank: 4, suit: 1 }],
+            cards: [
+              { rank: 2, suit: 1 },
+              { rank: 3, suit: 1 },
+              { rank: 4, suit: 1 },
+            ],
           },
           {
             tableIndex: 0,

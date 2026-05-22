@@ -393,8 +393,9 @@ function useGameBoardController({
           applyHandEntryOrder(rawHandEntries, activeDrag.baselineOrder),
         )
       : null;
+  const activeDrawSource = activeDrag?.type === "draw" ? activeDrag.source : null;
   const drawnHandKey =
-    turnState.canDiscard && activeDrag?.type === "draw" && activeDrag.source === "deck"
+    turnState.canDiscard && activeDrag?.type === "draw" && activeDrawSource === "deck"
       ? (activeDrawEntry?.key ?? null)
       : persistedDrawnHandKey;
 
@@ -514,7 +515,7 @@ function useGameBoardController({
     setHandOrderState((current) => {
       const scopeMatches = current.scopeKey === handOrderScopeKey;
       const nextDrawnKey =
-        activeDrag?.type === "draw" && activeDrag.source === "deck"
+        activeDrag?.type === "draw" && activeDrawSource === "deck"
           ? (activeDrawEntry?.key ?? null)
           : current.lastDrawnKey;
       const resolvedDrawnKey =
@@ -534,13 +535,7 @@ function useGameBoardController({
         lastDrawnKey: resolvedDrawnKey,
       };
     });
-  }, [
-    activeDrag?.type,
-    activeDrag?.source,
-    activeDrawEntry?.key,
-    handOrderScopeKey,
-    validHandKeys,
-  ]);
+  }, [activeDrag?.type, activeDrawSource, activeDrawEntry?.key, handOrderScopeKey, validHandKeys]);
 
   function resetDraftCompositions() {
     setDraftCompositionState({

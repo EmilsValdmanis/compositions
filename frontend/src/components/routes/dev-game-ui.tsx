@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { mockScenarios, type MockScenario } from "#/dev/mock-game-scenarios";
+import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardHeader } from "#/components/game/game-board-header";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { playerName } from "#/components/game/game-view-helpers";
@@ -173,7 +173,10 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
     cards: cloneCards(composition.cards),
     jokerRepresentations: composition.jokerRepresentations
       ? Object.fromEntries(
-          Object.entries(composition.jokerRepresentations).map(([key, cards]) => [key, cloneCards(cards)]),
+          Object.entries(composition.jokerRepresentations).map(([key, cards]) => [
+            key,
+            cloneCards(cards),
+          ]),
         )
       : undefined,
   }));
@@ -207,7 +210,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
     }
 
     target.jokerRepresentations = {
-      ...(target.jokerRepresentations ?? {}),
+      ...target.jokerRepresentations,
       [reclaim.jokerIndex]: [reclaim.replacementCard],
     };
   }
@@ -295,14 +298,15 @@ export function DevGameUi() {
   }
 
   return (
-    <section className="mx-auto flex h-full min-h-0 w-full max-w-[1700px] flex-1 flex-col gap-4 overflow-hidden">
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-425 flex-1 flex-col gap-4 overflow-hidden">
       <Card size="sm" className="shadow-sm">
         <CardHeader className="gap-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>Dev Game UI</CardTitle>
               <CardDescription>
-                Switch scenarios and player perspectives to inspect the board as if a live game were in progress.
+                Switch scenarios and player perspectives to inspect the board as if a live game were
+                in progress.
               </CardDescription>
             </div>
             <CardAction className="flex items-center gap-2 self-start">
@@ -406,7 +410,9 @@ export function DevGameUi() {
                   size="sm"
                   variant="outline"
                   disabled={!canDiscard}
-                  onClick={() => updateGame((current) => discardFromHand(current, current.hand.length - 1))}
+                  onClick={() =>
+                    updateGame((current) => discardFromHand(current, current.hand.length - 1))
+                  }
                 >
                   Discard last card
                 </Button>
@@ -428,11 +434,8 @@ export function DevGameUi() {
 
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <GameBoardHeader
-            connectionStatus="connected"
             phase={phase}
             roomCode={room.code}
-            connectedPlayers={connectedPlayers}
-            playerCount={players.length}
             isLobbyPhase={false}
             isMyTurn={Boolean(isMyTurn)}
             turnPlayerName={turnPlayerName}
