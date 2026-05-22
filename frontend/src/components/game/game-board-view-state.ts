@@ -9,6 +9,7 @@ export type HandEntry = {
   key: string;
   card: CardSnapshot;
   sourceIndex: number;
+  isVirtual?: boolean;
 };
 
 export type ActiveDrag =
@@ -42,6 +43,12 @@ export type TableCompositionView = {
   snapshot: CompositionSnapshot;
   stagedEntries: HandEntry[];
   reclaims: PlannedJokerReclaim[];
+};
+
+export type VirtualReclaimedJoker = {
+  key: string;
+  jokerIndex: number;
+  entry: HandEntry;
 };
 
 export const FACE_DOWN_CARD: CardSnapshot = {};
@@ -435,4 +442,25 @@ export function buildTableCompositionViews(
   }
 
   return views;
+}
+
+export function buildVirtualReclaimedJokers(tableCompositions: TableCompositionView[]) {
+  const virtualJokers: VirtualReclaimedJoker[] = [];
+
+  for (const composition of tableCompositions) {
+    for (const reclaim of composition.reclaims) {
+      virtualJokers.push({
+        key: `reclaimed-joker-${composition.tableIndex}-${reclaim.jokerIndex}`,
+        jokerIndex: reclaim.jokerIndex,
+        entry: {
+          key: `reclaimed-joker-${composition.tableIndex}-${reclaim.jokerIndex}`,
+          card: { isJoker: true },
+          sourceIndex: -1,
+          isVirtual: true,
+        },
+      });
+    }
+  }
+
+  return virtualJokers;
 }

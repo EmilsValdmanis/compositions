@@ -54,7 +54,11 @@ export function GameBoardHand({
                         key={entry.key}
                         card={entry.card}
                         size="hand"
-                        draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
+                        draggable={{
+                          id: entry.key,
+                          cardIndex: entry.sourceIndex,
+                          isVirtual: entry.isVirtual,
+                        }}
                         className={cn(
                           activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
                             ? "invisible"

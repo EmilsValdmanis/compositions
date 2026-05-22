@@ -103,7 +103,11 @@ export function CompositionRow({
               <GameCard
                 card={entry.card}
                 size="compact"
-                draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
+                draggable={{
+                  id: entry.key,
+                  cardIndex: entry.sourceIndex,
+                  isVirtual: entry.isVirtual,
+                }}
                 className={cn(
                   reclaimedEntryKeys.has(entry.key)
                     ? "ring-2 ring-primary/60 ring-offset-1 ring-offset-card"

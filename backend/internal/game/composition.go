@@ -15,6 +15,13 @@ type Composition struct {
 	jokerRepresentations map[int][]Card
 }
 
+type runOrderCandidate struct {
+	ordered              []Card
+	jokerRepresentations map[int]Card
+	matchesInput         bool
+	matchCount           int
+}
+
 func newComposition(cards []Card, variant compositionVariant, requireOrderedRun bool) (*Composition, bool) {
 	c := &Composition{
 		variant:              variant,
@@ -99,6 +106,41 @@ func (c *Composition) AddedCardsPoints(cards []Card) (int, bool) {
 	}
 
 	return extended.Points() - c.Points(), true
+}
+
+func (c *Composition) ReclaimPoints(cardIndex int) (int, bool) {
+	if cardIndex < 0 || cardIndex >= len(c.cards) || !c.cards[cardIndex].isJoker {
+		return 0, false
+	}
+
+	switch c.variant {
+	case set:
+		representation, ok := c.JokerRepresentation(cardIndex)
+		if !ok {
+			return 0, false
+		}
+		return rankPoints(representation.rank, false), true
+	case run:
+		ordered, jokerRepresentations, _, ok := bestRunOrder(c.cards)
+		if !ok || cardIndex >= len(ordered) || !ordered[cardIndex].isJoker {
+			return 0, false
+		}
+
+		representation := jokerRepresentations[cardIndex]
+
+		aceLow := false
+		if representation.rank == Ace && cardIndex == 0 && len(ordered) > 1 {
+			next := ordered[1]
+			if next.isJoker {
+				next = jokerRepresentations[1]
+			}
+			aceLow = next.rank == Two
+		}
+
+		return rankPoints(representation.rank, aceLow), true
+	default:
+		return 0, false
+	}
 }
 
 func (c *Composition) addedCardsPointsNoAlloc(cards []Card, combinedBuf []Card) (int, bool) {
@@ -579,13 +621,6 @@ func bestRunOrder(cards []Card) ([]Card, map[int]Card, bool, bool) {
 		return ordered, jokerRepresentations, true, true
 	}
 
-	type runOrderCandidate struct {
-		ordered              []Card
-		jokerRepresentations map[int]Card
-		matchesInput         bool
-		matchCount           int
-	}
-
 	var best *runOrderCandidate
 
 	for _, aceLow := range []bool{false, true} {
@@ -650,11 +685,25 @@ func bestRunOrder(cards []Card) ([]Card, map[int]Card, bool, bool) {
 				matchCount:           matchCount,
 			}
 
-			if best == nil || candidate.matchesInput || candidate.matchCount > best.matchCount {
+			if best == nil {
+				if candidate.matchesInput {
+					return candidate.ordered, candidate.jokerRepresentations, true, true
+				}
 				best = candidate
+				continue
 			}
 			if candidate.matchesInput {
 				return candidate.ordered, candidate.jokerRepresentations, true, true
+			}
+			if candidate.matchCount > best.matchCount {
+				best = candidate
+				continue
+			}
+			if candidate.matchCount == best.matchCount {
+				if runOrderCandidatesEqual(best, candidate) {
+					continue
+				}
+				return nil, nil, false, false
 			}
 		}
 	}
@@ -664,6 +713,25 @@ func bestRunOrder(cards []Card) ([]Card, map[int]Card, bool, bool) {
 	}
 
 	return best.ordered, best.jokerRepresentations, false, true
+}
+
+func runOrderCandidatesEqual(a, b *runOrderCandidate) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	if !slices.EqualFunc(a.ordered, b.ordered, sameCard) {
+		return false
+	}
+	if len(a.jokerRepresentations) != len(b.jokerRepresentations) {
+		return false
+	}
+	for index, card := range a.jokerRepresentations {
+		other, ok := b.jokerRepresentations[index]
+		if !ok || !sameCard(card, other) {
+			return false
+		}
+	}
+	return true
 }
 
 func runCardsAreOrdered(cards []Card) bool {

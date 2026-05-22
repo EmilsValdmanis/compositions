@@ -96,7 +96,11 @@ export function GameBoardTable({
                       key={entry.key}
                       card={entry.card}
                       size="compact"
-                      draggable={{ id: entry.key, cardIndex: entry.sourceIndex }}
+                      draggable={{
+                        id: entry.key,
+                        cardIndex: entry.sourceIndex,
+                        isVirtual: entry.isVirtual,
+                      }}
                     />
                   ))}
                 </div>

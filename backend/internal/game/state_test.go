@@ -1803,6 +1803,64 @@ func TestGameStatePlayTableWithReclaimsAllowsReusingJokerSameTurn(t *testing.T) 
 	}
 }
 
+func TestGameStatePlayTableAllowsOpeningWithReclaimAndReusedJoker(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+
+	base, ok := NewRun([]Card{
+		{rank: Five, suit: Hearts},
+		{isJoker: true},
+		{rank: Seven, suit: Hearts},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+	state.activeCompositions = []*Composition{base}
+	state.players[0].hand.cards = []Card{
+		{rank: Six, suit: Hearts},
+		{rank: Eight, suit: Spades},
+		{rank: Nine, suit: Spades},
+		{rank: Ten, suit: Spades},
+		{rank: Two, suit: Clubs},
+	}
+
+	runComp, ok := NewRun([]Card{
+		{rank: Eight, suit: Spades},
+		{rank: Nine, suit: Spades},
+		{rank: Ten, suit: Spades},
+		{isJoker: true},
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true")
+	}
+
+	err := state.PlayTable([]*Composition{runComp}, nil, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       1,
+		ReplacementCard:  Card{rank: Six, suit: Hearts},
+	})
+
+	if err != nil {
+		t.Fatalf("PlayTable() error = %v", err)
+	}
+	if !state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = false; want true")
+	}
+	if len(state.activeCompositions) != 2 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 2", len(state.activeCompositions))
+	}
+	if got := state.activeCompositions[1].Points(); got != 37 {
+		t.Fatalf("state.activeCompositions[1].Points() = %d; want 37", got)
+	}
+	if len(state.players[0].hand.cards) != 1 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 1", len(state.players[0].hand.cards))
+	}
+	remaining := state.players[0].hand.cards[0]
+	if remaining.rank != Two || remaining.suit != Clubs {
+		t.Fatalf("remaining hand card = %+v; want Two of Clubs", remaining)
+	}
+}
+
 func TestGameStatePlayTableWithReclaimsRejectsAmbiguousSetJoker(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
@@ -3246,6 +3304,27 @@ func TestValidateTablePlayBranches(t *testing.T) {
 	}, nil, nil, []selectedAddition{{compositionIndex: 1, mask: 0b00110}, {compositionIndex: 1, mask: 0b01000}}, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Six, Hearts)}}, 0b01111, true, scratch) {
 		t.Fatal("validateTablePlay() = false; want true for repeated composition updates")
 	}
+	if !validateTablePlay(tablePlayState{
+		handCards:          []Card{card(Six, Hearts), card(Eight, Spades), card(Nine, Spades), card(Ten, Spades), card(Jack, Spades), card(Two, Clubs)},
+		activeCompositions: []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))},
+		hasOpened:          false,
+	}, []uint32{0b11110}, []compositionVariant{run}, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Six, Hearts)}}, 0b11111, true, scratch) {
+		t.Fatal("validateTablePlay() = false; want true when reclaim points complete opening requirement")
+	}
+	brokenReclaimBase := tablePlayState{
+		handCards: []Card{card(Ten, Hearts), card(King, Clubs)},
+		activeCompositions: []*Composition{{
+			variant: run,
+			cards:   []Card{card(Five, Hearts), joker(), card(Six, Hearts)},
+			jokerRepresentations: map[int][]Card{
+				1: {card(Four, Hearts)},
+			},
+		}},
+		hasOpened: true,
+	}
+	if validateTablePlay(brokenReclaimBase, nil, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Ten, Hearts)}}, 1, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false when reclaim points cannot be resolved")
+	}
 }
 
 func TestDiscardSearchBaseStateAndTablePlayUsesCard(t *testing.T) {
@@ -3319,5 +3398,16 @@ func TestApplyTablePlayStateErrorBranches(t *testing.T) {
 	}
 	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(Two, Clubs)}, hasOpened: true}, []*Composition{mustSet(t, card(King, Hearts), card(King, Diamonds), card(King, Clubs))}, nil, nil); !errors.Is(err, ErrCardsNotInHand) {
 		t.Fatalf("applyTablePlayState() error = %v; want %v", err, ErrCardsNotInHand)
+	}
+
+	brokenReclaimComp := &Composition{
+		variant: run,
+		cards:   []Card{card(Five, Hearts), joker(), card(Six, Hearts)},
+		jokerRepresentations: map[int][]Card{
+			1: {card(Four, Hearts)},
+		},
+	}
+	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Ten, Hearts), card(Two, Clubs)}, activeCompositions: []*Composition{brokenReclaimComp}, hasOpened: true}, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Ten, Hearts)}}); !errors.Is(err, ErrInvalidComposition) {
+		t.Fatalf("applyTablePlayState() error = %v; want %v for unresolved reclaim points", err, ErrInvalidComposition)
 	}
 }
