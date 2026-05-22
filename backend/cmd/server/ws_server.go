@@ -95,9 +95,9 @@ type draftUpdateRequest struct {
 }
 
 type draftCompositionRequest struct {
-	TableIndex *int          `json:"tableIndex,omitempty"`
-	InsertIndex *int         `json:"insertIndex,omitempty"`
-	Cards      []cardRequest `json:"cards"`
+	TableIndex  *int          `json:"tableIndex,omitempty"`
+	InsertIndex *int          `json:"insertIndex,omitempty"`
+	Cards       []cardRequest `json:"cards"`
 }
 
 type compositionAdditionRequest struct {

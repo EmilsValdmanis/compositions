@@ -647,7 +647,8 @@ function useGameBoardController({
         const existing = current.find(
           (composition) => composition.tableIndex === droppedOnTableEdgeTarget.compositionIndex,
         );
-        const targetComposition = game?.activeCompositions?.[droppedOnTableEdgeTarget.compositionIndex];
+        const targetComposition =
+          game?.activeCompositions?.[droppedOnTableEdgeTarget.compositionIndex];
         const insertIndex = targetComposition
           ? tableCompositionInsertIndexForEdge(targetComposition, droppedOnTableEdgeTarget.edge)
           : 0;

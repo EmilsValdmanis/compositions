@@ -181,10 +181,7 @@ export function tableCompositionDropId(compositionIndex: number) {
   return `${TABLE_COMPOSITION_DROP_ID_PREFIX}${compositionIndex}`;
 }
 
-export function tableCompositionEdgeDropId(
-  compositionIndex: number,
-  edge: TableCompositionEdge,
-) {
+export function tableCompositionEdgeDropId(compositionIndex: number, edge: TableCompositionEdge) {
   return `${TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX}${compositionIndex}-${edge}`;
 }
 
