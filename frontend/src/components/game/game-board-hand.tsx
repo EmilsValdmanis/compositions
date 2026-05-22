@@ -24,6 +24,7 @@ type GameBoardHandProps = {
   availableHandEntries: HandEntry[];
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
+  drawnHandKey: string | null;
   tablePlayState: TablePlayState;
 };
 
@@ -32,6 +33,7 @@ export function GameBoardHand({
   availableHandEntries,
   sortableIds,
   activeDrag,
+  drawnHandKey,
   tablePlayState,
 }: GameBoardHandProps) {
   const { hasGame } = status;
@@ -64,6 +66,18 @@ export function GameBoardHand({
                             ? "invisible"
                             : undefined,
                         )}
+                        decoration={
+                          drawnHandKey === entry.key
+                            ? {
+                                highlight: "new",
+                                label: (
+                                  <span className="text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
+                                    New
+                                  </span>
+                                ),
+                              }
+                            : undefined
+                        }
                       />
                     ))}
                   </div>
