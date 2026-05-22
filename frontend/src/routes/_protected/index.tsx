@@ -5,6 +5,7 @@ import { GameBoardHeader } from "#/components/game/game-board-header";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
+import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-utils";
 import { Spinner } from "#/components/ui/spinner";
 
@@ -51,6 +52,7 @@ function HydratedHome() {
     joinRoom,
     leaveRoom,
     startGame,
+    startNextRound,
     chooseDealing,
     drawFromDeck,
     drawFromDiscard,
@@ -87,6 +89,8 @@ function HydratedHome() {
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
   const turnPlayerName = playerName(players, state.game?.turn.playerId);
+  const roundResultsGame = phase === "round_over" ? state.game : null;
+  const completedGame = state.completedGame;
   const isBootstrappingConnection =
     state.connectionStatus === "idle" ||
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
@@ -186,11 +190,22 @@ function HydratedHome() {
         game={state.game}
       />
 
-      {isLobbyPhase ? (
+      {roundResultsGame ? (
+        <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">
+          <GameResultsView
+            room={state.room}
+            game={roundResultsGame}
+            players={players}
+            playerId={state.playerId}
+            onStartNextRound={startNextRound}
+          />
+        </div>
+      ) : isLobbyPhase ? (
         <div key="lobby">
           <GameLobbyView
             room={state.room}
             game={state.game}
+            completedGame={completedGame}
             players={players}
             roomCode={roomCode}
             playerId={state.playerId}

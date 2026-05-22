@@ -100,6 +100,11 @@ type ActionResult = {
   ok: boolean;
 };
 
+export type CompletedGameSnapshot = {
+  room: RoomSnapshot;
+  game: GameSnapshot;
+};
+
 export type LobbyState = {
   connectionStatus: ConnectionStatus;
   sessionId: string;
@@ -110,6 +115,7 @@ export type LobbyState = {
   lastError: string | null;
   lastErrorId: number;
   lastEvent: string | null;
+  completedGame: CompletedGameSnapshot | null;
 };
 
 type Envelope<T = unknown> = {
@@ -126,6 +132,7 @@ type GameWebSocketContextValue = {
   createRoom: () => void;
   joinRoom: (roomCode: string) => void;
   startGame: () => void;
+  startNextRound: () => void;
   chooseDealing: (dealType: string) => void;
   leaveRoom: () => void;
   drawFromDeck: () => void;
@@ -144,6 +151,7 @@ const initialState: LobbyState = {
   lastError: null,
   lastErrorId: 0,
   lastEvent: null,
+  completedGame: null,
 };
 
 const gameWebSocketStore = createStore(initialState);
@@ -183,12 +191,22 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
     clearError(current, {
       room: data?.room ?? null,
       game: data?.room?.phase === "lobby" ? null : current.game,
+      completedGame:
+        data?.room?.phase === "lobby" && current.completedGame?.room.code === data?.room?.code
+          ? current.completedGame
+          : current.completedGame,
       lastEvent: "room_state",
     }),
   game_state: (current, data) =>
     clearError(current, {
       room: data?.room ?? current.room,
       game: data?.game ?? null,
+      completedGame:
+        data?.room?.phase === "game_over" && data?.game
+          ? { room: data.room, game: data.game }
+          : data?.room?.phase === "in_progress" || data?.room?.phase === "round_over"
+            ? null
+            : current.completedGame,
       lastEvent: "game_state",
     }),
   action_result: (current, data) =>
@@ -200,6 +218,7 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
     clearError(current, {
       room: null,
       game: null,
+      completedGame: null,
       lastEvent: "left_room",
     }),
   error: (current, data) =>
@@ -442,6 +461,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     createRoom: () => send("create_room", {}),
     joinRoom: (roomCode) => send("join_room", { roomCode }),
     startGame: () => send("start_game", { dealerIndex: getDealerIndex(state.room) }),
+    startNextRound: () => send("start_next_round", {}),
     chooseDealing: (dealType) => send("choose_dealing", { dealType }),
     leaveRoom: () => send("leave_room", {}),
     drawFromDeck: () => send("draw", { source: "deck" }),

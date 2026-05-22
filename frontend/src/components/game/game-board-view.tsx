@@ -148,6 +148,7 @@ function GameBoardLayout({
         />
 
         <div className="flex flex-col min-h-0 gap-4">
+          <GameBoardPlayers players={players} game={game} connectedPlayers={connectedPlayers} />
           <GameBoardPiles
             drawPileCount={game?.drawPileCount ?? 0}
             topDiscardCard={topDiscardCard}
@@ -155,7 +156,6 @@ function GameBoardLayout({
             canDrawDiscard={turnState.canDrawDiscard}
             canDiscard={turnState.canDiscard}
           />
-          <GameBoardPlayers players={players} game={game} connectedPlayers={connectedPlayers} />
         </div>
       </div>
 
@@ -653,10 +653,11 @@ export function GameBoardView({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={controller.closePendingDiscardDialog}>
-              Keep editing
-            </Button>
-            <Button type="button" variant="ghost" onClick={controller.discardWithoutSubmitting}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={controller.discardWithoutSubmitting}
+            >
               Discard anyway
             </Button>
             <Button
@@ -664,7 +665,7 @@ export function GameBoardView({
               onClick={controller.submitBeforeDiscard}
               disabled={!controller.canSubmitTablePlay}
             >
-              Submit staged cards
+              Submit
             </Button>
           </DialogFooter>
         </DialogContent>

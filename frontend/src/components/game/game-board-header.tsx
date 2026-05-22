@@ -29,14 +29,26 @@ export function GameBoardHeader({
       <CardContent className="flex flex-col gap-3 py-0 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs uppercase text-muted-foreground">
-            {isLobbyPhase ? "Room status" : isMyTurn ? "Your turn" : `${turnPlayerName}'s turn`}
+            {isLobbyPhase
+              ? "Room status"
+              : phase === "round_over"
+                ? "Round complete"
+                : phase === "game_over"
+                  ? "Game complete"
+                  : isMyTurn
+                    ? "Your turn"
+                    : `${turnPlayerName}'s turn`}
           </p>
           <p className="truncate text-sm font-medium">
             {isLobbyPhase
               ? roomCode
                 ? `Room ${roomCode} is ready`
                 : "Create or join a room"
-              : `${turnPlayerName} is playing ${formatLabel(phase).toLowerCase()}`}
+              : phase === "round_over"
+                ? `Round ${game?.round ?? ""} results are ready`
+                : phase === "game_over"
+                  ? "The game has ended"
+                  : `${turnPlayerName} is playing ${formatLabel(phase).toLowerCase()}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

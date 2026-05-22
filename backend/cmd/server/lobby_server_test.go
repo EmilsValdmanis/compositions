@@ -2,12 +2,21 @@ package main
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/gorilla/websocket"
 )
+
+func setGameStatePhaseForTest(t *testing.T, state *game.GameState, phase game.GamePhase) {
+	t.Helper()
+
+	field := reflect.ValueOf(state).Elem().FieldByName("phase")
+	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().SetInt(int64(phase))
+}
 
 func TestLobbyServerCoverage(t *testing.T) {
 	originalEmit := emitEvent
@@ -1099,6 +1108,173 @@ func TestLobbyChooseDealingValidationErrors(t *testing.T) {
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: 99, chooserIndex: 1}
 	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); !errors.Is(err, game.ErrInvalidDealer) {
 		t.Fatalf("chooseDealing(start game failure) error = %v; want ErrInvalidDealer", err)
+	}
+}
+
+func TestLobbyStartNextRoundCoverage(t *testing.T) {
+	lobby := newLobbyServer()
+	if _, _, err := lobby.startNextRound("missing"); err == nil || err.Error() != "session not found" {
+		t.Fatalf("startNextRound(missing session) error = %v; want session not found", err)
+	}
+
+	hostConn, _, closeHost := newSocketPair(t)
+	defer closeHost()
+	hostEvent, _, _, err := lobby.connect("", hostConn)
+	if err != nil {
+		t.Fatalf("connect(host) error = %v", err)
+	}
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "join a room first" {
+		t.Fatalf("startNextRound(no room) error = %v; want join a room first", err)
+	}
+
+	hostRoom, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+
+	guestConn, _, closeGuest := newSocketPair(t)
+	defer closeGuest()
+	guestEvent, _, _, err := lobby.connect("", guestConn)
+	if err != nil {
+		t.Fatalf("connect(guest) error = %v", err)
+	}
+	if _, _, err := lobby.joinRoom(guestEvent.SessionID, hostRoom.Code, "Guest"); err != nil {
+		t.Fatalf("joinRoom() error = %v", err)
+	}
+	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+		t.Fatalf("startGame() error = %v", err)
+	}
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+		t.Fatalf("chooseDealing() error = %v", err)
+	}
+
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); !errors.Is(err, game.ErrCannotStartNextRound) {
+		t.Fatalf("startNextRound(in progress) error = %v; want ErrCannotStartNextRound", err)
+	}
+	if _, _, err := lobby.startNextRound(guestEvent.SessionID); err == nil || err.Error() != "only the host can start the next round" {
+		t.Fatalf("startNextRound(non host) error = %v; want only the host can start the next round", err)
+	}
+
+	room := lobby.rooms[hostRoom.Code]
+	room.players[1].connected = false
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseRoundOver)
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "all players must be connected" {
+		t.Fatalf("startNextRound(disconnected player) error = %v; want all players must be connected", err)
+	}
+	room.players[1].connected = true
+
+	room.gameState = nil
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "game state not initialized" {
+		t.Fatalf("startNextRound(nil game state) error = %v; want game state not initialized", err)
+	}
+
+	room.gameState = game.NewGameState()
+	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(host) error = %v", err)
+	}
+	if err := room.gameState.AddPlayer(newPlayerWithID(guestEvent.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(guest) error = %v", err)
+	}
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseRoundOver)
+
+	roomState, recipients, err := lobby.startNextRound(hostEvent.SessionID)
+	if err != nil {
+		t.Fatalf("startNextRound() error = %v", err)
+	}
+	if roomState.Phase != "in_progress" {
+		t.Fatalf("roomState.Phase = %q; want in_progress", roomState.Phase)
+	}
+	if roomState.DealerIndex != 1 {
+		t.Fatalf("roomState.DealerIndex = %d; want 1", roomState.DealerIndex)
+	}
+	if len(recipients) != 2 {
+		t.Fatalf("len(recipients) = %d; want 2", len(recipients))
+	}
+	if recipients[0].event.Game.Round != 2 {
+		t.Fatalf("recipients[0].event.Game.Round = %d; want 2", recipients[0].event.Game.Round)
+	}
+
+	room.gameState = game.NewGameState()
+	if err := room.gameState.AddPlayer(newPlayerWithID("state-host")); err != nil {
+		t.Fatalf("AddPlayer(state-host) error = %v", err)
+	}
+	if err := room.gameState.AddPlayer(newPlayerWithID("state-guest")); err != nil {
+		t.Fatalf("AddPlayer(state-guest) error = %v", err)
+	}
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseRoundOver)
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "game state snapshot failed" {
+		t.Fatalf("startNextRound(snapshot failure) error = %v; want game state snapshot failed", err)
+	}
+}
+
+func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
+	originalMakeGameState := makeGameState
+	defer func() { makeGameState = originalMakeGameState }()
+	originalAddPlayer := addPlayerToGameState
+	defer func() { addPlayerToGameState = originalAddPlayer }()
+
+	lobby := newLobbyServer()
+	if _, _, err := lobby.resetRoomAfterGameOver("missing"); err == nil || err.Error() != "room not found" {
+		t.Fatalf("resetRoomAfterGameOver(missing room) error = %v; want room not found", err)
+	}
+
+	hostConn, _, closeHost := newSocketPair(t)
+	defer closeHost()
+	hostEvent, _, _, err := lobby.connect("", hostConn)
+	if err != nil {
+		t.Fatalf("connect(host) error = %v", err)
+	}
+	hostRoom, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	room := lobby.rooms[hostRoom.Code]
+
+	room.gameState = nil
+	if _, _, err := lobby.resetRoomAfterGameOver(hostRoom.Code); err == nil || err.Error() != "game state not initialized" {
+		t.Fatalf("resetRoomAfterGameOver(nil game state) error = %v; want game state not initialized", err)
+	}
+
+	room.gameState = game.NewGameState()
+	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(host) error = %v", err)
+	}
+	if _, _, err := lobby.resetRoomAfterGameOver(hostRoom.Code); err == nil || err.Error() != "game is not over" {
+		t.Fatalf("resetRoomAfterGameOver(not over) error = %v; want game is not over", err)
+	}
+
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
+	makeGameState = func() *game.GameState { return nil }
+	if _, _, err := lobby.resetRoomAfterGameOver(hostRoom.Code); err == nil || err.Error() != "game state not initialized" {
+		t.Fatalf("resetRoomAfterGameOver(reset error) error = %v; want game state not initialized", err)
+	}
+
+	makeGameState = game.NewGameState
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
+	snapshot, recipients, err := lobby.resetRoomAfterGameOver(hostRoom.Code)
+	if err != nil {
+		t.Fatalf("resetRoomAfterGameOver() error = %v", err)
+	}
+	if snapshot == nil || snapshot.Phase != "lobby" {
+		t.Fatalf("snapshot = %#v; want lobby snapshot", snapshot)
+	}
+	if len(snapshot.Players) != 1 || snapshot.Players[0].PlayerID != hostEvent.PlayerID {
+		t.Fatalf("snapshot.Players = %#v; want host retained", snapshot.Players)
+	}
+	if len(recipients) != 1 || recipients[0] != hostConn {
+		t.Fatalf("recipients = %v; want [%p]", recipients, hostConn)
+	}
+
+	room.players = append(room.players, nil)
+	if err := room.resetForLobby(); err != nil {
+		t.Fatalf("resetForLobby(with nil player) error = %v", err)
+	}
+
+	addPlayerToGameState = func(state *game.GameState, player *game.Player) error {
+		return errors.New("add failed")
+	}
+	if err := room.resetForLobby(); err == nil || err.Error() != "add failed" {
+		t.Fatalf("resetForLobby(add failure) error = %v; want add failed", err)
 	}
 }
 
