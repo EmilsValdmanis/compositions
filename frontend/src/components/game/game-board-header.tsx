@@ -4,21 +4,15 @@ import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
 
 export function GameBoardHeader({
-  connectionStatus,
   phase,
   roomCode,
-  connectedPlayers,
-  playerCount,
   isLobbyPhase,
   isMyTurn,
   turnPlayerName,
   game,
 }: {
-  connectionStatus: "idle" | "disconnected" | "connecting" | "connected";
   phase: string;
   roomCode?: string;
-  connectedPlayers: number;
-  playerCount: number;
   isLobbyPhase: boolean;
   isMyTurn: boolean;
   turnPlayerName: string;
@@ -52,17 +46,6 @@ export function GameBoardHeader({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Badge
-            variant={
-              connectionStatus === "connected"
-                ? "default"
-                : connectionStatus === "disconnected"
-                  ? "destructive"
-                  : "outline"
-            }
-          >
-            {formatLabel(connectionStatus)}
-          </Badge>
           <Badge variant="secondary">{formatLabel(phase)}</Badge>
           <Badge variant="outline">Room {roomCode ?? "None"}</Badge>
           {!isLobbyPhase && game ? (
@@ -75,9 +58,6 @@ export function GameBoardHeader({
               ) : null}
             </>
           ) : null}
-          <Badge variant="outline">
-            {connectedPlayers}/{playerCount || 0} online
-          </Badge>
         </div>
       </CardContent>
     </Card>

@@ -6,6 +6,7 @@ import {
   HAND_DROP_ID,
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
+import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Card, CardContent } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
@@ -70,11 +71,7 @@ export function GameBoardHand({
                           drawnHandKey === entry.key
                             ? {
                                 highlight: "new",
-                                label: (
-                                  <span className="text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
-                                    New
-                                  </span>
-                                ),
+                                label: <NewActivityLabel players={[]} />,
                               }
                             : undefined
                         }

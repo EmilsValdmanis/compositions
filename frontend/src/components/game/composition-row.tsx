@@ -10,9 +10,12 @@ import {
 } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { cardName } from "#/components/game/game-card-utils";
 import { formatLabel } from "#/components/game/game-view-helpers";
-import { ActivityLabel } from "#/components/game/game-view-utils";
+import {
+  ActivityLabel,
+  NewActivityLabel,
+  ReclaimActivityLabel,
+} from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { cn } from "#/lib/utils";
 
@@ -75,20 +78,18 @@ export function CompositionRow({
     <GameBoardDraftDropZone
       id={tableCompositionDropId(index)}
       className={cn(
-        "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3 pt-5",
+        "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-3",
         isNewComposition ? "border-primary/70 bg-primary/5" : null,
       )}
     >
-      {isNewComposition ? (
-        <div className="absolute left-3 top-2 z-10">
-          <ActivityLabel players={players} playerId={activity?.playerId} />
-        </div>
-      ) : null}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">#{index + 1}</Badge>
           <Badge variant="outline">{formatLabel(composition.type)}</Badge>
           {composition.complete ? <Badge>Complete</Badge> : null}
+          {isNewComposition ? (
+            <NewActivityLabel players={players} playerId={activity?.playerId} />
+          ) : null}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{composition.points} pts</span>
@@ -126,16 +127,20 @@ export function CompositionRow({
                   submittedHighlight || reclaim
                     ? {
                         highlight: submittedHighlight ?? "joker_reclaim",
-                        label: <ActivityLabel players={players} playerId={previewPlayerId} />,
+                        label:
+                          (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
+                            <ReclaimActivityLabel players={players} playerId={previewPlayerId} />
+                          ) : (
+                            <ActivityLabel
+                              players={players}
+                              playerId={previewPlayerId}
+                              label="Add"
+                            />
+                          ),
                       }
                     : undefined
                 }
               />
-              {reclaim && !submittedHighlight ? (
-                <span className="text-center text-[0.6rem] leading-tight text-primary">
-                  {cardName(reclaim.replacementEntry.card)} replaces the joker
-                </span>
-              ) : null}
             </div>
           );
         })}
@@ -159,7 +164,9 @@ export function CompositionRow({
                 }
                 decoration={{
                   highlight: "addition",
-                  label: <ActivityLabel players={players} playerId={stagedEntryPlayerId} />,
+                  label: (
+                    <ActivityLabel players={players} playerId={stagedEntryPlayerId} label="Add" />
+                  ),
                 }}
               />
             </div>

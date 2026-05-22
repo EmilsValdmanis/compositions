@@ -1,6 +1,7 @@
-import { Outlet } from "@tanstack/react-router";
+import { Link, Outlet } from "@tanstack/react-router";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { UserDropdown } from "#/components/user-dropdown";
+import { Button } from "#/components/ui/button";
 
 export function ProtectedLayout() {
   return (
@@ -12,6 +13,11 @@ export function ProtectedLayout() {
             Compositions
           </h1>
           <div className="flex items-center justify-end gap-1">
+            {import.meta.env.DEV ? (
+              <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
+                <Link to="/dev-ui">Dev UI</Link>
+              </Button>
+            ) : null}
             <UserDropdown />
           </div>
         </div>

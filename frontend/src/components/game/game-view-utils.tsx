@@ -1,3 +1,5 @@
+import { SparklesIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { playerById } from "#/components/game/game-view-helpers";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
@@ -30,11 +32,13 @@ export function ActivityLabel({
   players,
   playerId,
   label = "New",
+  icon,
   className,
 }: {
   players: PlayerSnapshot[];
   playerId?: string;
   label?: string;
+  icon?: React.ComponentProps<typeof HugeiconsIcon>["icon"];
   className?: string;
 }) {
   return (
@@ -44,8 +48,21 @@ export function ActivityLabel({
         className,
       )}
     >
+      {icon ? <HugeiconsIcon icon={icon} className="size-3.5" strokeWidth={2} /> : null}
       <span className="uppercase tracking-wide">{label}</span>
       {playerId ? <PlayerMarker players={players} playerId={playerId} className="size-4" /> : null}
     </div>
   );
+}
+
+export function NewActivityLabel(
+  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
+) {
+  return <ActivityLabel {...props} label="New" icon={SparklesIcon} />;
+}
+
+export function ReclaimActivityLabel(
+  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
+) {
+  return <ActivityLabel {...props} label="Reclaim" />;
 }

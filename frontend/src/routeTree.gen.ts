@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as ProtectedIndexRouteImport } from './routes/_protected/index'
+import { Route as ProtectedDevUiRouteImport } from './routes/_protected/dev-ui'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -28,6 +29,11 @@ const ProtectedIndexRoute = ProtectedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => ProtectedRoute,
 } as any)
+const ProtectedDevUiRoute = ProtectedDevUiRouteImport.update({
+  id: '/dev-ui',
+  path: '/dev-ui',
+  getParentRoute: () => ProtectedRoute,
+} as any)
 const AuthSignInRoute = AuthSignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
@@ -42,11 +48,13 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof ProtectedIndexRoute
   '/sign-in': typeof AuthSignInRoute
+  '/dev-ui': typeof ProtectedDevUiRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof ProtectedIndexRoute
   '/sign-in': typeof AuthSignInRoute
+  '/dev-ui': typeof ProtectedDevUiRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -54,19 +62,21 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/_protected': typeof ProtectedRouteWithChildren
   '/_auth/sign-in': typeof AuthSignInRoute
+  '/_protected/dev-ui': typeof ProtectedDevUiRoute
   '/_protected/': typeof ProtectedIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/api/auth/$'
+  fullPaths: '/' | '/sign-in' | '/dev-ui' | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/api/auth/$'
+  to: '/' | '/sign-in' | '/dev-ui' | '/api/auth/$'
   id:
     | '__root__'
     | '/_auth'
     | '/_protected'
     | '/_auth/sign-in'
+    | '/_protected/dev-ui'
     | '/_protected/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -100,6 +110,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedIndexRouteImport
       parentRoute: typeof ProtectedRoute
     }
+    '/_protected/dev-ui': {
+      id: '/_protected/dev-ui'
+      path: '/dev-ui'
+      fullPath: '/dev-ui'
+      preLoaderRoute: typeof ProtectedDevUiRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_auth/sign-in': {
       id: '/_auth/sign-in'
       path: '/sign-in'
@@ -128,10 +145,12 @@ const AuthRouteChildren: AuthRouteChildren = {
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface ProtectedRouteChildren {
+  ProtectedDevUiRoute: typeof ProtectedDevUiRoute
   ProtectedIndexRoute: typeof ProtectedIndexRoute
 }
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
+  ProtectedDevUiRoute: ProtectedDevUiRoute,
   ProtectedIndexRoute: ProtectedIndexRoute,
 }
 

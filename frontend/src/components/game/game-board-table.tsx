@@ -19,7 +19,7 @@ import {
 import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { ActivityLabel } from "#/components/game/game-view-utils";
+import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
@@ -175,12 +175,10 @@ export function GameBoardTable({
           {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
             <div
               key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
-              className="relative flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3 pt-5"
+              className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
             >
-              <div className="absolute left-3 top-2 z-10">
-                <ActivityLabel players={players} playerId={turnActivity?.playerId} />
-              </div>
-              <div className="mb-3 flex items-center justify-end gap-2">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                 <Badge variant="outline">{composition.cards.length} cards</Badge>
               </div>
               <div className="flex items-start gap-2">
@@ -199,12 +197,10 @@ export function GameBoardTable({
             <GameBoardDraftDropZone
               key={composition.id}
               id={draftCompositionDropId(composition.id)}
-              className="relative flex w-fit flex-col shrink-0 rounded-3xl border border-primary/70 bg-primary/5 p-3 pt-5"
+              className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
             >
-              <div className="absolute left-3 top-2 z-10">
-                <ActivityLabel players={players} />
-              </div>
-              <div className="mb-3 flex items-center justify-end gap-2">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <NewActivityLabel players={players} />
                 <Badge variant="outline">{composition.entries.length} cards</Badge>
               </div>
               <SortableContext
