@@ -233,9 +233,6 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 	if gs.turn.mustUseDiscardDraw && tablePlayUsesCard(comps, additions, reclaims, gs.turn.discardDrawCard) {
 		gs.turn.mustUseDiscardDraw = false
 	}
-	if !gs.turn.mustUseDiscardDraw && gs.finishRoundIfSpecialWin(gs.turn.playerIndex) {
-		return nil
-	}
 
 	return nil
 }
@@ -358,7 +355,7 @@ func hasSameSuitCollection(cards []Card) bool {
 	var suit Suit
 	for _, card := range cards {
 		if card.isJoker {
-			return false
+			continue
 		}
 		if !firstSuitSet {
 			suit = card.suit
@@ -378,23 +375,24 @@ func hasSixIdenticalPairs(cards []Card) bool {
 		return false
 	}
 
-	counts := make(map[handCardKey]int, 6)
+	counts := make(map[Card]int, 6)
+	jokerCount := 0
 	for _, card := range cards {
-		key := handCardKey{rank: card.rank, suit: card.suit, isJoker: card.isJoker}
-		counts[key]++
+		if card.isJoker {
+			jokerCount++
+			continue
+		}
+		counts[Card{rank: card.rank, suit: card.suit}]++
 	}
 
-	if len(counts) != 6 {
-		return false
-	}
-
+	oddCount := 0
 	for _, count := range counts {
-		if count != 2 {
-			return false
+		if count%2 != 0 {
+			oddCount++
 		}
 	}
 
-	return true
+	return jokerCount >= oddCount
 }
 
 func (gs *GameState) removeCompletedCompositionsToDiscard() {

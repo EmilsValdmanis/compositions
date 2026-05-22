@@ -744,6 +744,44 @@ func TestGameStateDrawFromDeckDrawsCardAndMarksTurn(t *testing.T) {
 	}
 }
 
+func TestGameStateDrawFromDeckDoesNotEndRoundForJokerSameSuitCollection(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hand.cards = []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		joker(),
+		joker(),
+	}
+	state.drawPile = &CardPile{cards: []Card{joker()}}
+	state.players[1].totalPoints = 10
+	state.players[1].hand.cards = []Card{card(King, Clubs)}
+
+	err := state.DrawFromDeck()
+
+	if err != nil {
+		t.Fatalf("DrawFromDeck() error = %v", err)
+	}
+	if state.phase != PhaseInProgress {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseInProgress)
+	}
+	if state.roundWinnerIndex != -1 {
+		t.Fatalf("state.roundWinnerIndex = %d; want -1", state.roundWinnerIndex)
+	}
+	if state.players[1].totalPoints != 10 {
+		t.Fatalf("player 1 totalPoints = %d; want 10", state.players[1].totalPoints)
+	}
+	if state.turn.mustUseDiscardDraw {
+		t.Fatal("state.turn.mustUseDiscardDraw = true; want false")
+	}
+}
+
 func TestGameStateDrawFromDeckRejectsSecondDrawSameTurn(t *testing.T) {
 	state := NewGameState()
 	first := NewPlayer()
@@ -2197,7 +2235,7 @@ func TestGameStateFinishRoundEndsGameWhenAllOtherPlayersExceedHundred(t *testing
 	}
 }
 
-func TestGameStatePlayTableEndsRoundForSameSuitCollection(t *testing.T) {
+func TestGameStatePlayTableDoesNotEndRoundForSameSuitCollection(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
 	state.players[0].hasOpened = true
@@ -2237,17 +2275,17 @@ func TestGameStatePlayTableEndsRoundForSameSuitCollection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AddToCompositions() error = %v", err)
 	}
-	if state.phase != PhaseRoundOver {
-		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	if state.phase != PhaseInProgress {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseInProgress)
 	}
-	if state.roundWinnerIndex != 0 {
-		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	if state.roundWinnerIndex != -1 {
+		t.Fatalf("state.roundWinnerIndex = %d; want -1", state.roundWinnerIndex)
 	}
 	if len(state.players[0].hand.cards) != 12 {
 		t.Fatalf("len(state.players[0].hand.cards) = %d; want 12", len(state.players[0].hand.cards))
 	}
-	if state.players[1].totalPoints != 32 {
-		t.Fatalf("player 1 totalPoints = %d; want 32", state.players[1].totalPoints)
+	if state.players[1].totalPoints != 30 {
+		t.Fatalf("player 1 totalPoints = %d; want 30", state.players[1].totalPoints)
 	}
 }
 
@@ -2649,6 +2687,111 @@ func TestGameStateDrawFromDiscardRejectsSecondDrawSameTurn(t *testing.T) {
 	}
 }
 
+func TestGameStateDrawFromDiscardDoesNotEndRoundForJokerSixIdenticalPairs(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Two, Hearts), card(Two, Hearts),
+		card(Three, Clubs), card(Three, Clubs),
+		card(Four, Diamonds), card(Four, Diamonds),
+		card(Five, Spades), card(Five, Spades),
+		card(Six, Hearts),
+		card(Seven, Diamonds),
+		joker(),
+	}
+	state.discardPile = &CardPile{cards: []Card{joker()}}
+	state.players[1].totalPoints = 40
+	state.players[1].hand.cards = []Card{card(King, Hearts)}
+
+	err := state.DrawFromDiscard()
+
+	if err != nil {
+		t.Fatalf("DrawFromDiscard() error = %v", err)
+	}
+	if state.phase != PhaseInProgress {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseInProgress)
+	}
+	if state.roundWinnerIndex != -1 {
+		t.Fatalf("state.roundWinnerIndex = %d; want -1", state.roundWinnerIndex)
+	}
+	if state.players[1].totalPoints != 40 {
+		t.Fatalf("player 1 totalPoints = %d; want 40", state.players[1].totalPoints)
+	}
+	if !state.turn.mustUseDiscardDraw {
+		t.Fatal("state.turn.mustUseDiscardDraw = false; want true")
+	}
+}
+
+func TestGameStateDiscardFromHandEndsRoundForJokerSameSuitCollection(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[1].totalPoints = 10
+	state.players[1].hand.cards = []Card{card(King, Clubs)}
+	state.players[0].hand.cards = []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		joker(),
+		joker(),
+		joker(),
+		card(King, Clubs),
+	}
+
+	err := state.DiscardFromHand(12)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.roundWinnerIndex != 0 {
+		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	}
+	if state.players[1].totalPoints != 20 {
+		t.Fatalf("player 1 totalPoints = %d; want 20", state.players[1].totalPoints)
+	}
+}
+
+func TestGameStateDiscardFromHandEndsRoundForJokerSixIdenticalPairs(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[1].totalPoints = 40
+	state.players[1].hand.cards = []Card{card(King, Hearts)}
+	state.players[0].hand.cards = []Card{
+		card(Two, Hearts), card(Two, Hearts),
+		card(Three, Clubs), card(Three, Clubs),
+		card(Four, Diamonds), card(Four, Diamonds),
+		card(Five, Spades), card(Five, Spades),
+		card(Six, Hearts),
+		card(Seven, Diamonds),
+		joker(),
+		joker(),
+		card(Ace, Clubs),
+	}
+
+	err := state.DiscardFromHand(12)
+
+	if err != nil {
+		t.Fatalf("DiscardFromHand() error = %v", err)
+	}
+	if state.phase != PhaseRoundOver {
+		t.Fatalf("state.phase = %d; want %d", state.phase, PhaseRoundOver)
+	}
+	if state.roundWinnerIndex != 0 {
+		t.Fatalf("state.roundWinnerIndex = %d; want 0", state.roundWinnerIndex)
+	}
+	if state.players[1].totalPoints != 50 {
+		t.Fatalf("player 1 totalPoints = %d; want 50", state.players[1].totalPoints)
+	}
+}
+
 func TestGameStateDrawFromDiscardRejectsEmptyDiscardPile(t *testing.T) {
 	state := newTurnTestState()
 	state.players[0].hasOpened = true
@@ -2921,14 +3064,31 @@ func TestApplyOverHundredAdjustmentWithoutSafePlayersDoesNothing(t *testing.T) {
 	}
 }
 
-func TestHasSameSuitCollectionRejectsWrongLengthAndJoker(t *testing.T) {
+func TestHasSameSuitCollectionRejectsWrongLengthAndMixedSuits(t *testing.T) {
 	if hasSameSuitCollection([]Card{card(Ace, Hearts)}) {
 		t.Fatal("hasSameSuitCollection() = true; want false for wrong length")
 	}
 	hand := sameSuitCollectionHand(Hearts)
-	hand[0] = joker()
+	hand[0] = card(Ace, Clubs)
 	if hasSameSuitCollection(hand) {
-		t.Fatal("hasSameSuitCollection() = true; want false for joker")
+		t.Fatal("hasSameSuitCollection() = true; want false for mixed suits")
+	}
+	withJokers := []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		joker(),
+		joker(),
+		joker(),
+	}
+	if !hasSameSuitCollection(withJokers) {
+		t.Fatal("hasSameSuitCollection() = false; want true with jokers completing the suit")
 	}
 }
 
@@ -2946,6 +3106,19 @@ func TestHasSixIdenticalPairsRejectsWrongLengthAndBadCounts(t *testing.T) {
 	}
 	if hasSixIdenticalPairs(bad) {
 		t.Fatal("hasSixIdenticalPairs() = true; want false for unmatched final pair")
+	}
+	withJokers := []Card{
+		card(Two, Hearts), card(Two, Hearts),
+		card(Three, Hearts), card(Three, Hearts),
+		card(Four, Hearts), card(Four, Hearts),
+		card(Five, Hearts), card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		joker(),
+		joker(),
+	}
+	if !hasSixIdenticalPairs(withJokers) {
+		t.Fatal("hasSixIdenticalPairs() = false; want true with jokers completing unmatched cards")
 	}
 }
 
