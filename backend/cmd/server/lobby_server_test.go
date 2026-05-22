@@ -671,13 +671,13 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		mergeCompositionActivities(activity, nil)
 		mergeCompositionActivities(nil, []game.CompositionActivitySnapshot{{TableIndex: 1}})
 		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
-			TableIndex: 2,
+			TableIndex:     2,
 			CardActivities: map[int]game.CardActivitySnapshot{0: {Kind: "addition", PlayerID: "p1"}},
 		}})
 		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
 			TableIndex: 2,
-			Kind:      "new_composition",
-			PlayerID:  "p1",
+			Kind:       "new_composition",
+			PlayerID:   "p1",
 			CardActivities: map[int]game.CardActivitySnapshot{
 				1: {Kind: "joker_reclaim", PlayerID: "p1"},
 			},
@@ -693,14 +693,14 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		}
 		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
 			TableIndex: 2,
-			Kind:      "ignored_kind",
-			PlayerID:  "ignored_player",
+			Kind:       "ignored_kind",
+			PlayerID:   "ignored_player",
 		}})
 		if activity.CompositionActivities[0].Kind != "new_composition" || activity.CompositionActivities[0].PlayerID != "p1" {
 			t.Fatalf("merge should preserve existing kind/player, got %#v", activity.CompositionActivities[0])
 		}
 		mergeCompositionActivities(activity, []game.CompositionActivitySnapshot{{
-			TableIndex: 2,
+			TableIndex:     2,
 			CardActivities: map[int]game.CardActivitySnapshot{2: {Kind: "new", PlayerID: "p1"}},
 		}})
 		if activity.CompositionActivities[0].CardActivities[2].Kind != "new" {
@@ -708,7 +708,7 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		}
 		emptyCardMapActivity := &game.TurnActivitySnapshot{CompositionActivities: []game.CompositionActivitySnapshot{{TableIndex: 7}}}
 		mergeCompositionActivities(emptyCardMapActivity, []game.CompositionActivitySnapshot{{
-			TableIndex: 7,
+			TableIndex:     7,
 			CardActivities: map[int]game.CardActivitySnapshot{1: {Kind: "addition", PlayerID: "p2"}},
 		}})
 		if emptyCardMapActivity.CompositionActivities[0].CardActivities[1].Kind != "addition" {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -13,6 +13,7 @@ import {
   type PlayerSnapshot,
   type TablePlayRequest,
   type TurnActivitySnapshot,
+  useGameWebSocket,
 } from "#/components/game-websocket-provider";
 import { GameBoardHand } from "#/components/game/game-board-hand";
 import { GameBoardPiles } from "#/components/game/game-board-piles";
@@ -84,7 +85,6 @@ type GameBoardViewProps = {
   onDiscardCard: (cardIndex: number) => void;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
-  onUpdateTurnDrafts: (draft: { compositions: DraftCompositionSnapshot[] }) => void;
   onPlayTable: (play: TablePlayRequest) => void;
 };
 
@@ -127,6 +127,12 @@ function buildSubmittedCompositionActivityMap(
   turnActivity?: TurnActivitySnapshot,
 ) {
   const activityMap = new Map<number, SubmittedCompositionActivity>();
+  const compositionActivityByIndex = new Map(
+    (turnActivity?.compositionActivities ?? []).map((compositionActivity) => [
+      compositionActivity.tableIndex,
+      compositionActivity,
+    ]),
+  );
 
   for (const compositionActivity of turnActivity?.compositionActivities ?? []) {
     activityMap.set(compositionActivity.tableIndex, {
@@ -148,9 +154,7 @@ function buildSubmittedCompositionActivityMap(
     if (!baseline) {
       activity.kind ??= "new_composition";
       for (let cardIndex = 0; cardIndex < current.cards.length; cardIndex += 1) {
-        const activityDetails = turnActivity?.compositionActivities?.find(
-          (item) => item.tableIndex === index,
-        )?.cardActivities?.[cardIndex];
+        const activityDetails = compositionActivityByIndex.get(index)?.cardActivities?.[cardIndex];
         if (activityDetails) {
           activity.cardActivities[cardIndex] = {
             kind: activityDetails.kind === "joker_reclaim" ? "joker_reclaim" : "new",
@@ -165,9 +169,7 @@ function buildSubmittedCompositionActivityMap(
     for (let cardIndex = 0; cardIndex < current.cards.length; cardIndex += 1) {
       const currentCard = current.cards[cardIndex];
       const baselineCard = baseline.cards[cardIndex];
-      const activityDetails = turnActivity?.compositionActivities?.find(
-        (item) => item.tableIndex === index,
-      )?.cardActivities?.[cardIndex];
+      const activityDetails = compositionActivityByIndex.get(index)?.cardActivities?.[cardIndex];
 
       if (!baselineCard) {
         if (activityDetails) {
@@ -320,7 +322,6 @@ function useGameBoardController({
   onDiscardCard,
   onDrawFromDeck,
   onDrawFromDiscard,
-  onUpdateTurnDrafts,
   onPlayTable,
 }: Pick<
   GameBoardViewProps,
@@ -332,9 +333,9 @@ function useGameBoardController({
   | "onDiscardCard"
   | "onDrawFromDeck"
   | "onDrawFromDiscard"
-  | "onUpdateTurnDrafts"
   | "onPlayTable"
 >): GameBoardController {
+  const { updateTurnDrafts } = useGameWebSocket();
   const handOrderScopeKey = useMemo(
     () => (roomCode && playerId ? `${roomCode}:${playerId}` : null),
     [playerId, roomCode],
@@ -478,16 +479,17 @@ function useGameBoardController({
       ),
     [draftedCompositionsView],
   );
+  const syncTurnDrafts = useEffectEvent((drafts: DraftCompositionSnapshot[]) => {
+    updateTurnDrafts({ compositions: drafts });
+  });
 
   useEffect(() => {
     if (!turnState.isMyTurn) {
       return;
     }
 
-    onUpdateTurnDrafts({
-      compositions: JSON.parse(serializedDrafts) as DraftCompositionSnapshot[],
-    });
-  }, [onUpdateTurnDrafts, serializedDrafts, turnState.isMyTurn]);
+    syncTurnDrafts(JSON.parse(serializedDrafts) as DraftCompositionSnapshot[]);
+  }, [serializedDrafts, turnState.isMyTurn]);
 
   function resetDraftCompositions() {
     setDraftCompositionState({
@@ -732,7 +734,6 @@ export function GameBoardView({
   onDiscardCard,
   onDrawFromDeck,
   onDrawFromDiscard,
-  onUpdateTurnDrafts,
   onPlayTable,
 }: GameBoardViewProps) {
   const controller = useGameBoardController({
@@ -744,7 +745,6 @@ export function GameBoardView({
     onDiscardCard,
     onDrawFromDeck,
     onDrawFromDiscard,
-    onUpdateTurnDrafts,
     onPlayTable,
   });
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;

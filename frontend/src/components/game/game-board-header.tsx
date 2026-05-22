@@ -1,5 +1,5 @@
 import { type GameSnapshot } from "#/components/game-websocket-provider";
-import { formatLabel } from "#/components/game/game-view-utils";
+import { formatLabel } from "#/components/game/game-view-helpers";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
 

@@ -6,7 +6,7 @@ import {
   type RoomSnapshot,
 } from "#/components/game-websocket-provider";
 import { PlayerStrip } from "#/components/game/player-strip";
-import { compactId } from "#/components/game/game-view-utils";
+import { compactId } from "#/components/game/game-view-helpers";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import {

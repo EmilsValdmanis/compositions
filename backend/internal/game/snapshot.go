@@ -20,10 +20,10 @@ type CardActivitySnapshot struct {
 }
 
 type CompositionActivitySnapshot struct {
-	TableIndex      int                           `json:"tableIndex"`
-	Kind            string                        `json:"kind,omitempty"`
-	PlayerID        string                        `json:"playerId,omitempty"`
-	CardActivities  map[int]CardActivitySnapshot  `json:"cardActivities,omitempty"`
+	TableIndex     int                          `json:"tableIndex"`
+	Kind           string                       `json:"kind,omitempty"`
+	PlayerID       string                       `json:"playerId,omitempty"`
+	CardActivities map[int]CardActivitySnapshot `json:"cardActivities,omitempty"`
 }
 
 type DraftCompositionSnapshot struct {

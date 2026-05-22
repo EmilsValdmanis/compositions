@@ -11,6 +11,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { cardName } from "#/components/game/game-card-utils";
 import { cn } from "#/lib/utils";
 
 const rankLabels: Record<number, string> = {
@@ -36,13 +37,6 @@ const suitIcons = {
   3: SpadesIcon,
 };
 
-const suitNames: Record<number, string> = {
-  0: "Hearts",
-  1: "Diamonds",
-  2: "Clubs",
-  3: "Spades",
-};
-
 function cardRankLabel(card: CardSnapshot) {
   if (card.isJoker) {
     return "J";
@@ -57,16 +51,6 @@ function cardSuitIcon(card: CardSnapshot) {
   }
 
   return suitIcons[card.suit as keyof typeof suitIcons] ?? null;
-}
-
-export function cardName(card: CardSnapshot) {
-  if (card.isJoker) {
-    return "Joker";
-  }
-
-  const rank = rankLabels[card.rank ?? 0] ?? "Unknown";
-  const suit = suitNames[card.suit ?? -1] ?? "Unknown";
-  return `${rank} of ${suit}`;
 }
 
 function cardAccentClass(card: CardSnapshot) {
@@ -192,7 +176,13 @@ function decorationRingClassName(highlight?: GameCardDecoration["highlight"]) {
   }
 }
 
-function renderGameCardDecoration(size: GameCardSize, decoration?: GameCardDecoration) {
+function GameCardDecorationLayer({
+  size,
+  decoration,
+}: {
+  size: GameCardSize;
+  decoration?: GameCardDecoration;
+}) {
   if (!decoration?.label && !decoration?.footer) {
     return null;
   }
@@ -270,7 +260,7 @@ function SortableGameCard({
       {...attributes}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-      {renderGameCardDecoration(size, decoration)}
+      <GameCardDecorationLayer size={size} decoration={decoration} />
     </button>
   );
 }
@@ -326,7 +316,7 @@ function DraggableGameCard({
       {...attributes}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-      {renderGameCardDecoration(size, decoration)}
+      <GameCardDecorationLayer size={size} decoration={decoration} />
     </button>
   );
 }
@@ -406,7 +396,7 @@ export function GameCard({
       aria-label={accessibleName}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-      {renderGameCardDecoration(size, decoration)}
+      <GameCardDecorationLayer size={size} decoration={decoration} />
     </div>
   );
 }

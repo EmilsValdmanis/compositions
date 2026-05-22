@@ -9,8 +9,10 @@ import {
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
-import { GameCard, cardName } from "#/components/game/game-card";
-import { PlayerMarker, formatLabel } from "#/components/game/game-view-utils";
+import { GameCard } from "#/components/game/game-card";
+import { cardName } from "#/components/game/game-card-utils";
+import { formatLabel } from "#/components/game/game-view-helpers";
+import { PlayerMarker } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { cn } from "#/lib/utils";
 

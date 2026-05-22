@@ -1,0 +1,5 @@
+import SignInButton from "#/components/auth/sign-in-button";
+
+export function SignInPage() {
+  return <SignInButton />;
+}

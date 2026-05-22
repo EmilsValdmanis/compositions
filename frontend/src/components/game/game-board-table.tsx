@@ -27,6 +27,26 @@ import {
   CardTitle,
 } from "#/components/ui/card";
 
+function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
+  return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
+}
+
+function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
+  const duplicateCounts = new Map<string, number>();
+
+  return cards.map((card) => {
+    const baseKey = draftCardKey(card);
+    const duplicateCount = duplicateCounts.get(baseKey) ?? 0;
+
+    duplicateCounts.set(baseKey, duplicateCount + 1);
+
+    return {
+      card,
+      key: `${baseKey}-${duplicateCount}`,
+    };
+  });
+}
+
 export function GameBoardTable({
   game,
   tableCompositions,
@@ -116,22 +136,20 @@ export function GameBoardTable({
                 <Badge variant="outline">{composition.cards.length} cards</Badge>
               </div>
               <div className="flex items-start gap-2">
-                {composition.cards.map(
-                  (card: DraftCompositionSnapshot["cards"][number], cardIndex: number) => (
-                    <GameCard
-                      key={`${composition.tableIndex ?? "new"}-${index}-${cardIndex}`}
-                      card={card}
-                      size="compact"
-                      decoration={{
-                        highlight: composition.tableIndex === undefined ? "new" : "addition",
-                        label: composition.tableIndex === undefined ? "New" : undefined,
-                        footer: turnActivity?.playerId ? (
-                          <PlayerMarker players={players} playerId={turnActivity.playerId} />
-                        ) : undefined,
-                      }}
-                    />
-                  ),
-                )}
+                {draftCardInstances(composition.cards).map(({ card, key }) => (
+                  <GameCard
+                    key={`${composition.tableIndex ?? "new"}-${key}`}
+                    card={card}
+                    size="compact"
+                    decoration={{
+                      highlight: composition.tableIndex === undefined ? "new" : "addition",
+                      label: composition.tableIndex === undefined ? "New" : undefined,
+                      footer: turnActivity?.playerId ? (
+                        <PlayerMarker players={players} playerId={turnActivity.playerId} />
+                      ) : undefined,
+                    }}
+                  />
+                ))}
               </div>
             </div>
           ))}
