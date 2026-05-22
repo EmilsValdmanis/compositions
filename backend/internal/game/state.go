@@ -816,6 +816,8 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
 			return false
 		}
+		reclaimPoints, _ := target.ReclaimPoints(reclaim.JokerIndex)
+		openingPoints += reclaimPoints
 		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
 		storeComposition(reclaim.CompositionIndex, updated)
 	}
@@ -939,9 +941,11 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		if !ok {
 			return tablePlayState{}, ErrInvalidComposition
 		}
+		reclaimPoints, _ := target.ReclaimPoints(reclaim.JokerIndex)
 
 		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
 		playedCards = append(playedCards, reclaim.ReplacementCard)
+		openingPoints += reclaimPoints
 		updatedCompositions[reclaim.CompositionIndex] = updated
 	}
 

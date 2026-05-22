@@ -3,6 +3,8 @@ import {
   applyHandEntryOrder,
   buildHandEntries,
   buildTablePlayRequest,
+  buildTableCompositionViews,
+  buildVirtualReclaimedJokers,
   inferPlannedJokerReclaims,
   insertHandKeyIntoDraft,
 } from "#/components/game/game-board-view-state";
@@ -105,6 +107,47 @@ describe("buildTablePlayRequest", () => {
         cards: [{ rank: 5, suit: 0 }],
       },
     ]);
+  });
+});
+
+describe("buildVirtualReclaimedJokers", () => {
+  it("surfaces staged reclaims as temporary joker hand entries", () => {
+    const entries = buildHandEntries([{ rank: 8, suit: 3 }]);
+    const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const tableCompositions = buildTableCompositionViews(
+      [
+        {
+          type: "set",
+          cards: [
+            { rank: 8, suit: 0 },
+            { rank: 8, suit: 2 },
+            { isJoker: true },
+            { rank: 8, suit: 1 },
+          ],
+          jokerRepresentations: {
+            2: [{ rank: 8, suit: 3 }],
+          },
+          points: 32,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          handKeys: [entries[0]!.key],
+        },
+      ],
+      entryByKey,
+    );
+
+    const virtualJokers = buildVirtualReclaimedJokers(tableCompositions);
+
+    expect(virtualJokers).toHaveLength(1);
+    expect(virtualJokers[0]?.entry.card).toEqual({ isJoker: true });
+    expect(virtualJokers[0]?.entry.isVirtual).toBe(true);
+    expect(virtualJokers[0]?.entry.sourceIndex).toBe(-1);
+    expect(virtualJokers[0]?.entry.key).toBe("reclaimed-joker-0-2");
   });
 });
 

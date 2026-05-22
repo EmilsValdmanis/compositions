@@ -31,6 +31,7 @@ import {
   applyHandEntryOrder,
   buildTablePlayRequest,
   buildTableCompositionViews,
+  buildVirtualReclaimedJokers,
   buildHandEntries,
   compositionIdFromDropId,
   findNewHandEntry,
@@ -276,10 +277,6 @@ function useGameBoardController({
     });
   }
 
-  const activeEntry =
-    activeDrag?.type === "hand"
-      ? (handEntries.find((entry) => entry.key === activeDrag.handKey) ?? null)
-      : null;
   const validHandKeys = useMemo(
     () => new Set(handEntries.map((entry) => entry.key)),
     [handEntries],
@@ -299,23 +296,11 @@ function useGameBoardController({
       validHandKeys,
     ],
   );
-  const stagedHandKeySet = useMemo(
-    () => new Set(draftCompositions.flatMap((composition) => composition.handKeys)),
-    [draftCompositions],
-  );
-  const availableHandEntries = useMemo(
-    () => handEntries.filter((entry) => !stagedHandKeySet.has(entry.key)),
-    [handEntries, stagedHandKeySet],
-  );
-  const sortableIds = useMemo(
-    () => availableHandEntries.map((entry) => entry.key),
-    [availableHandEntries],
-  );
   const entryByKey = useMemo(
     () => new Map(handEntries.map((entry) => [entry.key, entry])),
     [handEntries],
   );
-  const draftedCompositionsView = useMemo(
+  const draftedCompositionsViewFromHand = useMemo(
     () => buildDraftedCompositionViews(draftCompositions, entryByKey),
     [draftCompositions, entryByKey],
   );
@@ -323,10 +308,42 @@ function useGameBoardController({
     () =>
       buildTableCompositionViews(
         game?.activeCompositions ?? [],
-        draftedCompositionsView,
+        draftedCompositionsViewFromHand,
         entryByKey,
       ),
-    [draftedCompositionsView, entryByKey, game?.activeCompositions],
+    [draftedCompositionsViewFromHand, entryByKey, game?.activeCompositions],
+  );
+  const virtualReclaimedJokers = useMemo(
+    () => buildVirtualReclaimedJokers(tableCompositions),
+    [tableCompositions],
+  );
+  const allHandEntries = useMemo(
+    () => [...handEntries, ...virtualReclaimedJokers.map((joker) => joker.entry)],
+    [handEntries, virtualReclaimedJokers],
+  );
+  const activeEntry =
+    activeDrag?.type === "hand"
+      ? (allHandEntries.find((entry) => entry.key === activeDrag.handKey) ?? null)
+      : null;
+  const allEntryByKey = useMemo(
+    () => new Map(allHandEntries.map((entry) => [entry.key, entry])),
+    [allHandEntries],
+  );
+  const stagedHandKeySet = useMemo(
+    () => new Set(draftCompositions.flatMap((composition) => composition.handKeys)),
+    [draftCompositions],
+  );
+  const availableHandEntries = useMemo(
+    () => allHandEntries.filter((entry) => !stagedHandKeySet.has(entry.key)),
+    [allHandEntries, stagedHandKeySet],
+  );
+  const sortableIds = useMemo(
+    () => availableHandEntries.map((entry) => entry.key),
+    [availableHandEntries],
+  );
+  const draftedCompositionsView = useMemo(
+    () => buildDraftedCompositionViews(draftCompositions, allEntryByKey),
+    [draftCompositions, allEntryByKey],
   );
   const newCompositions = useMemo(
     () => draftedCompositionsView.filter((composition) => composition.tableIndex === null),
@@ -452,6 +469,10 @@ function useGameBoardController({
       }
 
       const cardIndex = event.active.data.current?.cardIndex;
+      const isVirtual = event.active.data.current?.isVirtual === true;
+      if (isVirtual) {
+        return;
+      }
       if (typeof cardIndex === "number") {
         if (draftedCompositionsView.length > 0) {
           setPendingDiscardIndex(cardIndex);

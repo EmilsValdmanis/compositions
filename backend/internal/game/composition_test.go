@@ -310,6 +310,12 @@ func TestNewRun_RejectsMixedOrderSequence(t *testing.T) {
 	}
 }
 
+func TestNewRun_RejectsAmbiguousMiddleJokerPlacement(t *testing.T) {
+	if _, ok := NewRun([]Card{card(Five, Hearts), joker(), card(Six, Hearts)}); ok {
+		t.Fatal("NewRun() returned true; want false for ambiguous joker placement")
+	}
+}
+
 func TestNewRun_ValidLongerSequence(t *testing.T) {
 	cards := []Card{
 		card(Three, Spades),
@@ -996,6 +1002,59 @@ func TestCompositionReclaimJokerRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestCompositionReclaimPoints(t *testing.T) {
+	setComp := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), card(Ten, Clubs), joker())
+	if got, ok := setComp.ReclaimPoints(3); !ok || got != 10 {
+		t.Fatalf("setComp.ReclaimPoints(3) = (%d, %v); want (10, true)", got, ok)
+	}
+
+	runComp := mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts))
+	if got, ok := runComp.ReclaimPoints(1); !ok || got != 6 {
+		t.Fatalf("runComp.ReclaimPoints(1) = (%d, %v); want (6, true)", got, ok)
+	}
+
+	doubleJokerAceLowComp := mustRun(t, joker(), joker(), card(Three, Clubs))
+	if got, ok := doubleJokerAceLowComp.ReclaimPoints(0); !ok || got != 1 {
+		t.Fatalf("doubleJokerAceLowComp.ReclaimPoints(0) = (%d, %v); want (1, true)", got, ok)
+	}
+
+	aceLowComp := mustRun(t, joker(), card(Two, Clubs), card(Three, Clubs))
+	if got, ok := aceLowComp.ReclaimPoints(0); !ok || got != 1 {
+		t.Fatalf("aceLowComp.ReclaimPoints(0) = (%d, %v); want (1, true)", got, ok)
+	}
+}
+
+func TestCompositionReclaimPointsRejectsInvalidAndBrokenInputs(t *testing.T) {
+	setComp := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), card(Ten, Clubs), joker())
+	if got, ok := setComp.ReclaimPoints(-1); ok || got != 0 {
+		t.Fatalf("setComp.ReclaimPoints(-1) = (%d, %v); want (0, false)", got, ok)
+	}
+	if got, ok := setComp.ReclaimPoints(0); ok || got != 0 {
+		t.Fatalf("setComp.ReclaimPoints(0) = (%d, %v); want (0, false)", got, ok)
+	}
+
+	ambiguousSet := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), joker())
+	if got, ok := ambiguousSet.ReclaimPoints(2); ok || got != 0 {
+		t.Fatalf("ambiguousSet.ReclaimPoints(2) = (%d, %v); want (0, false)", got, ok)
+	}
+
+	ambiguousRun := &Composition{
+		variant: run,
+		cards:   []Card{card(Five, Hearts), joker(), card(Six, Hearts)},
+		jokerRepresentations: map[int][]Card{
+			1: {card(Four, Hearts)},
+		},
+	}
+	if got, ok := ambiguousRun.ReclaimPoints(1); ok || got != 0 {
+		t.Fatalf("ambiguousRun.ReclaimPoints(1) = (%d, %v); want (0, false)", got, ok)
+	}
+
+	unknown := &Composition{variant: compositionVariant("weird"), cards: []Card{joker()}}
+	if got, ok := unknown.ReclaimPoints(0); ok || got != 0 {
+		t.Fatalf("unknown.ReclaimPoints(0) = (%d, %v); want (0, false)", got, ok)
+	}
+}
+
 func TestCompositionCanReclaimJoker(t *testing.T) {
 	ambiguous := mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), joker())
 	if ambiguous.canReclaimJoker(2, card(Ten, Clubs)) {
@@ -1258,6 +1317,61 @@ func TestBestRunOrder_PrefersClosestCandidateWhenInputIsUnordered(t *testing.T) 
 	}
 	if replacement := jokerRepresentations[2]; replacement.rank != Nine || replacement.suit != Hearts {
 		t.Fatalf("jokerRepresentations[2] = %#v; want Nine of Hearts", replacement)
+	}
+}
+
+func TestBestRunOrder_RejectsAmbiguousJokerPlacement(t *testing.T) {
+	ordered, jokerRepresentations, matchesInput, ok := bestRunOrder([]Card{
+		card(Seven, Hearts),
+		joker(),
+		card(Six, Hearts),
+	})
+	if ok || ordered != nil || jokerRepresentations != nil || matchesInput {
+		t.Fatalf("bestRunOrder() = (%#v, %#v, %v, %v); want (nil, nil, false, false)", ordered, jokerRepresentations, matchesInput, ok)
+	}
+}
+
+func TestRunOrderCandidatesEqual(t *testing.T) {
+	if !runOrderCandidatesEqual(nil, nil) {
+		t.Fatal("runOrderCandidatesEqual(nil, nil) = false; want true")
+	}
+	if runOrderCandidatesEqual(nil, &runOrderCandidate{}) {
+		t.Fatal("runOrderCandidatesEqual(nil, candidate) = true; want false")
+	}
+
+	base := &runOrderCandidate{
+		ordered:              []Card{card(Five, Hearts), joker(), card(Seven, Hearts)},
+		jokerRepresentations: map[int]Card{1: card(Six, Hearts)},
+	}
+	if !runOrderCandidatesEqual(base, &runOrderCandidate{
+		ordered:              []Card{card(Five, Hearts), joker(), card(Seven, Hearts)},
+		jokerRepresentations: map[int]Card{1: card(Six, Hearts)},
+	}) {
+		t.Fatal("runOrderCandidatesEqual(equal candidates) = false; want true")
+	}
+	if runOrderCandidatesEqual(base, &runOrderCandidate{
+		ordered:              []Card{joker(), card(Six, Hearts), card(Seven, Hearts)},
+		jokerRepresentations: map[int]Card{0: card(Five, Hearts)},
+	}) {
+		t.Fatal("runOrderCandidatesEqual(different ordered cards) = true; want false")
+	}
+	if runOrderCandidatesEqual(base, &runOrderCandidate{
+		ordered:              []Card{card(Five, Hearts), joker(), card(Seven, Hearts)},
+		jokerRepresentations: map[int]Card{1: card(Six, Hearts), 2: card(Eight, Hearts)},
+	}) {
+		t.Fatal("runOrderCandidatesEqual(different representation count) = true; want false")
+	}
+	if runOrderCandidatesEqual(base, &runOrderCandidate{
+		ordered:              []Card{card(Five, Hearts), joker(), card(Seven, Hearts)},
+		jokerRepresentations: map[int]Card{0: card(Six, Hearts)},
+	}) {
+		t.Fatal("runOrderCandidatesEqual(different representation keys) = true; want false")
+	}
+	if runOrderCandidatesEqual(base, &runOrderCandidate{
+		ordered:              []Card{card(Five, Hearts), joker(), card(Seven, Hearts)},
+		jokerRepresentations: map[int]Card{1: card(Eight, Hearts)},
+	}) {
+		t.Fatal("runOrderCandidatesEqual(different representation card) = true; want false")
 	}
 }
 

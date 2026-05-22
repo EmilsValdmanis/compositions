@@ -180,6 +180,7 @@ function SortableGameCard({
   size,
   className,
   faceDown,
+  data,
 }: {
   card: CardSnapshot;
   id: string;
@@ -187,10 +188,11 @@ function SortableGameCard({
   size: GameCardSize;
   className?: string;
   faceDown?: boolean;
+  data?: Record<string, unknown>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
-    data: { cardIndex },
+    data: { cardIndex, ...data },
   });
   const accessibleName = faceDown ? "Face-down card" : cardName(card);
 
@@ -290,6 +292,7 @@ export function GameCard({
   draggable?: {
     id: string;
     cardIndex: number;
+    isVirtual?: boolean;
   };
   dragSource?: {
     id: string;
@@ -300,16 +303,17 @@ export function GameCard({
 }) {
   if (draggable) {
     return (
-      <SortableGameCard
-        card={card}
-        id={draggable.id}
-        cardIndex={draggable.cardIndex}
-        size={size}
-        className={className}
-        faceDown={faceDown}
-      />
-    );
-  }
+        <SortableGameCard
+          card={card}
+          id={draggable.id}
+          cardIndex={draggable.cardIndex}
+          size={size}
+          className={className}
+          faceDown={faceDown}
+          data={{ isVirtual: draggable.isVirtual }}
+        />
+      );
+    }
 
   if (dragSource) {
     return (
