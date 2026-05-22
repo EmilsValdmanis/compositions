@@ -17,8 +17,9 @@ import (
 var errSocketClosed = errors.New("socket closed")
 var emitEvent = writeEvent
 
-const (
-	defaultWSReadTimeout  = 5 * time.Minute
+var (
+	defaultWSReadTimeout  = 75 * time.Second
+	defaultWSPingInterval = 25 * time.Second
 	defaultWSWriteTimeout = 10 * time.Second
 )
 
@@ -253,6 +254,27 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 func (s *wsServer) handleConnection(conn *websocket.Conn) {
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
+	})
+
+	pingDone := make(chan struct{})
+	defer close(pingDone)
+	go func() {
+		ticker := time.NewTicker(defaultWSPingInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(defaultWSWriteTimeout)); err != nil {
+					return
+				}
+			case <-pingDone:
+				return
+			}
+		}
+	}()
 
 	sessionID := ""
 	for {
