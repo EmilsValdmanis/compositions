@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -8,9 +8,11 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  type DraftCompositionSnapshot,
   type GameSnapshot,
   type PlayerSnapshot,
   type TablePlayRequest,
+  type TurnActivitySnapshot,
 } from "#/components/game-websocket-provider";
 import { GameBoardHand } from "#/components/game/game-board-hand";
 import { GameBoardPiles } from "#/components/game/game-board-piles";
@@ -82,7 +84,19 @@ type GameBoardViewProps = {
   onDiscardCard: (cardIndex: number) => void;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
+  onUpdateTurnDrafts: (draft: { compositions: DraftCompositionSnapshot[] }) => void;
   onPlayTable: (play: TablePlayRequest) => void;
+};
+
+type SubmittedCardActivity = {
+  kind: "new" | "addition" | "joker_reclaim";
+  playerId: string;
+};
+
+type SubmittedCompositionActivity = {
+  kind?: string;
+  playerId?: string;
+  cardActivities: Record<number, SubmittedCardActivity>;
 };
 
 function draftScopeKey(game: GameSnapshot | null, playerId: string, isMyTurn: boolean) {
@@ -103,10 +117,87 @@ function buildDraftedCompositionViews(
   })) as DraftedCompositionView[];
 }
 
+function cardEquals(a: GameSnapshot["hand"][number], b: GameSnapshot["hand"][number]) {
+  return Boolean(a.isJoker) === Boolean(b.isJoker) && a.rank === b.rank && a.suit === b.suit;
+}
+
+function buildSubmittedCompositionActivityMap(
+  baselineCompositions: GameSnapshot["activeCompositions"],
+  currentCompositions: GameSnapshot["activeCompositions"],
+  turnActivity?: TurnActivitySnapshot,
+) {
+  const activityMap = new Map<number, SubmittedCompositionActivity>();
+
+  for (const compositionActivity of turnActivity?.compositionActivities ?? []) {
+    activityMap.set(compositionActivity.tableIndex, {
+      kind: compositionActivity.kind,
+      playerId: compositionActivity.playerId,
+      cardActivities: {},
+    });
+  }
+
+  for (let index = 0; index < currentCompositions.length; index += 1) {
+    const current = currentCompositions[index];
+    const baseline = baselineCompositions[index];
+    const activity = activityMap.get(index) ?? {
+      kind: undefined,
+      playerId: undefined,
+      cardActivities: {},
+    };
+
+    if (!baseline) {
+      activity.kind ??= "new_composition";
+      for (let cardIndex = 0; cardIndex < current.cards.length; cardIndex += 1) {
+        const activityDetails = turnActivity?.compositionActivities?.find(
+          (item) => item.tableIndex === index,
+        )?.cardActivities?.[cardIndex];
+        if (activityDetails) {
+          activity.cardActivities[cardIndex] = {
+            kind: activityDetails.kind === "joker_reclaim" ? "joker_reclaim" : "new",
+            playerId: activityDetails.playerId,
+          };
+        }
+      }
+      activityMap.set(index, activity);
+      continue;
+    }
+
+    for (let cardIndex = 0; cardIndex < current.cards.length; cardIndex += 1) {
+      const currentCard = current.cards[cardIndex];
+      const baselineCard = baseline.cards[cardIndex];
+      const activityDetails = turnActivity?.compositionActivities?.find(
+        (item) => item.tableIndex === index,
+      )?.cardActivities?.[cardIndex];
+
+      if (!baselineCard) {
+        if (activityDetails) {
+          activity.cardActivities[cardIndex] = {
+            kind: activityDetails.kind === "joker_reclaim" ? "joker_reclaim" : "addition",
+            playerId: activityDetails.playerId,
+          };
+          activityMap.set(index, activity);
+        }
+        continue;
+      }
+
+      if (!cardEquals(currentCard, baselineCard) && activityDetails) {
+        activity.cardActivities[cardIndex] = {
+          kind: activityDetails.kind === "joker_reclaim" ? "joker_reclaim" : "addition",
+          playerId: activityDetails.playerId,
+        };
+        activityMap.set(index, activity);
+      }
+    }
+  }
+
+  return activityMap;
+}
+
 function GameBoardLayout({
   game,
   tableCompositions,
   newCompositions,
+  submittedCompositionActivities,
   turnState,
   topDiscardCard,
   players,
@@ -115,6 +206,7 @@ function GameBoardLayout({
   sortableIds,
   activeDrag,
   draftedCompositionsCount,
+  spectatorDrafts,
   canSubmitTablePlay,
   onResetTablePlay,
   onSubmitTablePlay,
@@ -122,6 +214,7 @@ function GameBoardLayout({
   game: GameSnapshot | null;
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
   newCompositions: DraftedCompositionView[];
+  submittedCompositionActivities: Map<number, SubmittedCompositionActivity>;
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
   players: PlayerSnapshot[];
@@ -130,6 +223,7 @@ function GameBoardLayout({
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
   draftedCompositionsCount: number;
+  spectatorDrafts: DraftCompositionSnapshot[];
   canSubmitTablePlay: boolean;
   onResetTablePlay: () => void;
   onSubmitTablePlay: () => void;
@@ -141,6 +235,23 @@ function GameBoardLayout({
           game={game}
           tableCompositions={tableCompositions}
           newCompositions={newCompositions}
+          players={players}
+          turnActivity={
+            game?.turnActivity
+              ? {
+                  ...game.turnActivity,
+                  draftCompositions: spectatorDrafts,
+                  compositionActivities: Array.from(submittedCompositionActivities.entries()).map(
+                    ([tableIndex, activity]) => ({
+                      tableIndex,
+                      kind: activity.kind,
+                      playerId: activity.playerId,
+                      cardActivities: activity.cardActivities,
+                    }),
+                  ),
+                }
+              : undefined
+          }
           canCompose={turnState.canDiscard}
           hasDraftedCompositions={draftedCompositionsCount > 0}
           canSubmitTablePlay={canSubmitTablePlay}
@@ -209,6 +320,7 @@ function useGameBoardController({
   onDiscardCard,
   onDrawFromDeck,
   onDrawFromDiscard,
+  onUpdateTurnDrafts,
   onPlayTable,
 }: Pick<
   GameBoardViewProps,
@@ -220,6 +332,7 @@ function useGameBoardController({
   | "onDiscardCard"
   | "onDrawFromDeck"
   | "onDrawFromDiscard"
+  | "onUpdateTurnDrafts"
   | "onPlayTable"
 >): GameBoardController {
   const handOrderScopeKey = useMemo(
@@ -351,6 +464,30 @@ function useGameBoardController({
   );
   const canCompose = turnState.canDiscard;
   const canSubmitTablePlay = canCompose && draftedCompositionsView.length > 0;
+
+  const serializedDrafts = useMemo(
+    () =>
+      JSON.stringify(
+        draftedCompositionsView.map(
+          (composition) =>
+            ({
+              tableIndex: composition.tableIndex ?? undefined,
+              cards: composition.entries.map((entry) => entry.card),
+            }) satisfies DraftCompositionSnapshot,
+        ),
+      ),
+    [draftedCompositionsView],
+  );
+
+  useEffect(() => {
+    if (!turnState.isMyTurn) {
+      return;
+    }
+
+    onUpdateTurnDrafts({
+      compositions: JSON.parse(serializedDrafts) as DraftCompositionSnapshot[],
+    });
+  }, [onUpdateTurnDrafts, serializedDrafts, turnState.isMyTurn]);
 
   function resetDraftCompositions() {
     setDraftCompositionState({
@@ -595,6 +732,7 @@ export function GameBoardView({
   onDiscardCard,
   onDrawFromDeck,
   onDrawFromDiscard,
+  onUpdateTurnDrafts,
   onPlayTable,
 }: GameBoardViewProps) {
   const controller = useGameBoardController({
@@ -606,9 +744,20 @@ export function GameBoardView({
     onDiscardCard,
     onDrawFromDeck,
     onDrawFromDiscard,
+    onUpdateTurnDrafts,
     onPlayTable,
   });
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;
+  const submittedCompositionActivities = useMemo(
+    () =>
+      buildSubmittedCompositionActivityMap(
+        game?.turnActivity?.baselineCompositions ?? game?.activeCompositions ?? [],
+        game?.activeCompositions ?? [],
+        game?.turnActivity,
+      ),
+    [game?.activeCompositions, game?.turnActivity],
+  );
+  const spectatorDrafts = game?.turnActivity?.draftCompositions ?? [];
 
   return (
     <>
@@ -623,6 +772,7 @@ export function GameBoardView({
           game={game}
           tableCompositions={controller.tableCompositions}
           newCompositions={controller.newCompositions}
+          submittedCompositionActivities={submittedCompositionActivities}
           turnState={turnState}
           topDiscardCard={topDiscardCard}
           players={players}
@@ -631,6 +781,7 @@ export function GameBoardView({
           sortableIds={controller.sortableIds}
           activeDrag={controller.activeDrag}
           draftedCompositionsCount={controller.draftedCompositionsCount}
+          spectatorDrafts={spectatorDrafts}
           canSubmitTablePlay={controller.canSubmitTablePlay}
           onResetTablePlay={controller.resetDraftCompositions}
           onSubmitTablePlay={controller.submitDraftCompositions}

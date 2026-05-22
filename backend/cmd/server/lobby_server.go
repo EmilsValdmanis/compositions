@@ -47,6 +47,8 @@ type room struct {
 	players           []*roomPlayer
 	hostID            string
 	pendingDealChoice *pendingDealChoice
+	turnBaseline      *game.GameSnapshot
+	turnActivity      *game.TurnActivitySnapshot
 }
 
 type pendingDealChoice struct {
@@ -204,6 +206,7 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 		players:   []*roomPlayer{player},
 		hostID:    session.playerID,
 	}
+	room.clearTurnTracking()
 	if err := addPlayerToGameState(room.gameState, player.player); err != nil {
 		return roomSnapshot{}, nil, err
 	}
@@ -437,6 +440,7 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	room.hostID = nextHostID
 	room.gameState = nextGameState
 	session.roomCode = ""
+	room.clearTurnTracking()
 
 	slog.Info("player left room",
 		"roomCode", roomCode,
@@ -458,22 +462,67 @@ func (l *lobbyServer) draw(sessionID, source string) (roomSnapshot, []gameStateR
 		default:
 			return errors.New("unknown draw source")
 		}
+	}, func(room *room, session *playerSession) error {
+		room.resetTurnTracking(session.playerID)
+		return nil
 	})
 }
 
 func (l *lobbyServer) play(sessionID string, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "play", func(state *game.GameState) error {
 		return state.PlayTable(comps, additions, reclaims...)
+	}, func(room *room, session *playerSession) error {
+		room.applySubmittedTurnActivity(session.playerID, comps, additions, reclaims)
+		return nil
 	})
 }
 
 func (l *lobbyServer) discard(sessionID string, cardIndex int) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "discard", func(state *game.GameState) error {
 		return state.DiscardFromHand(cardIndex)
+	}, func(room *room, _ *playerSession) error {
+		room.clearTurnTracking()
+		return nil
 	})
 }
 
-func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*game.GameState) error) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+func (l *lobbyServer) updateDraftActivity(sessionID string, drafts []game.DraftCompositionSnapshot) (roomSnapshot, []gameStateRecipient, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, errors.New("join a room first")
+	}
+	if room.gameState == nil {
+		return roomSnapshot{}, nil, errors.New("game state not initialized")
+	}
+	if room.gameState.Phase() != game.PhaseInProgress {
+		return roomSnapshot{}, nil, game.ErrGameNotInProgress
+	}
+	if !room.isCurrentTurn(session.playerID) {
+		return roomSnapshot{}, nil, errors.New("not your turn")
+	}
+	if room.turnActivity == nil || room.turnActivity.PlayerID != session.playerID {
+		room.resetTurnTracking(session.playerID)
+	}
+	if room.turnActivity != nil {
+		room.turnActivity.DraftCompositions = cloneDraftCompositionSnapshots(drafts)
+	}
+
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, err
+	}
+	return roomState, recipients, nil
+}
+
+func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*game.GameState) error, afterMutate func(*room, *playerSession) error) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -496,6 +545,11 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 	}
 	if err := mutate(room.gameState); err != nil {
 		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	if afterMutate != nil {
+		if err := afterMutate(room, session); err != nil {
+			return roomSnapshot{}, nil, actionResultEvent{}, err
+		}
 	}
 
 	roomState := room.snapshot()
@@ -760,6 +814,7 @@ func (r *room) resetForLobby() error {
 
 	r.gameState = nextGameState
 	r.pendingDealChoice = nil
+	r.clearTurnTracking()
 	return nil
 }
 
@@ -777,12 +832,242 @@ func (r *room) gameStateRecipients(sessions map[string]*playerSession, roomState
 		if !ok {
 			return nil, errors.New("game state snapshot failed")
 		}
+		if baseline, activity := r.turnContextForPlayer(player.player.ID); baseline != nil {
+			state.TurnActivity = activity
+		}
 		recipients = append(recipients, gameStateRecipient{
 			conn:  session.conn,
 			event: gameStateEvent{Room: roomState, Game: state},
 		})
 	}
 	return recipients, nil
+}
+
+func (r *room) resetTurnTracking(playerID string) {
+	if r == nil || r.gameState == nil {
+		return
+	}
+	baseline, ok := r.gameState.SnapshotForPlayer(playerID)
+	if !ok {
+		return
+	}
+	r.turnBaseline = &baseline
+	r.turnActivity = &game.TurnActivitySnapshot{
+		PlayerID:   playerID,
+		Round:      r.gameState.RoundNumber(),
+		TurnNumber: r.gameState.TurnNumber(),
+	}
+}
+
+func (r *room) clearTurnTracking() {
+	if r == nil {
+		return
+	}
+	r.turnBaseline = nil
+	r.turnActivity = nil
+}
+
+func (r *room) turnContextForPlayer(playerID string) (*game.GameSnapshot, *game.TurnActivitySnapshot) {
+	if r == nil || r.turnBaseline == nil || r.turnActivity == nil {
+		return nil, nil
+	}
+	if r.turnActivity.PlayerID == playerID {
+		return nil, nil
+	}
+	activity := *r.turnActivity
+	activity.BaselineCompositions = cloneCompositionSnapshots(r.turnBaseline.ActiveCompositions)
+	activity.DraftCompositions = cloneDraftCompositionSnapshots(r.turnActivity.DraftCompositions)
+	activity.CompositionActivities = cloneCompositionActivitySnapshots(r.turnActivity.CompositionActivities)
+	baseline := *r.turnBaseline
+	baseline.ActiveCompositions = cloneCompositionSnapshots(r.turnBaseline.ActiveCompositions)
+	return &baseline, &activity
+}
+
+func (r *room) applySubmittedTurnActivity(playerID string, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) {
+	if r == nil || r.turnActivity == nil || r.turnBaseline == nil {
+		return
+	}
+	if r.turnActivity.PlayerID != playerID {
+		return
+	}
+	r.turnActivity.DraftCompositions = buildDraftSnapshotsFromSubmitted(comps, additions)
+	mergeCompositionActivities(r.turnActivity, buildCompositionActivities(playerID, comps, additions, reclaims, r.gameState.ActiveCompositions()))
+}
+
+func buildDraftSnapshotsFromSubmitted(comps []*game.Composition, additions []game.CompositionAddition) []game.DraftCompositionSnapshot {
+	drafts := make([]game.DraftCompositionSnapshot, 0, len(comps)+len(additions))
+	for _, comp := range comps {
+		if comp == nil {
+			continue
+		}
+		snapshot := comp.Snapshot()
+		cards := make([]game.CardSnapshot, len(snapshot.Cards))
+		copy(cards, snapshot.Cards)
+		drafts = append(drafts, game.DraftCompositionSnapshot{Cards: cards})
+	}
+	for _, addition := range additions {
+		cards := make([]game.CardSnapshot, 0, len(addition.Cards))
+		for _, card := range addition.Cards {
+			cards = append(cards, card.Snapshot())
+		}
+		index := addition.CompositionIndex
+		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: &index, Cards: cards})
+	}
+	return drafts
+}
+
+func mergeCompositionActivities(target *game.TurnActivitySnapshot, updates []game.CompositionActivitySnapshot) {
+	if target == nil || len(updates) == 0 {
+		return
+	}
+	merged := cloneCompositionActivitySnapshots(target.CompositionActivities)
+	byIndex := make(map[int]int, len(merged))
+	for i := range merged {
+		byIndex[merged[i].TableIndex] = i
+	}
+	for _, update := range updates {
+		if existingIndex, ok := byIndex[update.TableIndex]; ok {
+			existing := &merged[existingIndex]
+			if existing.Kind == "" {
+				existing.Kind = update.Kind
+			}
+			if existing.PlayerID == "" {
+				existing.PlayerID = update.PlayerID
+			}
+			if len(update.CardActivities) > 0 {
+				if existing.CardActivities == nil {
+					existing.CardActivities = map[int]game.CardActivitySnapshot{}
+				}
+				for index, activity := range update.CardActivities {
+					existing.CardActivities[index] = activity
+				}
+			}
+			continue
+		}
+		merged = append(merged, update)
+		byIndex[update.TableIndex] = len(merged) - 1
+	}
+	target.CompositionActivities = merged
+}
+
+func buildCompositionActivities(playerID string, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim, active []*game.Composition) []game.CompositionActivitySnapshot {
+	activities := make([]game.CompositionActivitySnapshot, 0, len(comps)+len(additions)+len(reclaims))
+	newCount := len(active) - len(comps)
+	if newCount < 0 {
+		newCount = 0
+	}
+	for offset, comp := range comps {
+		if comp == nil {
+			continue
+		}
+		compSnapshot := comp.Snapshot()
+		tableIndex := newCount + offset
+		cardActivities := make(map[int]game.CardActivitySnapshot, len(compSnapshot.Cards))
+		for index := range compSnapshot.Cards {
+			cardActivities[index] = game.CardActivitySnapshot{Kind: "new", PlayerID: playerID}
+		}
+		activities = append(activities, game.CompositionActivitySnapshot{
+			TableIndex:     tableIndex,
+			Kind:           "new_composition",
+			PlayerID:       playerID,
+			CardActivities: cardActivities,
+		})
+	}
+
+	activityByIndex := make(map[int]int)
+	for i := range activities {
+		activityByIndex[activities[i].TableIndex] = i
+	}
+	for _, addition := range additions {
+		activityIndex, ok := activityByIndex[addition.CompositionIndex]
+		if !ok {
+			activities = append(activities, game.CompositionActivitySnapshot{TableIndex: addition.CompositionIndex})
+			activityIndex = len(activities) - 1
+			activityByIndex[addition.CompositionIndex] = activityIndex
+		}
+		activity := &activities[activityIndex]
+		if activity.CardActivities == nil {
+			activity.CardActivities = map[int]game.CardActivitySnapshot{}
+		}
+		startIndex := 0
+		if addition.CompositionIndex >= 0 && addition.CompositionIndex < len(active) && active[addition.CompositionIndex] != nil {
+			startIndex = len(active[addition.CompositionIndex].Snapshot().Cards) - len(addition.Cards)
+			if startIndex < 0 {
+				startIndex = 0
+			}
+		}
+		for offset := range addition.Cards {
+			activity.CardActivities[startIndex+offset] = game.CardActivitySnapshot{Kind: "addition", PlayerID: playerID}
+		}
+	}
+	for _, reclaim := range reclaims {
+		activityIndex, ok := activityByIndex[reclaim.CompositionIndex]
+		if !ok {
+			activities = append(activities, game.CompositionActivitySnapshot{TableIndex: reclaim.CompositionIndex})
+			activityIndex = len(activities) - 1
+			activityByIndex[reclaim.CompositionIndex] = activityIndex
+		}
+		activity := &activities[activityIndex]
+		if activity.CardActivities == nil {
+			activity.CardActivities = map[int]game.CardActivitySnapshot{}
+		}
+		activity.CardActivities[reclaim.JokerIndex] = game.CardActivitySnapshot{Kind: "joker_reclaim", PlayerID: playerID}
+	}
+	return activities
+}
+
+func cloneCompositionSnapshots(source []game.CompositionSnapshot) []game.CompositionSnapshot {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make([]game.CompositionSnapshot, 0, len(source))
+	for _, comp := range source {
+		next := comp
+		next.Cards = append([]game.CardSnapshot(nil), comp.Cards...)
+		if len(comp.JokerRepresentations) > 0 {
+			next.JokerRepresentations = make(map[int][]game.CardSnapshot, len(comp.JokerRepresentations))
+			for index, cards := range comp.JokerRepresentations {
+				next.JokerRepresentations[index] = append([]game.CardSnapshot(nil), cards...)
+			}
+		}
+		cloned = append(cloned, next)
+	}
+	return cloned
+}
+
+func cloneDraftCompositionSnapshots(source []game.DraftCompositionSnapshot) []game.DraftCompositionSnapshot {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make([]game.DraftCompositionSnapshot, 0, len(source))
+	for _, draft := range source {
+		next := draft
+		next.Cards = append([]game.CardSnapshot(nil), draft.Cards...)
+		if draft.TableIndex != nil {
+			index := *draft.TableIndex
+			next.TableIndex = &index
+		}
+		cloned = append(cloned, next)
+	}
+	return cloned
+}
+
+func cloneCompositionActivitySnapshots(source []game.CompositionActivitySnapshot) []game.CompositionActivitySnapshot {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make([]game.CompositionActivitySnapshot, 0, len(source))
+	for _, activity := range source {
+		next := activity
+		if len(activity.CardActivities) > 0 {
+			next.CardActivities = make(map[int]game.CardActivitySnapshot, len(activity.CardActivities))
+			for index, cardActivity := range activity.CardActivities {
+				next.CardActivities[index] = cardActivity
+			}
+		}
+		cloned = append(cloned, next)
+	}
+	return cloned
 }
 
 func (r *room) playerByID(playerID string) *roomPlayer {

@@ -14,6 +14,32 @@ type CompositionSnapshot struct {
 	Complete             bool                   `json:"complete"`
 }
 
+type CardActivitySnapshot struct {
+	Kind     string `json:"kind"`
+	PlayerID string `json:"playerId"`
+}
+
+type CompositionActivitySnapshot struct {
+	TableIndex      int                           `json:"tableIndex"`
+	Kind            string                        `json:"kind,omitempty"`
+	PlayerID        string                        `json:"playerId,omitempty"`
+	CardActivities  map[int]CardActivitySnapshot  `json:"cardActivities,omitempty"`
+}
+
+type DraftCompositionSnapshot struct {
+	TableIndex *int           `json:"tableIndex,omitempty"`
+	Cards      []CardSnapshot `json:"cards"`
+}
+
+type TurnActivitySnapshot struct {
+	PlayerID              string                        `json:"playerId"`
+	Round                 int                           `json:"round"`
+	TurnNumber            int                           `json:"turnNumber"`
+	BaselineCompositions  []CompositionSnapshot         `json:"baselineCompositions,omitempty"`
+	DraftCompositions     []DraftCompositionSnapshot    `json:"draftCompositions,omitempty"`
+	CompositionActivities []CompositionActivitySnapshot `json:"compositionActivities,omitempty"`
+}
+
 type PlayerStateSnapshot struct {
 	PlayerID    string `json:"playerId"`
 	HandCount   int    `json:"handCount"`
@@ -40,6 +66,7 @@ type GameSnapshot struct {
 	DrawPileCount      int                   `json:"drawPileCount"`
 	DiscardPile        []CardSnapshot        `json:"discardPile"`
 	ActiveCompositions []CompositionSnapshot `json:"activeCompositions"`
+	TurnActivity       *TurnActivitySnapshot `json:"turnActivity,omitempty"`
 }
 
 func (gs *GameState) SnapshotForPlayer(playerID string) (GameSnapshot, bool) {
@@ -75,6 +102,20 @@ func (gs *GameState) CurrentPlayerIndex() int {
 		return 0
 	}
 	return gs.turn.playerIndex
+}
+
+func (gs *GameState) RoundNumber() int {
+	if gs == nil {
+		return 0
+	}
+	return gs.round
+}
+
+func (gs *GameState) TurnNumber() int {
+	if gs == nil {
+		return 0
+	}
+	return gs.turn.number
 }
 
 func cardSnapshots(cards []Card) []CardSnapshot {
@@ -145,4 +186,18 @@ func (c *Composition) snapshot() CompositionSnapshot {
 		Points:               c.Points(),
 		Complete:             c.isComplete(),
 	}
+}
+
+func (c *Composition) Snapshot() CompositionSnapshot {
+	if c == nil {
+		return CompositionSnapshot{}
+	}
+	return c.snapshot()
+}
+
+func (gs *GameState) ActiveCompositions() []*Composition {
+	if gs == nil {
+		return nil
+	}
+	return gs.activeCompositions
 }

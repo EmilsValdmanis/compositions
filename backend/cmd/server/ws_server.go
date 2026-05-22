@@ -73,6 +73,15 @@ type playRequest struct {
 	Reclaims     []reclaimRequest             `json:"reclaims,omitempty"`
 }
 
+type draftUpdateRequest struct {
+	Compositions []draftCompositionRequest `json:"compositions,omitempty"`
+}
+
+type draftCompositionRequest struct {
+	TableIndex *int          `json:"tableIndex,omitempty"`
+	Cards      []cardRequest `json:"cards"`
+}
+
 type compositionAdditionRequest struct {
 	CompositionIndex int           `json:"compositionIndex"`
 	Cards            []cardRequest `json:"cards"`
@@ -286,6 +295,8 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			s.handleDraw(conn, sessionID, envelope)
 		case "play":
 			s.handlePlay(conn, sessionID, envelope)
+		case "draft_update":
+			s.handleDraftUpdate(conn, sessionID, envelope)
 		case "discard":
 			s.handleDiscard(conn, sessionID, envelope)
 		default:
@@ -498,6 +509,29 @@ func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope w
 	s.broadcastActionSuccess(result, roomState, recipients)
 }
 
+func (s *wsServer) handleDraftUpdate(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[draftUpdateRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	drafts, err := draftCompositionsFromRequest(req.Compositions)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+
+	roomState, recipients, err := s.lobby.updateDraftActivity(sessionID, drafts)
+	if err != nil {
+		slog.Warn("draft update failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	conns := gameRecipientConns(recipients)
+	s.broadcastRoomState(roomState, conns)
+	s.broadcastGameState(recipients)
+}
+
 func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
 	req, ok := decodeSessionRequest[discardRequest](s, conn, sessionID, envelope)
 	if !ok {
@@ -686,6 +720,22 @@ func reclaimsFromRequest(requests []reclaimRequest) ([]game.JokerReclaim, error)
 		reclaims = append(reclaims, reclaim)
 	}
 	return reclaims, nil
+}
+
+func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.DraftCompositionSnapshot, error) {
+	drafts := make([]game.DraftCompositionSnapshot, 0, len(requests))
+	for _, req := range requests {
+		cards, err := cardsFromRequest(req.Cards)
+		if err != nil {
+			return nil, err
+		}
+		snapshots := make([]game.CardSnapshot, 0, len(cards))
+		for _, card := range cards {
+			snapshots = append(snapshots, card.Snapshot())
+		}
+		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: req.TableIndex, Cards: snapshots})
+	}
+	return drafts, nil
 }
 
 func cardsFromRequest(requests []cardRequest) ([]game.Card, error) {

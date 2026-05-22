@@ -101,6 +101,9 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	if snapshot.ActiveCompositions[1].Type != "run" || !snapshot.ActiveCompositions[1].Complete {
 		t.Fatalf("run snapshot = %#v; want complete run", snapshot.ActiveCompositions[1])
 	}
+	if snapshot.TurnActivity != nil {
+		t.Fatalf("snapshot.TurnActivity = %#v; want nil by default", snapshot.TurnActivity)
+	}
 }
 
 func TestGameStateSnapshotForPlayerFailuresAndInvalidTurn(t *testing.T) {
@@ -181,5 +184,35 @@ func TestCardSnapshotJSONIncludesHeartsSuit(t *testing.T) {
 	}
 	if strings.Contains(jsonText, `"isJoker":`) {
 		t.Fatalf("json.Marshal(CardSnapshot) = %s; want joker flag omitted", jsonText)
+	}
+}
+
+func TestGameStateSnapshotHelpersAndCompositionExport(t *testing.T) {
+	state := NewGameState()
+	if got := state.RoundNumber(); got != 1 {
+		t.Fatalf("RoundNumber() = %d; want 1", got)
+	}
+	if got := state.TurnNumber(); got != 1 {
+		t.Fatalf("TurnNumber() = %d; want 1", got)
+	}
+	if got := (*GameState)(nil).RoundNumber(); got != 0 {
+		t.Fatalf("nil RoundNumber() = %d; want 0", got)
+	}
+	if got := (*GameState)(nil).TurnNumber(); got != 0 {
+		t.Fatalf("nil TurnNumber() = %d; want 0", got)
+	}
+	if got := (*GameState)(nil).ActiveCompositions(); got != nil {
+		t.Fatalf("nil ActiveCompositions() = %#v; want nil", got)
+	}
+	comp := mustSet(t, NewCard(Five, Hearts), NewCard(Five, Diamonds), NewCard(Five, Clubs))
+	state.activeCompositions = []*Composition{comp}
+	if got := state.ActiveCompositions(); len(got) != 1 || got[0] != comp {
+		t.Fatalf("ActiveCompositions() = %#v; want original composition", got)
+	}
+	if got := (*Composition)(nil).Snapshot(); got.Type != "" || len(got.Cards) != 0 || got.Points != 0 || got.Complete {
+		t.Fatalf("nil Composition.Snapshot() = %#v; want zero value fields", got)
+	}
+	if got := comp.Snapshot(); got.Type != "set" || len(got.Cards) != 3 {
+		t.Fatalf("Composition.Snapshot() = %#v; want set snapshot", got)
 	}
 }

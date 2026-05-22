@@ -56,6 +56,7 @@ function HydratedHome() {
     chooseDealing,
     drawFromDeck,
     drawFromDiscard,
+    updateTurnDrafts,
     playTable,
     discardCard,
   } = useGameWebSocket();
@@ -246,6 +247,7 @@ function HydratedHome() {
             onDiscardCard={handleDiscardCard}
             onDrawFromDeck={drawFromDeck}
             onDrawFromDiscard={drawFromDiscard}
+            onUpdateTurnDrafts={updateTurnDrafts}
             onPlayTable={playTable}
           />
         </div>
