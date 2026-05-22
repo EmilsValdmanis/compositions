@@ -49,6 +49,8 @@ type chooseDealingRequest struct {
 	DealType string `json:"dealType"`
 }
 
+type startNextRoundRequest struct{}
+
 type leaveRoomRequest struct{}
 
 type drawRequest struct {
@@ -274,6 +276,8 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			s.handleStartGame(conn, sessionID, envelope)
 		case "choose_dealing":
 			s.handleChooseDealing(conn, sessionID, envelope)
+		case "start_next_round":
+			s.handleStartNextRound(conn, sessionID, envelope)
 		case "leave_room":
 			if s.handleLeaveRoom(conn, sessionID, envelope) {
 				return
@@ -408,6 +412,22 @@ func (s *wsServer) handleChooseDealing(conn *websocket.Conn, sessionID string, e
 	s.broadcastGameState(recipients)
 }
 
+func (s *wsServer) handleStartNextRound(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	if _, ok := decodeSessionRequest[startNextRoundRequest](s, conn, sessionID, envelope); !ok {
+		return
+	}
+
+	roomState, recipients, err := s.lobby.startNextRound(sessionID)
+	if err != nil {
+		slog.Warn("start next round failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	conns := gameRecipientConns(recipients)
+	s.broadcastRoomState(roomState, conns)
+	s.broadcastGameState(recipients)
+}
+
 func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) bool {
 	if _, ok := decodeSessionRequest[leaveRoomRequest](s, conn, sessionID, envelope); !ok {
 		return false
@@ -520,6 +540,14 @@ func (s *wsServer) broadcastActionSuccess(result actionResultEvent, roomState ro
 	s.broadcastActionResult(result, conns)
 	s.broadcastRoomState(roomState, conns)
 	s.broadcastGameState(recipients)
+
+	if roomState.Phase == "game_over" {
+		if resetRoomState, resetRecipients, err := s.lobby.resetRoomAfterGameOver(roomState.Code); err != nil {
+			slog.Error("reset room after game over failed", "roomCode", roomState.Code, "error", err)
+		} else if resetRoomState != nil {
+			s.broadcastRoomState(*resetRoomState, resetRecipients)
+		}
+	}
 }
 
 func gameRecipientConns(recipients []gameStateRecipient) []*websocket.Conn {

@@ -6,15 +6,7 @@ import {
   HAND_DROP_ID,
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
-import { Badge } from "#/components/ui/badge";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
+import { Card, CardContent } from "#/components/ui/card";
 import { cn } from "#/lib/utils";
 
 type HandStatus = {
@@ -42,20 +34,11 @@ export function GameBoardHand({
   activeDrag,
   tablePlayState,
 }: GameBoardHandProps) {
-  const { hasGame, isMyTurn, turnPlayerName } = status;
+  const { hasGame } = status;
   const { hasDraftedCompositions } = tablePlayState;
 
   return (
     <Card className="min-h-0 overflow-hidden">
-      <CardHeader>
-        <CardTitle>Hand</CardTitle>
-        <CardDescription>{isMyTurn ? "Your turn" : `${turnPlayerName} is up`}</CardDescription>
-        <CardAction>
-          <Badge variant="outline" className="w-fit">
-            {availableHandEntries.length} cards
-          </Badge>
-        </CardAction>
-      </CardHeader>
       <CardContent className="min-h-0">
         {hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
@@ -64,7 +47,7 @@ export function GameBoardHand({
               className="min-h-0 rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="min-h-0 overflow-x-auto overflow-y-hidden pb-2">
+                <div className="min-h-0 overflow-x-auto overflow-y-hidden">
                   <div className="flex w-max min-w-full justify-center gap-2">
                     {availableHandEntries.map((entry) => (
                       <GameCard

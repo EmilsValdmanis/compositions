@@ -1027,6 +1027,167 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 	server.broadcastActionSuccess(actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, hostRoom, []gameStateRecipient{{conn: nil}, {conn: writeConn, event: gameStateEvent{Room: hostRoom}}})
 }
 
+func TestBroadcastActionSuccessResetsRoomAfterGameOver(t *testing.T) {
+	originalMakeGameState := makeGameState
+	defer func() { makeGameState = originalMakeGameState }()
+
+	server := newWSServer()
+	hostConn, hostPeer, closeHostPair := newSocketPair(t)
+	defer closeHostPair()
+
+	hostEvent, _, _, err := server.lobby.connect("", hostConn)
+	if err != nil {
+		t.Fatalf("connect(host) error = %v", err)
+	}
+	hostRoom, _, err := server.lobby.createRoom(hostEvent.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	room := server.lobby.rooms[hostRoom.Code]
+	room.gameState = game.NewGameState()
+	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(host) error = %v", err)
+	}
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
+
+	state, ok := room.gameState.SnapshotForPlayer(hostEvent.PlayerID)
+	if !ok {
+		t.Fatal("SnapshotForPlayer() = false; want true")
+	}
+	server.broadcastActionSuccess(
+		actionResultEvent{Action: "discard", PlayerID: hostEvent.PlayerID, OK: true},
+		roomSnapshot{Code: hostRoom.Code, Phase: "game_over", HostPlayerID: hostEvent.PlayerID},
+		[]gameStateRecipient{{
+			conn:  hostConn,
+			event: gameStateEvent{Room: roomSnapshot{Code: hostRoom.Code, Phase: "game_over", HostPlayerID: hostEvent.PlayerID}, Game: state},
+		}},
+	)
+
+	if envelope := mustReadEnvelopeFromConn(t, hostPeer); envelope.Type != "action_result" {
+		t.Fatalf("envelope.Type = %q; want action_result", envelope.Type)
+	}
+	if envelope := mustReadEnvelopeFromConn(t, hostPeer); envelope.Type != "room_state" {
+		t.Fatalf("envelope.Type = %q; want room_state", envelope.Type)
+	}
+	if envelope := mustReadEnvelopeFromConn(t, hostPeer); envelope.Type != "game_state" {
+		t.Fatalf("envelope.Type = %q; want game_state", envelope.Type)
+	}
+	resetRoom := mustReadRoomState(t, hostPeer)
+	if resetRoom.Phase != "lobby" {
+		t.Fatalf("resetRoom.Phase = %q; want lobby", resetRoom.Phase)
+	}
+}
+
+func TestHandleStartNextRound(t *testing.T) {
+	originalMakeGameState := makeGameState
+	defer func() { makeGameState = originalMakeGameState }()
+	makeGameState = game.NewGameState
+
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	hostConnected := mustConnectSession(t, hostConn, "")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+
+	guestConn := mustDialWS(t, httpServer.URL)
+	defer guestConn.Close()
+	guestConnected := mustConnectSession(t, guestConn, "")
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Guest"})
+	_ = mustReadRoomState(t, guestConn)
+	_ = mustReadRoomState(t, hostConn)
+
+	room := server.lobby.rooms[hostRoom.Code]
+	room.gameState = game.NewGameState()
+	if err := room.gameState.AddPlayer(newPlayerWithID(hostConnected.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(host) error = %v", err)
+	}
+	if err := room.gameState.AddPlayer(newPlayerWithID(guestConnected.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(guest) error = %v", err)
+	}
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseRoundOver)
+
+	mustSendEnvelope(t, guestConn, "start_next_round", startNextRoundRequest{})
+	mustReadError(t, guestConn, "only the host can start the next round")
+
+	mustSendEnvelope(t, hostConn, "start_next_round", startNextRoundRequest{})
+	hostStartedRoom := mustReadRoomState(t, hostConn)
+	guestStartedRoom := mustReadRoomState(t, guestConn)
+	hostGame := mustReadGameState(t, hostConn, hostStartedRoom.Code)
+	guestGame := mustReadGameState(t, guestConn, guestStartedRoom.Code)
+	if hostStartedRoom.Phase != "in_progress" || guestStartedRoom.Phase != "in_progress" {
+		t.Fatalf("started phases = %q/%q; want in_progress", hostStartedRoom.Phase, guestStartedRoom.Phase)
+	}
+	if hostGame.Game.Round != 2 || guestGame.Game.Round != 2 {
+		t.Fatalf("game rounds = %d/%d; want 2", hostGame.Game.Round, guestGame.Game.Round)
+	}
+}
+
+func TestHandleStartNextRoundErrors(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	mustConnectSession(t, conn, "")
+	if err := conn.WriteJSON(wsEnvelope{Type: "start_next_round"}); err != nil {
+		t.Fatalf("WriteJSON(start_next_round missing data) error = %v", err)
+	}
+	mustReadError(t, conn, "missing data")
+}
+
+func TestBroadcastActionSuccessGameOverResetFailure(t *testing.T) {
+	originalMakeGameState := makeGameState
+	defer func() { makeGameState = originalMakeGameState }()
+
+	server := newWSServer()
+	hostConn, hostPeer, closeHostPair := newSocketPair(t)
+	defer closeHostPair()
+
+	hostEvent, _, _, err := server.lobby.connect("", hostConn)
+	if err != nil {
+		t.Fatalf("connect(host) error = %v", err)
+	}
+	hostRoom, _, err := server.lobby.createRoom(hostEvent.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	room := server.lobby.rooms[hostRoom.Code]
+	room.gameState = game.NewGameState()
+	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
+		t.Fatalf("AddPlayer(host) error = %v", err)
+	}
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
+	makeGameState = func() *game.GameState { return nil }
+
+	state, ok := room.gameState.SnapshotForPlayer(hostEvent.PlayerID)
+	if !ok {
+		t.Fatal("SnapshotForPlayer() = false; want true")
+	}
+	server.broadcastActionSuccess(
+		actionResultEvent{Action: "discard", PlayerID: hostEvent.PlayerID, OK: true},
+		roomSnapshot{Code: hostRoom.Code, Phase: "game_over", HostPlayerID: hostEvent.PlayerID},
+		[]gameStateRecipient{{
+			conn:  hostConn,
+			event: gameStateEvent{Room: roomSnapshot{Code: hostRoom.Code, Phase: "game_over", HostPlayerID: hostEvent.PlayerID}, Game: state},
+		}},
+	)
+
+	if envelope := mustReadEnvelopeFromConn(t, hostPeer); envelope.Type != "action_result" {
+		t.Fatalf("envelope.Type = %q; want action_result", envelope.Type)
+	}
+	if envelope := mustReadEnvelopeFromConn(t, hostPeer); envelope.Type != "room_state" {
+		t.Fatalf("envelope.Type = %q; want room_state", envelope.Type)
+	}
+	if envelope := mustReadEnvelopeFromConn(t, hostPeer); envelope.Type != "game_state" {
+		t.Fatalf("envelope.Type = %q; want game_state", envelope.Type)
+	}
+}
+
 func TestDecodePayload(t *testing.T) {
 	if err := decodePayload(nil, &struct{}{}); err == nil {
 		t.Fatal("decodePayload(nil) error = nil; want error")

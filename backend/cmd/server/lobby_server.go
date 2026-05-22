@@ -346,6 +346,39 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string) (roomSnapshot, [
 	return roomState, recipients, nil
 }
 
+func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []gameStateRecipient, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, errors.New("join a room first")
+	}
+	if room.hostID != session.playerID {
+		return roomSnapshot{}, nil, errors.New("only the host can start the next round")
+	}
+	if !room.allPlayersConnected() {
+		return roomSnapshot{}, nil, errors.New("all players must be connected")
+	}
+	if room.gameState == nil {
+		return roomSnapshot{}, nil, errors.New("game state not initialized")
+	}
+	if err := room.gameState.StartNextRound(game.DealRoundRobin, nil, 0); err != nil {
+		return roomSnapshot{}, nil, err
+	}
+
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, err
+	}
+	return roomState, recipients, nil
+}
+
 func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.Conn, string, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -472,6 +505,28 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 	}
 	result := actionResultEvent{Action: action, PlayerID: session.playerID, OK: true}
 	return roomState, recipients, result, nil
+}
+
+func (l *lobbyServer) resetRoomAfterGameOver(roomCode string) (*roomSnapshot, []*websocket.Conn, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	room := l.rooms[normalizeRoomCode(roomCode)]
+	if room == nil {
+		return nil, nil, errors.New("room not found")
+	}
+	if room.gameState == nil {
+		return nil, nil, errors.New("game state not initialized")
+	}
+	if room.gameStatePhase() != game.PhaseGameOver {
+		return nil, nil, errors.New("game is not over")
+	}
+	if err := room.resetForLobby(); err != nil {
+		return nil, nil, err
+	}
+
+	snapshot := room.snapshot()
+	return &snapshot, room.connectedConns(l.sessions), nil
 }
 
 func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
@@ -684,6 +739,28 @@ func (r *room) connectedConns(sessions map[string]*playerSession) []*websocket.C
 		recipients = append(recipients, session.conn)
 	}
 	return recipients
+}
+
+func (r *room) resetForLobby() error {
+	nextGameState := makeGameState()
+	if nextGameState == nil {
+		return errors.New("game state not initialized")
+	}
+
+	for _, player := range r.players {
+		if player == nil {
+			continue
+		}
+
+		player.player = newPlayerWithID(player.player.ID)
+		if err := addPlayerToGameState(nextGameState, player.player); err != nil {
+			return err
+		}
+	}
+
+	r.gameState = nextGameState
+	r.pendingDealChoice = nil
+	return nil
 }
 
 func (r *room) gameStateRecipients(sessions map[string]*playerSession, roomState roomSnapshot) ([]gameStateRecipient, error) {

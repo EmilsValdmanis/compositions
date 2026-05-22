@@ -2,7 +2,7 @@ import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { DiscardDropZone } from "#/components/game/discard-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
+import { Card, CardContent } from "#/components/ui/card";
 
 export function GameBoardPiles({
   drawPileCount,
@@ -18,11 +18,7 @@ export function GameBoardPiles({
   canDiscard: boolean;
 }) {
   return (
-    <Card size="sm" className="overflow-y-scroll h-fit">
-      <CardHeader>
-        <CardTitle>Piles</CardTitle>
-        <CardDescription>Drop a hand card on discard after drawing.</CardDescription>
-      </CardHeader>
+    <Card size="sm" className="h-fit">
       <CardContent className="grid gap-3 grid-cols-2">
         <div className="rounded-3xl border flex flex-col border-border/70 bg-muted/20 p-3">
           <div className="mb-2 flex items-center justify-between gap-3 text-xs uppercase text-muted-foreground">

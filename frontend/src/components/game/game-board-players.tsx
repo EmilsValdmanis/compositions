@@ -1,6 +1,7 @@
 import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { PlayerStrip } from "#/components/game/player-strip";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { Badge } from "../ui/badge";
 
 export function GameBoardPlayers({
   players,
@@ -15,9 +16,11 @@ export function GameBoardPlayers({
     <Card size="sm" className="overflow-y-scroll grow">
       <CardHeader>
         <CardTitle>Players</CardTitle>
-        <CardDescription>
-          {connectedPlayers}/{players.length || 0} online
-        </CardDescription>
+        <CardAction>
+          <Badge variant="outline">
+            {connectedPlayers}/{players.length || 0} online
+          </Badge>
+        </CardAction>
       </CardHeader>
       <CardContent>
         <PlayerStrip players={players} game={game} />

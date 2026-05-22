@@ -1,4 +1,5 @@
 import {
+  type CompletedGameSnapshot,
   type GameSnapshot,
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
@@ -35,6 +36,7 @@ type DealChoiceState = {
 type GameLobbyViewProps = {
   room: RoomSnapshot | null;
   game: GameSnapshot | null;
+  completedGame: CompletedGameSnapshot | null;
   players: PlayerSnapshot[];
   roomCode: string;
   playerId: string;
@@ -55,6 +57,7 @@ type GameLobbyViewProps = {
 export function GameLobbyView({
   room,
   game,
+  completedGame,
   players,
   roomCode,
   playerId,
@@ -73,6 +76,8 @@ export function GameLobbyView({
 }: GameLobbyViewProps) {
   const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame } = roomActions;
   const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
+  const victorPlayerId = completedGame?.game.players[completedGame.game.roundWinnerIndex]?.playerId;
+  const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
@@ -147,6 +152,14 @@ export function GameLobbyView({
                       Tap dealing coming later
                     </Button>
                   </div>
+                </div>
+              ) : null}
+              {completedGame ? (
+                <div className="grid gap-2 rounded-3xl border border-border/70 bg-muted/20 p-4">
+                  <p className="text-sm font-medium">Last game winner</p>
+                  <p className="text-sm text-muted-foreground">
+                    {victor?.name ?? "A player"} won the game in round {completedGame.game.round}.
+                  </p>
                 </div>
               ) : null}
             </div>
