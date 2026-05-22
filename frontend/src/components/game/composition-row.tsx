@@ -69,10 +69,10 @@ function CompositionEdgeDraftZone({
       id={tableCompositionEdgeDropId(compositionIndex, edge)}
       activeClassName={null}
       className={cn(
-        "flex h-24 w-16 shrink-0 items-center justify-center overflow-visible p-0 transition-[opacity,border-color,background-color] duration-150",
+        "flex shrink-0 items-center justify-center overflow-visible p-0 transition-[opacity,border-color,background-color] duration-150",
         hasEntries
           ? "border-transparent bg-transparent"
-          : "rounded-2xl border border-dashed border-border/50 bg-background/10 data-[over=true]:border-primary/60 data-[over=true]:bg-primary/5",
+          : "h-24 w-16 rounded-2xl border border-dashed border-border/50 bg-background/10 data-[over=true]:border-primary/60 data-[over=true]:bg-primary/5",
       )}
     >
       <SortableContext
@@ -112,6 +112,7 @@ export function CompositionRow({
   stagedEntries = EMPTY_STAGED_ENTRIES,
   reclaims = EMPTY_RECLAIMS,
   insertIndex,
+  cardInsertIndices,
   players,
   stagedEntryPlayerId,
   stagedEntriesInteractive = true,
@@ -122,6 +123,7 @@ export function CompositionRow({
   stagedEntries?: HandEntry[];
   reclaims?: PlannedJokerReclaim[];
   insertIndex?: number;
+  cardInsertIndices?: Record<string, number>;
   players: PlayerSnapshot[];
   stagedEntryPlayerId?: string;
   stagedEntriesInteractive?: boolean;
@@ -139,8 +141,13 @@ export function CompositionRow({
   const cardActivities = activity?.cardActivities ?? {};
   const isNewComposition = activity?.kind === "new_composition";
   const isHighlightedComposition = isNewComposition || composition.complete;
-  const additionsAtStart = insertIndex === 0 ? additionEntries : EMPTY_STAGED_ENTRIES;
-  const additionsAtEnd = insertIndex === 0 ? EMPTY_STAGED_ENTRIES : additionEntries;
+
+  function entryInsertIndex(entry: HandEntry): number {
+    return cardInsertIndices?.[entry.key] ?? insertIndex ?? composition.cards.length;
+  }
+
+  const additionsAtStart = additionEntries.filter((entry) => entryInsertIndex(entry) === 0);
+  const additionsAtEnd = additionEntries.filter((entry) => entryInsertIndex(entry) !== 0);
   const compositionDropId = tableCompositionDropId(index);
   const startEdgeDropId = tableCompositionEdgeDropId(index, "start");
   const endEdgeDropId = tableCompositionEdgeDropId(index, "end");

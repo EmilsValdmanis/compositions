@@ -181,6 +181,7 @@ export function GameBoardTable({
                           stagedEntries={stagedEntries}
                           reclaims={reclaims}
                           insertIndex={insertIndex}
+                          cardInsertIndices={composition.cardInsertIndices}
                           players={players}
                           stagedEntryPlayerId={spectatorDraft?.playerId}
                           stagedEntriesInteractive={composition.stagedEntries.length > 0}

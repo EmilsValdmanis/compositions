@@ -45,6 +45,7 @@ import {
   moveDraftCompositionInsertIndex,
   pruneDraftCompositions,
   removeHandKeyFromDrafts,
+  setDraftCardInsertIndex,
   tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
   tableCompositionIndexFromDropId,
@@ -654,9 +655,10 @@ function useGameBoardController({
           : 0;
 
         if (existing) {
-          return moveDraftCompositionInsertIndex(
+          return setDraftCardInsertIndex(
             insertHandKeyIntoDraft(current, draggedHandKey, existing.id),
             existing.id,
+            draggedHandKey,
             insertIndex,
           );
         }
@@ -670,7 +672,8 @@ function useGameBoardController({
             id: compositionId,
             handKeys: [draggedHandKey],
             tableIndex: droppedOnTableEdgeTarget.compositionIndex,
-            insertIndex,
+            insertIndex: targetComposition?.cards.length ?? 0,
+            cardInsertIndices: { [draggedHandKey]: insertIndex },
           },
         ];
       });

@@ -201,7 +201,7 @@ export const mockScenarios: MockScenario[] = [
             { rank: 5, suit: 3 },
           ],
           points: 20,
-          complete: true,
+          complete: false,
         },
       ],
       turnActivity: {
@@ -449,7 +449,7 @@ export const mockScenarios: MockScenario[] = [
             { rank: 8, suit: 3 },
           ],
           points: 30,
-          complete: true,
+          complete: false,
         },
       ],
       turnActivity: {
@@ -476,7 +476,7 @@ export const mockScenarios: MockScenario[] = [
               { rank: 8, suit: 3 },
             ],
             points: 30,
-            complete: true,
+            complete: false,
           },
         ],
         draftCompositions: [
