@@ -845,6 +845,10 @@ func TestHandleConnectionSendsHeartbeatPing(t *testing.T) {
 		t.Fatal("timed out waiting for heartbeat ping")
 	}
 
+	if err := clientConn.WriteControl(websocket.PongMessage, []byte("pong"), time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("WriteControl(PongMessage) error = %v", err)
+	}
+
 	if err := serverConn.Close(); err != nil {
 		t.Fatalf("serverConn.Close() error = %v", err)
 	}
@@ -852,6 +856,15 @@ func TestHandleConnectionSendsHeartbeatPing(t *testing.T) {
 		t.Fatalf("clientConn.Close() error = %v", err)
 	}
 	<-done
+}
+
+func TestSetWSReadDeadline(t *testing.T) {
+	serverConn, _, cleanup := newSocketPair(t)
+	defer cleanup()
+
+	if err := setWSReadDeadline(serverConn); err != nil {
+		t.Fatalf("setWSReadDeadline() error = %v", err)
+	}
 }
 
 func TestHandleConnectionReturnsWhenHeartbeatPingWriteFails(t *testing.T) {

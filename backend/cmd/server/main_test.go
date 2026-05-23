@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -10,7 +11,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/websocket"
 )
 
@@ -19,9 +22,16 @@ func TestRunServerAndMain(t *testing.T) {
 	defer func() { listenAndServe = originalListen }()
 	originalFatal := fatalOnRunError
 	defer func() { fatalOnRunError = originalFatal }()
+	originalInit := sentryInit
+	defer func() { sentryInit = originalInit }()
+	originalFlush := sentryFlush
+	defer func() { sentryFlush = originalFlush }()
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
 	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("SENTRY_ENVIRONMENT", "development")
+	sentryFlush = func(timeout time.Duration) bool { return true }
+	sentryInit = func(options sentry.ClientOptions) error { return nil }
 
 	calledAddrs := make([]string, 0, 2)
 	listenAndServe = func(addr string, handler http.Handler) error {
@@ -84,6 +94,32 @@ func TestConfigureLoggerWritesToProvidedOutput(t *testing.T) {
 	}
 }
 
+func TestConfigureLoggerWithSentryClient(t *testing.T) {
+	originalLogger := slog.Default()
+	defer slog.SetDefault(originalLogger)
+	originalInit := sentryInit
+	defer func() { sentryInit = originalInit }()
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+
+	sentryInit = sentry.Init
+	if err := sentryInit(newSentryClientOptions()); err != nil {
+		t.Fatalf("sentryInit() error = %v", err)
+	}
+
+	var output bytes.Buffer
+	configureLogger(&output)
+
+	logger := slog.Default()
+	multi, ok := logger.Handler().(multiHandler)
+	if !ok {
+		t.Fatalf("logger handler type = %T; want multiHandler", logger.Handler())
+	}
+	if len(multi.handlers) != 2 {
+		t.Fatalf("len(multi.handlers) = %d; want 2", len(multi.handlers))
+	}
+}
+
 func TestRunServerReturnsEnvErrorBeforeListen(t *testing.T) {
 	originalListen := listenAndServe
 	defer func() { listenAndServe = originalListen }()
@@ -101,6 +137,285 @@ func TestRunServerReturnsEnvErrorBeforeListen(t *testing.T) {
 	}
 	if listenCalled {
 		t.Fatal("listenAndServe() was called; want startup to fail before listen")
+	}
+}
+
+func TestTraceSampleRate(t *testing.T) {
+	if got := traceSampleRate(sentry.SamplingContext{}); got != 0.2 {
+		t.Fatalf("traceSampleRate() = %v; want 0.2", got)
+	}
+
+	ctx := sentry.SamplingContext{Span: &sentry.Span{Name: "GET /health"}}
+	if got := traceSampleRate(ctx); got != 0 {
+		t.Fatalf("traceSampleRate() = %v; want 0 for health checks", got)
+	}
+}
+
+func TestNewSentryClientOptions(t *testing.T) {
+	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+
+	options := newSentryClientOptions()
+	if options.Dsn != "https://examplePublicKey@o0.ingest.sentry.io/0" {
+		t.Fatalf("newSentryClientOptions().Dsn = %q; want configured DSN", options.Dsn)
+	}
+	if options.Environment != "production" {
+		t.Fatalf("newSentryClientOptions().Environment = %q; want production", options.Environment)
+	}
+	if options.Release != "" {
+		t.Fatalf("newSentryClientOptions().Release = %q; want empty", options.Release)
+	}
+	if !options.EnableTracing {
+		t.Fatal("newSentryClientOptions().EnableTracing = false; want true")
+	}
+	if !options.EnableLogs {
+		t.Fatal("newSentryClientOptions().EnableLogs = false; want true")
+	}
+}
+
+func TestSentryEnabled(t *testing.T) {
+	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	if !sentryEnabled() {
+		t.Fatal("sentryEnabled() = false; want true in production with DSN")
+	}
+
+	t.Setenv("SENTRY_ENVIRONMENT", "development")
+	if sentryEnabled() {
+		t.Fatal("sentryEnabled() = true; want false in development")
+	}
+
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	t.Setenv("SENTRY_DSN", "   ")
+	if sentryEnabled() {
+		t.Fatal("sentryEnabled() = true; want false without DSN")
+	}
+}
+
+func TestConfigureObservabilityReturnsInitError(t *testing.T) {
+	originalInit := sentryInit
+	defer func() { sentryInit = originalInit }()
+	originalLogger := slog.Default()
+	defer slog.SetDefault(originalLogger)
+
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+	sentryInit = func(options sentry.ClientOptions) error {
+		return errors.New("init boom")
+	}
+
+	if err := configureObservability(&bytes.Buffer{}); err == nil || err.Error() != "init boom" {
+		t.Fatalf("configureObservability() error = %v; want init boom", err)
+	}
+}
+
+func TestMainReportsObservabilityInitError(t *testing.T) {
+	originalInit := sentryInit
+	defer func() { sentryInit = originalInit }()
+	originalFatal := fatalOnRunError
+	defer func() { fatalOnRunError = originalFatal }()
+	originalFlush := sentryFlush
+	defer func() { sentryFlush = originalFlush }()
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+
+	sentryInit = func(options sentry.ClientOptions) error { return errors.New("init boom") }
+	sentryFlush = func(timeout time.Duration) bool { return true }
+
+	fatalCalled := false
+	fatalOnRunError = func(v ...any) {
+		fatalCalled = true
+		if len(v) != 1 {
+			t.Fatalf("fatalOnRunError args = %v; want single arg", v)
+		}
+		err, ok := v[0].(error)
+		if !ok || err == nil || err.Error() != "init boom" {
+			t.Fatalf("fatalOnRunError arg = %v; want init boom", v[0])
+		}
+	}
+
+	main()
+
+	if !fatalCalled {
+		t.Fatal("main() did not call fatalOnRunError for observability init error")
+	}
+}
+
+func TestReportFatalIgnoresNil(t *testing.T) {
+	originalFatal := fatalOnRunError
+	defer func() { fatalOnRunError = originalFatal }()
+	originalFlush := sentryFlush
+	defer func() { sentryFlush = originalFlush }()
+
+	flushCalled := false
+	sentryFlush = func(timeout time.Duration) bool {
+		flushCalled = true
+		return true
+	}
+
+	fatalCalled := false
+	fatalOnRunError = func(v ...any) {
+		fatalCalled = true
+	}
+
+	reportFatal(nil)
+
+	if flushCalled {
+		t.Fatal("reportFatal(nil) flushed Sentry; want no flush")
+	}
+	if fatalCalled {
+		t.Fatal("reportFatal(nil) called fatalOnRunError; want no fatal")
+	}
+}
+
+type stubHandler struct {
+	enabled bool
+	err     error
+	attrs   []slog.Attr
+	groups  []string
+	records []slog.Record
+}
+
+func (h *stubHandler) Enabled(context.Context, slog.Level) bool { return h.enabled }
+
+func (h *stubHandler) Handle(_ context.Context, record slog.Record) error {
+	h.records = append(h.records, record)
+	return h.err
+}
+
+func (h *stubHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	clone := *h
+	clone.attrs = append(append([]slog.Attr{}, h.attrs...), attrs...)
+	return &clone
+}
+
+func (h *stubHandler) WithGroup(name string) slog.Handler {
+	clone := *h
+	clone.groups = append(append([]string{}, h.groups...), name)
+	return &clone
+}
+
+func TestMultiHandler(t *testing.T) {
+	disabled := &stubHandler{}
+	enabled := &stubHandler{enabled: true}
+	combined := multiHandler{handlers: []slog.Handler{disabled, enabled}}
+
+	if !combined.Enabled(context.Background(), slog.LevelInfo) {
+		t.Fatal("Enabled() = false; want true when one handler is enabled")
+	}
+
+	onlyDisabled := multiHandler{handlers: []slog.Handler{disabled}}
+	if onlyDisabled.Enabled(context.Background(), slog.LevelInfo) {
+		t.Fatal("Enabled() = true; want false when no handlers are enabled")
+	}
+
+	record := slog.NewRecord(time.Now(), slog.LevelInfo, "message", 0)
+	errHandler := &stubHandler{enabled: true, err: errors.New("handle boom")}
+	okHandler := &stubHandler{enabled: true}
+	handling := multiHandler{handlers: []slog.Handler{disabled, errHandler, okHandler}}
+	if err := handling.Handle(context.Background(), record); err == nil || err.Error() != "handle boom" {
+		t.Fatalf("Handle() error = %v; want handle boom", err)
+	}
+	if len(disabled.records) != 0 {
+		t.Fatalf("disabled handler saw %d records; want 0", len(disabled.records))
+	}
+	if len(errHandler.records) != 1 {
+		t.Fatalf("errHandler saw %d records; want 1", len(errHandler.records))
+	}
+	if len(okHandler.records) != 1 {
+		t.Fatalf("okHandler saw %d records; want 1", len(okHandler.records))
+	}
+
+	withAttrs := handling.WithAttrs([]slog.Attr{slog.String("key", "value")})
+	withAttrsCombined, ok := withAttrs.(multiHandler)
+	if !ok {
+		t.Fatalf("WithAttrs() type = %T; want multiHandler", withAttrs)
+	}
+	for i, handler := range withAttrsCombined.handlers {
+		stub, ok := handler.(*stubHandler)
+		if !ok {
+			t.Fatalf("WithAttrs() handler %d type = %T; want *stubHandler", i, handler)
+		}
+		if len(stub.attrs) != 1 {
+			t.Fatalf("WithAttrs() handler %d attrs = %d; want 1", i, len(stub.attrs))
+		}
+	}
+
+	withGroup := handling.WithGroup("group")
+	withGroupCombined, ok := withGroup.(multiHandler)
+	if !ok {
+		t.Fatalf("WithGroup() type = %T; want multiHandler", withGroup)
+	}
+	for i, handler := range withGroupCombined.handlers {
+		stub, ok := handler.(*stubHandler)
+		if !ok {
+			t.Fatalf("WithGroup() handler %d type = %T; want *stubHandler", i, handler)
+		}
+		if len(stub.groups) != 1 || stub.groups[0] != "group" {
+			t.Fatalf("WithGroup() handler %d groups = %v; want [group]", i, stub.groups)
+		}
+	}
+}
+
+func TestRunServerWrapsHandlerWhenSentryEnabled(t *testing.T) {
+	originalListen := listenAndServe
+	defer func() { listenAndServe = originalListen }()
+	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+
+	listenAndServe = func(addr string, handler http.Handler) error {
+		if addr != ":0" {
+			t.Fatalf("listenAndServe addr = %q; want :0", addr)
+		}
+
+		request := httptest.NewRequest(http.MethodGet, "/health", nil)
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("wrapped handler status = %d; want %d", response.Code, http.StatusOK)
+		}
+		if sentry.GetHubFromContext(request.Context()) != nil {
+			t.Fatal("request context unexpectedly mutated before handler execution")
+		}
+		return errors.New("stop")
+	}
+
+	if err := runServer(":0"); err == nil || err.Error() != "stop" {
+		t.Fatalf("runServer() error = %v; want stop", err)
+	}
+}
+
+func TestReportFatalFlushesBeforeExit(t *testing.T) {
+	originalFatal := fatalOnRunError
+	defer func() { fatalOnRunError = originalFatal }()
+	originalFlush := sentryFlush
+	defer func() { sentryFlush = originalFlush }()
+
+	flushCalled := false
+	sentryFlush = func(timeout time.Duration) bool {
+		flushCalled = true
+		if timeout != sentryFlushTimeout {
+			t.Fatalf("sentryFlush timeout = %v; want %v", timeout, sentryFlushTimeout)
+		}
+		return true
+	}
+
+	fatalCalled := false
+	fatalOnRunError = func(v ...any) {
+		fatalCalled = true
+		if len(v) != 1 {
+			t.Fatalf("fatalOnRunError args = %v; want single arg", v)
+		}
+	}
+
+	reportFatal(errors.New("boom"))
+
+	if !flushCalled {
+		t.Fatal("reportFatal() did not flush Sentry")
+	}
+	if !fatalCalled {
+		t.Fatal("reportFatal() did not call fatalOnRunError")
 	}
 }
 
