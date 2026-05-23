@@ -93,24 +93,39 @@ function CompositionEdgeDropTarget({
   compositionIndex,
   edge,
   visible,
+  active,
 }: {
   compositionIndex: number;
   edge: "start" | "end";
   visible: boolean;
+  active: boolean;
 }) {
   return (
     <GameBoardDraftDropZone
       id={tableCompositionEdgeDropId(compositionIndex, edge)}
       activeClassName={null}
       className={cn(
-        "pointer-events-none absolute top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity duration-150 data-[over=true]:opacity-100 [&[data-over=true]_.edge-drop-line]:bg-primary/70 [&[data-over=true]_.edge-drop-pill]:border-primary/70 [&[data-over=true]_.edge-drop-pill]:bg-primary/10 [&[data-over=true]_.edge-drop-pill]:text-primary",
+        "pointer-events-none absolute top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center",
         edge === "start" ? "-left-5" : "-right-5",
-        visible ? "pointer-events-auto opacity-100" : null,
+        active ? "pointer-events-auto" : null,
       )}
     >
       <div className="pointer-events-none relative flex h-full w-full items-center justify-center">
-        <div className="edge-drop-line h-16 w-px rounded-full bg-border/60 shadow-[0_0_0_1px_hsl(var(--background))] transition-colors duration-150" />
-        <div className="edge-drop-pill absolute flex size-5 items-center justify-center rounded-full border border-border/60 bg-background/85 text-[0.7rem] leading-none text-muted-foreground shadow-sm backdrop-blur-sm transition-[border-color,color,background-color] duration-150">
+        <div
+          className={cn(
+            "edge-drop-line h-16 w-px rounded-full shadow-[0_0_0_1px_hsl(var(--background))] transition-colors duration-150",
+            active ? "bg-primary/70" : "bg-transparent",
+          )}
+        />
+        <div
+          className={cn(
+            "edge-drop-pill absolute flex size-5 items-center justify-center rounded-full text-[0.7rem] leading-none shadow-sm backdrop-blur-sm transition-[border-color,color,background-color,opacity] duration-150",
+            visible ? "opacity-100" : "opacity-0",
+            active
+              ? "border border-primary/70 bg-primary/10 text-primary opacity-100"
+              : "border border-border/60 bg-background/85 text-muted-foreground",
+          )}
+        >
           +
         </div>
       </div>
@@ -168,18 +183,19 @@ export function CompositionRow({
     active !== null &&
     active.data.current?.drawSource === undefined &&
     typeof active.id === "string";
-  const isDraggingOverComposition =
+  const showEdgeDropTargets =
     isDraggingCompositionCard &&
     (overId === compositionDropId || overId === startEdgeDropId || overId === endEdgeDropId);
-  const showStartEdgeDropTarget = isDraggingOverComposition;
-  const showEndEdgeDropTarget = isDraggingOverComposition;
+  const highlightStartEdgeDropTarget = isDraggingCompositionCard && overId === startEdgeDropId;
+  const highlightEndEdgeDropTarget = isDraggingCompositionCard && overId === endEdgeDropId;
 
   return (
     <GameBoardDraftDropZone
       id={compositionDropId}
+      activeClassName={null}
       className={cn(
         "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-4",
-        isHighlightedComposition ? "mt-5 border-primary/70 bg-primary/5" : null,
+        isHighlightedComposition ? "border-primary/70 bg-primary/5" : null,
       )}
     >
       {composition.complete ? (
@@ -204,7 +220,8 @@ export function CompositionRow({
         <CompositionEdgeDropTarget
           compositionIndex={index}
           edge="start"
-          visible={showStartEdgeDropTarget}
+          visible={showEdgeDropTargets}
+          active={highlightStartEdgeDropTarget}
         />
 
         {additionsAtStart.length > 0 ? (
@@ -276,7 +293,8 @@ export function CompositionRow({
         <CompositionEdgeDropTarget
           compositionIndex={index}
           edge="end"
-          visible={showEndEdgeDropTarget}
+          visible={showEdgeDropTargets}
+          active={highlightEndEdgeDropTarget}
         />
       </div>
     </GameBoardDraftDropZone>

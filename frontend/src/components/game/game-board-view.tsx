@@ -1,8 +1,11 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
+  closestCenter,
+  closestCorners,
   DndContext,
   DragOverlay,
-  closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -48,7 +51,6 @@ import {
   setDraftCardInsertIndex,
   tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
-  tableCompositionIndexFromDropId,
 } from "#/components/game/game-board-view-state";
 import { Button } from "#/components/ui/button";
 import {
@@ -77,6 +79,64 @@ type DraftCompositionState = {
   scopeKey: string | null;
   compositions: DraftComposition[];
 };
+
+function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetection {
+  return ({ droppableContainers, ...args }) => {
+    const fallbackContainers = droppableContainers.filter(
+      (container) => container.id === NEW_COMPOSITION_DROP_ID || container.id === HAND_DROP_ID,
+    );
+    const handCardContainers = droppableContainers.filter((container) =>
+      handCardIds.has(String(container.id)),
+    );
+    const nonFallbackContainers = droppableContainers.filter(
+      (container) => container.id !== NEW_COMPOSITION_DROP_ID && container.id !== HAND_DROP_ID,
+    );
+
+    const pointerCollisions = pointerWithin({
+      ...args,
+      droppableContainers,
+    });
+    const pointerSpecificCollisions = pointerCollisions.filter(
+      (collision) => collision.id !== NEW_COMPOSITION_DROP_ID && collision.id !== HAND_DROP_ID,
+    );
+
+    if (pointerSpecificCollisions.length > 0) {
+      return pointerSpecificCollisions;
+    }
+
+    if (
+      pointerCollisions.some((collision) => collision.id === HAND_DROP_ID) &&
+      handCardContainers.length > 0
+    ) {
+      const closestHandCollisions = closestCenter({
+        ...args,
+        droppableContainers: handCardContainers,
+      });
+
+      if (closestHandCollisions.length > 0) {
+        return closestHandCollisions;
+      }
+    }
+
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+
+    const closestSpecificCollisions = closestCorners({
+      ...args,
+      droppableContainers: nonFallbackContainers,
+    });
+
+    if (closestSpecificCollisions.length > 0) {
+      return closestSpecificCollisions;
+    }
+
+    return closestCorners({
+      ...args,
+      droppableContainers: fallbackContainers,
+    });
+  };
+}
 
 type GameBoardViewProps = {
   game: GameSnapshot | null;
@@ -671,7 +731,6 @@ function useGameBoardController({
     const droppedOnHandCard =
       overId !== null && availableHandEntries.some((entry) => entry.key === overId);
     const droppedOnDraftContainer = overId ? compositionIdFromDropId(overId) : null;
-    const droppedOnTableComposition = overId ? tableCompositionIndexFromDropId(overId) : null;
     const droppedOnTableEdgeTarget = overId ? tableCompositionEdgeTargetFromDropId(overId) : null;
 
     if (event.over?.id === "discard-pile") {
@@ -732,35 +791,6 @@ function useGameBoardController({
             tableIndex: droppedOnTableEdgeTarget.compositionIndex,
             insertIndex: targetComposition?.cards.length ?? 0,
             cardInsertIndices: { [draggedHandKey]: insertIndex },
-          },
-        ];
-      });
-      return;
-    }
-
-    if (droppedOnTableComposition !== null && draggedEntry) {
-      updateDraftCompositions((current) => {
-        const existing = current.find(
-          (composition) => composition.tableIndex === droppedOnTableComposition,
-        );
-        if (existing) {
-          return moveDraftCompositionInsertIndex(
-            insertHandKeyIntoDraft(current, draggedHandKey, existing.id),
-            existing.id,
-            existing.insertIndex ?? existing.handKeys.length,
-          );
-        }
-
-        const compositionId = `draft-${nextDraftIdRef.current}`;
-        nextDraftIdRef.current += 1;
-
-        return [
-          ...removeHandKeyFromDrafts(current, draggedHandKey),
-          {
-            id: compositionId,
-            handKeys: [draggedHandKey],
-            tableIndex: droppedOnTableComposition,
-            insertIndex: game?.activeCompositions?.[droppedOnTableComposition]?.cards.length,
           },
         ];
       });
@@ -894,11 +924,18 @@ export function GameBoardView({
     [game?.activeCompositions, game?.turnActivity],
   );
   const spectatorDrafts = game?.turnActivity?.draftCompositions ?? [];
+  const collisionDetection = useMemo(
+    () =>
+      createBoardCollisionDetection(
+        new Set(controller.availableHandEntries.map((entry) => entry.key)),
+      ),
+    [controller.availableHandEntries],
+  );
 
   return (
     <>
       <DndContext
-        collisionDetection={closestCenter}
+        collisionDetection={collisionDetection}
         onDragStart={controller.handleDragStart}
         onDragOver={controller.handleDragOver}
         onDragEnd={controller.handleDragEnd}

@@ -1,3 +1,4 @@
+import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   NEW_COMPOSITION_DROP_ID,
@@ -30,6 +31,7 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
+import { cn } from "#/lib/utils";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -98,6 +100,11 @@ export function GameBoardTable({
   onResetTablePlay: () => void;
   onSubmitTablePlay: () => void;
 }) {
+  const { active } = useDndContext();
+  const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
+    id: NEW_COMPOSITION_DROP_ID,
+    disabled: !canCompose,
+  });
   const tablePoints = (game?.activeCompositions ?? []).reduce(
     (total: number, composition: GameSnapshot["activeCompositions"][number]) =>
       total + composition.points,
@@ -126,6 +133,10 @@ export function GameBoardTable({
   const stagedNewDrafts = stagedDrafts.filter(
     (composition) => composition.tableIndex === undefined,
   );
+  const isDraggingHandCard =
+    active !== null &&
+    active.data.current?.drawSource === undefined &&
+    typeof active.id === "string";
 
   for (const draft of stagedDrafts) {
     if (draft.tableIndex === undefined) {
@@ -151,10 +162,21 @@ export function GameBoardTable({
         </CardAction>
       </CardHeader>
       <CardContent className="min-h-0 flex-1">
-        <div className="flex min-h-full flex-col justify-center gap-4">
+        <div
+          ref={setNodeRef}
+          className={[
+            "flex min-h-full flex-col justify-center gap-6 rounded-3xl border border-dashed border-border/70 px-3 py-3 transition-colors",
+            canCompose && isDraggingHandCard ? "border-border/70" : null,
+            canCompose && isDraggingHandCard && isOverNewCompositionBoard
+              ? "border-primary/70 bg-primary/5"
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <div className="min-h-0">
             {hasVisibleCompositions ? (
-              <div className="flex min-h-0 flex-wrap items-center justify-center gap-3">
+              <div className="flex min-h-0 flex-wrap items-center justify-center gap-4">
                 {tableCompositions.map((composition) => (
                   <div key={composition.key} className="w-fit shrink-0">
                     {(() => {
@@ -252,38 +274,30 @@ export function GameBoardTable({
                 </SortableContext>
               </GameBoardDraftDropZone>
             ))}
-
-            <GameBoardDraftDropZone
-              id={NEW_COMPOSITION_DROP_ID}
-              className="grid min-h-32 w-full max-w-80 min-w-64 shrink-0 place-items-center rounded-3xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground"
-            >
-              {canCompose
-                ? "Drop cards here to start a new composition."
-                : hasVisibleCompositions
-                  ? "Additions to table compositions are shown above."
-                  : "Waiting for a composition to be played."}
-            </GameBoardDraftDropZone>
           </div>
         </div>
       </CardContent>
-      {hasDraftedCompositions ? (
-        <CardFooter className="justify-center">
-          <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="ghost" onClick={onResetTablePlay}>
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="default"
-              onClick={onSubmitTablePlay}
-              disabled={!canSubmitTablePlay}
-              className="shadow-sm"
-            >
-              Submit table play
-            </Button>
-          </div>
-        </CardFooter>
-      ) : null}
+      <CardFooter
+        className={cn(
+          "min-h-16 justify-center transition-opacity duration-150",
+          hasDraftedCompositions ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onResetTablePlay}>
+            Reset
+          </Button>
+          <Button
+            type="button"
+            size="default"
+            onClick={onSubmitTablePlay}
+            disabled={!canSubmitTablePlay}
+            className="shadow-sm"
+          >
+            Submit table play
+          </Button>
+        </div>
+      </CardFooter>
     </Card>
   );
 }
