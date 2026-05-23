@@ -157,10 +157,10 @@ export function GameBoardTable({
         </CardAction>
       </CardHeader>
       <CardContent className="min-h-0 flex-1">
-        <div className="flex min-h-full flex-col justify-center gap-4">
+        <div className="flex min-h-full flex-col justify-center gap-6">
           <div className="min-h-0">
             {hasVisibleCompositions ? (
-              <div className="flex min-h-0 flex-wrap items-center justify-center gap-3">
+              <div className="flex min-h-0 flex-wrap items-center justify-center gap-4">
                 {tableCompositions.map((composition) => (
                   <div key={composition.key} className="w-fit shrink-0">
                     {(() => {

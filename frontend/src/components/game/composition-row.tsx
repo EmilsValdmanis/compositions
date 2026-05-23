@@ -173,7 +173,7 @@ export function CompositionRow({
     <div
       className={cn(
         "relative flex min-w-0 flex-col rounded-3xl border border-border/70 bg-muted/20 p-4",
-        isHighlightedComposition ? "mt-5 border-primary/70 bg-primary/5" : null,
+        isHighlightedComposition ? "border-primary/70 bg-primary/5" : null,
       )}
     >
       {composition.complete ? (
@@ -194,7 +194,7 @@ export function CompositionRow({
         </div>
       </div>
 
-      <div className="relative flex flex-wrap items-center justify-center gap-3 pb-6">
+      <div className="relative flex flex-wrap items-center justify-center gap-3">
         <CompositionEdgeDropTarget
           compositionIndex={index}
           edge="start"
