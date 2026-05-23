@@ -1,4 +1,4 @@
-import { useDndContext } from "@dnd-kit/core";
+import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   NEW_COMPOSITION_DROP_ID,
@@ -31,6 +31,7 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
+import { cn } from "#/lib/utils";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -100,6 +101,10 @@ export function GameBoardTable({
   onSubmitTablePlay: () => void;
 }) {
   const { active } = useDndContext();
+  const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
+    id: NEW_COMPOSITION_DROP_ID,
+    disabled: !canCompose,
+  });
   const tablePoints = (game?.activeCompositions ?? []).reduce(
     (total: number, composition: GameSnapshot["activeCompositions"][number]) =>
       total + composition.points,
@@ -157,7 +162,18 @@ export function GameBoardTable({
         </CardAction>
       </CardHeader>
       <CardContent className="min-h-0 flex-1">
-        <div className="flex min-h-full flex-col justify-center gap-6">
+        <div
+          ref={setNodeRef}
+          className={[
+            "flex min-h-full flex-col justify-center gap-6 rounded-3xl border border-dashed border-border/70 px-3 py-3 transition-colors",
+            canCompose && isDraggingHandCard ? "border-border/70" : null,
+            canCompose && isDraggingHandCard && isOverNewCompositionBoard
+              ? "border-primary/70 bg-primary/5"
+              : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <div className="min-h-0">
             {hasVisibleCompositions ? (
               <div className="flex min-h-0 flex-wrap items-center justify-center gap-4">
@@ -258,36 +274,30 @@ export function GameBoardTable({
                 </SortableContext>
               </GameBoardDraftDropZone>
             ))}
-
-            {canCompose && isDraggingHandCard ? (
-              <GameBoardDraftDropZone
-                id={NEW_COMPOSITION_DROP_ID}
-                className="flex min-h-40 w-full max-w-80 min-w-64 shrink-0 items-center justify-center rounded-3xl border border-dashed border-border/70 px-4 py-4 text-center text-sm text-muted-foreground"
-              >
-                Drop card here to create new compositions.
-              </GameBoardDraftDropZone>
-            ) : null}
           </div>
         </div>
       </CardContent>
-      {hasDraftedCompositions ? (
-        <CardFooter className="justify-center">
-          <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="ghost" onClick={onResetTablePlay}>
-              Reset
-            </Button>
-            <Button
-              type="button"
-              size="default"
-              onClick={onSubmitTablePlay}
-              disabled={!canSubmitTablePlay}
-              className="shadow-sm"
-            >
-              Submit table play
-            </Button>
-          </div>
-        </CardFooter>
-      ) : null}
+      <CardFooter
+        className={cn(
+          "min-h-16 justify-center transition-opacity duration-150",
+          hasDraftedCompositions ? "opacity-100" : "pointer-events-none opacity-0",
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="ghost" onClick={onResetTablePlay}>
+            Reset
+          </Button>
+          <Button
+            type="button"
+            size="default"
+            onClick={onSubmitTablePlay}
+            disabled={!canSubmitTablePlay}
+            className="shadow-sm"
+          >
+            Submit table play
+          </Button>
+        </div>
+      </CardFooter>
     </Card>
   );
 }

@@ -1,8 +1,11 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
+  closestCenter,
+  closestCorners,
   DndContext,
   DragOverlay,
-  closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
@@ -76,6 +79,64 @@ type DraftCompositionState = {
   scopeKey: string | null;
   compositions: DraftComposition[];
 };
+
+function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetection {
+  return ({ droppableContainers, ...args }) => {
+    const fallbackContainers = droppableContainers.filter(
+      (container) => container.id === NEW_COMPOSITION_DROP_ID || container.id === HAND_DROP_ID,
+    );
+    const handCardContainers = droppableContainers.filter((container) =>
+      handCardIds.has(String(container.id)),
+    );
+    const nonFallbackContainers = droppableContainers.filter(
+      (container) => container.id !== NEW_COMPOSITION_DROP_ID && container.id !== HAND_DROP_ID,
+    );
+
+    const pointerCollisions = pointerWithin({
+      ...args,
+      droppableContainers,
+    });
+    const pointerSpecificCollisions = pointerCollisions.filter(
+      (collision) => collision.id !== NEW_COMPOSITION_DROP_ID && collision.id !== HAND_DROP_ID,
+    );
+
+    if (pointerSpecificCollisions.length > 0) {
+      return pointerSpecificCollisions;
+    }
+
+    if (
+      pointerCollisions.some((collision) => collision.id === HAND_DROP_ID) &&
+      handCardContainers.length > 0
+    ) {
+      const closestHandCollisions = closestCenter({
+        ...args,
+        droppableContainers: handCardContainers,
+      });
+
+      if (closestHandCollisions.length > 0) {
+        return closestHandCollisions;
+      }
+    }
+
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+
+    const closestSpecificCollisions = closestCorners({
+      ...args,
+      droppableContainers: nonFallbackContainers,
+    });
+
+    if (closestSpecificCollisions.length > 0) {
+      return closestSpecificCollisions;
+    }
+
+    return closestCorners({
+      ...args,
+      droppableContainers: fallbackContainers,
+    });
+  };
+}
 
 type GameBoardViewProps = {
   game: GameSnapshot | null;
@@ -863,11 +924,18 @@ export function GameBoardView({
     [game?.activeCompositions, game?.turnActivity],
   );
   const spectatorDrafts = game?.turnActivity?.draftCompositions ?? [];
+  const collisionDetection = useMemo(
+    () =>
+      createBoardCollisionDetection(
+        new Set(controller.availableHandEntries.map((entry) => entry.key)),
+      ),
+    [controller.availableHandEntries],
+  );
 
   return (
     <>
       <DndContext
-        collisionDetection={closestCenter}
+        collisionDetection={collisionDetection}
         onDragStart={controller.handleDragStart}
         onDragOver={controller.handleDragOver}
         onDragEnd={controller.handleDragEnd}

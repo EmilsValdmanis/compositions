@@ -62,7 +62,7 @@ function cardAccentClass(card: CardSnapshot) {
     return "border-destructive/30 bg-destructive/5 text-destructive";
   }
 
-  return "border-foreground/15 bg-background text-foreground";
+  return "border-foreground/15 bg-foreground/5 text-foreground";
 }
 
 type GameCardSize = "hand" | "default" | "compact";
