@@ -3,7 +3,7 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import {
   NEW_COMPOSITION_DROP_ID,
   buildHandEntries,
-  inferPlannedJokerReclaims,
+  canReclaimJokerWithCard,
   type DraftedCompositionView,
   type HandEntry,
   type PlannedJokerReclaim,
@@ -65,16 +65,25 @@ function draftPreviewForComposition(
       stagedEntries,
       reclaims: [] as PlannedJokerReclaim[],
       insertIndex: draft.insertIndex,
+      cardInsertIndices: draft.cardInsertIndices,
     };
   }
 
   const insertIndex = draft.insertIndex ?? tableComposition.snapshot.cards.length;
-  const { reclaims } = inferPlannedJokerReclaims(
-    tableComposition.snapshot,
-    stagedEntries,
+  const reclaims = stagedEntries.flatMap((entry) => {
+    const jokerIndex = draft.reclaimTargets?.[entry.key];
+    return typeof jokerIndex === "number" &&
+      canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)
+      ? [{ jokerIndex, replacementEntry: entry } satisfies PlannedJokerReclaim]
+      : [];
+  });
+  const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
+  return {
+    stagedEntries: stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key)),
+    reclaims,
     insertIndex,
-  );
-  return { stagedEntries, reclaims, insertIndex };
+    cardInsertIndices: draft.cardInsertIndices,
+  };
 }
 
 export function GameBoardTable({
@@ -127,6 +136,7 @@ export function GameBoardTable({
       stagedEntries: HandEntry[];
       reclaims: PlannedJokerReclaim[];
       insertIndex?: number;
+      cardInsertIndices?: Record<string, number>;
       playerId?: string;
     }
   >();
@@ -154,14 +164,14 @@ export function GameBoardTable({
   }
 
   return (
-    <Card className="min-h-0 overflow-y-auto xl:flex-1">
+    <Card className="min-h-0 overflow-visible xl:flex-1">
       <CardHeader>
         <CardTitle>Table</CardTitle>
         <CardAction>
           <Badge variant="outline">{tablePoints} pts</Badge>
         </CardAction>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1">
+      <CardContent className="min-h-0 flex-1 overflow-visible">
         <div
           ref={setNodeRef}
           className={[
@@ -174,11 +184,11 @@ export function GameBoardTable({
             .filter(Boolean)
             .join(" ")}
         >
-          <div className="min-h-0">
+          <div className="min-h-0 overflow-visible">
             {hasVisibleCompositions ? (
-              <div className="flex min-h-0 flex-wrap items-center justify-center gap-4">
+              <div className="flex min-h-0 flex-wrap items-center justify-center gap-4 overflow-visible p-1">
                 {tableCompositions.map((composition) => (
-                  <div key={composition.key} className="w-fit shrink-0">
+                  <div key={composition.key} className="w-fit shrink-0 overflow-visible p-1">
                     {(() => {
                       const spectatorDraft = spectatorDraftsByTableIndex.get(
                         composition.tableIndex,
@@ -195,6 +205,10 @@ export function GameBoardTable({
                         composition.stagedEntries.length > 0
                           ? composition.insertIndex
                           : spectatorDraft?.insertIndex;
+                      const cardInsertIndices =
+                        composition.stagedEntries.length > 0
+                          ? composition.cardInsertIndices
+                          : spectatorDraft?.cardInsertIndices;
 
                       return (
                         <CompositionRow
@@ -203,10 +217,11 @@ export function GameBoardTable({
                           stagedEntries={stagedEntries}
                           reclaims={reclaims}
                           insertIndex={insertIndex}
-                          cardInsertIndices={composition.cardInsertIndices}
+                          cardInsertIndices={cardInsertIndices}
                           players={players}
                           stagedEntryPlayerId={spectatorDraft?.playerId}
                           stagedEntriesInteractive={composition.stagedEntries.length > 0}
+                          dropTargetsEnabled={canCompose}
                           activity={activityByIndex.get(composition.tableIndex)}
                         />
                       );
@@ -292,7 +307,6 @@ export function GameBoardTable({
             size="default"
             onClick={onSubmitTablePlay}
             disabled={!canSubmitTablePlay}
-            className="shadow-sm"
           >
             Submit table play
           </Button>

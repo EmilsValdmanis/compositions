@@ -153,7 +153,7 @@ export function ProtectedHome() {
 
   return (
     <ClientOnly fallback={<GameRouteLoadingScreen />}>
-      <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-4 overflow-hidden">
+      <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-4">
         <GameBoardHeader
           phase={phase}
           roomCode={state.room?.code}
@@ -201,7 +201,7 @@ export function ProtectedHome() {
             />
           </div>
         ) : (
-          <div key="game" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div key="game" className="flex min-h-0 flex-1 flex-col">
             <GameBoardView
               game={state.game}
               roomCode={state.room?.code ?? null}

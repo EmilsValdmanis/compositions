@@ -27,7 +27,7 @@ export function RootDocument({ children }: { children: React.ReactNode }) {
         )}
       </head>
       <body>
-        <div className="flex h-dvh w-full flex-col overflow-hidden">
+        <div className="flex h-dvh w-full flex-col">
           <ThemeProvider defaultTheme="system" storageKey="theme">
             <GameWebSocketProvider>
               {children}

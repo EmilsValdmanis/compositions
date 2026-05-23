@@ -247,13 +247,7 @@ export function DevGameUi() {
     () => (gameOverride ? cloneGame(gameOverride) : scenario ? cloneGame(scenario.game) : null),
     [gameOverride, scenario],
   );
-  const game = useMemo(() => {
-    if (!rawGame) return null;
-    return {
-      ...rawGame,
-      activeCompositions: rawGame.activeCompositions.filter((c) => c.complete),
-    };
-  }, [rawGame]);
+  const game = rawGame;
 
   const availablePerspectiveIds = useMemo(
     () => (scenario ? perspectivePlayerIds(scenario.players, scenario.controlledPlayerId) : []),
@@ -302,8 +296,8 @@ export function DevGameUi() {
   }
 
   return (
-    <section className="mx-auto flex h-full min-h-0 w-full max-w-425 flex-1 flex-col gap-4 overflow-hidden">
-      <Card size="sm" className="shadow-sm">
+    <section className="mx-auto flex h-full min-h-0 w-full max-w-425 flex-1 flex-col gap-4">
+      <Card size="sm">
         <CardHeader className="gap-3">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -374,7 +368,7 @@ export function DevGameUi() {
         </CardContent>
       </Card>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-visible">
         <GameBoardHeader
           phase={phase}
           roomCode={room.code}
@@ -384,7 +378,7 @@ export function DevGameUi() {
           game={game}
         />
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 flex-col overflow-visible">
           <GameBoardView
             game={game}
             roomCode={room.code}

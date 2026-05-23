@@ -418,6 +418,29 @@ func TestAuthenticatedWebSocketAcceptsConfiguredOrigin(t *testing.T) {
 	mustConnectAuthenticatedSession(t, conn, "", "host-token")
 }
 
+func TestCloneIndexMap(t *testing.T) {
+	t.Run("returns nil for empty input", func(t *testing.T) {
+		if cloned := cloneIndexMap(nil); cloned != nil {
+			t.Fatalf("cloneIndexMap(nil) = %#v; want nil", cloned)
+		}
+		if cloned := cloneIndexMap(map[string]int{}); cloned != nil {
+			t.Fatalf("cloneIndexMap(empty) = %#v; want nil", cloned)
+		}
+	})
+
+	t.Run("clones non-empty map", func(t *testing.T) {
+		source := map[string]int{"ace-1": 0}
+		cloned := cloneIndexMap(source)
+		if cloned["ace-1"] != 0 {
+			t.Fatalf("cloneIndexMap(source) = %#v; want preserved values", cloned)
+		}
+		cloned["ace-1"] = 2
+		if source["ace-1"] != 0 {
+			t.Fatal("cloneIndexMap(source) reused source map")
+		}
+	})
+}
+
 func TestAuthenticatedWebSocketRejectsMissingOriginWhenConfigured(t *testing.T) {
 	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
 		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
@@ -1707,7 +1730,14 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 		t.Fatal("guest draw TurnActivity = nil; want turn context")
 	}
 
-	mustSendEnvelope(t, hostConn, "draft_update", draftUpdateRequest{Compositions: []draftCompositionRequest{{Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}}}})
+	insertIndex := 0
+	mustSendEnvelope(t, hostConn, "draft_update", draftUpdateRequest{Compositions: []draftCompositionRequest{{
+		TableIndex:        nil,
+		InsertIndex:       &insertIndex,
+		CardInsertIndices: map[string]int{"king-hearts": 0},
+		ReclaimTargets:    map[string]int{"king-diamonds": 1},
+		Cards:             []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)},
+	}}})
 	updatedHostRoom := mustReadRoomState(t, hostConn)
 	if updatedHostRoom.Code != hostRoom.Code {
 		t.Fatalf("updated host room code = %q; want %q", updatedHostRoom.Code, hostRoom.Code)
@@ -1741,6 +1771,12 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 	}
 	if len(updatedGuestGame.Game.TurnActivity.DraftCompositions[0].Cards) != 3 {
 		t.Fatalf("draft composition cards = %d; want 3", len(updatedGuestGame.Game.TurnActivity.DraftCompositions[0].Cards))
+	}
+	if updatedGuestGame.Game.TurnActivity.DraftCompositions[0].CardInsertIndices["king-hearts"] != 0 {
+		t.Fatalf("draft composition cardInsertIndices = %#v; want preserved metadata", updatedGuestGame.Game.TurnActivity.DraftCompositions[0].CardInsertIndices)
+	}
+	if updatedGuestGame.Game.TurnActivity.DraftCompositions[0].ReclaimTargets["king-diamonds"] != 1 {
+		t.Fatalf("draft composition reclaimTargets = %#v; want preserved metadata", updatedGuestGame.Game.TurnActivity.DraftCompositions[0].ReclaimTargets)
 	}
 
 	mustSendEnvelope(t, guestConn, "draft_update", draftUpdateRequest{})

@@ -34,7 +34,6 @@ export function GameBoardPiles({
                 disabled: !canDrawDeck,
                 data: { drawSource: "deck" },
               }}
-              className="shadow-md"
             />
           </div>
         </div>

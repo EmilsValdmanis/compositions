@@ -101,6 +101,8 @@ type draftUpdateRequest struct {
 type draftCompositionRequest struct {
 	TableIndex  *int          `json:"tableIndex,omitempty"`
 	InsertIndex *int          `json:"insertIndex,omitempty"`
+	CardInsertIndices map[string]int `json:"cardInsertIndices,omitempty"`
+	ReclaimTargets map[string]int `json:"reclaimTargets,omitempty"`
 	Cards       []cardRequest `json:"cards"`
 }
 
@@ -767,9 +769,26 @@ func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.Dr
 		for _, card := range cards {
 			snapshots = append(snapshots, card.Snapshot())
 		}
-		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: req.TableIndex, InsertIndex: req.InsertIndex, Cards: snapshots})
+		drafts = append(drafts, game.DraftCompositionSnapshot{
+			TableIndex: req.TableIndex,
+			InsertIndex: req.InsertIndex,
+			CardInsertIndices: cloneIndexMap(req.CardInsertIndices),
+			ReclaimTargets: cloneIndexMap(req.ReclaimTargets),
+			Cards: snapshots,
+		})
 	}
 	return drafts, nil
+}
+
+func cloneIndexMap(source map[string]int) map[string]int {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]int, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func cardsFromRequest(requests []cardRequest) ([]game.Card, error) {

@@ -355,7 +355,7 @@ export function GameCard({
         size={size}
         className={className}
         faceDown={faceDown}
-        data={{ isVirtual: draggable.isVirtual }}
+        data={{ card, isVirtual: draggable.isVirtual }}
         decoration={decoration}
       />
     );

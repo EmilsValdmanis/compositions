@@ -33,6 +33,7 @@ export type DraftComposition = {
   tableIndex: number | null;
   insertIndex?: number;
   cardInsertIndices?: Record<string, number>;
+  reclaimTargets?: Record<string, number>;
 };
 
 export type DraftedCompositionView = DraftComposition & {
@@ -74,6 +75,7 @@ export const NEW_COMPOSITION_DROP_ID = "new-composition-drop-zone";
 const DRAFT_COMPOSITION_DROP_ID_PREFIX = "draft-composition-";
 const TABLE_COMPOSITION_DROP_ID_PREFIX = "table-composition-";
 const TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX = "table-composition-edge-";
+const TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX = "table-composition-joker-";
 
 function handCardKey(card: CardSnapshot) {
   if (card.isJoker) {
@@ -163,13 +165,8 @@ export function tableCompositionEdgeDropId(compositionIndex: number, edge: Table
   return `${TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX}${compositionIndex}-${edge}`;
 }
 
-export function tableCompositionIndexFromDropId(dropId: string) {
-  if (!dropId.startsWith(TABLE_COMPOSITION_DROP_ID_PREFIX)) {
-    return null;
-  }
-
-  const compositionIndex = Number(dropId.slice(TABLE_COMPOSITION_DROP_ID_PREFIX.length));
-  return Number.isInteger(compositionIndex) && compositionIndex >= 0 ? compositionIndex : null;
+export function tableCompositionJokerDropId(compositionIndex: number, jokerIndex: number) {
+  return `${TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX}${compositionIndex}-${jokerIndex}`;
 }
 
 export function tableCompositionEdgeTargetFromDropId(dropId: string) {
@@ -200,6 +197,34 @@ export function tableCompositionEdgeTargetFromDropId(dropId: string) {
   } as const;
 }
 
+export function tableCompositionJokerTargetFromDropId(dropId: string) {
+  if (!dropId.startsWith(TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX)) {
+    return null;
+  }
+
+  const target = dropId.slice(TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX.length);
+  const separatorIndex = target.indexOf("-");
+  if (separatorIndex < 0) {
+    return null;
+  }
+
+  const compositionIndex = Number(target.slice(0, separatorIndex));
+  const jokerIndex = Number(target.slice(separatorIndex + 1));
+
+  if (!Number.isInteger(compositionIndex) || compositionIndex < 0) {
+    return null;
+  }
+
+  if (!Number.isInteger(jokerIndex) || jokerIndex < 0) {
+    return null;
+  }
+
+  return {
+    compositionIndex,
+    jokerIndex,
+  } as const;
+}
+
 export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKey: string) {
   const next: DraftComposition[] = [];
 
@@ -213,9 +238,19 @@ export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKe
     }
 
     if (handKeys.length > 0) {
+      const nextCardInsertIndices = Object.fromEntries(
+        Object.entries(composition.cardInsertIndices ?? {}).filter(([key]) => key !== handKey),
+      );
+      const nextReclaimTargets = Object.fromEntries(
+        Object.entries(composition.reclaimTargets ?? {}).filter(([key]) => key !== handKey),
+      );
+
       next.push({
         ...composition,
         handKeys,
+        cardInsertIndices:
+          Object.keys(nextCardInsertIndices).length > 0 ? nextCardInsertIndices : undefined,
+        reclaimTargets: Object.keys(nextReclaimTargets).length > 0 ? nextReclaimTargets : undefined,
       });
     }
   }
@@ -361,6 +396,36 @@ export function setDraftCardInsertIndex(
         ...composition.cardInsertIndices,
         [handKey]: insertIndex,
       },
+      reclaimTargets: Object.fromEntries(
+        Object.entries(composition.reclaimTargets ?? {}).filter(([key]) => key !== handKey),
+      ),
+    };
+  });
+}
+
+export function setDraftCardReclaimTarget(
+  draftCompositions: DraftComposition[],
+  compositionId: string,
+  handKey: string,
+  jokerIndex: number,
+): DraftComposition[] {
+  return draftCompositions.map((composition) => {
+    if (composition.id !== compositionId) {
+      return composition;
+    }
+
+    const nextCardInsertIndices = Object.fromEntries(
+      Object.entries(composition.cardInsertIndices ?? {}).filter(([key]) => key !== handKey),
+    );
+
+    return {
+      ...composition,
+      cardInsertIndices:
+        Object.keys(nextCardInsertIndices).length > 0 ? nextCardInsertIndices : undefined,
+      reclaimTargets: {
+        ...composition.reclaimTargets,
+        [handKey]: jokerIndex,
+      },
     };
   });
 }
@@ -392,6 +457,15 @@ function jokerReclaimOptions(composition: CompositionSnapshot) {
   }
 
   return options;
+}
+
+export function canReclaimJokerWithCard(
+  composition: CompositionSnapshot,
+  jokerIndex: number,
+  card: CardSnapshot,
+) {
+  const option = jokerReclaimOptions(composition).find((entry) => entry.jokerIndex === jokerIndex);
+  return option ? cardsEqual(option.replacementCard, card) : false;
 }
 
 function isAmbiguousRunInsertion(composition: CompositionSnapshot, insertIndex: number) {
@@ -565,32 +639,59 @@ export function inferPlannedJokerReclaims(
   return inferPlannedJokerReclaimsForInsertIndex(composition, stagedEntries, insertIndex);
 }
 
-function buildOrderedAdditionEntries(
+function buildExplicitReclaims(
   composition: CompositionSnapshot,
   stagedEntries: HandEntry[],
-  insertIndex: number,
+  reclaimTargets?: Record<string, number>,
 ) {
-  const { additions, reclaims } = inferPlannedJokerReclaimsForInsertIndex(
-    composition,
-    stagedEntries,
-    insertIndex,
-  );
+  const reclaims: PlannedJokerReclaim[] = [];
+  const reclaimedEntryKeys = new Set<string>();
+  const usedJokerIndices = new Set<number>();
 
-  const orderedAdditions = insertIndex === 0 ? [...additions].reverse() : additions;
+  for (const entry of stagedEntries) {
+    const jokerIndex = reclaimTargets?.[entry.key];
+    if (
+      typeof jokerIndex !== "number" ||
+      usedJokerIndices.has(jokerIndex) ||
+      !canReclaimJokerWithCard(composition, jokerIndex, entry.card)
+    ) {
+      continue;
+    }
 
-  if (reclaims.length === 0) {
-    return {
-      additions,
-      reclaims,
-      orderedEntries: orderedAdditions,
-    };
+    usedJokerIndices.add(jokerIndex);
+    reclaimedEntryKeys.add(entry.key);
+    reclaims.push({
+      jokerIndex,
+      replacementEntry: entry,
+    });
   }
 
   return {
-    additions,
     reclaims,
-    orderedEntries: orderedAdditions,
+    reclaimedEntryKeys,
   };
+}
+
+function orderAdditionEntries(
+  stagedEntries: HandEntry[],
+  defaultInsertIndex: number,
+  cardInsertIndices?: Record<string, number>,
+) {
+  const entriesByInsertIndex = new Map<number, HandEntry[]>();
+
+  for (const entry of stagedEntries) {
+    const idx = cardInsertIndices?.[entry.key] ?? defaultInsertIndex;
+    const groupedEntries = entriesByInsertIndex.get(idx) ?? [];
+    groupedEntries.push(entry);
+    entriesByInsertIndex.set(idx, groupedEntries);
+  }
+
+  const orderedEntries: HandEntry[] = [];
+  for (const [groupInsertIndex, entries] of entriesByInsertIndex) {
+    orderedEntries.push(...(groupInsertIndex === 0 ? [...entries].reverse() : entries));
+  }
+
+  return orderedEntries;
 }
 
 export function buildTablePlayRequest(
@@ -611,10 +712,18 @@ export function buildTablePlayRequest(
 
     const activeComposition = activeCompositions[composition.tableIndex];
     const cardInsertIndices = composition.cardInsertIndices;
+    const reclaimTargets = composition.reclaimTargets;
     const defaultInsertIndex = composition.insertIndex ?? activeComposition?.cards.length ?? 0;
+    const explicitReclaims = activeComposition
+      ? buildExplicitReclaims(activeComposition, composition.entries, reclaimTargets)
+      : { reclaims: [], reclaimedEntryKeys: new Set<string>() };
 
     const entriesByInsertIndex = new Map<number, HandEntry[]>();
     for (const entry of composition.entries) {
+      if (explicitReclaims.reclaimedEntryKeys.has(entry.key)) {
+        continue;
+      }
+
       const idx = cardInsertIndices?.[entry.key] ?? defaultInsertIndex;
       const group = entriesByInsertIndex.get(idx);
       if (group) {
@@ -625,9 +734,7 @@ export function buildTablePlayRequest(
     }
 
     for (const [insertIndex, entries] of entriesByInsertIndex) {
-      const { reclaims: stagedReclaims, orderedEntries } = activeComposition
-        ? buildOrderedAdditionEntries(activeComposition, entries, insertIndex)
-        : { reclaims: [], orderedEntries: entries };
+      const orderedEntries = insertIndex === 0 ? [...entries].reverse() : entries;
 
       if (orderedEntries.length > 0) {
         additions.push({
@@ -636,14 +743,14 @@ export function buildTablePlayRequest(
           cards: orderedEntries.map((entry) => entry.card),
         });
       }
+    }
 
-      for (const reclaim of stagedReclaims) {
-        reclaims.push({
-          compositionIndex: composition.tableIndex,
-          jokerIndex: reclaim.jokerIndex,
-          replacementCard: reclaim.replacementEntry.card,
-        });
-      }
+    for (const reclaim of explicitReclaims.reclaims) {
+      reclaims.push({
+        compositionIndex: composition.tableIndex,
+        jokerIndex: reclaim.jokerIndex,
+        replacementCard: reclaim.replacementEntry.card,
+      });
     }
   }
 
@@ -679,28 +786,20 @@ export function buildTableCompositionViews(
       const insertIndex = composition.insertIndex ?? existing.snapshot.cards.length;
       existing.insertIndex = insertIndex;
       existing.cardInsertIndices = composition.cardInsertIndices;
-      const orderedEntriesByInsertIndex = new Map<number, HandEntry[]>();
-      for (const entry of existing.stagedEntries) {
-        const idx = composition.cardInsertIndices?.[entry.key] ?? insertIndex;
-        const groupedEntries = orderedEntriesByInsertIndex.get(idx) ?? [];
-        groupedEntries.push(entry);
-        orderedEntriesByInsertIndex.set(idx, groupedEntries);
-      }
+      const explicitReclaims = buildExplicitReclaims(
+        existing.snapshot,
+        existing.stagedEntries,
+        composition.reclaimTargets,
+      );
+      const additionEntries = existing.stagedEntries.filter(
+        (entry) => !explicitReclaims.reclaimedEntryKeys.has(entry.key),
+      );
 
-      const orderedStagedEntries: HandEntry[] = [];
-      const groupedReclaims: PlannedJokerReclaim[] = [];
-      for (const [groupInsertIndex, entries] of orderedEntriesByInsertIndex) {
-        const { orderedEntries, reclaims } = buildOrderedAdditionEntries(
-          existing.snapshot,
-          entries,
-          groupInsertIndex,
-        );
-        orderedStagedEntries.push(...orderedEntries);
-        groupedReclaims.push(...reclaims);
-      }
-
-      existing.stagedEntries = orderedStagedEntries;
-      existing.reclaims = groupedReclaims;
+      existing.stagedEntries = [
+        ...orderAdditionEntries(additionEntries, insertIndex, composition.cardInsertIndices),
+        ...explicitReclaims.reclaims.map((reclaim) => reclaim.replacementEntry),
+      ];
+      existing.reclaims = explicitReclaims.reclaims;
     }
   }
 

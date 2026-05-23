@@ -49,8 +49,10 @@ import {
   pruneDraftCompositions,
   removeHandKeyFromDrafts,
   setDraftCardInsertIndex,
+  setDraftCardReclaimTarget,
   tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
+  tableCompositionJokerTargetFromDropId,
 } from "#/components/game/game-board-view-state";
 import { Button } from "#/components/ui/button";
 import {
@@ -99,6 +101,20 @@ function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetec
     const pointerSpecificCollisions = pointerCollisions.filter(
       (collision) => collision.id !== NEW_COMPOSITION_DROP_ID && collision.id !== HAND_DROP_ID,
     );
+    const jokerSpecificCollisions = pointerSpecificCollisions.filter((collision) =>
+      String(collision.id).startsWith("table-composition-joker-"),
+    );
+    const edgeSpecificCollisions = pointerSpecificCollisions.filter((collision) =>
+      String(collision.id).startsWith("table-composition-edge-"),
+    );
+
+    if (jokerSpecificCollisions.length > 0) {
+      return jokerSpecificCollisions;
+    }
+
+    if (edgeSpecificCollisions.length > 0) {
+      return edgeSpecificCollisions;
+    }
 
     if (pointerSpecificCollisions.length > 0) {
       return pointerSpecificCollisions;
@@ -122,19 +138,7 @@ function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetec
       return pointerCollisions;
     }
 
-    const closestSpecificCollisions = closestCorners({
-      ...args,
-      droppableContainers: nonFallbackContainers,
-    });
-
-    if (closestSpecificCollisions.length > 0) {
-      return closestSpecificCollisions;
-    }
-
-    return closestCorners({
-      ...args,
-      droppableContainers: fallbackContainers,
-    });
+    return [];
   };
 }
 
@@ -299,7 +303,7 @@ function GameBoardLayout({
   onSubmitTablePlay: () => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <GameBoardTable
           game={game}
@@ -548,6 +552,8 @@ function useGameBoardController({
             ({
               tableIndex: composition.tableIndex ?? undefined,
               insertIndex: composition.insertIndex,
+              cardInsertIndices: composition.cardInsertIndices,
+              reclaimTargets: composition.reclaimTargets,
               cards: composition.entries.map((entry) => entry.card),
             }) satisfies DraftCompositionSnapshot,
         ),
@@ -732,6 +738,7 @@ function useGameBoardController({
       overId !== null && availableHandEntries.some((entry) => entry.key === overId);
     const droppedOnDraftContainer = overId ? compositionIdFromDropId(overId) : null;
     const droppedOnTableEdgeTarget = overId ? tableCompositionEdgeTargetFromDropId(overId) : null;
+    const droppedOnTableJokerTarget = overId ? tableCompositionJokerTargetFromDropId(overId) : null;
 
     if (event.over?.id === "discard-pile") {
       if (draftCompositions.some((composition) => composition.handKeys.includes(draggedHandKey))) {
@@ -791,6 +798,40 @@ function useGameBoardController({
             tableIndex: droppedOnTableEdgeTarget.compositionIndex,
             insertIndex: targetComposition?.cards.length ?? 0,
             cardInsertIndices: { [draggedHandKey]: insertIndex },
+          },
+        ];
+      });
+      return;
+    }
+
+    if (droppedOnTableJokerTarget !== null && draggedEntry) {
+      updateDraftCompositions((current) => {
+        const existing = current.find(
+          (composition) => composition.tableIndex === droppedOnTableJokerTarget.compositionIndex,
+        );
+
+        if (existing) {
+          return setDraftCardReclaimTarget(
+            insertHandKeyIntoDraft(current, draggedHandKey, existing.id),
+            existing.id,
+            draggedHandKey,
+            droppedOnTableJokerTarget.jokerIndex,
+          );
+        }
+
+        const compositionId = `draft-${nextDraftIdRef.current}`;
+        nextDraftIdRef.current += 1;
+
+        return [
+          ...removeHandKeyFromDrafts(current, draggedHandKey),
+          {
+            id: compositionId,
+            handKeys: [draggedHandKey],
+            tableIndex: droppedOnTableJokerTarget.compositionIndex,
+            insertIndex:
+              game?.activeCompositions?.[droppedOnTableJokerTarget.compositionIndex]?.cards
+                .length ?? 0,
+            reclaimTargets: { [draggedHandKey]: droppedOnTableJokerTarget.jokerIndex },
           },
         ];
       });

@@ -19,7 +19,7 @@ export function GameBoardHeader({
   game: GameSnapshot | null;
 }) {
   return (
-    <Card size="sm" className="shadow-sm">
+    <Card size="sm">
       <CardContent className="flex flex-col gap-3 py-0 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-xs uppercase text-muted-foreground">
