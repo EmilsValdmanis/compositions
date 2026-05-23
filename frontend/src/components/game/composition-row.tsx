@@ -238,7 +238,7 @@ export function CompositionRow({
       overId === compositionDropId ||
       overId === startEdgeDropId ||
       overId === endEdgeDropId ||
-      overId?.startsWith(jokerDropIdPrefix));
+      overId?.startsWith(jokerDropIdPrefix) === true);
   return (
     <GameBoardDraftDropZone
       id={compositionDropId}

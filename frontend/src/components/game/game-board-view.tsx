@@ -1,7 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import {
   closestCenter,
-  closestCorners,
   DndContext,
   DragOverlay,
   pointerWithin,
@@ -84,14 +83,8 @@ type DraftCompositionState = {
 
 function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetection {
   return ({ droppableContainers, ...args }) => {
-    const fallbackContainers = droppableContainers.filter(
-      (container) => container.id === NEW_COMPOSITION_DROP_ID || container.id === HAND_DROP_ID,
-    );
     const handCardContainers = droppableContainers.filter((container) =>
       handCardIds.has(String(container.id)),
-    );
-    const nonFallbackContainers = droppableContainers.filter(
-      (container) => container.id !== NEW_COMPOSITION_DROP_ID && container.id !== HAND_DROP_ID,
     );
 
     const pointerCollisions = pointerWithin({
