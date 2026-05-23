@@ -22,6 +22,7 @@ export function getRouter() {
   if (!router.isServer) {
     Sentry.init({
       dsn: "https://1b571087a2847838e64e3a7856ee9533@o4511438083653632.ingest.de.sentry.io/4511438085161040",
+      enabled: process.env.NODE_ENV === "production",
 
       // Adds request headers and IP for users, for more info visit:
       // https://docs.sentry.io/platforms/javascript/guides/tanstackstart-react/configuration/options/#sendDefaultPii
