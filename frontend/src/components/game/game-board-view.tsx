@@ -48,7 +48,6 @@ import {
   setDraftCardInsertIndex,
   tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
-  tableCompositionIndexFromDropId,
 } from "#/components/game/game-board-view-state";
 import { Button } from "#/components/ui/button";
 import {
@@ -671,7 +670,6 @@ function useGameBoardController({
     const droppedOnHandCard =
       overId !== null && availableHandEntries.some((entry) => entry.key === overId);
     const droppedOnDraftContainer = overId ? compositionIdFromDropId(overId) : null;
-    const droppedOnTableComposition = overId ? tableCompositionIndexFromDropId(overId) : null;
     const droppedOnTableEdgeTarget = overId ? tableCompositionEdgeTargetFromDropId(overId) : null;
 
     if (event.over?.id === "discard-pile") {
@@ -732,35 +730,6 @@ function useGameBoardController({
             tableIndex: droppedOnTableEdgeTarget.compositionIndex,
             insertIndex: targetComposition?.cards.length ?? 0,
             cardInsertIndices: { [draggedHandKey]: insertIndex },
-          },
-        ];
-      });
-      return;
-    }
-
-    if (droppedOnTableComposition !== null && draggedEntry) {
-      updateDraftCompositions((current) => {
-        const existing = current.find(
-          (composition) => composition.tableIndex === droppedOnTableComposition,
-        );
-        if (existing) {
-          return moveDraftCompositionInsertIndex(
-            insertHandKeyIntoDraft(current, draggedHandKey, existing.id),
-            existing.id,
-            existing.insertIndex ?? existing.handKeys.length,
-          );
-        }
-
-        const compositionId = `draft-${nextDraftIdRef.current}`;
-        nextDraftIdRef.current += 1;
-
-        return [
-          ...removeHandKeyFromDrafts(current, draggedHandKey),
-          {
-            id: compositionId,
-            handKeys: [draggedHandKey],
-            tableIndex: droppedOnTableComposition,
-            insertIndex: game?.activeCompositions?.[droppedOnTableComposition]?.cards.length,
           },
         ];
       });

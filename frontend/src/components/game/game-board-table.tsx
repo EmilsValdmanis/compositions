@@ -1,3 +1,4 @@
+import { useDndContext } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
   NEW_COMPOSITION_DROP_ID,
@@ -98,6 +99,7 @@ export function GameBoardTable({
   onResetTablePlay: () => void;
   onSubmitTablePlay: () => void;
 }) {
+  const { active } = useDndContext();
   const tablePoints = (game?.activeCompositions ?? []).reduce(
     (total: number, composition: GameSnapshot["activeCompositions"][number]) =>
       total + composition.points,
@@ -126,6 +128,10 @@ export function GameBoardTable({
   const stagedNewDrafts = stagedDrafts.filter(
     (composition) => composition.tableIndex === undefined,
   );
+  const isDraggingHandCard =
+    active !== null &&
+    active.data.current?.drawSource === undefined &&
+    typeof active.id === "string";
 
   for (const draft of stagedDrafts) {
     if (draft.tableIndex === undefined) {
@@ -253,16 +259,14 @@ export function GameBoardTable({
               </GameBoardDraftDropZone>
             ))}
 
-            <GameBoardDraftDropZone
-              id={NEW_COMPOSITION_DROP_ID}
-              className="grid min-h-32 w-full max-w-80 min-w-64 shrink-0 place-items-center rounded-3xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground"
-            >
-              {canCompose
-                ? "Drop cards here to start a new composition."
-                : hasVisibleCompositions
-                  ? "Additions to table compositions are shown above."
-                  : "Waiting for a composition to be played."}
-            </GameBoardDraftDropZone>
+            {canCompose && isDraggingHandCard ? (
+              <GameBoardDraftDropZone
+                id={NEW_COMPOSITION_DROP_ID}
+                className="flex min-h-40 w-full max-w-80 min-w-64 shrink-0 items-center justify-center rounded-3xl border border-dashed border-border/70 px-4 py-4 text-center text-sm text-muted-foreground"
+              >
+                Drop card here to create new compositions.
+              </GameBoardDraftDropZone>
+            ) : null}
           </div>
         </div>
       </CardContent>
