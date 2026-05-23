@@ -14,6 +14,13 @@ Run commands from inside `backend/`.
 
 The websocket server now requires `BETTER_AUTH_URL` to point at the frontend app's Better Auth base URL, for example `http://localhost:3000` in local development.
 
+Optional Sentry configuration:
+
+- `SENTRY_DSN`: enables Sentry when set outside development
+- `SENTRY_ENVIRONMENT`: deployment environment such as `development`, `staging`, or `production`
+
+The backend initializes Sentry for error monitoring, request tracing, and structured log forwarding. It is disabled automatically in `development`, health checks are excluded from tracing, and production traffic is sampled more conservatively.
+
 | Command      | What it does                              |
 | :----------- | :---------------------------------------- |
 | `make run`   | Starts the server on `:8080`              |

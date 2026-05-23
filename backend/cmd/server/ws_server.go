@@ -26,6 +26,10 @@ var (
 	defaultWSWriteTimeout = 10 * time.Second
 )
 
+func setWSReadDeadline(conn *websocket.Conn) error {
+	return conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
+}
+
 func runHeartbeatPingLoop(conn *websocket.Conn, pingDone <-chan struct{}, ticks <-chan time.Time) {
 	for {
 		select {
@@ -271,9 +275,9 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 
 func (s *wsServer) handleConnection(conn *websocket.Conn) {
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
+	_ = setWSReadDeadline(conn)
 	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
+		return setWSReadDeadline(conn)
 	})
 
 	pingDone := make(chan struct{})
@@ -296,7 +300,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 			}
 			return
 		}
-		_ = conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
+		_ = setWSReadDeadline(conn)
 
 		slog.Debug("websocket message received", "sessionID", sessionID, "type", envelope.Type)
 
