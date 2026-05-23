@@ -34,7 +34,7 @@
     "better-auth": "1.6.11",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
-    "nitro": "npm:nitro-nightly@latest",
+    "nitro": "npm:nitro-nightly@^3.0.260522-beta",
     "radix-ui": "1.4.3",
     "react": "19.2.6",
     "react-compiler-runtime": "1.0.0",
@@ -60,9 +60,9 @@
     "jsdom": "29.1.1",
     "react-scan": "0.5.6",
     "typescript": "6.0.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest",
-    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+    "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.22",
+    "vite-plus": "^0.1.22",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.22"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@latest",
