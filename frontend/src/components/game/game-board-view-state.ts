@@ -99,30 +99,6 @@ export function buildHandEntries(hand: CardSnapshot[]) {
   });
 }
 
-export function reconcileHandEntries(current: HandEntry[], next: HandEntry[]) {
-  const nextByKey = new Map(next.map((entry) => [entry.key, entry]));
-  const ordered: HandEntry[] = [];
-  const seenKeys = new Set<string>();
-
-  for (const entry of current) {
-    const nextEntry = nextByKey.get(entry.key);
-    if (!nextEntry) {
-      continue;
-    }
-
-    ordered.push(nextEntry);
-    seenKeys.add(nextEntry.key);
-  }
-
-  for (const entry of next) {
-    if (!seenKeys.has(entry.key)) {
-      ordered.push(entry);
-    }
-  }
-
-  return ordered;
-}
-
 export function applyHandEntryOrder(entries: HandEntry[], orderedKeys: string[]) {
   if (orderedKeys.length === 0) {
     return entries;
@@ -165,10 +141,6 @@ export function moveHandEntry(current: HandEntry[], handKey: string, overHandKey
   }
 
   return arrayMove(current, oldIndex, newIndex);
-}
-
-export function sameStringArray(a: string[], b: string[]) {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 export function draftCompositionDropId(compositionId: string) {

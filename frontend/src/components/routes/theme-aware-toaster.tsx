@@ -1,4 +1,4 @@
-import { Toaster } from "sonner";
+import { Toaster } from "#/components/ui/sonner";
 import { useTheme } from "#/components/theme-provider";
 
 export function ThemeAwareToaster() {

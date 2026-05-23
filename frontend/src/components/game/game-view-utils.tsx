@@ -5,7 +5,7 @@ import { playerById } from "#/components/game/game-view-helpers";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { cn, getUserInitials } from "#/lib/utils";
 
-export function PlayerMarker({
+function PlayerMarker({
   players,
   playerId,
   className,

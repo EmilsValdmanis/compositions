@@ -64,7 +64,7 @@ class GlobalRouteErrorBoundary extends React.Component<ErrorComponentProps> {
   }
 }
 
-export const GlobalErrorComponent = Sentry.withErrorBoundary(GlobalRouteErrorBoundary, {
+const SentryWrappedGlobalRouteErrorBoundary = Sentry.withErrorBoundary(GlobalRouteErrorBoundary, {
   fallback: (
     <RouteStatusFrame
       eyebrow="Application Error"
@@ -77,6 +77,10 @@ export const GlobalErrorComponent = Sentry.withErrorBoundary(GlobalRouteErrorBou
     </RouteStatusFrame>
   ),
 });
+
+export function GlobalErrorComponent(props: ErrorComponentProps) {
+  return <SentryWrappedGlobalRouteErrorBoundary {...props} />;
+}
 
 export function GlobalNotFoundComponent(_: NotFoundRouteProps) {
   return (
