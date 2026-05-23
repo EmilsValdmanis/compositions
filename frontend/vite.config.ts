@@ -25,7 +25,10 @@ const config = defineConfig({
     sentryTanstackStart({
       org: "emils-valdmanis",
       project: "frontend",
-      tunnelRoute: true,
+      sourcemaps: {
+        disable: process.env.NODE_ENV !== "production",
+      },
+      telemetry: false,
       authToken: process.env.SENTRY_AUTH_TOKEN,
     }),
   ],
