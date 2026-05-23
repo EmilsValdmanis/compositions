@@ -989,10 +989,16 @@ func buildCompositionActivities(playerID string, comps []*game.Composition, addi
 			activity.CardActivities = map[int]game.CardActivitySnapshot{}
 		}
 		startIndex := 0
+		if addition.InsertIndex != nil {
+			startIndex = *addition.InsertIndex
+		}
+		if startIndex < 0 {
+			startIndex = 0
+		}
 		if addition.CompositionIndex >= 0 && addition.CompositionIndex < len(active) && active[addition.CompositionIndex] != nil {
-			startIndex = len(active[addition.CompositionIndex].Snapshot().Cards) - len(addition.Cards)
-			if startIndex < 0 {
-				startIndex = 0
+			maxStartIndex := len(active[addition.CompositionIndex].Snapshot().Cards)
+			if startIndex > maxStartIndex {
+				startIndex = maxStartIndex
 			}
 		}
 		for offset := range addition.Cards {
@@ -1049,6 +1055,18 @@ func cloneDraftCompositionSnapshots(source []game.DraftCompositionSnapshot) []ga
 		if draft.InsertIndex != nil {
 			index := *draft.InsertIndex
 			next.InsertIndex = &index
+		}
+		if len(draft.CardInsertIndices) > 0 {
+			next.CardInsertIndices = make(map[string]int, len(draft.CardInsertIndices))
+			for key, value := range draft.CardInsertIndices {
+				next.CardInsertIndices[key] = value
+			}
+		}
+		if len(draft.ReclaimTargets) > 0 {
+			next.ReclaimTargets = make(map[string]int, len(draft.ReclaimTargets))
+			for key, value := range draft.ReclaimTargets {
+				next.ReclaimTargets[key] = value
+			}
 		}
 		cloned = append(cloned, next)
 	}

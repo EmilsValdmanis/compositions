@@ -288,9 +288,11 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		tableIndex := 2
 		insertIndex := 1
 		source := []game.DraftCompositionSnapshot{{
-			TableIndex:  &tableIndex,
-			InsertIndex: &insertIndex,
-			Cards:       []game.CardSnapshot{{Rank: game.Ace, Suit: game.Spades}},
+			TableIndex:        &tableIndex,
+			InsertIndex:       &insertIndex,
+			CardInsertIndices: map[string]int{"ace-1": 0},
+			ReclaimTargets:    map[string]int{"king-1": 2},
+			Cards:             []game.CardSnapshot{{Rank: game.Ace, Suit: game.Spades}},
 		}}
 		cloned := cloneDraftCompositionSnapshots(source)
 
@@ -303,8 +305,19 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		if cloned[0].InsertIndex == nil || *cloned[0].InsertIndex != insertIndex {
 			t.Fatalf("cloned[0].InsertIndex = %#v; want %d", cloned[0].InsertIndex, insertIndex)
 		}
+		if cloned[0].CardInsertIndices["ace-1"] != 0 {
+			t.Fatalf("cloned[0].CardInsertIndices = %#v; want ace-1 preserved", cloned[0].CardInsertIndices)
+		}
+		if cloned[0].ReclaimTargets["king-1"] != 2 {
+			t.Fatalf("cloned[0].ReclaimTargets = %#v; want king-1 preserved", cloned[0].ReclaimTargets)
+		}
 		if &cloned[0].Cards[0] == &source[0].Cards[0] {
 			t.Fatal("cloneDraftCompositionSnapshots() reused card backing array")
+		}
+		cloned[0].CardInsertIndices["ace-1"] = 3
+		cloned[0].ReclaimTargets["king-1"] = 4
+		if source[0].CardInsertIndices["ace-1"] != 0 || source[0].ReclaimTargets["king-1"] != 2 {
+			t.Fatal("cloneDraftCompositionSnapshots() reused draft metadata maps")
 		}
 	})
 
@@ -657,14 +670,14 @@ func TestRoomTurnTrackingAndActivitySnapshots(t *testing.T) {
 	if activity.CompositionActivities[0].Kind != "new_composition" || activity.CompositionActivities[0].PlayerID != "current" {
 		t.Fatalf("new composition activity = %#v; want current player new_composition", activity.CompositionActivities[0])
 	}
-	if activity.CompositionActivities[0].CardActivities[2].Kind != "addition" {
+	if activity.CompositionActivities[0].CardActivities[0].Kind != "addition" {
 		t.Fatalf("addition activity = %#v; want addition marker", activity.CompositionActivities[0])
 	}
 	if activity.CompositionActivities[0].CardActivities[1].Kind != "joker_reclaim" {
 		t.Fatalf("reclaim activity = %#v; want joker reclaim marker", activity.CompositionActivities[0])
 	}
-	activity.CompositionActivities[0].CardActivities[2] = game.CardActivitySnapshot{Kind: "mutated"}
-	if room.turnActivity.CompositionActivities[0].CardActivities[2].Kind != "addition" {
+	activity.CompositionActivities[0].CardActivities[0] = game.CardActivitySnapshot{Kind: "mutated"}
+	if room.turnActivity.CompositionActivities[0].CardActivities[0].Kind != "addition" {
 		t.Fatal("turnContextForPlayer should clone activity maps")
 	}
 
@@ -759,10 +772,26 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		if len(additionActivities) != 1 || additionActivities[0].CardActivities[1].Kind != "addition" {
 			t.Fatalf("buildCompositionActivities(addition overflow) = %#v; want addition markers starting at zero", additionActivities)
 		}
+		prependIndex := 0
+		prependActivities := buildCompositionActivities(
+			"p1",
+			nil,
+			[]game.CompositionAddition{{
+				CompositionIndex: 0,
+				InsertIndex:      &prependIndex,
+				Cards:            []game.Card{game.NewCard(game.Two, game.Spades)},
+			}},
+			nil,
+			[]*game.Composition{mustSetComposition(t, game.NewCard(game.Nine, game.Hearts), game.NewCard(game.Nine, game.Diamonds), game.NewCard(game.Nine, game.Clubs))},
+		)
+		if len(prependActivities) != 1 || prependActivities[0].CardActivities[0].Kind != "addition" {
+			t.Fatalf("buildCompositionActivities(prepend) = %#v; want addition marker at insert index", prependActivities)
+		}
+		negativeInsertIndex := -2
 		negativeStartActivities := buildCompositionActivities(
 			"p1",
 			nil,
-			[]game.CompositionAddition{{CompositionIndex: 0, Cards: []game.Card{
+			[]game.CompositionAddition{{CompositionIndex: 0, InsertIndex: &negativeInsertIndex, Cards: []game.Card{
 				game.NewCard(game.Two, game.Spades),
 				game.NewCard(game.Three, game.Spades),
 				game.NewCard(game.Four, game.Spades),
@@ -773,6 +802,21 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		)
 		if len(negativeStartActivities) != 1 || negativeStartActivities[0].CardActivities[0].Kind != "addition" || negativeStartActivities[0].CardActivities[3].Kind != "addition" {
 			t.Fatalf("buildCompositionActivities(negative start index) = %#v; want addition markers clamped to zero", negativeStartActivities)
+		}
+		oversizedInsertIndex := 99
+		oversizedStartActivities := buildCompositionActivities(
+			"p1",
+			nil,
+			[]game.CompositionAddition{{
+				CompositionIndex: 0,
+				InsertIndex:      &oversizedInsertIndex,
+				Cards:            []game.Card{game.NewCard(game.Six, game.Spades)},
+			}},
+			nil,
+			[]*game.Composition{mustSetComposition(t, game.NewCard(game.Nine, game.Hearts), game.NewCard(game.Nine, game.Diamonds), game.NewCard(game.Nine, game.Clubs))},
+		)
+		if len(oversizedStartActivities) != 1 || oversizedStartActivities[0].CardActivities[3].Kind != "addition" {
+			t.Fatalf("buildCompositionActivities(oversized start index) = %#v; want addition marker clamped to composition end", oversizedStartActivities)
 		}
 		reclaimActivities := buildCompositionActivities("p1", nil, nil, []game.JokerReclaim{{CompositionIndex: 3, JokerIndex: 2}}, nil)
 		if len(reclaimActivities) != 1 || reclaimActivities[0].CardActivities[2].Kind != "joker_reclaim" {

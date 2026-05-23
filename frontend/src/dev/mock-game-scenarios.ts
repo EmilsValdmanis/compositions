@@ -19,7 +19,7 @@ export const mockScenarios: MockScenario[] = [
     id: "table-activity-showcase",
     label: "Table Activity",
     description:
-      "A live turn where Avery is active, one joker reclaim has already happened this turn, a new composition just landed on the table, and another new composition is still staged in draft.",
+      "A live turn where Avery is active, a joker reclaim is available to test, one new composition just landed on the table, and another new composition is still staged in draft.",
     controlledPlayerId: "player-avery",
     players: [
       {
@@ -147,6 +147,7 @@ export const mockScenarios: MockScenario[] = [
         { rank: 9, suit: 2 },
         { rank: 9, suit: 3 },
         { rank: 10, suit: 2 },
+        { rank: 12, suit: 1 },
         { rank: 11, suit: 2 },
         { rank: 12, suit: 2 },
       ],
@@ -166,7 +167,7 @@ export const mockScenarios: MockScenario[] = [
             { rank: 10, suit: 1 },
           ],
           points: 40,
-          complete: true,
+          complete: false,
         },
         {
           type: "set",
@@ -180,7 +181,7 @@ export const mockScenarios: MockScenario[] = [
             1: [{ rank: 12, suit: 1 }],
           },
           points: 55,
-          complete: true,
+          complete: false,
         },
         {
           type: "run",
@@ -191,7 +192,7 @@ export const mockScenarios: MockScenario[] = [
             { rank: 4, suit: 2 },
           ],
           points: 30,
-          complete: true,
+          complete: false,
         },
         {
           type: "set",
@@ -218,7 +219,7 @@ export const mockScenarios: MockScenario[] = [
               { rank: 10, suit: 1 },
             ],
             points: 40,
-            complete: true,
+            complete: false,
           },
           {
             type: "set",
@@ -227,7 +228,7 @@ export const mockScenarios: MockScenario[] = [
               1: [{ rank: 12, suit: 1 }],
             },
             points: 45,
-            complete: true,
+            complete: false,
           },
           {
             type: "run",
@@ -238,7 +239,7 @@ export const mockScenarios: MockScenario[] = [
               { rank: 4, suit: 2 },
             ],
             points: 30,
-            complete: true,
+            complete: false,
           },
         ],
         draftCompositions: [
@@ -255,19 +256,6 @@ export const mockScenarios: MockScenario[] = [
           },
         ],
         compositionActivities: [
-          {
-            tableIndex: 1,
-            cardActivities: {
-              1: {
-                kind: "joker_reclaim",
-                playerId: "player-avery",
-              },
-              3: {
-                kind: "addition",
-                playerId: "player-avery",
-              },
-            },
-          },
           {
             tableIndex: 3,
             kind: "new_composition",
@@ -439,7 +427,7 @@ export const mockScenarios: MockScenario[] = [
             { rank: 12, suit: 0 },
           ],
           points: 40,
-          complete: true,
+          complete: false,
         },
         {
           type: "set",
@@ -466,7 +454,7 @@ export const mockScenarios: MockScenario[] = [
               { rank: 12, suit: 0 },
             ],
             points: 40,
-            complete: true,
+            complete: false,
           },
           {
             type: "set",

@@ -38,7 +38,7 @@ export function GameBoardHand({
   const { hasDraftedCompositions } = tablePlayState;
 
   return (
-    <Card className="min-h-0 overflow-hidden">
+    <Card className="min-h-0">
       <CardContent className="min-h-0">
         {hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>

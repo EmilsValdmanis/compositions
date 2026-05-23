@@ -34,6 +34,8 @@ export type CompositionActivitySnapshot = {
 export type DraftCompositionSnapshot = {
   tableIndex?: number;
   insertIndex?: number;
+  cardInsertIndices?: Record<string, number>;
+  reclaimTargets?: Record<string, number>;
   cards: CardSnapshot[];
 };
 

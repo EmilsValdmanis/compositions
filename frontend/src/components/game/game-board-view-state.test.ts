@@ -132,6 +132,7 @@ describe("buildTablePlayRequest", () => {
           tableIndex: 0,
           handKeys: entries.map((entry) => entry.key),
           entries,
+          reclaimTargets: { [entries[0]!.key]: 2 },
         },
       ],
     );
@@ -178,6 +179,7 @@ describe("buildTablePlayRequest", () => {
           insertIndex: 0,
           handKeys: entries.map((entry) => entry.key),
           entries,
+          reclaimTargets: { [entries[1]!.key]: 2 },
         },
       ],
     );
@@ -222,6 +224,7 @@ describe("buildTablePlayRequest", () => {
           id: "draft-reclaim",
           tableIndex: 0,
           handKeys: ["9-0-1"],
+          reclaimTargets: { "9-0-1": 1 },
           entries: [{ key: "9-0-1", card: { rank: 9, suit: 0 }, sourceIndex: 0 }],
         },
         {
@@ -333,6 +336,7 @@ describe("buildVirtualReclaimedJokers", () => {
           id: "draft-1",
           tableIndex: 0,
           handKeys: [entries[0]!.key],
+          reclaimTargets: { [entries[0]!.key]: 2 },
         },
       ],
       entryByKey,
@@ -381,6 +385,48 @@ describe("buildVirtualReclaimedJokers", () => {
     );
 
     expect(tableCompositions[0]?.stagedEntries.map((entry) => entry.card.rank)).toEqual([2, 3, 4]);
+  });
+
+  it("keeps explicit reclaim entries out of staged additions in the preview", () => {
+    const entries = buildHandEntries([
+      { rank: 8, suit: 3 },
+      { rank: 5, suit: 0 },
+    ]);
+    const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const tableCompositions = buildTableCompositionViews(
+      [
+        {
+          type: "set",
+          cards: [
+            { rank: 8, suit: 0 },
+            { rank: 8, suit: 2 },
+            { isJoker: true },
+            { rank: 8, suit: 1 },
+          ],
+          jokerRepresentations: {
+            2: [{ rank: 8, suit: 3 }],
+          },
+          points: 32,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          reclaimTargets: { [entries[0]!.key]: 2 },
+        },
+      ],
+      entryByKey,
+    );
+
+    expect(tableCompositions[0]?.reclaims).toHaveLength(1);
+    expect(tableCompositions[0]?.reclaims[0]?.replacementEntry.key).toBe(entries[0]?.key);
+    expect(tableCompositions[0]?.stagedEntries.map((entry) => entry.key)).toEqual([
+      entries[1]?.key,
+      entries[0]?.key,
+    ]);
   });
 });
 
