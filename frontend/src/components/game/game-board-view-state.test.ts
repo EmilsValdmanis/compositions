@@ -259,6 +259,52 @@ describe("buildTablePlayRequest", () => {
       },
     ]);
   });
+
+  it("reverses repeated prepend additions so runs stay in sequence", () => {
+    const entries = buildHandEntries([
+      { rank: 4, suit: 0 },
+      { rank: 3, suit: 0 },
+      { rank: 2, suit: 0 },
+    ]);
+
+    const request = buildTablePlayRequest(
+      [
+        {
+          type: "run",
+          cards: [
+            { rank: 5, suit: 0 },
+            { rank: 6, suit: 0 },
+            { rank: 7, suit: 0 },
+          ],
+          jokerRepresentations: {},
+          points: 18,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          insertIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          entries,
+          cardInsertIndices: Object.fromEntries(entries.map((entry) => [entry.key, 0])),
+        },
+      ],
+    );
+
+    expect(request.additions).toEqual([
+      {
+        compositionIndex: 0,
+        insertIndex: 0,
+        cards: [
+          { rank: 2, suit: 0 },
+          { rank: 3, suit: 0 },
+          { rank: 4, suit: 0 },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("buildVirtualReclaimedJokers", () => {
@@ -299,6 +345,42 @@ describe("buildVirtualReclaimedJokers", () => {
     expect(virtualJokers[0]?.entry.isVirtual).toBe(true);
     expect(virtualJokers[0]?.entry.sourceIndex).toBe(-1);
     expect(virtualJokers[0]?.entry.key).toBe("reclaimed-joker-0-2");
+  });
+
+  it("orders repeated prepend additions from lowest to highest in the preview", () => {
+    const entries = buildHandEntries([
+      { rank: 4, suit: 0 },
+      { rank: 3, suit: 0 },
+      { rank: 2, suit: 0 },
+    ]);
+    const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const tableCompositions = buildTableCompositionViews(
+      [
+        {
+          type: "run",
+          cards: [
+            { rank: 5, suit: 0 },
+            { rank: 6, suit: 0 },
+            { rank: 7, suit: 0 },
+          ],
+          jokerRepresentations: {},
+          points: 18,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          insertIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          cardInsertIndices: Object.fromEntries(entries.map((entry) => [entry.key, 0])),
+        },
+      ],
+      entryByKey,
+    );
+
+    expect(tableCompositions[0]?.stagedEntries.map((entry) => entry.card.rank)).toEqual([2, 3, 4]);
   });
 });
 

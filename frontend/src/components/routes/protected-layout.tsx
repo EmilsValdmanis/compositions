@@ -12,7 +12,16 @@ export function ProtectedLayout() {
           <h1 className="text-center text-lg font-semibold tracking-tight md:text-xl">
             Compositions
           </h1>
+
           <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                throw new Error("Sentry Test Error");
+              }}
+            >
+              Break the world
+            </button>
             {import.meta.env.DEV ? (
               <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
                 <Link to="/dev-ui">Dev UI</Link>

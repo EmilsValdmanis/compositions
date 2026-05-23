@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "vp dev --port 3000",
-    "build": "vp build",
+    "build": "vp build && cp instrument.server.mjs .output/server",
     "preview": "vp preview",
     "test": "vp test run"
   },
@@ -17,6 +17,7 @@
     "@fontsource-variable/jetbrains-mono": "5.2.8",
     "@hugeicons/core-free-icons": "4.1.4",
     "@hugeicons/react": "1.1.6",
+    "@sentry/tanstackstart-react": "10.53.1",
     "@tailwindcss/vite": "4.3.0",
     "@tanstack/react-devtools": "0.10.5",
     "@tanstack/react-query": "5.100.10",

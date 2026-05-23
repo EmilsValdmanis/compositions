@@ -193,7 +193,7 @@ export function GameBoardTable({
                 ))}
               </div>
             ) : (
-              <div className="grid min-h-32 w-fit max-w-full place-items-center self-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
+              <div className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
                 No compositions on the table.
               </div>
             )}
@@ -266,36 +266,24 @@ export function GameBoardTable({
           </div>
         </div>
       </CardContent>
-      <CardFooter className="flex justify-between">
-        <div className="space-y-1 text-sm">
-          <div className="font-medium">New compositions</div>
-          <div className="text-muted-foreground">
-            {hasDraftedCompositions
-              ? "Review your staged cards, then submit them to the table."
-              : "Build a new composition or add cards to one already on the table."}
+      {hasDraftedCompositions ? (
+        <CardFooter className="justify-center">
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="ghost" onClick={onResetTablePlay}>
+              Reset
+            </Button>
+            <Button
+              type="button"
+              size="default"
+              onClick={onSubmitTablePlay}
+              disabled={!canSubmitTablePlay}
+              className="shadow-sm"
+            >
+              Submit table play
+            </Button>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onResetTablePlay}
-            disabled={!hasDraftedCompositions}
-          >
-            Reset
-          </Button>
-          <Button
-            type="button"
-            size="default"
-            onClick={onSubmitTablePlay}
-            disabled={!canSubmitTablePlay}
-            className="shadow-sm"
-          >
-            Submit table play
-          </Button>
-        </div>
-      </CardFooter>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }

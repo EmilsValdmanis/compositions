@@ -604,18 +604,20 @@ function buildOrderedAdditionEntries(
     insertIndex,
   );
 
+  const orderedAdditions = insertIndex === 0 ? [...additions].reverse() : additions;
+
   if (reclaims.length === 0) {
     return {
       additions,
       reclaims,
-      orderedEntries: additions,
+      orderedEntries: orderedAdditions,
     };
   }
 
   return {
     additions,
     reclaims,
-    orderedEntries: additions,
+    orderedEntries: orderedAdditions,
   };
 }
 
@@ -705,11 +707,28 @@ export function buildTableCompositionViews(
       const insertIndex = composition.insertIndex ?? existing.snapshot.cards.length;
       existing.insertIndex = insertIndex;
       existing.cardInsertIndices = composition.cardInsertIndices;
-      existing.reclaims = inferPlannedJokerReclaims(
-        existing.snapshot,
-        existing.stagedEntries,
-        insertIndex,
-      ).reclaims;
+      const orderedEntriesByInsertIndex = new Map<number, HandEntry[]>();
+      for (const entry of existing.stagedEntries) {
+        const idx = composition.cardInsertIndices?.[entry.key] ?? insertIndex;
+        const groupedEntries = orderedEntriesByInsertIndex.get(idx) ?? [];
+        groupedEntries.push(entry);
+        orderedEntriesByInsertIndex.set(idx, groupedEntries);
+      }
+
+      const orderedStagedEntries: HandEntry[] = [];
+      const groupedReclaims: PlannedJokerReclaim[] = [];
+      for (const [groupInsertIndex, entries] of orderedEntriesByInsertIndex) {
+        const { orderedEntries, reclaims } = buildOrderedAdditionEntries(
+          existing.snapshot,
+          entries,
+          groupInsertIndex,
+        );
+        orderedStagedEntries.push(...orderedEntries);
+        groupedReclaims.push(...reclaims);
+      }
+
+      existing.stagedEntries = orderedStagedEntries;
+      existing.reclaims = groupedReclaims;
     }
   }
 
