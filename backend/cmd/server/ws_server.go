@@ -99,11 +99,11 @@ type draftUpdateRequest struct {
 }
 
 type draftCompositionRequest struct {
-	TableIndex  *int          `json:"tableIndex,omitempty"`
-	InsertIndex *int          `json:"insertIndex,omitempty"`
+	TableIndex        *int           `json:"tableIndex,omitempty"`
+	InsertIndex       *int           `json:"insertIndex,omitempty"`
 	CardInsertIndices map[string]int `json:"cardInsertIndices,omitempty"`
-	ReclaimTargets map[string]int `json:"reclaimTargets,omitempty"`
-	Cards       []cardRequest `json:"cards"`
+	ReclaimTargets    map[string]int `json:"reclaimTargets,omitempty"`
+	Cards             []cardRequest  `json:"cards"`
 }
 
 type compositionAdditionRequest struct {
@@ -770,11 +770,11 @@ func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.Dr
 			snapshots = append(snapshots, card.Snapshot())
 		}
 		drafts = append(drafts, game.DraftCompositionSnapshot{
-			TableIndex: req.TableIndex,
-			InsertIndex: req.InsertIndex,
+			TableIndex:        req.TableIndex,
+			InsertIndex:       req.InsertIndex,
 			CardInsertIndices: cloneIndexMap(req.CardInsertIndices),
-			ReclaimTargets: cloneIndexMap(req.ReclaimTargets),
-			Cards: snapshots,
+			ReclaimTargets:    cloneIndexMap(req.ReclaimTargets),
+			Cards:             snapshots,
 		})
 	}
 	return drafts, nil

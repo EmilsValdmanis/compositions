@@ -388,7 +388,10 @@ describe("buildVirtualReclaimedJokers", () => {
   });
 
   it("keeps explicit reclaim entries out of staged additions in the preview", () => {
-    const entries = buildHandEntries([{ rank: 8, suit: 3 }, { rank: 5, suit: 0 }]);
+    const entries = buildHandEntries([
+      { rank: 8, suit: 3 },
+      { rank: 5, suit: 0 },
+    ]);
     const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
     const tableCompositions = buildTableCompositionViews(
       [
@@ -420,7 +423,10 @@ describe("buildVirtualReclaimedJokers", () => {
 
     expect(tableCompositions[0]?.reclaims).toHaveLength(1);
     expect(tableCompositions[0]?.reclaims[0]?.replacementEntry.key).toBe(entries[0]?.key);
-    expect(tableCompositions[0]?.stagedEntries.map((entry) => entry.key)).toEqual([entries[1]?.key, entries[0]?.key]);
+    expect(tableCompositions[0]?.stagedEntries.map((entry) => entry.key)).toEqual([
+      entries[1]?.key,
+      entries[0]?.key,
+    ]);
   });
 });
 
