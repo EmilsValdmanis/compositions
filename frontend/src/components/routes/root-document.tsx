@@ -11,8 +11,10 @@ import { ThemeAwareToaster } from "#/components/routes/theme-aware-toaster";
 export function RootDocument({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (import.meta.env.PROD) {
-      import("@vercel/analytics").then(({ inject }) => inject());
-      import("@vercel/speed-insights").then(({ injectSpeedInsights }) => injectSpeedInsights());
+      void import("@vercel/analytics").then(({ inject }) => inject());
+      void import("@vercel/speed-insights").then(({ injectSpeedInsights }) =>
+        injectSpeedInsights(),
+      );
     }
   }, []);
 

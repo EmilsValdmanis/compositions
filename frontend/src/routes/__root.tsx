@@ -3,6 +3,10 @@ import { getRequestHeaders } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { authClient } from "#/lib/auth-client";
+import {
+  GlobalErrorComponent,
+  GlobalNotFoundComponent,
+} from "#/components/routes/global-route-status";
 import { RootDocument } from "#/components/routes/root-document";
 import { z } from "zod";
 import appCss from "../styles.css?url";
@@ -51,5 +55,7 @@ export const Route = createRootRouteWithContext<{
       },
     ],
   }),
+  errorComponent: GlobalErrorComponent,
+  notFoundComponent: GlobalNotFoundComponent,
   shellComponent: RootDocument,
 });

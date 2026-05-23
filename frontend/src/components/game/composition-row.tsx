@@ -48,60 +48,72 @@ function buildCompositionCardViews(cards: CompositionSnapshot["cards"]) {
 }
 
 function CompositionEdgeDraftZone({
-  compositionIndex,
-  edge,
   entries,
   interactive,
   players,
   playerId,
 }: {
-  compositionIndex: number;
-  edge: "start" | "end";
   entries: HandEntry[];
   interactive: boolean;
   players: PlayerSnapshot[];
   playerId?: string;
 }) {
-  const hasEntries = entries.length > 0;
+  return (
+    <SortableContext
+      items={entries.map((entry) => entry.key)}
+      strategy={horizontalListSortingStrategy}
+    >
+      <div className="flex shrink-0 items-center gap-2">
+        {entries.map((entry) => (
+          <GameCard
+            key={entry.key}
+            card={entry.card}
+            size="default"
+            draggable={
+              interactive
+                ? {
+                    id: entry.key,
+                    cardIndex: entry.sourceIndex,
+                    isVirtual: entry.isVirtual,
+                  }
+                : undefined
+            }
+            decoration={{
+              highlight: "addition",
+              label: <ActivityLabel players={players} playerId={playerId} label="Add" />,
+            }}
+          />
+        ))}
+      </div>
+    </SortableContext>
+  );
+}
 
+function CompositionEdgeDropTarget({
+  compositionIndex,
+  edge,
+  visible,
+}: {
+  compositionIndex: number;
+  edge: "start" | "end";
+  visible: boolean;
+}) {
   return (
     <GameBoardDraftDropZone
       id={tableCompositionEdgeDropId(compositionIndex, edge)}
       activeClassName={null}
       className={cn(
-        "flex shrink-0 items-center justify-center overflow-visible p-0 transition-[opacity,border-color,background-color] duration-150",
-        hasEntries
-          ? "border-transparent bg-transparent"
-          : "h-24 w-16 rounded-2xl border border-dashed border-border/50 bg-background/10 data-[over=true]:border-primary/60 data-[over=true]:bg-primary/5",
+        "pointer-events-none absolute top-1/2 z-10 flex h-24 w-10 -translate-y-1/2 items-center justify-center opacity-0 transition-opacity duration-150 data-[over=true]:opacity-100 [&[data-over=true]_.edge-drop-line]:bg-primary/70 [&[data-over=true]_.edge-drop-pill]:border-primary/70 [&[data-over=true]_.edge-drop-pill]:bg-primary/10 [&[data-over=true]_.edge-drop-pill]:text-primary",
+        edge === "start" ? "-left-5" : "-right-5",
+        visible ? "pointer-events-auto opacity-100" : null,
       )}
     >
-      <SortableContext
-        items={entries.map((entry) => entry.key)}
-        strategy={horizontalListSortingStrategy}
-      >
-        <div className="flex items-center gap-2">
-          {entries.map((entry) => (
-            <GameCard
-              key={entry.key}
-              card={entry.card}
-              size="default"
-              draggable={
-                interactive
-                  ? {
-                      id: entry.key,
-                      cardIndex: entry.sourceIndex,
-                      isVirtual: entry.isVirtual,
-                    }
-                  : undefined
-              }
-              decoration={{
-                highlight: "addition",
-                label: <ActivityLabel players={players} playerId={playerId} label="Add" />,
-              }}
-            />
-          ))}
+      <div className="pointer-events-none relative flex h-full w-full items-center justify-center">
+        <div className="edge-drop-line h-16 w-px rounded-full bg-border/60 shadow-[0_0_0_1px_hsl(var(--background))] transition-colors duration-150" />
+        <div className="edge-drop-pill absolute flex size-5 items-center justify-center rounded-full border border-border/60 bg-background/85 text-[0.7rem] leading-none text-muted-foreground shadow-sm backdrop-blur-sm transition-[border-color,color,background-color] duration-150">
+          +
         </div>
-      </SortableContext>
+      </div>
     </GameBoardDraftDropZone>
   );
 }
@@ -152,11 +164,15 @@ export function CompositionRow({
   const startEdgeDropId = tableCompositionEdgeDropId(index, "start");
   const endEdgeDropId = tableCompositionEdgeDropId(index, "end");
   const overId = over ? String(over.id) : null;
-  const isDraggingOverComposition =
+  const isDraggingCompositionCard =
     active !== null &&
+    active.data.current?.drawSource === undefined &&
+    typeof active.id === "string";
+  const isDraggingOverComposition =
+    isDraggingCompositionCard &&
     (overId === compositionDropId || overId === startEdgeDropId || overId === endEdgeDropId);
-  const showStartEdgeDropZone = isDraggingOverComposition || additionsAtStart.length > 0;
-  const showEndEdgeDropZone = isDraggingOverComposition || additionsAtEnd.length > 0;
+  const showStartEdgeDropTarget = isDraggingOverComposition;
+  const showEndEdgeDropTarget = isDraggingOverComposition;
 
   return (
     <GameBoardDraftDropZone
@@ -184,11 +200,15 @@ export function CompositionRow({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        {showStartEdgeDropZone ? (
+      <div className="relative flex flex-wrap items-center justify-center gap-3">
+        <CompositionEdgeDropTarget
+          compositionIndex={index}
+          edge="start"
+          visible={showStartEdgeDropTarget}
+        />
+
+        {additionsAtStart.length > 0 ? (
           <CompositionEdgeDraftZone
-            compositionIndex={index}
-            edge="start"
             entries={additionsAtStart}
             interactive={stagedEntriesInteractive}
             players={players}
@@ -244,16 +264,20 @@ export function CompositionRow({
           );
         })}
 
-        {showEndEdgeDropZone ? (
+        {additionsAtEnd.length > 0 ? (
           <CompositionEdgeDraftZone
-            compositionIndex={index}
-            edge="end"
             entries={additionsAtEnd}
             interactive={stagedEntriesInteractive}
             players={players}
             playerId={stagedEntryPlayerId}
           />
         ) : null}
+
+        <CompositionEdgeDropTarget
+          compositionIndex={index}
+          edge="end"
+          visible={showEndEdgeDropTarget}
+        />
       </div>
     </GameBoardDraftDropZone>
   );

@@ -1,10 +1,12 @@
 import { useEffect, useEffectEvent } from "react";
-import { Route } from "#/routes/__root";
+import { getRouteApi } from "@tanstack/react-router";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
+
+const rootRouteApi = getRouteApi("__root__");
 
 export function AutoConnectWebSocket() {
   const { connect, disconnect } = useGameWebSocket();
-  const { session } = Route.useRouteContext();
+  const { session } = rootRouteApi.useRouteContext();
   const isAuthenticated = !!session;
   const syncConnection = useEffectEvent(() => {
     if (isAuthenticated) {

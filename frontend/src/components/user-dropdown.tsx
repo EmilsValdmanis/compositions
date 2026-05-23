@@ -1,7 +1,7 @@
 import { authClient } from "#/lib/auth-client";
+import { getRouteApi, useRouter } from "@tanstack/react-router";
 import { useTheme } from "#/components/theme-provider";
 import { getUserInitials } from "#/lib/utils";
-import { Route } from "#/routes/__root";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import {
@@ -21,10 +21,11 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Logout02FreeIcons } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useRouter } from "@tanstack/react-router";
+
+const rootRouteApi = getRouteApi("__root__");
 
 export function UserDropdown() {
-  const { session } = Route.useRouteContext();
+  const { session } = rootRouteApi.useRouteContext();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
 
