@@ -101,7 +101,7 @@ func TestPostgresUserStoreUpsertUser(t *testing.T) {
 		if err := store.UpsertUser(context.Background(), authenticatedUser{
 			ID:    " user-1 ",
 			Name:  " Player One ",
-			Email: " player@example.com ",
+			Email: " Player@Example.com ",
 			Image: " https://cdn.example.com/player.png ",
 		}); err != nil {
 			t.Fatalf("UpsertUser() error = %v", err)

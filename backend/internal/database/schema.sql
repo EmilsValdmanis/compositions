@@ -6,3 +6,5 @@ CREATE TABLE users (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX users_email_key ON users (LOWER(email)) WHERE email <> '';

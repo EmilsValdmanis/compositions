@@ -61,7 +61,7 @@ func (s *postgresUserStore) UpsertUser(ctx context.Context, user authenticatedUs
 	return upsertStoredUser(ctx, s.store, database.UserRecord{
 		ID:       strings.TrimSpace(user.ID),
 		Name:     strings.TrimSpace(user.Name),
-		Email:    strings.TrimSpace(user.Email),
+		Email:    strings.ToLower(strings.TrimSpace(user.Email)),
 		ImageURL: strings.TrimSpace(user.Image),
 	})
 }

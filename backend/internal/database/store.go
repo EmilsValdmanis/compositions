@@ -71,16 +71,25 @@ func (s *UserStore) UpsertUser(ctx context.Context, user UserRecord) error {
 		return errors.New("user store is not configured")
 	}
 
-	if strings.TrimSpace(user.ID) == "" {
+	userID := strings.TrimSpace(user.ID)
+	if userID == "" {
 		return errors.New("user id is required")
 	}
 
+	email := normalizeEmail(user.Email)
+	name := strings.TrimSpace(user.Name)
+	imageURL := strings.TrimSpace(user.ImageURL)
+
 	return s.queries.UpsertUser(ctx, dbsqlc.UpsertUserParams{
-		ID:       strings.TrimSpace(user.ID),
-		Name:     strings.TrimSpace(user.Name),
-		Email:    strings.TrimSpace(user.Email),
-		ImageUrl: strings.TrimSpace(user.ImageURL),
+		ID:       userID,
+		Name:     name,
+		Email:    email,
+		ImageUrl: imageURL,
 	})
+}
+
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
 }
 
 func (s *UserStore) GetUserByID(ctx context.Context, userID string) (dbsqlc.User, error) {
