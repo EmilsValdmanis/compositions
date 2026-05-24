@@ -1,4 +1,4 @@
-export const verifiedSessionQuery = {
+const verifiedSessionQuery = {
   disableCookieCache: true,
 } as const;
 
