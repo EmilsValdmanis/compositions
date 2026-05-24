@@ -84,28 +84,28 @@ func TestPostgresUserStoreUpsertUser(t *testing.T) {
 		}
 	})
 
-		t.Run("trims fields before upsert", func(t *testing.T) {
-			called := false
-			upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) error {
-				called = true
-				if store == nil {
-					t.Fatal("store = nil; want configured store")
-				}
-				if user.ID != "user-1" || user.Name != "Player One" || user.Email != "player@example.com" || user.ImageURL != "https://cdn.example.com/player.png" {
-					t.Fatalf("user = %#v; want trimmed fields", user)
-				}
-				return nil
+	t.Run("trims fields before upsert", func(t *testing.T) {
+		called := false
+		upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) error {
+			called = true
+			if store == nil {
+				t.Fatal("store = nil; want configured store")
 			}
+			if user.ID != "user-1" || user.Name != "Player One" || user.Email != "player@example.com" || user.ImageURL != "https://cdn.example.com/player.png" {
+				t.Fatalf("user = %#v; want trimmed fields", user)
+			}
+			return nil
+		}
 
-			store := &postgresUserStore{store: &database.UserStore{}}
-			if err := store.UpsertUser(context.Background(), authenticatedUser{
-				ID:    " user-1 ",
-				Name:  " Player One ",
-				Email: " Player@Example.com ",
-				Image: " https://cdn.example.com/player.png ",
-			}); err != nil {
-				t.Fatalf("UpsertUser() error = %v", err)
-			}
+		store := &postgresUserStore{store: &database.UserStore{}}
+		if err := store.UpsertUser(context.Background(), authenticatedUser{
+			ID:    " user-1 ",
+			Name:  " Player One ",
+			Email: " Player@Example.com ",
+			Image: " https://cdn.example.com/player.png ",
+		}); err != nil {
+			t.Fatalf("UpsertUser() error = %v", err)
+		}
 		if !called {
 			t.Fatal("upsertStoredUser was not called")
 		}
