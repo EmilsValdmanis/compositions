@@ -26,6 +26,16 @@ func (v staticSessionVerifier) VerifySession(_ context.Context, bearerToken stri
 	return authenticatedUser{}, errAuthenticationRequired
 }
 
+type capturingSessionVerifier struct {
+	user        authenticatedUser
+	bearerToken string
+}
+
+func (v *capturingSessionVerifier) VerifySession(_ context.Context, bearerToken string) (authenticatedUser, error) {
+	v.bearerToken = bearerToken
+	return v.user, nil
+}
+
 func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 	server := newWSServer()
 	httpServer := httptest.NewServer(server.routes())
@@ -233,6 +243,23 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	defer hijackConn.Close()
 	mustSendEnvelope(t, hijackConn, "connect", connectRequest{SessionID: hostConnected.SessionID, AuthToken: "guest-token"})
 	mustReadError(t, hijackConn, "session belongs to a different user")
+}
+
+func TestAuthenticatedWebSocketPassesBearerTokenToVerifier(t *testing.T) {
+	verifier := &capturingSessionVerifier{user: authenticatedUser{ID: "user-1", Name: "Player One", Email: "player@example.com"}}
+	server := newWSServerWithVerifier(verifier)
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+
+	mustSendEnvelope(t, conn, "connect", connectRequest{AuthToken: "token-123"})
+	_ = mustReadConnectedEvent(t, conn)
+
+	if verifier.bearerToken != "token-123" {
+		t.Fatalf("verifier.bearerToken = %q; want token-123", verifier.bearerToken)
+	}
 }
 
 func TestAuthenticatedWebSocketReplacesSecondLiveSocketForSameUser(t *testing.T) {

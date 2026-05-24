@@ -90,6 +90,30 @@ func TestBetterAuthSessionVerifierVerifySession(t *testing.T) {
 		}
 	})
 
+	t.Run("does not forward cookie header", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
+				t.Fatalf("Authorization header = %q; want Bearer token-123", got)
+			}
+			if got := r.Header.Get("Cookie"); got != "" {
+				t.Fatalf("Cookie header = %q; want empty", got)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, `{"user":{"id":"user-1","name":"Player One","email":"player@example.com"}}`)
+		}))
+		defer server.Close()
+
+		verifier := newBetterAuthSessionVerifier(server.URL+"/", server.Client())
+		user, err := verifier.VerifySession(context.Background(), "token-123")
+		if err != nil {
+			t.Fatalf("VerifySession() error = %v", err)
+		}
+		if user.ID != "user-1" {
+			t.Fatalf("user.ID = %q; want user-1", user.ID)
+		}
+	})
+
 	testCases := []struct {
 		name       string
 		statusCode int
