@@ -4,10 +4,18 @@ package database
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -62,7 +70,7 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	updatedUser := UserRecord{
 		ID:       "user-1",
 		Name:     "Updated Player",
-		Email:    "updated@example.com",
+		Email:    "player1@example.com",
 		ImageURL: "https://cdn.example.com/player-1-updated.png",
 	}
 	if err := store.UpsertUser(ctx, updatedUser); err != nil {
@@ -89,9 +97,164 @@ func TestUserStoreUpsertUser(t *testing.T) {
 		t.Fatalf("updated timestamps are inconsistent: created_at=%v updated_at=%v", updatedRecord.CreatedAt, updatedRecord.UpdatedAt)
 	}
 
-	if err := RunMigrations(ctx, databaseURL, MigrationDown); err != nil {
-		t.Fatalf("RunMigrations(down) error = %v", err)
+	reauthenticatedUser := UserRecord{
+		ID:       "user-2",
+		Name:     " Reauthenticated Player ",
+		Email:    " PLAYER1@EXAMPLE.COM ",
+		ImageURL: " https://cdn.example.com/player-2.png ",
 	}
+	if err := store.UpsertUser(ctx, reauthenticatedUser); err != nil {
+		t.Fatalf("UpsertUser(reauthenticated) error = %v", err)
+	}
+
+	if got := countUsers(t, ctx, pool); got != 1 {
+		t.Fatalf("user row count = %d; want 1", got)
+	}
+
+	if _, err := store.GetUserByID(ctx, createdUser.ID); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("GetUserByID(old id) error = %v; want %v", err, pgx.ErrNoRows)
+	}
+
+	reauthenticatedRecord, err := store.GetUserByID(ctx, strings.TrimSpace(reauthenticatedUser.ID))
+	if err != nil {
+		t.Fatalf("GetUserByID(reauthenticated) error = %v", err)
+	}
+	if reauthenticatedRecord.Name != "Reauthenticated Player" {
+		t.Fatalf("reauthenticated name = %q; want %q", reauthenticatedRecord.Name, "Reauthenticated Player")
+	}
+	if reauthenticatedRecord.Email != "player1@example.com" {
+		t.Fatalf("reauthenticated email = %q; want %q", reauthenticatedRecord.Email, "player1@example.com")
+	}
+	if reauthenticatedRecord.ImageUrl != "https://cdn.example.com/player-2.png" {
+		t.Fatalf("reauthenticated image_url = %q; want %q", reauthenticatedRecord.ImageUrl, "https://cdn.example.com/player-2.png")
+	}
+	if reauthenticatedRecord.CreatedAt.Time != createdRecord.CreatedAt.Time {
+		t.Fatalf("created_at changed after same-email upsert: got %v; want %v", reauthenticatedRecord.CreatedAt.Time, createdRecord.CreatedAt.Time)
+	}
+	if reauthenticatedRecord.UpdatedAt.Time.Before(updatedRecord.UpdatedAt.Time) {
+		t.Fatalf("updated_at did not advance: got %v; want after %v", reauthenticatedRecord.UpdatedAt.Time, updatedRecord.UpdatedAt.Time)
+	}
+}
+
+func TestUserEmailUniquenessMigrationDeduplicatesExistingRows(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+
+	migrationDB, err := OpenMigrationDB(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenMigrationDB() error = %v", err)
+	}
+	defer migrationDB.Close()
+
+	migrator := newTestMigrator(t, migrationDB)
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(1 first migration) error = %v", err)
+	}
+
+	pool, err := OpenPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO users (id, name, email, image_url, created_at, updated_at)
+		VALUES
+			($1, $2, $3, $4, $5, $6),
+			($7, $8, $9, $10, $11, $12)
+	`,
+		"user-1",
+		" First Player ",
+		"Player@example.com",
+		" https://cdn.example.com/player-1.png ",
+		time.Date(2026, time.May, 24, 15, 11, 1, 0, time.UTC),
+		time.Date(2026, time.May, 24, 15, 11, 56, 0, time.UTC),
+		"user-2",
+		" Second Player ",
+		" PLAYER@EXAMPLE.COM ",
+		" https://cdn.example.com/player-2.png ",
+		time.Date(2026, time.May, 24, 15, 51, 3, 0, time.UTC),
+		time.Date(2026, time.May, 24, 15, 51, 3, 0, time.UTC),
+	); err != nil {
+		t.Fatalf("seed duplicate users error = %v", err)
+	}
+
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(1 second migration) error = %v", err)
+	}
+
+	if got := countUsers(t, ctx, pool); got != 1 {
+		t.Fatalf("user row count after migration = %d; want 1", got)
+	}
+
+	var record struct {
+		ID       string
+		Name     string
+		Email    string
+		ImageURL string
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT id, name, email, image_url
+		FROM users
+		LIMIT 1
+	`).Scan(&record.ID, &record.Name, &record.Email, &record.ImageURL); err != nil {
+		t.Fatalf("select deduplicated user error = %v", err)
+	}
+	if record.ID != "user-2" {
+		t.Fatalf("deduplicated id = %q; want %q", record.ID, "user-2")
+	}
+	if record.Name != "Second Player" {
+		t.Fatalf("deduplicated name = %q; want %q", record.Name, "Second Player")
+	}
+	if record.Email != "player@example.com" {
+		t.Fatalf("deduplicated email = %q; want %q", record.Email, "player@example.com")
+	}
+	if record.ImageURL != "https://cdn.example.com/player-2.png" {
+		t.Fatalf("deduplicated image_url = %q; want %q", record.ImageURL, "https://cdn.example.com/player-2.png")
+	}
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO users (id, name, email, image_url)
+		VALUES ($1, $2, $3, $4)
+	`, "user-3", "Third Player", "PLAYER@example.com", "https://cdn.example.com/player-3.png"); err == nil {
+		t.Fatal("expected duplicate email insert to fail")
+	}
+}
+
+func countUsers(t *testing.T, ctx context.Context, pool *pgxpool.Pool) int {
+	t.Helper()
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		t.Fatalf("count users error = %v", err)
+	}
+
+	return count
+}
+
+func newTestMigrator(t *testing.T, db *sql.DB) *migrate.Migrate {
+	t.Helper()
+
+	sourceDriver, err := iofs.New(migrationsFS, "migrations")
+	if err != nil {
+		t.Fatalf("iofs.New() error = %v", err)
+	}
+
+	driver, err := migratepgx.WithInstance(db, &migratepgx.Config{})
+	if err != nil {
+		t.Fatalf("pgx.WithInstance() error = %v", err)
+	}
+
+	migrator, err := migrate.NewWithInstance("iofs", sourceDriver, "postgres", driver)
+	if err != nil {
+		t.Fatalf("migrate.NewWithInstance() error = %v", err)
+	}
+
+	t.Cleanup(func() {
+		_, _ = migrator.Close()
+	})
+
+	return migrator
 }
 
 func startPostgresContainer(t *testing.T, ctx context.Context) string {
