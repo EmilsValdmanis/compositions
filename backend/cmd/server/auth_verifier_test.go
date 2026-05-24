@@ -52,25 +52,25 @@ func TestAuthenticatedUserHelpers(t *testing.T) {
 }
 
 func TestBetterAuthSessionVerifierVerifySession(t *testing.T) {
-		t.Run("requires bearer token", func(t *testing.T) {
-			verifier := &betterAuthSessionVerifier{}
+	t.Run("requires bearer token", func(t *testing.T) {
+		verifier := &betterAuthSessionVerifier{}
 
-			user, err := verifier.VerifySession(context.Background(), "   ")
-			if !errors.Is(err, errAuthenticationRequired) {
-				t.Fatalf("VerifySession() error = %v; want errAuthenticationRequired", err)
-			}
+		user, err := verifier.VerifySession(context.Background(), "   ")
+		if !errors.Is(err, errAuthenticationRequired) {
+			t.Fatalf("VerifySession() error = %v; want errAuthenticationRequired", err)
+		}
 		if user != (authenticatedUser{}) {
 			t.Fatalf("user = %#v; want zero value", user)
 		}
 	})
 
-		t.Run("returns request build error for invalid base url", func(t *testing.T) {
-			verifier := &betterAuthSessionVerifier{baseURL: "://bad", client: &http.Client{}}
+	t.Run("returns request build error for invalid base url", func(t *testing.T) {
+		verifier := &betterAuthSessionVerifier{baseURL: "://bad", client: &http.Client{}}
 
-			_, err := verifier.VerifySession(context.Background(), "token")
-			if err == nil || err.Error() == "" {
-				t.Fatal("VerifySession() error = nil; want build request error")
-			}
+		_, err := verifier.VerifySession(context.Background(), "token")
+		if err == nil || err.Error() == "" {
+			t.Fatal("VerifySession() error = nil; want build request error")
+		}
 	})
 
 	t.Run("returns transport error", func(t *testing.T) {
@@ -84,31 +84,31 @@ func TestBetterAuthSessionVerifierVerifySession(t *testing.T) {
 			})},
 		}
 
-			_, err := verifier.VerifySession(context.Background(), " token-123 ")
-			if err == nil || !strings.Contains(err.Error(), "network boom") {
-				t.Fatalf("VerifySession() error = %v; want wrapped network boom", err)
+		_, err := verifier.VerifySession(context.Background(), " token-123 ")
+		if err == nil || !strings.Contains(err.Error(), "network boom") {
+			t.Fatalf("VerifySession() error = %v; want wrapped network boom", err)
+		}
+	})
+
+	t.Run("does not forward cookie header", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
+				t.Fatalf("Authorization header = %q; want Bearer token-123", got)
 			}
-		})
-
-		t.Run("does not forward cookie header", func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
-					t.Fatalf("Authorization header = %q; want Bearer token-123", got)
-				}
-				if got := r.Header.Get("Cookie"); got != "" {
-					t.Fatalf("Cookie header = %q; want empty", got)
-				}
-
-				w.WriteHeader(http.StatusOK)
-				_, _ = io.WriteString(w, `{"user":{"id":"user-1","name":"Player One","email":"player@example.com"}}`)
-			}))
-			defer server.Close()
-
-			verifier := newBetterAuthSessionVerifier(server.URL+"/", server.Client())
-			user, err := verifier.VerifySession(context.Background(), "token-123")
-			if err != nil {
-				t.Fatalf("VerifySession() error = %v", err)
+			if got := r.Header.Get("Cookie"); got != "" {
+				t.Fatalf("Cookie header = %q; want empty", got)
 			}
+
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, `{"user":{"id":"user-1","name":"Player One","email":"player@example.com"}}`)
+		}))
+		defer server.Close()
+
+		verifier := newBetterAuthSessionVerifier(server.URL+"/", server.Client())
+		user, err := verifier.VerifySession(context.Background(), "token-123")
+		if err != nil {
+			t.Fatalf("VerifySession() error = %v", err)
+		}
 		if user.ID != "user-1" {
 			t.Fatalf("user.ID = %q; want user-1", user.ID)
 		}
