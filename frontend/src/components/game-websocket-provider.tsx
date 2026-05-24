@@ -129,10 +129,17 @@ export type RoomSnapshot = {
   players: PlayerSnapshot[];
 };
 
-type ActionResult = {
+export type ActionResult = {
   action: string;
   playerId: string;
   ok: boolean;
+};
+
+type PendingAction = {
+  expectedAction: string;
+  id: number;
+  resolve: (result: ActionResult) => void;
+  reject: (error: Error) => void;
 };
 
 export type CompletedGameSnapshot = {
@@ -173,8 +180,8 @@ type GameWebSocketContextValue = {
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
   updateTurnDrafts: (draft: TurnDraftUpdateRequest) => void;
-  playTable: (play: TablePlayRequest) => void;
-  discardCard: (cardIndex: number) => void;
+  playTable: (play: TablePlayRequest) => Promise<ActionResult>;
+  discardCard: (cardIndex: number) => Promise<ActionResult>;
 };
 
 const initialState: LobbyState = {
@@ -278,6 +285,8 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   const socketRef = useRef<WebSocket | null>(null);
   const connectAttemptRef = useRef(0);
   const connectInFlightRef = useRef(false);
+  const nextPendingActionIdRef = useRef(0);
+  const pendingActionsRef = useRef<PendingAction[]>([]);
   const state = useSelector(gameWebSocketStore);
 
   useEffect(() => {
@@ -312,6 +321,43 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     );
   }
 
+  function rejectPendingActions(message: string) {
+    const pendingActions = pendingActionsRef.current.splice(0);
+
+    for (const pendingAction of pendingActions) {
+      pendingAction.reject(new Error(message));
+    }
+  }
+
+  function resolvePendingAction(data: unknown) {
+    const result = data as Partial<ActionResult> | null | undefined;
+    const action = typeof result?.action === "string" ? result.action : null;
+    const pendingIndex = action
+      ? pendingActionsRef.current.findIndex(
+          (pendingAction) => pendingAction.expectedAction === action,
+        )
+      : 0;
+    const [pendingAction] = pendingActionsRef.current.splice(
+      pendingIndex >= 0 ? pendingIndex : 0,
+      1,
+    );
+
+    if (!pendingAction) {
+      return;
+    }
+
+    if (result?.ok === false) {
+      pendingAction.reject(new Error(`${action ?? pendingAction.expectedAction} failed`));
+      return;
+    }
+
+    pendingAction.resolve({
+      action: action ?? pendingAction.expectedAction,
+      playerId: result?.playerId ?? "",
+      ok: true,
+    });
+  }
+
   function resolveConnectionAuthError(error: unknown) {
     if (error instanceof Error && error.message.trim() !== "") {
       return error.message;
@@ -336,6 +382,18 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
   }
 
   function applyIncomingMessage(message: Envelope) {
+    if (message.type === "action_result") {
+      resolvePendingAction(message.data);
+    }
+
+    if (message.type === "error") {
+      rejectPendingActions(
+        typeof message.data === "object" && message.data && "message" in message.data
+          ? String(message.data.message)
+          : "unknown error",
+      );
+    }
+
     const reducer = incomingMessageReducers[message.type];
     if (!reducer) {
       updateState((current) => withError(current, `unknown websocket message: ${message.type}`));
@@ -354,20 +412,61 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     }
   }
 
-  function send(type: string, data: unknown) {
+  function send(type: string, data: unknown): void;
+  function send(type: string, data: unknown, options: { awaitResult: true }): Promise<ActionResult>;
+  function send(type: string, data: unknown, options?: { awaitResult?: boolean }) {
     const socket = socketRef.current;
 
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       updateState((current) => withError(current, "websocket is not connected"));
+
+      if (options?.awaitResult) {
+        return Promise.reject(new Error("websocket is not connected"));
+      }
+
       return;
     }
 
-    socket.send(JSON.stringify({ type, data }));
+    const pendingAction = options?.awaitResult
+      ? new Promise<ActionResult>((resolve, reject) => {
+          const pendingActionId = nextPendingActionIdRef.current;
+          nextPendingActionIdRef.current += 1;
+
+          pendingActionsRef.current.push({
+            expectedAction: type,
+            id: pendingActionId,
+            resolve,
+            reject,
+          });
+        })
+      : undefined;
+
+    try {
+      socket.send(JSON.stringify({ type, data }));
+    } catch (error) {
+      if (options?.awaitResult) {
+        const pendingIndex = pendingActionsRef.current.findLastIndex(
+          (candidate) => candidate.expectedAction === type,
+        );
+        const [queuedAction] = pendingActionsRef.current.splice(
+          pendingIndex >= 0 ? pendingIndex : 0,
+          1,
+        );
+        queuedAction?.reject(error instanceof Error ? error : new Error("failed to send action"));
+        return pendingAction;
+      }
+
+      updateState((current) => withError(current, "failed to send websocket action"));
+      return;
+    }
+
     updateState((current) =>
       clearError(current, {
         lastEvent: type,
       }),
     );
+
+    return pendingAction;
   }
 
   async function connect() {
@@ -458,6 +557,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
       if (connectAttemptRef.current === connectAttempt) {
         connectInFlightRef.current = false;
       }
+      rejectPendingActions("failed to connect websocket");
       setConnectionError("failed to connect websocket");
     };
 
@@ -465,6 +565,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
       if (socketRef.current === socket) {
         socketRef.current = null;
         connectInFlightRef.current = false;
+        rejectPendingActions("websocket disconnected");
 
         updateState((current) => ({
           ...current,
@@ -481,6 +582,7 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     const socket = socketRef.current;
     socketRef.current = null;
     socket?.close();
+    rejectPendingActions("websocket disconnected");
 
     updateState((current) => ({
       ...current,
@@ -503,8 +605,8 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),
     updateTurnDrafts: (draft) => send("draft_update", draft),
-    playTable: (play) => send("play", play),
-    discardCard: (cardIndex) => send("discard", { cardIndex }),
+    playTable: (play) => send("play", play, { awaitResult: true }),
+    discardCard: (cardIndex) => send("discard", { cardIndex }, { awaitResult: true }),
   };
 
   return <GameWebSocketContext value={value}>{children}</GameWebSocketContext>;

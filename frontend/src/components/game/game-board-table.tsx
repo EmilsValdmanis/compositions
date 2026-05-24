@@ -22,16 +22,7 @@ import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-
 import { GameCard } from "#/components/game/game-card";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
-import { Button } from "#/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
-import { cn } from "#/lib/utils";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -93,10 +84,6 @@ export function GameBoardTable({
   players,
   turnActivity,
   canCompose,
-  hasDraftedCompositions,
-  canSubmitTablePlay,
-  onResetTablePlay,
-  onSubmitTablePlay,
 }: {
   game: GameSnapshot | null;
   tableCompositions: TableCompositionView[];
@@ -104,10 +91,6 @@ export function GameBoardTable({
   players: PlayerSnapshot[];
   turnActivity?: TurnActivitySnapshot;
   canCompose: boolean;
-  hasDraftedCompositions: boolean;
-  canSubmitTablePlay: boolean;
-  onResetTablePlay: () => void;
-  onSubmitTablePlay: () => void;
 }) {
   const { active } = useDndContext();
   const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
@@ -164,14 +147,14 @@ export function GameBoardTable({
   }
 
   return (
-    <Card className="min-h-0 overflow-visible xl:flex-1">
+    <Card className="min-h-0 overflow-hiddden overflow-y-auto xl:flex-1">
       <CardHeader>
         <CardTitle>Table</CardTitle>
         <CardAction>
           <Badge variant="outline">{tablePoints} pts</Badge>
         </CardAction>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-visible">
+      <CardContent className="min-h-0 flex-1">
         <div
           ref={setNodeRef}
           className={[
@@ -242,7 +225,7 @@ export function GameBoardTable({
                 key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
                 className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
               >
-                <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                   <Badge variant="outline">{composition.cards.length} cards</Badge>
                 </div>
@@ -264,7 +247,7 @@ export function GameBoardTable({
                 id={draftCompositionDropId(composition.id)}
                 className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
               >
-                <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
                   <Badge variant="outline">{composition.entries.length} cards</Badge>
                 </div>
@@ -292,26 +275,6 @@ export function GameBoardTable({
           </div>
         </div>
       </CardContent>
-      <CardFooter
-        className={cn(
-          "min-h-16 justify-center transition-opacity duration-150",
-          hasDraftedCompositions ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" variant="ghost" onClick={onResetTablePlay}>
-            Reset
-          </Button>
-          <Button
-            type="button"
-            size="default"
-            onClick={onSubmitTablePlay}
-            disabled={!canSubmitTablePlay}
-          >
-            Submit table play
-          </Button>
-        </div>
-      </CardFooter>
     </Card>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { ClientOnly } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { GameBoardHeader } from "#/components/game/game-board-header";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
@@ -138,13 +137,17 @@ export function ProtectedHome() {
     }
   }
 
-  function handleDiscardCard(cardIndex: number) {
+  async function handleDiscardCard(cardIndex: number) {
     if (!canDiscard) {
       toast.error("Draw before discarding");
-      return;
+      throw new Error("draw before discarding");
     }
 
-    discardCard(cardIndex);
+    return discardCard(cardIndex);
+  }
+
+  async function handlePlayTable(play: Parameters<typeof playTable>[0]) {
+    return playTable(play);
   }
 
   if (isBootstrappingConnection) {
@@ -153,16 +156,7 @@ export function ProtectedHome() {
 
   return (
     <ClientOnly fallback={<GameRouteLoadingScreen />}>
-      <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-4">
-        <GameBoardHeader
-          phase={phase}
-          roomCode={state.room?.code}
-          isLobbyPhase={isLobbyPhase}
-          isMyTurn={Boolean(isMyTurn)}
-          turnPlayerName={turnPlayerName}
-          game={state.game}
-        />
-
+      <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
         {roundResultsGame ? (
           <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
@@ -219,7 +213,7 @@ export function ProtectedHome() {
               onDiscardCard={handleDiscardCard}
               onDrawFromDeck={drawFromDeck}
               onDrawFromDiscard={drawFromDiscard}
-              onPlayTable={playTable}
+              onPlayTable={handlePlayTable}
             />
           </div>
         )}

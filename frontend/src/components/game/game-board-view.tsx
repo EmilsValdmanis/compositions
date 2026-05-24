@@ -10,6 +10,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  type ActionResult,
   type DraftCompositionSnapshot,
   type GameSnapshot,
   type PlayerSnapshot,
@@ -143,10 +144,10 @@ type GameBoardViewProps = {
   connectedPlayers: number;
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
-  onDiscardCard: (cardIndex: number) => void;
+  onDiscardCard: (cardIndex: number) => Promise<ActionResult> | void;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
-  onPlayTable: (play: TablePlayRequest) => void;
+  onPlayTable: (play: TablePlayRequest) => Promise<ActionResult> | void;
   disableDraftSync?: boolean;
 };
 
@@ -274,9 +275,6 @@ function GameBoardLayout({
   activeDrag,
   draftedCompositionsCount,
   spectatorDrafts,
-  canSubmitTablePlay,
-  onResetTablePlay,
-  onSubmitTablePlay,
 }: {
   game: GameSnapshot | null;
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
@@ -291,9 +289,6 @@ function GameBoardLayout({
   activeDrag: ActiveDrag | null;
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
-  canSubmitTablePlay: boolean;
-  onResetTablePlay: () => void;
-  onSubmitTablePlay: () => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -320,10 +315,6 @@ function GameBoardLayout({
               : undefined
           }
           canCompose={turnState.canDiscard}
-          hasDraftedCompositions={draftedCompositionsCount > 0}
-          canSubmitTablePlay={canSubmitTablePlay}
-          onResetTablePlay={onResetTablePlay}
-          onSubmitTablePlay={onSubmitTablePlay}
         />
 
         <div className="flex flex-col min-h-0 gap-4">
@@ -577,7 +568,9 @@ function useGameBoardController({
       return;
     }
 
-    onPlayTable(buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView));
+    return onPlayTable(
+      buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
+    );
   }
 
   function closePendingDiscardDialog() {
@@ -590,12 +583,12 @@ function useGameBoardController({
     }
 
     resetDraftCompositions();
-    onDiscardCard(pendingDiscardIndex);
+    void onDiscardCard(pendingDiscardIndex);
     closePendingDiscardDialog();
   }
 
   function submitBeforeDiscard() {
-    submitDraftCompositions();
+    void submitDraftCompositions();
     closePendingDiscardDialog();
   }
 
@@ -634,6 +627,7 @@ function useGameBoardController({
         ? {
             type: "hand",
             handKey,
+            baselineHandOrder: handEntryOrder(availableHandEntries),
             baselineDraftCompositions: draftCompositions,
           }
         : null,
@@ -747,7 +741,7 @@ function useGameBoardController({
         if (draftedCompositionsView.length > 0) {
           setPendingDiscardIndex(cardIndex);
         } else {
-          onDiscardCard(cardIndex);
+          void onDiscardCard(cardIndex);
         }
       }
       return;
@@ -989,9 +983,6 @@ export function GameBoardView({
           activeDrag={controller.activeDrag}
           draftedCompositionsCount={controller.draftedCompositionsCount}
           spectatorDrafts={spectatorDrafts}
-          canSubmitTablePlay={controller.canSubmitTablePlay}
-          onResetTablePlay={controller.resetDraftCompositions}
-          onSubmitTablePlay={controller.submitDraftCompositions}
         />
         <DragOverlay dropAnimation={null}>
           {activeDraw ? (

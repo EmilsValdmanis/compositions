@@ -1,27 +1,15 @@
 import { useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
-import { GameBoardHeader } from "#/components/game/game-board-header";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { playerName } from "#/components/game/game-view-helpers";
 import {
+  type ActionResult,
   type CardSnapshot,
   type DraftCompositionSnapshot,
   type GameSnapshot,
-  type PlayerSnapshot,
   type RoomSnapshot,
   type TablePlayRequest,
 } from "#/components/game-websocket-provider";
-import { Badge } from "#/components/ui/badge";
-import { Button } from "#/components/ui/button";
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "#/components/ui/card";
 
 const scenarios = mockScenarios;
 
@@ -222,23 +210,8 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
   };
 }
 
-function perspectivePlayerIds(players: PlayerSnapshot[], controlledPlayerId: string) {
-  const controlledFirst = players.find((player) => player.playerId === controlledPlayerId);
-  const others = players.filter((player) => player.playerId !== controlledPlayerId);
-  return controlledFirst
-    ? [controlledFirst.playerId, ...others.map((player) => player.playerId)]
-    : players.map((player) => player.playerId);
-}
-
 export function DevGameUi() {
-  const [scenarioId, setScenarioId] = useState(scenarios[0]?.id ?? "");
-  const scenario = useMemo(
-    () => scenarios.find((item) => item.id === scenarioId) ?? scenarios[0],
-    [scenarioId],
-  );
-  const [perspectivePlayerId, setPerspectivePlayerId] = useState(
-    scenario?.controlledPlayerId ?? "",
-  );
+  const scenario = scenarios[0];
   const [gameOverride, setGameOverride] = useState<GameSnapshot | null>(null);
 
   const players = scenario?.players ?? [];
@@ -249,19 +222,9 @@ export function DevGameUi() {
   );
   const game = rawGame;
 
-  const availablePerspectiveIds = useMemo(
-    () => (scenario ? perspectivePlayerIds(scenario.players, scenario.controlledPlayerId) : []),
-    [scenario],
-  );
+  const resolvedPerspectiveId = scenario?.controlledPlayerId ?? "";
 
-  const resolvedPerspectiveId = availablePerspectiveIds.includes(perspectivePlayerId)
-    ? perspectivePlayerId
-    : (availablePerspectiveIds[0] ?? "");
-
-  const selectedPerspective =
-    players.find((player) => player.playerId === resolvedPerspectiveId) ?? players[0] ?? null;
   const connectedPlayers = players.filter((player) => player.connected).length;
-  const phase = room?.phase ?? "in_progress";
   const isMyTurn = game?.turn.playerId === resolvedPerspectiveId;
   const canDraw = Boolean(game) && isMyTurn && !game.turn.hasDrawn;
   const topDiscardCard = game?.discardPile[0] ?? null;
@@ -269,13 +232,6 @@ export function DevGameUi() {
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(game) && isMyTurn && Boolean(game.turn.hasDrawn);
   const turnPlayerName = playerName(players, game?.turn.playerId);
-
-  function resetScenario(nextScenarioId: string, nextPerspectiveId?: string) {
-    const nextScenario = scenarios.find((item) => item.id === nextScenarioId) ?? scenarios[0];
-    setScenarioId(nextScenario?.id ?? "");
-    setPerspectivePlayerId(nextPerspectiveId ?? nextScenario?.controlledPlayerId ?? "");
-    setGameOverride(null);
-  }
 
   function updateGame(updater: (current: GameSnapshot) => GameSnapshot) {
     setGameOverride((current) => {
@@ -285,123 +241,52 @@ export function DevGameUi() {
   }
 
   if (!import.meta.env.DEV || !scenario || !game || !room) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Dev game UI</CardTitle>
-          <CardDescription>This page is only available in development.</CardDescription>
-        </CardHeader>
-      </Card>
-    );
+    return null;
+  }
+
+  async function handleDiscardCard(cardIndex: number) {
+    updateGame((current) => discardFromHand(current, cardIndex));
+
+    return {
+      action: "discard",
+      playerId: resolvedPerspectiveId,
+      ok: true,
+    } satisfies ActionResult;
+  }
+
+  async function handlePlayTable(play: TablePlayRequest) {
+    updateGame((current) => applyTablePlay(current, play));
+
+    return {
+      action: "play",
+      playerId: resolvedPerspectiveId,
+      ok: true,
+    } satisfies ActionResult;
   }
 
   return (
-    <section className="mx-auto flex h-full min-h-0 w-full max-w-425 flex-1 flex-col gap-4">
-      <Card size="sm">
-        <CardHeader className="gap-3">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle>Dev Game UI</CardTitle>
-              <CardDescription>
-                Switch scenarios and player perspectives to inspect the board as if a live game were
-                in progress.
-              </CardDescription>
-            </div>
-            <CardAction className="flex items-center gap-2 self-start">
-              <Button asChild variant="outline" size="sm">
-                <Link to="/">Back to game</Link>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetScenario(scenario.id, resolvedPerspectiveId)}
-              >
-                Reset mock state
-              </Button>
-            </CardAction>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {scenarios.map((item) => (
-              <Button
-                key={item.id}
-                type="button"
-                size="sm"
-                variant={item.id === scenario.id ? "default" : "outline"}
-                onClick={() => resetScenario(item.id)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {availablePerspectiveIds.map((playerId) => {
-              const player = players.find((item) => item.playerId === playerId);
-              if (!player) {
-                return null;
-              }
-
-              const isActive = player.playerId === resolvedPerspectiveId;
-
-              return (
-                <Button
-                  key={player.playerId}
-                  type="button"
-                  size="sm"
-                  variant={isActive ? "secondary" : "outline"}
-                  onClick={() => setPerspectivePlayerId(player.playerId)}
-                >
-                  {player.name}
-                </Button>
-              );
-            })}
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
-          <p>{scenario.description}</p>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">Room {room.code}</Badge>
-            <Badge variant="outline">Viewing as {selectedPerspective?.name ?? "Unknown"}</Badge>
-            <Badge variant={isMyTurn ? "default" : "secondary"}>
-              {isMyTurn ? "Active player" : "Spectator perspective"}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-visible">
-        <GameBoardHeader
-          phase={phase}
-          roomCode={room.code}
-          isLobbyPhase={false}
-          isMyTurn={Boolean(isMyTurn)}
-          turnPlayerName={turnPlayerName}
+    <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-visible">
+        <GameBoardView
           game={game}
+          roomCode={room.code}
+          playerId={resolvedPerspectiveId}
+          players={players}
+          connectedPlayers={connectedPlayers}
+          turnState={{
+            canDrawDeck,
+            canDrawDiscard,
+            canDiscard,
+            isMyTurn,
+            turnPlayerName,
+          }}
+          topDiscardCard={topDiscardCard}
+          onDiscardCard={handleDiscardCard}
+          onDrawFromDeck={() => updateGame(drawFromDeck)}
+          onDrawFromDiscard={() => updateGame(drawFromDiscard)}
+          onPlayTable={handlePlayTable}
+          disableDraftSync
         />
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-visible">
-          <GameBoardView
-            game={game}
-            roomCode={room.code}
-            playerId={resolvedPerspectiveId}
-            players={players}
-            connectedPlayers={connectedPlayers}
-            turnState={{
-              canDrawDeck,
-              canDrawDiscard,
-              canDiscard,
-              isMyTurn,
-              turnPlayerName,
-            }}
-            topDiscardCard={topDiscardCard}
-            onDiscardCard={(cardIndex) =>
-              updateGame((current) => discardFromHand(current, cardIndex))
-            }
-            onDrawFromDeck={() => updateGame(drawFromDeck)}
-            onDrawFromDiscard={() => updateGame(drawFromDiscard)}
-            onPlayTable={(play) => updateGame((current) => applyTablePlay(current, play))}
-            disableDraftSync
-          />
-        </div>
       </div>
     </section>
   );
