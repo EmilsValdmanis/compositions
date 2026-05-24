@@ -13,7 +13,7 @@ export function DiscardDropZone({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-3xl border border-dashed p-3 transition ${
+      className={`rounded-3xl border border-dashed p-2.5 transition ${
         isOver && !disabled ? "border-primary bg-primary/10" : "border-border bg-muted/20"
       }`}
     >

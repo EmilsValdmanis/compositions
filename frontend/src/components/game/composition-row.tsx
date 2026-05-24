@@ -82,7 +82,14 @@ function CompositionEdgeDraftZone({
             }
             decoration={{
               highlight: "addition",
-              label: <ActivityLabel players={players} playerId={playerId} label="Add" />,
+              label: (
+                <ActivityLabel
+                  players={players}
+                  playerId={playerId}
+                  label="Add"
+                  offsetClassName="translate-y-[2px]"
+                />
+              ),
             }}
           />
         ))}
@@ -109,7 +116,7 @@ function CompositionEdgeDropTarget({
       id={edgeDropId}
       activeClassName={null}
       className={cn(
-        "pointer-events-none absolute top-1/2 z-20 flex h-24 w-8 -translate-y-1/2 items-center justify-center overflow-visible",
+        "pointer-events-none absolute top-1/2 z-20 flex h-28 w-12 -translate-y-1/2 items-center justify-center overflow-visible",
         edge === "start" ? "left-0 -translate-x-1/2" : "right-0 translate-x-1/2",
         active ? "pointer-events-auto" : null,
       )}
@@ -244,7 +251,7 @@ export function CompositionRow({
       id={compositionDropId}
       activeClassName={null}
       className={cn(
-        "relative flex min-w-0 flex-col overflow-visible rounded-3xl border border-border/70 bg-muted/20 p-4",
+        "relative flex min-w-0 flex-col overflow-visible rounded-3xl border border-border/70 bg-muted/20 p-3",
         isHighlightedComposition ? "border-primary/70 bg-primary/5" : null,
       )}
     >
@@ -258,7 +265,7 @@ export function CompositionRow({
         </div>
       ) : null}
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-2.5 flex min-h-5 flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">#{index + 1}</Badge>
           {isNewComposition ? (
@@ -342,12 +349,17 @@ export function CompositionRow({
                           highlight: submittedHighlight ?? "joker_reclaim",
                           label:
                             (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
-                              <ReclaimActivityLabel players={players} playerId={previewPlayerId} />
+                              <ReclaimActivityLabel
+                                players={players}
+                                playerId={previewPlayerId}
+                                offsetClassName="translate-y-[2px]"
+                              />
                             ) : (
                               <ActivityLabel
                                 players={players}
                                 playerId={previewPlayerId}
                                 label="Add"
+                                offsetClassName="translate-y-[2px]"
                               />
                             ),
                         }

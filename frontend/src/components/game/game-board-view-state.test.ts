@@ -7,6 +7,8 @@ import {
   buildVirtualReclaimedJokers,
   inferPlannedJokerReclaims,
   insertHandKeyIntoDraft,
+  moveHandEntry,
+  removeHandKeyFromDrafts,
 } from "#/components/game/game-board-view-state";
 
 describe("applyHandEntryOrder", () => {
@@ -452,5 +454,61 @@ describe("insertHandKeyIntoDraft", () => {
     );
 
     expect(reordered[0]?.handKeys).toEqual([entries[1]!.key, entries[2]!.key, entries[0]!.key]);
+  });
+
+  it("supports returning a staged reclaim to hand before reordering", () => {
+    const entries = buildHandEntries([
+      { rank: 4, suit: 0 },
+      { rank: 5, suit: 0 },
+      { rank: 8, suit: 3 },
+    ]);
+    const availableHandEntries = [entries[0]!, entries[1]!];
+    const draggedEntry = entries[2]!;
+    const draftCompositions = [
+      {
+        id: "draft-1",
+        tableIndex: 0,
+        handKeys: [draggedEntry.key],
+        reclaimTargets: { [draggedEntry.key]: 2 },
+      },
+    ];
+
+    const returnedToHand = removeHandKeyFromDrafts(draftCompositions, draggedEntry.key);
+    const reordered = moveHandEntry(
+      [...availableHandEntries, draggedEntry],
+      draggedEntry.key,
+      availableHandEntries[0]!.key,
+    );
+
+    expect(returnedToHand).toEqual([]);
+    expect(reordered.map((entry) => entry.key)).toEqual([
+      draggedEntry.key,
+      availableHandEntries[0]!.key,
+      availableHandEntries[1]!.key,
+    ]);
+  });
+
+  it("retargets a staged card within the same table composition", () => {
+    const entries = buildHandEntries([
+      { rank: 4, suit: 0 },
+      { rank: 8, suit: 3 },
+    ]);
+
+    const retargeted = insertHandKeyIntoDraft(
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          cardInsertIndices: { [entries[0]!.key]: 0 },
+          reclaimTargets: { [entries[1]!.key]: 2 },
+        },
+      ],
+      entries[1]!.key,
+      "draft-1",
+      entries[0]!.key,
+    );
+
+    expect(retargeted[0]?.handKeys).toEqual([entries[1]!.key, entries[0]!.key]);
   });
 });

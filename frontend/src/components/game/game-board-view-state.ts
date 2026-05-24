@@ -24,6 +24,7 @@ export type ActiveDrag =
   | {
       type: "hand";
       handKey: string;
+      baselineHandOrder: string[];
       baselineDraftCompositions: DraftComposition[];
     };
 

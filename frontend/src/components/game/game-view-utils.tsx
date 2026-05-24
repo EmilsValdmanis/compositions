@@ -34,23 +34,28 @@ export function ActivityLabel({
   label = "New",
   icon,
   className,
+  offsetClassName,
 }: {
   players: PlayerSnapshot[];
   playerId?: string;
   label?: string;
   icon?: React.ComponentProps<typeof HugeiconsIcon>["icon"];
   className?: string;
+  offsetClassName?: string;
 }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-1 text-[0.65rem] font-medium text-muted-foreground",
+        "flex h-5 items-center gap-1 text-[0.65rem] font-medium text-muted-foreground",
+        offsetClassName,
         className,
       )}
     >
       {icon ? <HugeiconsIcon icon={icon} className="size-3.5" strokeWidth={2} /> : null}
       <span className="uppercase tracking-wide">{label}</span>
-      {playerId ? <PlayerMarker players={players} playerId={playerId} className="size-4" /> : null}
+      {playerId ? (
+        <PlayerMarker players={players} playerId={playerId} className="size-4 shrink-0" />
+      ) : null}
     </div>
   );
 }
