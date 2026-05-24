@@ -20,7 +20,6 @@ import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
-import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
