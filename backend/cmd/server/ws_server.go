@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/EmilsValdmanis/compositions/internal/game"
@@ -22,6 +23,8 @@ var writeControl = func(conn *websocket.Conn, messageType int, data []byte, dead
 }
 
 var (
+	wsDataWriteLocks      sync.Map
+	defaultWSReadLimit    int64 = 64 * 1024
 	defaultWSReadTimeout  = 75 * time.Second
 	defaultWSPingInterval = 25 * time.Second
 	defaultWSWriteTimeout = 10 * time.Second
@@ -172,7 +175,7 @@ type pendingDealChoiceSnapshot struct {
 
 type playerSnapshot struct {
 	PlayerID     string `json:"playerId"`
-	SessionID    string `json:"sessionId"`
+	SessionID    string `json:"sessionId,omitempty"`
 	Name         string `json:"name"`
 	ImageURL     string `json:"imageUrl,omitempty"`
 	Connected    bool   `json:"connected"`
@@ -300,7 +303,9 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *wsServer) handleConnection(conn *websocket.Conn) {
+	defer wsDataWriteLocks.Delete(conn)
 	defer conn.Close()
+	conn.SetReadLimit(defaultWSReadLimit)
 	_ = setWSReadDeadline(conn)
 	conn.SetPongHandler(func(string) error {
 		return setWSReadDeadline(conn)
@@ -716,6 +721,11 @@ func decodePayload(data json.RawMessage, target any) error {
 }
 
 func writeEvent(conn *websocket.Conn, messageType string, data any) error {
+	lock, _ := wsDataWriteLocks.LoadOrStore(conn, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
 	_ = conn.SetWriteDeadline(time.Now().Add(defaultWSWriteTimeout))
 	if err := conn.WriteJSON(wsEnvelope{Type: messageType, Data: mustMarshalRawMessage(data)}); err != nil {
 		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) || errors.Is(err, websocket.ErrCloseSent) {

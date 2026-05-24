@@ -14,22 +14,28 @@ import (
 
 const migrationTimeout = 30 * time.Second
 
+var fatalOnRunError = log.Fatal
+var databaseURLFromEnv = database.URLFromEnv
+var runDatabaseMigrations = database.RunMigrations
+
 func main() {
 	direction, err := migrationDirectionFromArgs(os.Args[1:])
 	if err != nil {
-		log.Fatal(err)
+		fatalOnRunError(err)
+		return
 	}
 
-	databaseURL, err := database.URLFromEnv()
+	databaseURL, err := databaseURLFromEnv()
 	if err != nil {
-		log.Fatal(err)
+		fatalOnRunError(err)
+		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), migrationTimeout)
 	defer cancel()
 
-	if err := database.RunMigrations(ctx, databaseURL, direction); err != nil {
-		log.Fatal(err)
+	if err := runDatabaseMigrations(ctx, databaseURL, direction); err != nil {
+		fatalOnRunError(err)
 	}
 }
 

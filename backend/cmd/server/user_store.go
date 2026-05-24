@@ -12,6 +12,14 @@ import (
 const defaultUserStoreTimeout = 5 * time.Second
 
 var openConfiguredUserStore = newConfiguredUserStore
+var databaseURLFromEnv = database.URLFromEnv
+var newDatabaseUserStore = database.NewUserStore
+var upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) error {
+	return store.UpsertUser(ctx, user)
+}
+var closeStoredUserStore = func(store *database.UserStore) {
+	store.Close()
+}
 
 type userStore interface {
 	UpsertUser(ctx context.Context, user authenticatedUser) error
@@ -29,7 +37,7 @@ type postgresUserStore struct {
 }
 
 func newConfiguredUserStore() (userStore, error) {
-	databaseURL, err := database.URLFromEnv()
+	databaseURL, err := databaseURLFromEnv()
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +45,7 @@ func newConfiguredUserStore() (userStore, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 
-	store, err := database.NewUserStore(ctx, databaseURL)
+	store, err := newDatabaseUserStore(ctx, databaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +58,7 @@ func (s *postgresUserStore) UpsertUser(ctx context.Context, user authenticatedUs
 		return errors.New("user store is not configured")
 	}
 
-	return s.store.UpsertUser(ctx, database.UserRecord{
+	return upsertStoredUser(ctx, s.store, database.UserRecord{
 		ID:       strings.TrimSpace(user.ID),
 		Name:     strings.TrimSpace(user.Name),
 		Email:    strings.TrimSpace(user.Email),
@@ -63,6 +71,6 @@ func (s *postgresUserStore) Close() error {
 		return nil
 	}
 
-	s.store.Close()
+	closeStoredUserStore(s.store)
 	return nil
 }

@@ -746,7 +746,6 @@ func (r *room) snapshot() roomSnapshot {
 		}
 		players = append(players, playerSnapshot{
 			PlayerID:     player.player.ID,
-			SessionID:    player.sessionID,
 			Name:         player.name,
 			ImageURL:     player.imageURL,
 			Connected:    player.connected,
