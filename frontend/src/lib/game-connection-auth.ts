@@ -1,6 +1,9 @@
 import { getSessionCookie } from "better-auth/cookies";
 
-import { AUTH_COOKIE_PREFIX, AUTH_SESSION_COOKIE_NAME } from "#/lib/auth";
+import {
+  AUTH_COOKIE_PREFIX,
+  AUTH_SESSION_COOKIE_NAME,
+} from "#/lib/auth";
 
 type GameConnectionSession = {
   user: {
