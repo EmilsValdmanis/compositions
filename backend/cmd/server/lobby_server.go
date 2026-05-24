@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"log/slog"
+	"maps"
 	"math/rand"
 	"sort"
 	"strings"
@@ -934,11 +935,9 @@ func mergeCompositionActivities(target *game.TurnActivitySnapshot, updates []gam
 			}
 			if len(update.CardActivities) > 0 {
 				if existing.CardActivities == nil {
-					existing.CardActivities = map[int]game.CardActivitySnapshot{}
+					existing.CardActivities = make(map[int]game.CardActivitySnapshot, len(update.CardActivities))
 				}
-				for index, activity := range update.CardActivities {
-					existing.CardActivities[index] = activity
-				}
+				maps.Copy(existing.CardActivities, update.CardActivities)
 			}
 			continue
 		}
@@ -951,9 +950,7 @@ func mergeCompositionActivities(target *game.TurnActivitySnapshot, updates []gam
 func buildCompositionActivities(playerID string, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim, active []*game.Composition) []game.CompositionActivitySnapshot {
 	activities := make([]game.CompositionActivitySnapshot, 0, len(comps)+len(additions)+len(reclaims))
 	newCount := len(active) - len(comps)
-	if newCount < 0 {
-		newCount = 0
-	}
+	newCount = max(newCount, 0)
 	for offset, comp := range comps {
 		if comp == nil {
 			continue
@@ -1056,16 +1053,10 @@ func cloneDraftCompositionSnapshots(source []game.DraftCompositionSnapshot) []ga
 			next.InsertIndex = &index
 		}
 		if len(draft.CardInsertIndices) > 0 {
-			next.CardInsertIndices = make(map[string]int, len(draft.CardInsertIndices))
-			for key, value := range draft.CardInsertIndices {
-				next.CardInsertIndices[key] = value
-			}
+			next.CardInsertIndices = maps.Clone(draft.CardInsertIndices)
 		}
 		if len(draft.ReclaimTargets) > 0 {
-			next.ReclaimTargets = make(map[string]int, len(draft.ReclaimTargets))
-			for key, value := range draft.ReclaimTargets {
-				next.ReclaimTargets[key] = value
-			}
+			next.ReclaimTargets = maps.Clone(draft.ReclaimTargets)
 		}
 		cloned = append(cloned, next)
 	}
@@ -1080,10 +1071,7 @@ func cloneCompositionActivitySnapshots(source []game.CompositionActivitySnapshot
 	for _, activity := range source {
 		next := activity
 		if len(activity.CardActivities) > 0 {
-			next.CardActivities = make(map[int]game.CardActivitySnapshot, len(activity.CardActivities))
-			for index, cardActivity := range activity.CardActivities {
-				next.CardActivities[index] = cardActivity
-			}
+			next.CardActivities = maps.Clone(activity.CardActivities)
 		}
 		cloned = append(cloned, next)
 	}
