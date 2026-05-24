@@ -25,9 +25,9 @@ var writeControl = func(conn *websocket.Conn, messageType int, data []byte, dead
 var (
 	wsDataWriteLocks      sync.Map
 	defaultWSReadLimit    int64 = 64 * 1024
-	defaultWSReadTimeout  = 75 * time.Second
-	defaultWSPingInterval = 25 * time.Second
-	defaultWSWriteTimeout = 10 * time.Second
+	defaultWSReadTimeout        = 75 * time.Second
+	defaultWSPingInterval       = 25 * time.Second
+	defaultWSWriteTimeout       = 10 * time.Second
 )
 
 func setWSReadDeadline(conn *websocket.Conn) error {
