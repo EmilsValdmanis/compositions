@@ -281,7 +281,7 @@ function getDealerIndex(room: RoomSnapshot | null) {
   return hostIndex >= 0 ? hostIndex : 0;
 }
 
-export function GameWebSocketProvider({ children }: { children: React.ReactNode }) {
+function useGameWebSocketController(): GameWebSocketContextValue {
   const socketRef = useRef<WebSocket | null>(null);
   const connectAttemptRef = useRef(0);
   const connectInFlightRef = useRef(false);
@@ -609,6 +609,11 @@ export function GameWebSocketProvider({ children }: { children: React.ReactNode 
     discardCard: (cardIndex) => send("discard", { cardIndex }, { awaitResult: true }),
   };
 
+  return value;
+}
+
+export function GameWebSocketProvider({ children }: { children: React.ReactNode }) {
+  const value = useGameWebSocketController();
   return <GameWebSocketContext value={value}>{children}</GameWebSocketContext>;
 }
 
