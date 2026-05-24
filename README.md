@@ -29,7 +29,7 @@ The full rule set lives in [RULES.md](RULES.md).
 ## Repository Layout
 
 - `frontend/`: the web app built with React, TanStack Start, and Vite+
-- `backend/`: the Go server and game logic module
+- `backend/`: the Go server and game logic module, including Postgres persistence via `pgx` + `sqlc`
 - `RULES.md`: the current written rules for the game
 
 ## Current Status

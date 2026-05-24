@@ -86,6 +86,11 @@ func runServer(addr string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := server.Close(); err != nil {
+			slog.Warn("close user store failed", "error", err)
+		}
+	}()
 	slog.Info("server starting", "addr", addr, "allowedOrigin", server.allowedOrigin)
 	handler := server.routes()
 	if sentryEnabled() {

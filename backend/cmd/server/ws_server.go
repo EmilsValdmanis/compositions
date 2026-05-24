@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -183,6 +184,7 @@ type playerSnapshot struct {
 type wsServer struct {
 	lobby         *lobbyServer
 	verifier      sessionVerifier
+	userStore     userStore
 	allowedOrigin string
 	upgrader      websocket.Upgrader
 }
@@ -196,9 +198,18 @@ func newWSServerWithVerifier(verifier sessionVerifier) *wsServer {
 }
 
 func newWSServerWithAllowedOrigin(verifier sessionVerifier, allowedOrigin string) *wsServer {
+	return newWSServerWithDependencies(verifier, noopUserStore{}, allowedOrigin)
+}
+
+func newWSServerWithDependencies(verifier sessionVerifier, store userStore, allowedOrigin string) *wsServer {
+	if store == nil {
+		store = noopUserStore{}
+	}
+
 	server := &wsServer{
 		lobby:         newLobbyServer(),
 		verifier:      verifier,
+		userStore:     store,
 		allowedOrigin: normalizeOrigin(allowedOrigin),
 	}
 	server.upgrader = websocket.Upgrader{
@@ -219,8 +230,21 @@ func newConfiguredWSServer() (*wsServer, error) {
 		return nil, errors.New("BETTER_AUTH_URL must be a valid absolute URL")
 	}
 
+	store, err := openConfiguredUserStore()
+	if err != nil {
+		return nil, err
+	}
+
 	verifier := newBetterAuthSessionVerifier(baseURL, nil)
-	return newWSServerWithAllowedOrigin(verifier, allowedOrigin), nil
+	return newWSServerWithDependencies(verifier, store, allowedOrigin), nil
+}
+
+func (s *wsServer) Close() error {
+	if s == nil || s.userStore == nil {
+		return nil
+	}
+
+	return s.userStore.Close()
 }
 
 func (s *wsServer) isAllowedOrigin(origin string) bool {
@@ -359,6 +383,11 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 		}
 		user = verifiedUser
 	}
+	if err := s.persistAuthenticatedUser(user); err != nil {
+		slog.Error("connect: persist user failed", "sessionID", req.SessionID, "userID", user.ID, "error", err)
+		s.writeError(conn, err)
+		return "", true
+	}
 
 	event, roomState, recipients, err := s.lobby.connectWithUser(req.SessionID, user, conn)
 	if err != nil {
@@ -391,6 +420,21 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 	}
 
 	return event.SessionID, false
+}
+
+func (s *wsServer) persistAuthenticatedUser(user authenticatedUser) error {
+	if s == nil || !user.isAuthenticated() {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+
+	if err := s.userStore.UpsertUser(ctx, user); err != nil {
+		return fmt.Errorf("save user: %w", err)
+	}
+
+	return nil
 }
 
 func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
