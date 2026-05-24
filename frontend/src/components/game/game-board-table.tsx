@@ -213,7 +213,6 @@ export function GameBoardTable({
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
-                  <Badge variant="outline">{composition.cards.length} cards</Badge>
                 </div>
                 <div className="flex items-start gap-2">
                   {draftCardInstances(composition.cards).map(({ card, key }) => (
@@ -235,7 +234,6 @@ export function GameBoardTable({
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
-                  <Badge variant="outline">{composition.entries.length} cards</Badge>
                 </div>
                 <SortableContext
                   items={composition.entries.map((entry) => entry.key)}
