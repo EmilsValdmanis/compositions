@@ -2,7 +2,8 @@ import { HeadContent, createRootRouteWithContext } from "@tanstack/react-router"
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { authClient } from "#/lib/auth-client";
+import { auth } from "#/lib/auth";
+import { loadVerifiedSession } from "#/lib/verified-session";
 import {
   GlobalErrorComponent,
   GlobalNotFoundComponent,
@@ -17,13 +18,8 @@ void rootHeadContentMarker;
 const getSession = createServerFn({ method: "GET" })
   .inputValidator(z.undefined())
   .handler(async () => {
-    const headers = getRequestHeaders();
-    const { data: session } = await authClient.getSession({
-      fetchOptions: {
-        headers,
-      },
-    });
-    return session;
+    const headers = new Headers(getRequestHeaders());
+    return loadVerifiedSession(headers, auth.api.getSession);
   });
 
 export const Route = createRootRouteWithContext<{
