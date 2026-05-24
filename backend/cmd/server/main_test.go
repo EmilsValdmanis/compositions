@@ -22,6 +22,8 @@ func TestRunServerAndMain(t *testing.T) {
 	defer func() { listenAndServe = originalListen }()
 	originalFatal := fatalOnRunError
 	defer func() { fatalOnRunError = originalFatal }()
+	originalOpenConfiguredUserStore := openConfiguredUserStore
+	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 	originalInit := sentryInit
 	defer func() { sentryInit = originalInit }()
 	originalFlush := sentryFlush
@@ -29,9 +31,11 @@ func TestRunServerAndMain(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
 	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("DATABASE_URL", "postgres://unused")
 	t.Setenv("SENTRY_ENVIRONMENT", "development")
 	sentryFlush = func(timeout time.Duration) bool { return true }
 	sentryInit = func(options sentry.ClientOptions) error { return nil }
+	openConfiguredUserStore = func() (userStore, error) { return noopUserStore{}, nil }
 
 	calledAddrs := make([]string, 0, 2)
 	listenAndServe = func(addr string, handler http.Handler) error {
@@ -360,9 +364,13 @@ func TestMultiHandler(t *testing.T) {
 func TestRunServerWrapsHandlerWhenSentryEnabled(t *testing.T) {
 	originalListen := listenAndServe
 	defer func() { listenAndServe = originalListen }()
+	originalOpenConfiguredUserStore := openConfiguredUserStore
+	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("DATABASE_URL", "postgres://unused")
 	t.Setenv("SENTRY_ENVIRONMENT", "production")
 	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
+	openConfiguredUserStore = func() (userStore, error) { return noopUserStore{}, nil }
 
 	listenAndServe = func(addr string, handler http.Handler) error {
 		if addr != ":0" {

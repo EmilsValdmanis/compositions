@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/EmilsValdmanis/compositions/internal/game"
@@ -21,9 +24,11 @@ var writeControl = func(conn *websocket.Conn, messageType int, data []byte, dead
 }
 
 var (
-	defaultWSReadTimeout  = 75 * time.Second
-	defaultWSPingInterval = 25 * time.Second
-	defaultWSWriteTimeout = 10 * time.Second
+	wsDataWriteLocks      sync.Map
+	defaultWSReadLimit    int64 = 64 * 1024
+	defaultWSReadTimeout        = 75 * time.Second
+	defaultWSPingInterval       = 25 * time.Second
+	defaultWSWriteTimeout       = 10 * time.Second
 )
 
 func setWSReadDeadline(conn *websocket.Conn) error {
@@ -171,7 +176,7 @@ type pendingDealChoiceSnapshot struct {
 
 type playerSnapshot struct {
 	PlayerID     string `json:"playerId"`
-	SessionID    string `json:"sessionId"`
+	SessionID    string `json:"sessionId,omitempty"`
 	Name         string `json:"name"`
 	ImageURL     string `json:"imageUrl,omitempty"`
 	Connected    bool   `json:"connected"`
@@ -183,6 +188,7 @@ type playerSnapshot struct {
 type wsServer struct {
 	lobby         *lobbyServer
 	verifier      sessionVerifier
+	userStore     userStore
 	allowedOrigin string
 	upgrader      websocket.Upgrader
 }
@@ -196,9 +202,18 @@ func newWSServerWithVerifier(verifier sessionVerifier) *wsServer {
 }
 
 func newWSServerWithAllowedOrigin(verifier sessionVerifier, allowedOrigin string) *wsServer {
+	return newWSServerWithDependencies(verifier, noopUserStore{}, allowedOrigin)
+}
+
+func newWSServerWithDependencies(verifier sessionVerifier, store userStore, allowedOrigin string) *wsServer {
+	if store == nil {
+		store = noopUserStore{}
+	}
+
 	server := &wsServer{
 		lobby:         newLobbyServer(),
 		verifier:      verifier,
+		userStore:     store,
 		allowedOrigin: normalizeOrigin(allowedOrigin),
 	}
 	server.upgrader = websocket.Upgrader{
@@ -219,8 +234,21 @@ func newConfiguredWSServer() (*wsServer, error) {
 		return nil, errors.New("BETTER_AUTH_URL must be a valid absolute URL")
 	}
 
+	store, err := openConfiguredUserStore()
+	if err != nil {
+		return nil, err
+	}
+
 	verifier := newBetterAuthSessionVerifier(baseURL, nil)
-	return newWSServerWithAllowedOrigin(verifier, allowedOrigin), nil
+	return newWSServerWithDependencies(verifier, store, allowedOrigin), nil
+}
+
+func (s *wsServer) Close() error {
+	if s == nil || s.userStore == nil {
+		return nil
+	}
+
+	return s.userStore.Close()
 }
 
 func (s *wsServer) isAllowedOrigin(origin string) bool {
@@ -276,7 +304,9 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *wsServer) handleConnection(conn *websocket.Conn) {
+	defer wsDataWriteLocks.Delete(conn)
 	defer conn.Close()
+	conn.SetReadLimit(defaultWSReadLimit)
 	_ = setWSReadDeadline(conn)
 	conn.SetPongHandler(func(string) error {
 		return setWSReadDeadline(conn)
@@ -359,6 +389,11 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 		}
 		user = verifiedUser
 	}
+	if err := s.persistAuthenticatedUser(user); err != nil {
+		slog.Error("connect: persist user failed", "sessionID", req.SessionID, "userID", user.ID, "error", err)
+		s.writeError(conn, err)
+		return "", true
+	}
 
 	event, roomState, recipients, err := s.lobby.connectWithUser(req.SessionID, user, conn)
 	if err != nil {
@@ -391,6 +426,21 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 	}
 
 	return event.SessionID, false
+}
+
+func (s *wsServer) persistAuthenticatedUser(user authenticatedUser) error {
+	if s == nil || !user.isAuthenticated() {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+
+	if err := s.userStore.UpsertUser(ctx, user); err != nil {
+		return fmt.Errorf("save user: %w", err)
+	}
+
+	return nil
 }
 
 func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -672,6 +722,11 @@ func decodePayload(data json.RawMessage, target any) error {
 }
 
 func writeEvent(conn *websocket.Conn, messageType string, data any) error {
+	lock, _ := wsDataWriteLocks.LoadOrStore(conn, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+
 	_ = conn.SetWriteDeadline(time.Now().Add(defaultWSWriteTimeout))
 	if err := conn.WriteJSON(wsEnvelope{Type: messageType, Data: mustMarshalRawMessage(data)}); err != nil {
 		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) || errors.Is(err, websocket.ErrCloseSent) {
@@ -785,9 +840,7 @@ func cloneIndexMap(source map[string]int) map[string]int {
 		return nil
 	}
 	cloned := make(map[string]int, len(source))
-	for key, value := range source {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, source)
 	return cloned
 }
 

@@ -14,6 +14,12 @@ Run commands from inside `backend/`.
 
 The websocket server now requires `BETTER_AUTH_URL` to point at the frontend app's Better Auth base URL, for example `http://localhost:3000` in local development.
 
+Authenticated websocket users are persisted to Postgres on connect. The backend uses:
+
+- `pgx/v5` for the connection pool and driver
+- `sqlc` to generate typed query code from SQL files
+- `golang-migrate` to apply SQL migrations from `internal/database/migrations/`
+
 Optional Sentry configuration:
 
 - `SENTRY_DSN`: enables Sentry when set outside development
@@ -26,7 +32,47 @@ The backend initializes Sentry for error monitoring, request tracing, and struct
 | `make run`   | Starts the server on `:8080`              |
 | `make build` | Builds the server binary to `dist/server` |
 | `make test`  | Runs `go vet` and the test suite          |
+| `make test-integration` | Runs Postgres integration tests with Testcontainers |
 | `make bench` | Runs benchmarks for game logic            |
+| `make db-up` | Starts local Postgres with Docker Compose |
+| `make db-down` | Stops local Postgres                    |
+| `make migrate-up` | Applies all pending database migrations |
+| `make migrate-down` | Rolls back the latest migration     |
+| `make sqlc` | Regenerates typed query code from SQL     |
+
+## Local Postgres Setup
+
+1. Copy `.env.sample` to `.env` if you have not already.
+2. Start Postgres with `make db-up`.
+3. Apply the schema with `make migrate-up`.
+4. Start the backend with `make run`.
+
+The default local connection string is:
+
+`postgres://postgres:postgres@localhost:5432/compositions?sslmode=disable`
+
+## How `pgx` + `sqlc` Fit Together
+
+- SQL lives in `internal/database/queries/*.sql`.
+- `sqlc` reads those queries plus `internal/database/schema.sql` and generates Go code into `internal/database/sqlc/`.
+- `internal/database/store.go` wraps the generated code in a small `UserStore` used by the websocket server.
+
+If you change the schema or queries:
+
+1. Update the migration in `internal/database/migrations/`.
+2. Update `internal/database/schema.sql` so `sqlc` sees the latest schema.
+3. Run `make sqlc`.
+4. Run `make test` and `make test-integration`.
+
+`make migrate-up` and `make migrate-down` use `golang-migrate` under the hood via `cmd/migrate`.
+
+## Testing
+
+- `make test` runs the fast unit test suite.
+- `make test-integration` starts a real Postgres container with Testcontainers and verifies migrations plus user persistence.
+- The PR validation workflow runs both.
+
+To run the integration tests locally you need Docker running.
 
 ## Server Notes
 

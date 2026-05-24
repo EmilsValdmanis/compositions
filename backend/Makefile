@@ -1,4 +1,4 @@
-.PHONY: run build test bench
+.PHONY: run build test test-integration bench sqlc migrate-up migrate-down db-up db-down db-logs
 
 ifneq (,$(wildcard .env))
 include .env
@@ -17,5 +17,26 @@ build:
 test:
 	go vet ./... && go test -cover ./...
 
+test-integration:
+	go test -tags=integration ./internal/database/...
+
 bench:
 	go test -run '^$$' -bench '$(BENCH)' $(if $(filter 1,$(BENCHMEM)),-benchmem,) ./...
+
+sqlc:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.29.0 generate
+
+migrate-up:
+	go run ./cmd/migrate up
+
+migrate-down:
+	go run ./cmd/migrate down
+
+db-up:
+	docker compose up -d postgres
+
+db-down:
+	docker compose down
+
+db-logs:
+	docker compose logs -f postgres

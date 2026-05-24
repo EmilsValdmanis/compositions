@@ -15,7 +15,17 @@ import (
 	sentryslog "github.com/getsentry/sentry-go/slog"
 )
 
-var listenAndServe = http.ListenAndServe
+var listenAndServe = func(addr string, handler http.Handler) error {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+	return server.ListenAndServe()
+}
 var fatalOnRunError = log.Fatal
 var sentryInit = sentry.Init
 var sentryFlush = sentry.Flush
@@ -86,6 +96,11 @@ func runServer(addr string) error {
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if err := server.Close(); err != nil {
+			slog.Warn("close user store failed", "error", err)
+		}
+	}()
 	slog.Info("server starting", "addr", addr, "allowedOrigin", server.allowedOrigin)
 	handler := server.routes()
 	if sentryEnabled() {

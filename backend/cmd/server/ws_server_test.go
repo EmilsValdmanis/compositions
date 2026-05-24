@@ -776,12 +776,12 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	httpServer2 := httptest.NewServer(server.routes())
 	defer httpServer2.Close()
 	soloConn := mustDialWS(t, httpServer2.URL)
-	mustConnectSession(t, soloConn, "")
+	soloConnected := mustConnectSession(t, soloConn, "")
 	mustSendEnvelope(t, soloConn, "create_room", createRoomRequest{Name: "Solo"})
 	soloRoom := mustReadRoomState(t, soloConn)
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "need at least 2 players to start")
-	soloHostSession := server.lobby.sessions[soloRoom.Players[0].SessionID]
+	soloHostSession := server.lobby.sessions[soloConnected.SessionID]
 	delete(server.lobby.rooms, soloRoom.Code)
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "join a room first")
@@ -791,6 +791,36 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	soloHostSession.roomCode = ""
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "join a room first")
+}
+
+func TestRoomStateOmitsPlayerSessionIDs(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	mustConnectSession(t, hostConn, "")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+	if hostRoom.Players[0].SessionID != "" {
+		t.Fatalf("hostRoom.Players[0].SessionID = %q; want empty", hostRoom.Players[0].SessionID)
+	}
+
+	guestConn := mustDialWS(t, httpServer.URL)
+	defer guestConn.Close()
+	mustConnectSession(t, guestConn, "")
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Guest"})
+	guestRoom := mustReadRoomState(t, guestConn)
+	hostRoom = mustReadRoomState(t, hostConn)
+
+	for _, room := range []roomSnapshot{hostRoom, guestRoom} {
+		for i, player := range room.Players {
+			if player.SessionID != "" {
+				t.Fatalf("room.Players[%d].SessionID = %q; want empty", i, player.SessionID)
+			}
+		}
+	}
 }
 
 func TestHandleConnectionReturnsWhenInitialConnectedWriteFails(t *testing.T) {
