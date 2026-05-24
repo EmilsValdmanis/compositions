@@ -13,7 +13,6 @@ import {
 import {
   type CompositionActivitySnapshot,
   type DraftCompositionSnapshot,
-  type GameSnapshot,
   type PlayerSnapshot,
   type TurnActivitySnapshot,
 } from "#/components/game-websocket-provider";
@@ -22,7 +21,7 @@ import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-
 import { GameCard } from "#/components/game/game-card";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
+import { Card, CardContent } from "#/components/ui/card";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -78,14 +77,12 @@ function draftPreviewForComposition(
 }
 
 export function GameBoardTable({
-  game,
   tableCompositions,
   newCompositions,
   players,
   turnActivity,
   canCompose,
 }: {
-  game: GameSnapshot | null;
   tableCompositions: TableCompositionView[];
   newCompositions: DraftedCompositionView[];
   players: PlayerSnapshot[];
@@ -97,11 +94,6 @@ export function GameBoardTable({
     id: NEW_COMPOSITION_DROP_ID,
     disabled: !canCompose,
   });
-  const tablePoints = (game?.activeCompositions ?? []).reduce(
-    (total: number, composition: GameSnapshot["activeCompositions"][number]) =>
-      total + composition.points,
-    0,
-  );
   const hasVisibleCompositions = tableCompositions.length > 0;
   const activityByIndex = new Map<number, CompositionActivitySnapshot>(
     (turnActivity?.compositionActivities ?? []).map((activity: CompositionActivitySnapshot) => [
@@ -148,12 +140,6 @@ export function GameBoardTable({
 
   return (
     <Card className="min-h-0 overflow-hiddden overflow-y-auto xl:flex-1">
-      <CardHeader>
-        <CardTitle>Table</CardTitle>
-        <CardAction>
-          <Badge variant="outline">{tablePoints} pts</Badge>
-        </CardAction>
-      </CardHeader>
       <CardContent className="min-h-0 flex-1">
         <div
           ref={setNodeRef}

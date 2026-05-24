@@ -275,6 +275,7 @@ function GameBoardLayout({
   activeDrag,
   draftedCompositionsCount,
   spectatorDrafts,
+  onResetDraftCompositions,
 }: {
   game: GameSnapshot | null;
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
@@ -289,12 +290,12 @@ function GameBoardLayout({
   activeDrag: ActiveDrag | null;
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
+  onResetDraftCompositions: () => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <GameBoardTable
-          game={game}
           tableCompositions={tableCompositions}
           newCompositions={newCompositions}
           players={players}
@@ -318,7 +319,13 @@ function GameBoardLayout({
         />
 
         <div className="flex flex-col min-h-0 gap-4">
-          <GameBoardPlayers players={players} game={game} connectedPlayers={connectedPlayers} />
+          <GameBoardPlayers
+            players={players}
+            game={game}
+            connectedPlayers={connectedPlayers}
+            hasDraftedCompositions={draftedCompositionsCount > 0}
+            onResetDraftCompositions={onResetDraftCompositions}
+          />
           <GameBoardPiles
             drawPileCount={game?.drawPileCount ?? 0}
             topDiscardCard={topDiscardCard}
@@ -983,6 +990,7 @@ export function GameBoardView({
           activeDrag={controller.activeDrag}
           draftedCompositionsCount={controller.draftedCompositionsCount}
           spectatorDrafts={spectatorDrafts}
+          onResetDraftCompositions={controller.resetDraftCompositions}
         />
         <DragOverlay dropAnimation={null}>
           {activeDraw ? (
