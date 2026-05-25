@@ -31,7 +31,7 @@ func TestRunServerAndMain(t *testing.T) {
 	defer func() { sentryFlush = originalFlush }()
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
-	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "https://backend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("DATABASE_URL", "postgres://unused")
@@ -371,7 +371,7 @@ func TestRunServerWrapsHandlerWhenSentryEnabled(t *testing.T) {
 	defer func() { listenAndServe = originalListen }()
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
-	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "https://backend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("DATABASE_URL", "postgres://unused")

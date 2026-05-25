@@ -11,11 +11,15 @@ import (
 	"time"
 
 	dbsqlc "github.com/EmilsValdmanis/compositions/internal/database/sqlc"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrSessionNotFound = errors.New("session not found")
+var ErrUserConflict = errors.New("user conflict")
+
+const postgresUniqueViolation = "23505"
 
 type UserRecord struct {
 	ID       string
@@ -100,12 +104,16 @@ func (s *UserStore) UpsertUser(ctx context.Context, user UserRecord) error {
 	name := strings.TrimSpace(user.Name)
 	imageURL := strings.TrimSpace(user.ImageURL)
 
-	return s.queries.UpsertUser(ctx, dbsqlc.UpsertUserParams{
+	err := s.queries.UpsertUser(ctx, dbsqlc.UpsertUserParams{
 		ID:       userID,
 		Name:     name,
 		Email:    email,
 		ImageUrl: imageURL,
 	})
+	if isUniqueViolation(err) {
+		return ErrUserConflict
+	}
+	return err
 }
 
 func normalizeEmail(email string) string {
@@ -181,6 +189,9 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 		&record.ExpiresAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SessionUserRecord{}, ErrSessionNotFound
+		}
 		return SessionUserRecord{}, err
 	}
 
@@ -222,4 +233,13 @@ func (s *UserStore) Close() {
 	}
 
 	s.pool.Close()
+}
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == postgresUniqueViolation
 }

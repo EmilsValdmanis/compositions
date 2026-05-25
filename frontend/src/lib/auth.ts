@@ -1,30 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { authURL, type AuthSession } from "#/lib/auth-shared";
 import { loadVerifiedSession } from "#/lib/verified-session";
-
-export type AuthSession = {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image: string;
-  };
-};
-
-function authURL(path: string) {
-  const serverURL = process.env.VITE_GAME_SERVER_URL;
-
-  if (!serverURL) {
-    throw new Error("missing VITE_GAME_SERVER_URL");
-  }
-
-  return new URL(path, serverURL).toString();
-}
 
 async function getSessionFromBackend({ headers }: { headers: Headers }) {
   const cookie = headers.get("cookie");
-  const response = await fetch(authURL("/auth/session"), {
+  const response = await fetch(authURL("/auth/session", process.env.VITE_GAME_SERVER_URL), {
     headers: cookie
       ? {
           cookie,

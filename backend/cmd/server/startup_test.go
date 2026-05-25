@@ -49,7 +49,7 @@ func TestNewConfiguredWSServerPropagatesStoreError(t *testing.T) {
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 
-	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "https://backend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	openConfiguredUserStore = func() (userStore, error) {
@@ -94,7 +94,7 @@ func TestRunServerWarnsWhenCloseFails(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
 
-	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "https://backend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	store := &closingUserStore{err: errors.New("close boom")}
@@ -126,7 +126,7 @@ func TestNewConfiguredWSServerClosesStoreOnAuthError(t *testing.T) {
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 
-	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "https://backend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	store := &closingUserStore{}

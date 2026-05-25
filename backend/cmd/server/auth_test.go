@@ -309,7 +309,9 @@ func newOAuthCallbackHandler(store *stubAuthStore, now time.Time) *authHandler {
 					TokenURL: "https://oauth.test/token",
 				},
 			},
-			sessionTTL: 2 * time.Hour,
+			frontendURL:    "http://frontend.test/",
+			frontendOrigin: "http://frontend.test",
+			sessionTTL:     2 * time.Hour,
 		},
 		store: store,
 		now:   func() time.Time { return now },
@@ -359,6 +361,7 @@ func TestAuthConfigHelpers(t *testing.T) {
 		}
 
 		t.Setenv("BASE_URL", "https://backend.test")
+		t.Setenv("FRONTEND_URL", "https://frontend.test")
 		t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 		t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 		t.Setenv("COOKIE_SECURE", "false")
@@ -368,6 +371,22 @@ func TestAuthConfigHelpers(t *testing.T) {
 		}
 		if !handler.config.secureCookie {
 			t.Fatal("secureCookie = false; want true for https base url")
+		}
+		if handler.config.frontendOrigin != "https://frontend.test" {
+			t.Fatalf("frontendOrigin = %q; want https://frontend.test", handler.config.frontendOrigin)
+		}
+	})
+
+	t.Run("configured auth handler rejects insecure non-localhost base url", func(t *testing.T) {
+		t.Setenv("BASE_URL", "http://backend.test")
+		t.Setenv("FRONTEND_URL", "http://frontend.test")
+		t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+		t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+		t.Setenv("COOKIE_SECURE", "true")
+
+		_, err := newConfiguredAuthHandler(&stubAuthStore{})
+		if err == nil || err.Error() != "BASE_URL must use https outside localhost when auth cookies are enabled" {
+			t.Fatalf("newConfiguredAuthHandler() error = %v; want https requirement", err)
 		}
 	})
 
@@ -381,21 +400,46 @@ func TestAuthConfigHelpers(t *testing.T) {
 		}
 	})
 
-	t.Run("frontend url helpers cover defaults", func(t *testing.T) {
+	t.Run("frontend config helpers cover defaults", func(t *testing.T) {
 		t.Setenv("FRONTEND_URL", "")
-		if got := frontendURLFromEnv(); got != "/" {
-			t.Fatalf("frontendURLFromEnv() = %q; want /", got)
+		frontendURL, frontendOrigin, err := frontendConfigFromEnv()
+		if err != nil {
+			t.Fatalf("frontendConfigFromEnv() error = %v", err)
 		}
-		if got := frontendOriginFromEnv(); got != "" {
-			t.Fatalf("frontendOriginFromEnv() = %q; want empty", got)
+		if frontendURL != "/" {
+			t.Fatalf("frontendURL = %q; want /", frontendURL)
+		}
+		if frontendOrigin != "" {
+			t.Fatalf("frontendOrigin = %q; want empty", frontendOrigin)
+		}
+
+		t.Setenv("FRONTEND_URL", "frontend.test")
+		if _, _, err := frontendConfigFromEnv(); err == nil || err.Error() != "FRONTEND_URL must be a valid absolute URL" {
+			t.Fatalf("frontendConfigFromEnv() error = %v; want FRONTEND_URL must be a valid absolute URL", err)
 		}
 
 		t.Setenv("FRONTEND_URL", "http://frontend.test/")
-		if got := frontendURLFromEnv(); got != "http://frontend.test/" {
-			t.Fatalf("frontendURLFromEnv() = %q; want http://frontend.test/", got)
+		frontendURL, frontendOrigin, err = frontendConfigFromEnv()
+		if err != nil {
+			t.Fatalf("frontendConfigFromEnv() error = %v", err)
 		}
-		if got := frontendOriginFromEnv(); got != "http://frontend.test" {
-			t.Fatalf("frontendOriginFromEnv() = %q; want http://frontend.test", got)
+		if frontendURL != "http://frontend.test/" {
+			t.Fatalf("frontendURL = %q; want http://frontend.test/", frontendURL)
+		}
+		if frontendOrigin != "http://frontend.test" {
+			t.Fatalf("frontendOrigin = %q; want http://frontend.test", frontendOrigin)
+		}
+	})
+
+	t.Run("state digest comparison is strict", func(t *testing.T) {
+		if !matchDigest("abc", "abc") {
+			t.Fatal("matchDigest(equal) = false; want true")
+		}
+		if matchDigest("abc", "abcd") {
+			t.Fatal("matchDigest(different length) = true; want false")
+		}
+		if matchDigest("abc", "abd") {
+			t.Fatal("matchDigest(different content) = true; want false")
 		}
 	})
 
@@ -705,6 +749,18 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 			handler.handleGoogleCallback(response, request)
 			if response.Code != http.StatusInternalServerError {
 				t.Fatalf("status = %d; want 500", response.Code)
+			}
+		})
+
+		t.Run("user conflict returns conflict status", func(t *testing.T) {
+			store := &stubAuthStore{upsertErr: database.ErrUserConflict}
+			handler := newOAuthCallbackHandler(store, now)
+			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true}`)
+			request := newOAuthCallbackRequest("state=state-token&code=code", client)
+			response := httptest.NewRecorder()
+			handler.handleGoogleCallback(response, request)
+			if response.Code != http.StatusConflict {
+				t.Fatalf("status = %d; want 409", response.Code)
 			}
 		})
 

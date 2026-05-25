@@ -1,24 +1,7 @@
-export type AuthSession = {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    image: string;
-  };
-};
-
-function authURL(path: string) {
-  const serverURL = import.meta.env.VITE_GAME_SERVER_URL;
-
-  if (!serverURL) {
-    throw new Error("missing VITE_GAME_SERVER_URL");
-  }
-
-  return new URL(path, serverURL).toString();
-}
+import { authURL, type AuthSession } from "#/lib/auth-shared";
 
 async function readSession() {
-  const response = await fetch(authURL("/auth/session"), {
+  const response = await fetch(authURL("/auth/session", import.meta.env.VITE_GAME_SERVER_URL), {
     credentials: "include",
     headers: {
       Accept: "application/json",
@@ -33,7 +16,7 @@ async function readSession() {
 }
 
 async function signOut() {
-  const response = await fetch(authURL("/auth/logout"), {
+  const response = await fetch(authURL("/auth/logout", import.meta.env.VITE_GAME_SERVER_URL), {
     method: "POST",
     credentials: "include",
   });
@@ -44,7 +27,7 @@ async function signOut() {
 }
 
 function signInWithGoogle() {
-  window.location.assign(authURL("/auth/google"));
+  window.location.assign(authURL("/auth/google", import.meta.env.VITE_GAME_SERVER_URL));
 }
 
 export const authClient = {

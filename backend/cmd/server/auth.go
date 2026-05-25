@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -62,10 +63,12 @@ type authStore interface {
 }
 
 type authConfig struct {
-	baseURL      string
-	secureCookie bool
-	oauthConfig  *oauth2.Config
-	sessionTTL   time.Duration
+	baseURL        string
+	frontendURL    string
+	frontendOrigin string
+	secureCookie   bool
+	oauthConfig    *oauth2.Config
+	sessionTTL     time.Duration
 }
 
 type authHandler struct {
@@ -93,15 +96,59 @@ type sessionResponse struct {
 }
 
 func baseURLFromEnv() (string, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("BASE_URL")), "/")
-	if baseURL == "" {
-		return "", errors.New("BASE_URL is required")
+	return absoluteURLFromEnv("BASE_URL")
+}
+
+func absoluteURLFromEnv(envName string) (string, error) {
+	return absoluteURLFromString(os.Getenv(envName), envName)
+}
+
+func absoluteURLFromString(rawURL, envName string) (string, error) {
+	absoluteURL := strings.TrimRight(strings.TrimSpace(rawURL), "/")
+	if absoluteURL == "" {
+		return "", fmt.Errorf("%s is required", envName)
 	}
-	parsed, err := url.Parse(baseURL)
+	parsed, err := url.Parse(absoluteURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return "", errors.New("BASE_URL must be a valid absolute URL")
+		return "", fmt.Errorf("%s must be a valid absolute URL", envName)
 	}
-	return baseURL, nil
+	return absoluteURL, nil
+}
+
+func frontendConfigFromEnv() (string, string, error) {
+	frontendURL := strings.TrimSpace(os.Getenv("FRONTEND_URL"))
+	if frontendURL == "" {
+		return "/", "", nil
+	}
+
+	absoluteURL, err := absoluteURLFromString(frontendURL, "FRONTEND_URL")
+	if err != nil {
+		return "", "", err
+	}
+	parsed, _ := url.Parse(absoluteURL)
+	return absoluteURL + "/", parsed.Scheme + "://" + parsed.Host, nil
+}
+
+func secureCookieFromBaseURL(baseURL string) (bool, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Scheme == "" || parsed.Hostname() == "" {
+		return false, errors.New("BASE_URL must be a valid absolute URL")
+	}
+	if parsed.Scheme == "https" {
+		return true, nil
+	}
+	if isLocalhostHost(parsed.Hostname()) {
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("COOKIE_SECURE")), "true") {
+			return true, nil
+		}
+		return false, nil
+	}
+	return false, errors.New("BASE_URL must use https outside localhost when auth cookies are enabled")
+}
+
+func isLocalhostHost(host string) bool {
+	host = strings.TrimSpace(strings.ToLower(host))
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 func newGoogleOAuthConfigFromEnv() (*oauth2.Config, error) {
@@ -143,13 +190,23 @@ func newConfiguredAuthHandler(store authStore) (*authHandler, error) {
 	if err != nil {
 		return nil, err
 	}
+	frontendURL, frontendOrigin, err := frontendConfigFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	secureCookie, err := secureCookieFromBaseURL(baseURL)
+	if err != nil {
+		return nil, err
+	}
 
 	return &authHandler{
 		config: authConfig{
-			baseURL:      baseURL,
-			secureCookie: strings.EqualFold(strings.TrimSpace(os.Getenv("COOKIE_SECURE")), "true") || strings.HasPrefix(baseURL, "https://"),
-			oauthConfig:  oauthConfig,
-			sessionTTL:   defaultSessionLifetime,
+			baseURL:        baseURL,
+			frontendURL:    frontendURL,
+			frontendOrigin: frontendOrigin,
+			secureCookie:   secureCookie,
+			oauthConfig:    oauthConfig,
+			sessionTTL:     defaultSessionLifetime,
 		},
 		store: store,
 		now:   time.Now,
@@ -188,7 +245,6 @@ func (h *authHandler) handleGoogleSignIn(w http.ResponseWriter, r *http.Request)
 	setCookie(w, h.cookie(oauthPKCECookieName, verifier, h.now().Add(oauthStateCookieMaxAge)))
 	http.Redirect(w, r, h.config.oauthConfig.AuthCodeURL(
 		state,
-		oauth2.AccessTypeOffline,
 		oauth2.S256ChallengeOption(verifier),
 	), http.StatusFound)
 }
@@ -209,7 +265,7 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	stateCookie, err := r.Cookie(oauthStateCookieName)
-	if err != nil || stateCookie.Value != stateDigest(state) {
+	if err != nil || !matchDigest(stateCookie.Value, stateDigest(state)) {
 		http.Error(w, "invalid oauth state", http.StatusUnauthorized)
 		return
 	}
@@ -234,6 +290,11 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := h.store.UpsertUser(r.Context(), user); err != nil {
+		if errors.Is(err, database.ErrUserConflict) {
+			slog.Warn("save oauth user conflict", "userID", user.ID, "email", user.Email)
+			http.Error(w, "google account could not be linked", http.StatusConflict)
+			return
+		}
 		slog.Error("save oauth user failed", "userID", user.ID, "error", err)
 		http.Error(w, "failed to save session user", http.StatusInternalServerError)
 		return
@@ -253,19 +314,7 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	setCookie(w, h.cookie(authCookieName, sessionToken, expiresAt))
-	http.Redirect(w, r, frontendURLFromEnv(), http.StatusFound)
-}
-
-func frontendURLFromEnv() string {
-	frontendURL := strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_URL")), "/")
-	if frontendURL == "" {
-		return "/"
-	}
-	return frontendURL + "/"
-}
-
-func frontendOriginFromEnv() string {
-	return strings.TrimRight(strings.TrimSpace(os.Getenv("FRONTEND_URL")), "/")
+	http.Redirect(w, r, h.config.frontendURL, http.StatusFound)
 }
 
 func (h *authHandler) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -422,7 +471,7 @@ func setNoStore(w http.ResponseWriter) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	if origin := frontendOriginFromEnv(); origin != "" {
+	if origin := frontendOriginFromHandler(nil); origin != "" {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Vary", "Origin")
@@ -433,7 +482,7 @@ func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	if w == nil || r == nil {
 		return
 	}
-	origin := frontendOriginFromEnv()
+	origin := frontendOriginFromHandler(nil)
 	if origin == "" || r.Header.Get("Origin") != origin {
 		return
 	}
@@ -451,4 +500,24 @@ func handleCORSPreflight(w http.ResponseWriter, r *http.Request) bool {
 	setCORSHeaders(w, r)
 	w.WriteHeader(http.StatusNoContent)
 	return true
+}
+
+func matchDigest(left, right string) bool {
+	leftBytes := []byte(strings.TrimSpace(left))
+	rightBytes := []byte(strings.TrimSpace(right))
+	if len(leftBytes) != len(rightBytes) {
+		return false
+	}
+	return subtle.ConstantTimeCompare(leftBytes, rightBytes) == 1
+}
+
+func frontendOriginFromHandler(h *authHandler) string {
+	if h != nil {
+		return h.config.frontendOrigin
+	}
+	_, frontendOrigin, err := frontendConfigFromEnv()
+	if err != nil {
+		return ""
+	}
+	return frontendOrigin
 }
