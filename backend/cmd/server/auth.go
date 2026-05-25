@@ -24,17 +24,17 @@ import (
 var readRandom = rand.Read
 
 const (
-	authCookieName             = "compositions_session"
-	oauthStateCookieName       = "compositions_oauth_state"
-	oauthPKCECookieName        = "compositions_oauth_pkce"
-	oauthStateCookieMaxAge     = 10 * time.Minute
-	defaultSessionLifetime     = 30 * 24 * time.Hour
-	authCookieSameSite         = http.SameSiteLaxMode
-	googleUserInfoEndpoint     = "https://www.googleapis.com/oauth2/v3/userinfo"
+	authCookieName         = "compositions_session"
+	oauthStateCookieName   = "compositions_oauth_state"
+	oauthPKCECookieName    = "compositions_oauth_pkce"
+	oauthStateCookieMaxAge = 10 * time.Minute
+	defaultSessionLifetime = 30 * 24 * time.Hour
+	authCookieSameSite     = http.SameSiteLaxMode
+	googleUserInfoEndpoint = "https://www.googleapis.com/oauth2/v3/userinfo"
 )
 
 type authSession struct {
-	user authenticatedUser
+	user  authenticatedUser
 	token string
 	valid bool
 }

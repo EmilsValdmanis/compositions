@@ -215,7 +215,7 @@ func TestHandleGoogleSignInSetsStateAndPKCECookies(t *testing.T) {
 				Endpoint: oauth2.Endpoint{AuthURL: "https://accounts.google.com/o/oauth2/v2/auth"},
 			},
 		},
-		now: func() time.Time { return time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC) },
+		now:   func() time.Time { return time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC) },
 		state: func() (string, error) { return "state-token", nil },
 	}
 	request := httptest.NewRequest(http.MethodGet, "/auth/google", nil)

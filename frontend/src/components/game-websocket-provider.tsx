@@ -508,75 +508,75 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       return;
     }
 
-    const connectionAuth = await getConnectionAuth();
+    return getConnectionAuth().then((connectionAuth) => {
+      if (connectAttemptRef.current !== connectAttempt) {
+        connectInFlightRef.current = false;
+        return;
+      }
 
-    if (connectAttemptRef.current !== connectAttempt) {
-      connectInFlightRef.current = false;
-      return;
-    }
+      if (!connectionAuth) {
+        connectInFlightRef.current = false;
+        setConnectionError("authentication required before connecting");
+        return;
+      }
 
-    if (!connectionAuth) {
-      connectInFlightRef.current = false;
-      setConnectionError("authentication required before connecting");
-      return;
-    }
+      const wsUrl = new URL("/ws", serverUrl).toString();
 
-    const wsUrl = new URL("/ws", serverUrl).toString();
+      const socket = new WebSocket(wsUrl);
 
-    const socket = new WebSocket(wsUrl);
-
-    if (connectAttemptRef.current !== connectAttempt) {
-      socket.close();
-      return;
-    }
-
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      if (connectAttemptRef.current !== connectAttempt || socketRef.current !== socket) {
+      if (connectAttemptRef.current !== connectAttempt) {
         socket.close();
         return;
       }
 
-      connectInFlightRef.current = false;
-      socket.send(
-        JSON.stringify({
-          type: "connect",
-          data: { sessionId: gameWebSocketStore.get().sessionId },
-        }),
-      );
-    };
+      socketRef.current = socket;
 
-    socket.onmessage = (event) => {
-      const message = parseEnvelope(event.data);
-      if (!message) {
-        setConnectionError("received invalid websocket message");
-        return;
-      }
+      socket.onopen = () => {
+        if (connectAttemptRef.current !== connectAttempt || socketRef.current !== socket) {
+          socket.close();
+          return;
+        }
 
-      applyIncomingMessage(message);
-    };
-
-    socket.onerror = () => {
-      if (connectAttemptRef.current === connectAttempt) {
         connectInFlightRef.current = false;
-      }
-      rejectPendingActions("failed to connect websocket");
-      setConnectionError("failed to connect websocket");
-    };
+        socket.send(
+          JSON.stringify({
+            type: "connect",
+            data: { sessionId: gameWebSocketStore.get().sessionId },
+          }),
+        );
+      };
 
-    socket.onclose = () => {
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-        connectInFlightRef.current = false;
-        rejectPendingActions("websocket disconnected");
+      socket.onmessage = (event) => {
+        const message = parseEnvelope(event.data);
+        if (!message) {
+          setConnectionError("received invalid websocket message");
+          return;
+        }
 
-        updateState((current) => ({
-          ...current,
-          connectionStatus: "disconnected",
-        }));
-      }
-    };
+        applyIncomingMessage(message);
+      };
+
+      socket.onerror = () => {
+        if (connectAttemptRef.current === connectAttempt) {
+          connectInFlightRef.current = false;
+        }
+        rejectPendingActions("failed to connect websocket");
+        setConnectionError("failed to connect websocket");
+      };
+
+      socket.onclose = () => {
+        if (socketRef.current === socket) {
+          socketRef.current = null;
+          connectInFlightRef.current = false;
+          rejectPendingActions("websocket disconnected");
+
+          updateState((current) => ({
+            ...current,
+            connectionStatus: "disconnected",
+          }));
+        }
+      };
+    });
   }
 
   function disconnect() {

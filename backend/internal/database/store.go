@@ -30,9 +30,9 @@ type UserStore struct {
 }
 
 type SessionRecord struct {
-	Token       string
-	UserID       string
-	ExpiresAt    time.Time
+	Token     string
+	UserID    string
+	ExpiresAt time.Time
 }
 
 type SessionUserRecord struct {
