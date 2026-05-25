@@ -1,9 +1,9 @@
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Button } from "#/components/ui/button";
-import { Login01Icon } from "@hugeicons/core-free-icons";
-import { authClient } from "#/lib/auth-client";
-import { Spinner } from "#/components/ui/spinner";
 import { useTransition } from "react";
+import { Login01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Spinner } from "#/components/ui/spinner";
+import { Button } from "#/components/ui/button";
+import { authClient } from "#/lib/auth-client";
 
 export default function SignInButton() {
   const [isPending, startTransition] = useTransition();

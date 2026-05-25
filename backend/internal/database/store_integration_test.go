@@ -97,42 +97,35 @@ func TestUserStoreUpsertUser(t *testing.T) {
 		t.Fatalf("updated timestamps are inconsistent: created_at=%v updated_at=%v", updatedRecord.CreatedAt, updatedRecord.UpdatedAt)
 	}
 
-	reauthenticatedUser := UserRecord{
+	conflictingUser := UserRecord{
 		ID:       "user-2",
-		Name:     " Reauthenticated Player ",
+		Name:     " Conflicting Player ",
 		Email:    " PLAYER1@EXAMPLE.COM ",
 		ImageURL: " https://cdn.example.com/player-2.png ",
 	}
-	if err := store.UpsertUser(ctx, reauthenticatedUser); err != nil {
-		t.Fatalf("UpsertUser(reauthenticated) error = %v", err)
+	if err := store.UpsertUser(ctx, conflictingUser); !errors.Is(err, ErrUserConflict) {
+		t.Fatalf("UpsertUser(conflicting) error = %v; want %v", err, ErrUserConflict)
 	}
 
 	if got := countUsers(t, ctx, pool); got != 1 {
 		t.Fatalf("user row count = %d; want 1", got)
 	}
 
-	if _, err := store.GetUserByID(ctx, createdUser.ID); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("GetUserByID(old id) error = %v; want %v", err, pgx.ErrNoRows)
-	}
-
-	reauthenticatedRecord, err := store.GetUserByID(ctx, strings.TrimSpace(reauthenticatedUser.ID))
+	preservedRecord, err := store.GetUserByID(ctx, createdUser.ID)
 	if err != nil {
-		t.Fatalf("GetUserByID(reauthenticated) error = %v", err)
+		t.Fatalf("GetUserByID(preserved) error = %v", err)
 	}
-	if reauthenticatedRecord.Name != "Reauthenticated Player" {
-		t.Fatalf("reauthenticated name = %q; want %q", reauthenticatedRecord.Name, "Reauthenticated Player")
+	if preservedRecord.Name != updatedUser.Name {
+		t.Fatalf("preserved name = %q; want %q", preservedRecord.Name, updatedUser.Name)
 	}
-	if reauthenticatedRecord.Email != "player1@example.com" {
-		t.Fatalf("reauthenticated email = %q; want %q", reauthenticatedRecord.Email, "player1@example.com")
+	if preservedRecord.Email != updatedUser.Email {
+		t.Fatalf("preserved email = %q; want %q", preservedRecord.Email, updatedUser.Email)
 	}
-	if reauthenticatedRecord.ImageUrl != "https://cdn.example.com/player-2.png" {
-		t.Fatalf("reauthenticated image_url = %q; want %q", reauthenticatedRecord.ImageUrl, "https://cdn.example.com/player-2.png")
+	if preservedRecord.ImageUrl != updatedUser.ImageURL {
+		t.Fatalf("preserved image_url = %q; want %q", preservedRecord.ImageUrl, updatedUser.ImageURL)
 	}
-	if reauthenticatedRecord.CreatedAt.Time != createdRecord.CreatedAt.Time {
-		t.Fatalf("created_at changed after same-email upsert: got %v; want %v", reauthenticatedRecord.CreatedAt.Time, createdRecord.CreatedAt.Time)
-	}
-	if reauthenticatedRecord.UpdatedAt.Time.Before(updatedRecord.UpdatedAt.Time) {
-		t.Fatalf("updated_at did not advance: got %v; want after %v", reauthenticatedRecord.UpdatedAt.Time, updatedRecord.UpdatedAt.Time)
+	if _, err := store.GetUserByID(ctx, strings.TrimSpace(conflictingUser.ID)); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("GetUserByID(conflicting id) error = %v; want %v", err, pgx.ErrNoRows)
 	}
 }
 

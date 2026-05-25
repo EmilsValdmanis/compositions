@@ -1,8 +1,8 @@
+import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders, setResponseHeader } from "@tanstack/react-start/server";
 import { auth } from "#/lib/auth";
 import { resolveGameConnectionAuth } from "#/lib/game-connection-auth";
 import { loadVerifiedSession } from "#/lib/verified-session";
-import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeaders, setResponseHeader } from "@tanstack/react-start/server";
 
 export const getGameConnectionAuth = createServerFn({ method: "POST" }).handler(async () => {
   setResponseHeader("cache-control", "no-store");

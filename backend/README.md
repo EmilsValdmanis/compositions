@@ -12,7 +12,15 @@ This directory contains the Go backend for Compositions.
 
 Run commands from inside `backend/`.
 
-The websocket server now requires `BETTER_AUTH_URL` to point at the frontend app's Better Auth base URL, for example `http://localhost:3000` in local development.
+Google OAuth is handled entirely by the Go backend. The frontend is just UI and talks to the backend directly.
+
+Required auth configuration:
+
+- `BASE_URL`: backend public URL, for example `http://localhost:8080`
+- `FRONTEND_URL`: frontend URL allowed for CORS, for example `http://localhost:3000`
+- `GOOGLE_CLIENT_ID`: Google OAuth client id
+- `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
+- `COOKIE_SECURE`: set to `true` when serving over HTTPS
 
 Authenticated websocket users are persisted to Postgres on connect. The backend uses:
 

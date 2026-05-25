@@ -1,7 +1,6 @@
-import { authClient } from "#/lib/auth-client";
+import { Logout02FreeIcons } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { getRouteApi, useRouter } from "@tanstack/react-router";
-import { useTheme } from "#/components/theme-provider";
-import { getUserInitials } from "#/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import {
@@ -19,8 +18,9 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
-import { Logout02FreeIcons } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { useTheme } from "#/components/theme-provider";
+import { authClient } from "#/lib/auth-client";
+import { getUserInitials } from "#/lib/utils";
 
 const rootRouteApi = getRouteApi("__root__");
 

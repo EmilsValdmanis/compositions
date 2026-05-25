@@ -55,7 +55,6 @@ type wsEnvelope struct {
 
 type connectRequest struct {
 	SessionID string `json:"sessionId"`
-	AuthToken string `json:"authToken"`
 }
 
 type createRoomRequest struct {
@@ -187,32 +186,32 @@ type playerSnapshot struct {
 
 type wsServer struct {
 	lobby         *lobbyServer
-	verifier      sessionVerifier
+	auth          *authHandler
 	userStore     userStore
 	allowedOrigin string
 	upgrader      websocket.Upgrader
 }
 
 func newWSServer() *wsServer {
-	return newWSServerWithVerifier(nil)
+	return newWSServerWithAuth(nil)
 }
 
-func newWSServerWithVerifier(verifier sessionVerifier) *wsServer {
-	return newWSServerWithAllowedOrigin(verifier, "")
+func newWSServerWithAuth(auth *authHandler) *wsServer {
+	return newWSServerWithAllowedOrigin(auth, "")
 }
 
-func newWSServerWithAllowedOrigin(verifier sessionVerifier, allowedOrigin string) *wsServer {
-	return newWSServerWithDependencies(verifier, noopUserStore{}, allowedOrigin)
+func newWSServerWithAllowedOrigin(auth *authHandler, allowedOrigin string) *wsServer {
+	return newWSServerWithDependencies(auth, noopUserStore{}, allowedOrigin)
 }
 
-func newWSServerWithDependencies(verifier sessionVerifier, store userStore, allowedOrigin string) *wsServer {
+func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrigin string) *wsServer {
 	if store == nil {
 		store = noopUserStore{}
 	}
 
 	server := &wsServer{
 		lobby:         newLobbyServer(),
-		verifier:      verifier,
+		auth:          auth,
 		userStore:     store,
 		allowedOrigin: normalizeOrigin(allowedOrigin),
 	}
@@ -225,22 +224,23 @@ func newWSServerWithDependencies(verifier sessionVerifier, store userStore, allo
 }
 
 func newConfiguredWSServer() (*wsServer, error) {
-	baseURL, err := betterAuthBaseURLFromEnv()
+	baseURL, err := baseURLFromEnv()
 	if err != nil {
 		return nil, err
 	}
 	allowedOrigin := originFromBaseURL(baseURL)
-	if allowedOrigin == "" {
-		return nil, errors.New("BETTER_AUTH_URL must be a valid absolute URL")
-	}
 
 	store, err := openConfiguredUserStore()
 	if err != nil {
 		return nil, err
 	}
 
-	verifier := newBetterAuthSessionVerifier(baseURL, nil)
-	return newWSServerWithDependencies(verifier, store, allowedOrigin), nil
+	auth, err := newConfiguredAuthHandler(store)
+	if err != nil {
+		_ = store.Close()
+		return nil, err
+	}
+	return newWSServerWithDependencies(auth, store, allowedOrigin), nil
 }
 
 func (s *wsServer) Close() error {
@@ -279,6 +279,7 @@ func originFromBaseURL(baseURL string) string {
 func (s *wsServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/auth/", s.handleSessionRoutes)
 	mux.HandleFunc("/ws", s.handleWS)
 	return mux
 }
@@ -300,10 +301,10 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Debug("websocket connection established", "remote", conn.RemoteAddr().String())
-	s.handleConnection(conn)
+	s.handleConnection(conn, r)
 }
 
-func (s *wsServer) handleConnection(conn *websocket.Conn) {
+func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request) {
 	defer wsDataWriteLocks.Delete(conn)
 	defer conn.Close()
 	conn.SetReadLimit(defaultWSReadLimit)
@@ -338,7 +339,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 
 		switch envelope.Type {
 		case "connect":
-			nextSessionID, shouldClose := s.handleConnect(conn, envelope)
+			nextSessionID, shouldClose := s.handleConnect(conn, request, envelope)
 			if shouldClose {
 				return
 			}
@@ -371,7 +372,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn) {
 	}
 }
 
-func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (string, bool) {
+func (s *wsServer) handleConnect(conn *websocket.Conn, request *http.Request, envelope wsEnvelope) (string, bool) {
 	var req connectRequest
 	if err := decodePayload(envelope.Data, &req); err != nil {
 		slog.Warn("connect: invalid payload", "error", err)
@@ -380,14 +381,14 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, envelope wsEnvelope) (str
 	}
 
 	user := authenticatedUser{}
-	if s.verifier != nil {
-		verifiedUser, err := s.verifier.VerifySession(context.Background(), req.AuthToken)
+	if s.auth != nil {
+		session, err := s.auth.sessionFromRequest(request)
 		if err != nil {
 			slog.Warn("connect: session verification failed", "sessionID", req.SessionID, "error", err)
 			s.writeError(conn, err)
 			return "", true
 		}
-		user = verifiedUser
+		user = session.user
 	}
 	if err := s.persistAuthenticatedUser(user); err != nil {
 		slog.Error("connect: persist user failed", "sessionID", req.SessionID, "userID", user.ID, "error", err)

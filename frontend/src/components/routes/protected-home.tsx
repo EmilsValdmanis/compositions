@@ -176,7 +176,6 @@ export function ProtectedHome() {
               players={players}
               roomCode={roomCode}
               playerId={state.playerId}
-              sessionId={state.sessionId}
               roomActions={{ canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame }}
               dealChoice={{
                 pendingDealChoice,
