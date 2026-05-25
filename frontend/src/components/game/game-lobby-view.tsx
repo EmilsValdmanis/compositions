@@ -40,7 +40,6 @@ type GameLobbyViewProps = {
   players: PlayerSnapshot[];
   roomCode: string;
   playerId: string;
-  sessionId: string;
   roomActions: RoomActions;
   dealChoice: DealChoiceState;
   onRoomCodeChange: (roomCode: string) => void;
@@ -61,7 +60,6 @@ export function GameLobbyView({
   players,
   roomCode,
   playerId,
-  sessionId,
   roomActions,
   dealChoice,
   onRoomCodeChange,
@@ -191,10 +189,6 @@ export function GameLobbyView({
             <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">Player ID</span>
               <span className="font-medium">{compactId(playerId)}</span>
-            </div>
-            <div className="flex justify-between gap-3">
-              <span className="text-muted-foreground">Session ID</span>
-              <span className="font-medium">{compactId(sessionId)}</span>
             </div>
           </div>
         </CardContent>

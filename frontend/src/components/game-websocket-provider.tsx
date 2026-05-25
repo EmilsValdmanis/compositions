@@ -321,6 +321,14 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     );
   }
 
+  function resolveConnectionAuthError(error: unknown) {
+    if (error instanceof Error && error.message.trim() !== "") {
+      return error.message;
+    }
+
+    return "failed to resolve websocket authentication";
+  }
+
   function rejectPendingActions(message: string) {
     const pendingActions = pendingActionsRef.current.splice(0);
 
@@ -356,13 +364,6 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       playerId: result?.playerId ?? "",
       ok: true,
     });
-  }
-
-  function resolveConnectionAuthError(error: unknown) {
-    if (error instanceof Error && error.message.trim() !== "") {
-      return error.message;
-    }
-    return "failed to resolve websocket authentication";
   }
 
   function parseEnvelope(rawData: unknown): Envelope | null {
@@ -508,23 +509,21 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     }
 
     const connectionAuth = await getConnectionAuth();
-    const authToken =
-      connectAttemptRef.current === connectAttempt ? connectionAuth?.authToken : null;
 
-    if (!authToken) {
+    if (connectAttemptRef.current !== connectAttempt) {
       connectInFlightRef.current = false;
+      return;
+    }
 
-      if (connectAttemptRef.current === connectAttempt) {
-        setConnectionError("authentication required before connecting");
-      }
-
+    if (!connectionAuth) {
+      connectInFlightRef.current = false;
+      setConnectionError("authentication required before connecting");
       return;
     }
 
     const wsUrl = new URL("/ws", serverUrl).toString();
 
     const socket = new WebSocket(wsUrl);
-    const sessionId = gameWebSocketStore.get().sessionId;
 
     if (connectAttemptRef.current !== connectAttempt) {
       socket.close();
@@ -540,7 +539,12 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       }
 
       connectInFlightRef.current = false;
-      socket.send(JSON.stringify({ type: "connect", data: { sessionId, authToken } }));
+      socket.send(
+        JSON.stringify({
+          type: "connect",
+          data: { sessionId: gameWebSocketStore.get().sessionId },
+        }),
+      );
     };
 
     socket.onmessage = (event) => {

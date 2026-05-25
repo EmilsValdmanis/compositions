@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/EmilsValdmanis/compositions/internal/database"
 )
 
 type closingUserStore struct {
@@ -18,6 +21,14 @@ type closingUserStore struct {
 func (s *closingUserStore) UpsertUser(_ context.Context, _ authenticatedUser) error {
 	return nil
 }
+
+func (s *closingUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+
+func (s *closingUserStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
+	return database.SessionUserRecord{}, database.ErrSessionNotFound
+}
+
+func (s *closingUserStore) DeleteSession(context.Context, string) error { return nil }
 
 func (s *closingUserStore) Close() error {
 	s.closed = true
@@ -38,7 +49,9 @@ func TestNewConfiguredWSServerPropagatesStoreError(t *testing.T) {
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 
-	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	openConfiguredUserStore = func() (userStore, error) {
 		return nil, errors.New("open store boom")
 	}
@@ -81,7 +94,9 @@ func TestRunServerWarnsWhenCloseFails(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
 
-	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	store := &closingUserStore{err: errors.New("close boom")}
 	openConfiguredUserStore = func() (userStore, error) { return store, nil }
 
@@ -104,5 +119,29 @@ func TestRunServerWarnsWhenCloseFails(t *testing.T) {
 	}
 	if got := output.String(); !strings.Contains(got, "close user store failed") {
 		t.Fatalf("logger output = %q; want close user store failed", got)
+	}
+}
+
+func TestNewConfiguredWSServerClosesStoreOnAuthError(t *testing.T) {
+	originalOpenConfiguredUserStore := openConfiguredUserStore
+	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
+
+	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+	store := &closingUserStore{}
+	openConfiguredUserStore = func() (userStore, error) {
+		return store, nil
+	}
+
+	server, err := newConfiguredWSServer()
+	if err == nil || err.Error() != "GOOGLE_CLIENT_ID is required" {
+		t.Fatalf("newConfiguredWSServer() error = %v; want GOOGLE_CLIENT_ID is required", err)
+	}
+	if server != nil {
+		t.Fatalf("server = %#v; want nil", server)
+	}
+	if !store.closed {
+		t.Fatal("store.closed = false; want true")
 	}
 }

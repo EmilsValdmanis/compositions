@@ -109,6 +109,46 @@ func runServer(addr string) error {
 	return listenAndServe(addr, handler)
 }
 
+func (s *wsServer) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
+	setCORSHeaders(w, r)
+	if handleCORSPreflight(w, r) {
+		return
+	}
+	if s == nil || s.auth == nil {
+		http.Error(w, "auth is not configured", http.StatusInternalServerError)
+		return
+	}
+
+	switch r.URL.Path {
+	case "/auth/google":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.auth.handleGoogleSignIn(w, r)
+	case "/auth/google/callback":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.auth.handleGoogleCallback(w, r)
+	case "/auth/session":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.auth.handleSession(w, r)
+	case "/auth/logout":
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		s.auth.handleLogout(w, r)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
 func reportFatal(err error) {
 	if err == nil {
 		return

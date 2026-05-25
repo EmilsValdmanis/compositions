@@ -1,15 +1,15 @@
 import { HeadContent, createRootRouteWithContext } from "@tanstack/react-router";
+import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
-import { createServerFn } from "@tanstack/react-start";
-import { auth } from "#/lib/auth";
-import { loadVerifiedSession } from "#/lib/verified-session";
+import { z } from "zod";
 import {
   GlobalErrorComponent,
   GlobalNotFoundComponent,
 } from "#/components/routes/global-route-status";
 import { RootDocument } from "#/components/routes/root-document";
-import { z } from "zod";
+import { auth } from "#/lib/auth";
+import { loadVerifiedSession } from "#/lib/verified-session";
 import appCss from "../styles.css?url";
 
 const rootHeadContentMarker = <HeadContent />;

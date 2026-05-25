@@ -15,6 +15,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/websocket"
+	"golang.org/x/oauth2"
 )
 
 func TestRunServerAndMain(t *testing.T) {
@@ -30,7 +31,9 @@ func TestRunServerAndMain(t *testing.T) {
 	defer func() { sentryFlush = originalFlush }()
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
-	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("DATABASE_URL", "postgres://unused")
 	t.Setenv("SENTRY_ENVIRONMENT", "development")
 	sentryFlush = func(timeout time.Duration) bool { return true }
@@ -127,7 +130,9 @@ func TestConfigureLoggerWithSentryClient(t *testing.T) {
 func TestRunServerReturnsEnvErrorBeforeListen(t *testing.T) {
 	originalListen := listenAndServe
 	defer func() { listenAndServe = originalListen }()
-	t.Setenv("BETTER_AUTH_URL", "")
+	t.Setenv("BASE_URL", "")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 
 	listenCalled := false
 	listenAndServe = func(addr string, handler http.Handler) error {
@@ -136,8 +141,8 @@ func TestRunServerReturnsEnvErrorBeforeListen(t *testing.T) {
 	}
 
 	err := runServer(":0")
-	if err == nil || err.Error() != "BETTER_AUTH_URL is required" {
-		t.Fatalf("runServer() error = %v; want BETTER_AUTH_URL is required", err)
+	if err == nil || err.Error() != "BASE_URL is required" {
+		t.Fatalf("runServer() error = %v; want BASE_URL is required", err)
 	}
 	if listenCalled {
 		t.Fatal("listenAndServe() was called; want startup to fail before listen")
@@ -366,7 +371,9 @@ func TestRunServerWrapsHandlerWhenSentryEnabled(t *testing.T) {
 	defer func() { listenAndServe = originalListen }()
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
-	t.Setenv("BETTER_AUTH_URL", "http://frontend.test")
+	t.Setenv("BASE_URL", "http://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("DATABASE_URL", "postgres://unused")
 	t.Setenv("SENTRY_ENVIRONMENT", "production")
 	t.Setenv("SENTRY_DSN", "https://examplePublicKey@o0.ingest.sentry.io/0")
@@ -491,6 +498,21 @@ func mustDialWS(t *testing.T, baseURL string) *websocket.Conn {
 	return conn
 }
 
+func mustDialWSWithCookie(t *testing.T, baseURL, sessionToken string) *websocket.Conn {
+	t.Helper()
+
+	url := "ws" + strings.TrimPrefix(baseURL, "http") + "/ws"
+	headers := http.Header{}
+	if strings.TrimSpace(sessionToken) != "" {
+		headers.Set("Cookie", authCookieName+"="+sessionToken)
+	}
+	conn, _, err := websocket.DefaultDialer.Dial(url, headers)
+	if err != nil {
+		t.Fatalf("Dial(%q) error = %v", url, err)
+	}
+	return conn
+}
+
 func mustConnectSession(t *testing.T, conn *websocket.Conn, sessionID string) connectedEvent {
 	t.Helper()
 
@@ -498,11 +520,94 @@ func mustConnectSession(t *testing.T, conn *websocket.Conn, sessionID string) co
 	return mustReadConnectedEvent(t, conn)
 }
 
-func mustConnectAuthenticatedSession(t *testing.T, conn *websocket.Conn, sessionID, authToken string) connectedEvent {
-	t.Helper()
+func TestHandleSessionRoutes(t *testing.T) {
+	t.Setenv("FRONTEND_URL", "http://frontend.test")
+	now := time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC)
+	handler := &authHandler{
+		config: authConfig{oauthConfig: &oauth2.Config{Endpoint: oauth2.Endpoint{AuthURL: "https://oauth.test/auth"}}},
+		store:  &stubAuthStore{},
+		now:    func() time.Time { return now },
+		state:  func() (string, error) { return "state-token", nil },
+	}
+	server := &wsServer{auth: handler}
 
-	mustSendEnvelope(t, conn, "connect", connectRequest{SessionID: sessionID, AuthToken: authToken})
-	return mustReadConnectedEvent(t, conn)
+	t.Run("preflight", func(t *testing.T) {
+		request := httptest.NewRequest(http.MethodOptions, "/auth/session", nil)
+		request.Header.Set("Origin", "http://frontend.test")
+		response := httptest.NewRecorder()
+		server.handleSessionRoutes(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("preflight status = %d; want 204", response.Code)
+		}
+	})
+
+	t.Run("nil auth", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		(&wsServer{}).handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/session", nil))
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("nil auth status = %d; want 500", response.Code)
+		}
+	})
+
+	t.Run("google routes", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/google", nil))
+		if response.Code != http.StatusFound {
+			t.Fatalf("google sign in status = %d; want 302", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodPost, "/auth/google", nil))
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("google sign in wrong method status = %d; want 405", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil))
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("google callback status = %d; want 400", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodPost, "/auth/google/callback", nil))
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("google callback wrong method status = %d; want 405", response.Code)
+		}
+	})
+
+	t.Run("session and logout routes", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/session", nil))
+		if response.Code != http.StatusOK {
+			t.Fatalf("session status = %d; want 200", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodPost, "/auth/session", nil))
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("session wrong method status = %d; want 405", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("logout status = %d; want 204", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/logout", nil))
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("logout wrong method status = %d; want 405", response.Code)
+		}
+	})
+
+	t.Run("default route", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/unknown", nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("default route status = %d; want 404", response.Code)
+		}
+	})
 }
 
 func mustReadConnectedEvent(t *testing.T, conn *websocket.Conn) connectedEvent {

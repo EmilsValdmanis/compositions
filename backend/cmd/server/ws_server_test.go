@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,30 +10,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EmilsValdmanis/compositions/internal/database"
 	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/gorilla/websocket"
 )
-
-type staticSessionVerifier struct {
-	usersByToken map[string]authenticatedUser
-}
-
-func (v staticSessionVerifier) VerifySession(_ context.Context, bearerToken string) (authenticatedUser, error) {
-	if user, ok := v.usersByToken[bearerToken]; ok {
-		return user, nil
-	}
-	return authenticatedUser{}, errAuthenticationRequired
-}
-
-type capturingSessionVerifier struct {
-	user        authenticatedUser
-	bearerToken string
-}
-
-func (v *capturingSessionVerifier) VerifySession(_ context.Context, bearerToken string) (authenticatedUser, error) {
-	v.bearerToken = bearerToken
-	return v.user, nil
-}
 
 func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 	server := newWSServer()
@@ -163,10 +142,7 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 }
 
 func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
-	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"host-token":  {ID: "host-user", Name: "Host Account", Email: "host@example.com", Image: "https://cdn.example.com/host.png"},
-		"guest-token": {ID: "guest-user", Name: "Guest Account", Email: "guest@example.com", Image: "https://cdn.example.com/guest.png"},
-	}})
+	server := newWSServerWithAuth(&authHandler{store: &stubAuthStore{}, now: time.Now})
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
 
@@ -175,9 +151,11 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	mustSendEnvelope(t, unauthenticatedConn, "connect", connectRequest{})
 	mustReadError(t, unauthenticatedConn, errAuthenticationRequired.Error())
 
-	hostConn := mustDialWS(t, httpServer.URL)
+	hostStore := &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "host-user", Name: "Host Account", Email: "host@example.com", ImageURL: "https://cdn.example.com/host.png"}}
+	server.auth = &authHandler{store: hostStore, now: time.Now}
+	hostConn := mustDialWSWithCookie(t, httpServer.URL, "host-token")
 	defer hostConn.Close()
-	hostConnected := mustConnectAuthenticatedSession(t, hostConn, "", "host-token")
+	hostConnected := mustConnectSession(t, hostConn, "")
 	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Spoofed Host"})
 	hostRoom := mustReadRoomState(t, hostConn)
 	if got := hostRoom.Players[0].Name; got != "Host Account" {
@@ -187,9 +165,11 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 		t.Fatalf("hostRoom.Players[0].ImageURL = %q; want https://cdn.example.com/host.png", got)
 	}
 
-	guestConn := mustDialWS(t, httpServer.URL)
+	guestStore := &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "guest-user", Name: "Guest Account", Email: "guest@example.com", ImageURL: "https://cdn.example.com/guest.png"}}
+	server.auth = &authHandler{store: guestStore, now: time.Now}
+	guestConn := mustDialWSWithCookie(t, httpServer.URL, "guest-token")
 	defer guestConn.Close()
-	guestConnected := mustConnectAuthenticatedSession(t, guestConn, "", "guest-token")
+	guestConnected := mustConnectSession(t, guestConn, "")
 	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Spoofed Guest"})
 	guestRoom := mustReadRoomState(t, guestConn)
 	hostRoom = mustReadRoomState(t, hostConn)
@@ -223,9 +203,10 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	}
 	_ = mustReadRoomState(t, guestConn)
 
-	refreshedHostConn := mustDialWS(t, httpServer.URL)
+	server.auth = &authHandler{store: hostStore, now: time.Now}
+	refreshedHostConn := mustDialWSWithCookie(t, httpServer.URL, "host-token")
 	defer refreshedHostConn.Close()
-	refreshedHost := mustConnectAuthenticatedSession(t, refreshedHostConn, "", "host-token")
+	refreshedHost := mustConnectSession(t, refreshedHostConn, "")
 	if refreshedHost.SessionID != hostConnected.SessionID || refreshedHost.PlayerID != hostConnected.PlayerID {
 		t.Fatalf("refreshedHost = %#v; want same authenticated host session/player", refreshedHost)
 	}
@@ -239,43 +220,26 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	}
 	_ = mustReadRoomState(t, guestConn)
 
-	hijackConn := mustDialWS(t, httpServer.URL)
+	server.auth = &authHandler{store: guestStore, now: time.Now}
+	hijackConn := mustDialWSWithCookie(t, httpServer.URL, "guest-token")
 	defer hijackConn.Close()
-	mustSendEnvelope(t, hijackConn, "connect", connectRequest{SessionID: hostConnected.SessionID, AuthToken: "guest-token"})
+	mustSendEnvelope(t, hijackConn, "connect", connectRequest{SessionID: hostConnected.SessionID})
 	mustReadError(t, hijackConn, "session belongs to a different user")
 }
 
-func TestAuthenticatedWebSocketPassesBearerTokenToVerifier(t *testing.T) {
-	verifier := &capturingSessionVerifier{user: authenticatedUser{ID: "user-1", Name: "Player One", Email: "player@example.com"}}
-	server := newWSServerWithVerifier(verifier)
-	httpServer := httptest.NewServer(server.routes())
-	defer httpServer.Close()
-
-	conn := mustDialWS(t, httpServer.URL)
-	defer conn.Close()
-
-	mustSendEnvelope(t, conn, "connect", connectRequest{AuthToken: "token-123"})
-	_ = mustReadConnectedEvent(t, conn)
-
-	if verifier.bearerToken != "token-123" {
-		t.Fatalf("verifier.bearerToken = %q; want token-123", verifier.bearerToken)
-	}
-}
-
 func TestAuthenticatedWebSocketReplacesSecondLiveSocketForSameUser(t *testing.T) {
-	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"same-user-token": {ID: "same-user", Name: "Same Account", Email: "same@example.com"},
-	}})
+	store := &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "same-user", Name: "Same Account", Email: "same@example.com"}}
+	server := newWSServerWithAuth(&authHandler{store: store, now: time.Now})
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
 
-	firstConn := mustDialWS(t, httpServer.URL)
+	firstConn := mustDialWSWithCookie(t, httpServer.URL, "same-user-token")
 	defer firstConn.Close()
-	firstConnected := mustConnectAuthenticatedSession(t, firstConn, "", "same-user-token")
+	firstConnected := mustConnectSession(t, firstConn, "")
 
-	secondConn := mustDialWS(t, httpServer.URL)
+	secondConn := mustDialWSWithCookie(t, httpServer.URL, "same-user-token")
 	defer secondConn.Close()
-	mustSendEnvelope(t, secondConn, "connect", connectRequest{AuthToken: "same-user-token"})
+	mustSendEnvelope(t, secondConn, "connect", connectRequest{})
 	secondConnected := mustReadConnectedEvent(t, secondConn)
 	if secondConnected.SessionID != firstConnected.SessionID {
 		t.Fatalf("secondConnected.SessionID = %q; want %q", secondConnected.SessionID, firstConnected.SessionID)
@@ -297,21 +261,20 @@ func TestAuthenticatedWebSocketReplacesSecondLiveSocketForSameUser(t *testing.T)
 }
 
 func TestAuthenticatedWebSocketReusesSessionAfterDisconnectForSameUser(t *testing.T) {
-	server := newWSServerWithVerifier(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"same-user-token": {ID: "same-user", Name: "Same Account", Email: "same@example.com"},
-	}})
+	store := &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "same-user", Name: "Same Account", Email: "same@example.com"}}
+	server := newWSServerWithAuth(&authHandler{store: store, now: time.Now})
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
 
-	firstConn := mustDialWS(t, httpServer.URL)
-	firstConnected := mustConnectAuthenticatedSession(t, firstConn, "", "same-user-token")
+	firstConn := mustDialWSWithCookie(t, httpServer.URL, "same-user-token")
+	firstConnected := mustConnectSession(t, firstConn, "")
 	if err := firstConn.Close(); err != nil {
 		t.Fatalf("firstConn.Close() error = %v", err)
 	}
 
-	secondConn := mustDialWS(t, httpServer.URL)
+	secondConn := mustDialWSWithCookie(t, httpServer.URL, "same-user-token")
 	defer secondConn.Close()
-	secondConnected := mustConnectAuthenticatedSession(t, secondConn, "", "same-user-token")
+	secondConnected := mustConnectSession(t, secondConn, "")
 
 	if secondConnected.SessionID != firstConnected.SessionID {
 		t.Fatalf("secondConnected.SessionID = %q; want %q", secondConnected.SessionID, firstConnected.SessionID)
@@ -360,7 +323,7 @@ func TestHandleConnectResumeGameStateErrorPaths(t *testing.T) {
 			}},
 		}
 
-		_, shouldClose := server.handleConnect(nil, wsEnvelope{Data: mustMarshalRawMessage(connectRequest{SessionID: sessionID})})
+		_, shouldClose := server.handleConnect(nil, httptest.NewRequest(http.MethodGet, "/ws", nil), wsEnvelope{Data: mustMarshalRawMessage(connectRequest{SessionID: sessionID})})
 		if !shouldClose {
 			t.Fatal("handleConnect() shouldClose = false; want true after game state snapshot failure")
 		}
@@ -400,7 +363,7 @@ func TestHandleConnectResumeGameStateErrorPaths(t *testing.T) {
 		}
 		server.lobby.sessions[hostEvent.SessionID].conn = nil
 
-		_, shouldClose := server.handleConnect(nil, wsEnvelope{Data: mustMarshalRawMessage(connectRequest{SessionID: hostEvent.SessionID})})
+		_, shouldClose := server.handleConnect(nil, httptest.NewRequest(http.MethodGet, "/ws", nil), wsEnvelope{Data: mustMarshalRawMessage(connectRequest{SessionID: hostEvent.SessionID})})
 		if !shouldClose {
 			t.Fatal("handleConnect() shouldClose = false; want true after game state write failure")
 		}
@@ -408,9 +371,7 @@ func TestHandleConnectResumeGameStateErrorPaths(t *testing.T) {
 }
 
 func TestAuthenticatedWebSocketRejectsUnexpectedOrigin(t *testing.T) {
-	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
-	}}, "http://frontend.test")
+	server := newWSServerWithAllowedOrigin(&authHandler{store: &stubAuthStore{}, now: time.Now}, "http://frontend.test")
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
 
@@ -429,20 +390,18 @@ func TestAuthenticatedWebSocketRejectsUnexpectedOrigin(t *testing.T) {
 }
 
 func TestAuthenticatedWebSocketAcceptsConfiguredOrigin(t *testing.T) {
-	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
-	}}, "http://frontend.test")
+	server := newWSServerWithAllowedOrigin(&authHandler{store: &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "host-user", Name: "Host Account", Email: "host@example.com"}}, now: time.Now}, "http://frontend.test")
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
 
 	url := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(url, http.Header{"Origin": {"http://frontend.test"}})
+	conn, _, err := websocket.DefaultDialer.Dial(url, http.Header{"Origin": {"http://frontend.test"}, "Cookie": {authCookieName + "=host-token"}})
 	if err != nil {
 		t.Fatalf("Dial() error = %v", err)
 	}
 	defer conn.Close()
 
-	mustConnectAuthenticatedSession(t, conn, "", "host-token")
+	mustConnectSession(t, conn, "")
 }
 
 func TestCloneIndexMap(t *testing.T) {
@@ -469,9 +428,7 @@ func TestCloneIndexMap(t *testing.T) {
 }
 
 func TestAuthenticatedWebSocketRejectsMissingOriginWhenConfigured(t *testing.T) {
-	server := newWSServerWithAllowedOrigin(staticSessionVerifier{usersByToken: map[string]authenticatedUser{
-		"host-token": {ID: "host-user", Name: "Host Account", Email: "host@example.com"},
-	}}, "http://frontend.test")
+	server := newWSServerWithAllowedOrigin(&authHandler{store: &stubAuthStore{}, now: time.Now}, "http://frontend.test")
 	httpServer := httptest.NewServer(server.routes())
 	defer httpServer.Close()
 
@@ -521,11 +478,11 @@ func TestWebSocketOriginHelpers(t *testing.T) {
 }
 
 func TestNewConfiguredWSServerRejectsInvalidOriginConfig(t *testing.T) {
-	t.Setenv("BETTER_AUTH_URL", "frontend.test")
+	t.Setenv("BASE_URL", "frontend.test")
 
 	server, err := newConfiguredWSServer()
-	if err == nil || err.Error() != "BETTER_AUTH_URL must be a valid absolute URL" {
-		t.Fatalf("newConfiguredWSServer() error = %v; want BETTER_AUTH_URL must be a valid absolute URL", err)
+	if err == nil || err.Error() != "BASE_URL must be a valid absolute URL" {
+		t.Fatalf("newConfiguredWSServer() error = %v; want BASE_URL must be a valid absolute URL", err)
 	}
 	if server != nil {
 		t.Fatalf("server = %#v; want nil", server)
@@ -866,7 +823,7 @@ func TestHandleConnectionReturnsWhenInitialConnectedWriteFails(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		server.handleConnection(serverConn)
+		server.handleConnection(serverConn, httptest.NewRequest(http.MethodGet, "/ws", nil))
 		close(done)
 	}()
 
@@ -892,7 +849,7 @@ func TestHandleConnectionSendsHeartbeatPing(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		server.handleConnection(serverConn)
+		server.handleConnection(serverConn, httptest.NewRequest(http.MethodGet, "/ws", nil))
 		close(done)
 	}()
 
@@ -938,6 +895,31 @@ func TestHandleConnectionSendsHeartbeatPing(t *testing.T) {
 	<-done
 }
 
+func TestHandleConnectionProcessesPongFrames(t *testing.T) {
+	server := newWSServer()
+	serverConn, clientConn, cleanup := newSocketPair(t)
+	defer cleanup()
+
+	done := make(chan struct{})
+	go func() {
+		server.handleConnection(serverConn, httptest.NewRequest(http.MethodGet, "/ws", nil))
+		close(done)
+	}()
+
+	if err := clientConn.WriteControl(websocket.PongMessage, []byte("pong"), time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("WriteControl(PongMessage) error = %v", err)
+	}
+	if err := clientConn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"), time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("WriteControl(CloseMessage) error = %v", err)
+	}
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for handleConnection to exit after pong")
+	}
+}
+
 func TestSetWSReadDeadline(t *testing.T) {
 	serverConn, _, cleanup := newSocketPair(t)
 	defer cleanup()
@@ -972,7 +954,7 @@ func TestHandleConnectionReturnsWhenHeartbeatPingWriteFails(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		server.handleConnection(serverConn)
+		server.handleConnection(serverConn, httptest.NewRequest(http.MethodGet, "/ws", nil))
 		close(done)
 	}()
 
@@ -1067,7 +1049,7 @@ func TestHandleConnectionReturnsWhenRoomStateWriteFailsAfterReconnect(t *testing
 
 	done := make(chan struct{})
 	go func() {
-		server.handleConnection(reconnectServerConn)
+		server.handleConnection(reconnectServerConn, httptest.NewRequest(http.MethodGet, "/ws", nil))
 		close(done)
 	}()
 
@@ -1107,7 +1089,7 @@ func TestHandleConnectionReturnsWhenLeftRoomWriteFails(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		server.handleConnection(serverConn)
+		server.handleConnection(serverConn, httptest.NewRequest(http.MethodGet, "/ws", nil))
 		close(done)
 	}()
 

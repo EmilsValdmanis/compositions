@@ -23,12 +23,23 @@ var closeStoredUserStore = func(store *database.UserStore) {
 
 type userStore interface {
 	UpsertUser(ctx context.Context, user authenticatedUser) error
+	CreateSession(ctx context.Context, session authSessionRecord) error
+	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
+	DeleteSession(ctx context.Context, sessionToken string) error
 	Close() error
 }
 
 type noopUserStore struct{}
 
 func (noopUserStore) UpsertUser(context.Context, authenticatedUser) error { return nil }
+
+func (noopUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+
+func (noopUserStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
+	return database.SessionUserRecord{}, database.ErrSessionNotFound
+}
+
+func (noopUserStore) DeleteSession(context.Context, string) error { return database.ErrSessionNotFound }
 
 func (noopUserStore) Close() error { return nil }
 
@@ -73,4 +84,32 @@ func (s *postgresUserStore) Close() error {
 
 	closeStoredUserStore(s.store)
 	return nil
+}
+
+func (s *postgresUserStore) CreateSession(ctx context.Context, session authSessionRecord) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+
+	return s.store.CreateSession(ctx, database.SessionRecord{
+		Token:     strings.TrimSpace(session.Token),
+		UserID:    strings.TrimSpace(session.UserID),
+		ExpiresAt: session.ExpiresAt,
+	})
+}
+
+func (s *postgresUserStore) GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error) {
+	if s == nil || s.store == nil {
+		return database.SessionUserRecord{}, errors.New("user store is not configured")
+	}
+
+	return s.store.GetSessionUserByToken(ctx, strings.TrimSpace(sessionToken), now)
+}
+
+func (s *postgresUserStore) DeleteSession(ctx context.Context, sessionToken string) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+
+	return s.store.DeleteSession(ctx, strings.TrimSpace(sessionToken))
 }

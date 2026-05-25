@@ -1,8 +1,8 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { ServerStatusBadge } from "#/components/server-status-badge";
-import { UserDropdown } from "#/components/user-dropdown";
 import { Button } from "#/components/ui/button";
+import { UserDropdown } from "#/components/user-dropdown";
 
 function ProtectedLayoutStatus() {
   const { state } = useGameWebSocket();
