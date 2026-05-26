@@ -37,7 +37,6 @@ import {
   applyHandEntryOrder,
   buildTablePlayRequest,
   buildTableCompositionViews,
-  buildVirtualReclaimedJokers,
   buildHandEntries,
   compositionIdFromDropId,
   findNewHandEntry,
@@ -454,7 +453,6 @@ function useGameBoardController({
     [game?.activeCompositions, handEntries, scopedDraftCompositions],
   );
   const tableCompositions = draftResolution.tableCompositions;
-  const virtualReclaimedJokers = draftResolution.virtualReclaimedJokers;
   const allHandEntries = draftResolution.allHandEntries;
   const draftCompositions = draftResolution.draftCompositions;
   const activeEntry =
