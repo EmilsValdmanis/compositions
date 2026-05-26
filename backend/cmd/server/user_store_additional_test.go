@@ -79,14 +79,14 @@ func TestPostgresUserStoreUpsertUser(t *testing.T) {
 
 	t.Run("requires configured store", func(t *testing.T) {
 		var store *postgresUserStore
-		if err := store.UpsertUser(context.Background(), authenticatedUser{}); err == nil || err.Error() != "user store is not configured" {
+		if _, err := store.UpsertUser(context.Background(), authenticatedUser{}); err == nil || err.Error() != "user store is not configured" {
 			t.Fatalf("UpsertUser() error = %v; want user store is not configured", err)
 		}
 	})
 
 	t.Run("trims fields before upsert", func(t *testing.T) {
 		called := false
-		upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) error {
+		upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) (database.UserRecord, error) {
 			called = true
 			if store == nil {
 				t.Fatal("store = nil; want configured store")
@@ -94,17 +94,21 @@ func TestPostgresUserStoreUpsertUser(t *testing.T) {
 			if user.ID != "user-1" || user.Name != "Player One" || user.Email != "player@example.com" || user.ImageURL != "https://cdn.example.com/player.png" {
 				t.Fatalf("user = %#v; want trimmed fields", user)
 			}
-			return nil
+			return user, nil
 		}
 
 		store := &postgresUserStore{store: &database.UserStore{}}
-		if err := store.UpsertUser(context.Background(), authenticatedUser{
+		storedUser, err := store.UpsertUser(context.Background(), authenticatedUser{
 			ID:    " user-1 ",
 			Name:  " Player One ",
 			Email: " Player@Example.com ",
 			Image: " https://cdn.example.com/player.png ",
-		}); err != nil {
+		})
+		if err != nil {
 			t.Fatalf("UpsertUser() error = %v", err)
+		}
+		if storedUser.ID != "user-1" {
+			t.Fatalf("stored user id = %q; want user-1", storedUser.ID)
 		}
 		if !called {
 			t.Fatal("upsertStoredUser was not called")

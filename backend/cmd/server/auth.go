@@ -32,6 +32,7 @@ const (
 	defaultSessionLifetime = 30 * 24 * time.Hour
 	authCookieSameSite     = http.SameSiteLaxMode
 	googleUserInfoEndpoint = "https://www.googleapis.com/oauth2/v3/userinfo"
+	googleProvider         = "google"
 )
 
 type authSession struct {
@@ -45,7 +46,7 @@ type sessionReader interface {
 }
 
 type sessionWriter interface {
-	UpsertUser(ctx context.Context, user authenticatedUser) error
+	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
 	CreateSession(ctx context.Context, session authSessionRecord) error
 	DeleteSession(ctx context.Context, sessionToken string) error
 }
@@ -289,13 +290,14 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "failed to read google profile", http.StatusUnauthorized)
 		return
 	}
-	if err := h.store.UpsertUser(r.Context(), user); err != nil {
+	user, err = h.store.UpsertUser(r.Context(), user)
+	if err != nil {
 		if errors.Is(err, database.ErrUserConflict) {
-			slog.Warn("save oauth user conflict", "userID", user.ID, "email", user.Email)
+			slog.Warn("save oauth user conflict", "provider", user.Provider, "providerAccountID", user.ProviderAccountID, "email", user.Email)
 			http.Error(w, "google account could not be linked", http.StatusConflict)
 			return
 		}
-		slog.Error("save oauth user failed", "userID", user.ID, "error", err)
+		slog.Error("save oauth user failed", "provider", user.Provider, "providerAccountID", user.ProviderAccountID, "error", err)
 		http.Error(w, "failed to save session user", http.StatusInternalServerError)
 		return
 	}
@@ -412,15 +414,12 @@ func (h *authHandler) fetchGoogleUser(ctx context.Context, token *oauth2.Token) 
 	}
 
 	return authenticatedUser{
-		ID:    googleUserID(profile.Sub),
-		Name:  name,
-		Email: strings.ToLower(strings.TrimSpace(profile.Email)),
-		Image: strings.TrimSpace(profile.Picture),
+		Name:              name,
+		Email:             strings.ToLower(strings.TrimSpace(profile.Email)),
+		Image:             strings.TrimSpace(profile.Picture),
+		Provider:          googleProvider,
+		ProviderAccountID: strings.TrimSpace(profile.Sub),
 	}, nil
-}
-
-func googleUserID(subject string) string {
-	return "google_" + strings.TrimSpace(subject)
 }
 
 func readAuthCookie(r *http.Request) (string, error) {

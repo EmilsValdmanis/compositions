@@ -14,7 +14,7 @@ const defaultUserStoreTimeout = 5 * time.Second
 var openConfiguredUserStore = newConfiguredUserStore
 var databaseURLFromEnv = database.URLFromEnv
 var newDatabaseUserStore = database.NewUserStore
-var upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) error {
+var upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) (database.UserRecord, error) {
 	return store.UpsertUser(ctx, user)
 }
 var closeStoredUserStore = func(store *database.UserStore) {
@@ -22,7 +22,7 @@ var closeStoredUserStore = func(store *database.UserStore) {
 }
 
 type userStore interface {
-	UpsertUser(ctx context.Context, user authenticatedUser) error
+	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
 	CreateSession(ctx context.Context, session authSessionRecord) error
 	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
 	DeleteSession(ctx context.Context, sessionToken string) error
@@ -31,7 +31,9 @@ type userStore interface {
 
 type noopUserStore struct{}
 
-func (noopUserStore) UpsertUser(context.Context, authenticatedUser) error { return nil }
+func (noopUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+	return user, nil
+}
 
 func (noopUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }
 
@@ -64,17 +66,31 @@ func newConfiguredUserStore() (userStore, error) {
 	return &postgresUserStore{store: store}, nil
 }
 
-func (s *postgresUserStore) UpsertUser(ctx context.Context, user authenticatedUser) error {
+func (s *postgresUserStore) UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error) {
 	if s == nil || s.store == nil {
-		return errors.New("user store is not configured")
+		return authenticatedUser{}, errors.New("user store is not configured")
 	}
 
-	return upsertStoredUser(ctx, s.store, database.UserRecord{
-		ID:       strings.TrimSpace(user.ID),
-		Name:     strings.TrimSpace(user.Name),
-		Email:    strings.ToLower(strings.TrimSpace(user.Email)),
-		ImageURL: strings.TrimSpace(user.Image),
+	storedUser, err := upsertStoredUser(ctx, s.store, database.UserRecord{
+		ID:                strings.TrimSpace(user.ID),
+		Name:              strings.TrimSpace(user.Name),
+		Email:             strings.ToLower(strings.TrimSpace(user.Email)),
+		ImageURL:          strings.TrimSpace(user.Image),
+		Provider:          strings.TrimSpace(user.Provider),
+		ProviderAccountID: strings.TrimSpace(user.ProviderAccountID),
 	})
+	if err != nil {
+		return authenticatedUser{}, err
+	}
+
+	return authenticatedUser{
+		ID:                storedUser.ID,
+		Name:              storedUser.Name,
+		Email:             storedUser.Email,
+		Image:             storedUser.ImageURL,
+		Provider:          strings.TrimSpace(user.Provider),
+		ProviderAccountID: strings.TrimSpace(user.ProviderAccountID),
+	}, nil
 }
 
 func (s *postgresUserStore) Close() error {

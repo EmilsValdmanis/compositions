@@ -16,12 +16,12 @@ type recordingUserStore struct {
 	err   error
 }
 
-func (s *recordingUserStore) UpsertUser(_ context.Context, user authenticatedUser) error {
+func (s *recordingUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
 	if s.err != nil {
-		return s.err
+		return authenticatedUser{}, s.err
 	}
 	s.users = append(s.users, user)
-	return nil
+	return user, nil
 }
 
 func (s *recordingUserStore) Close() error { return nil }
@@ -38,7 +38,9 @@ type recordingSessionStore struct {
 	user authenticatedUser
 }
 
-func (s *recordingSessionStore) UpsertUser(context.Context, authenticatedUser) error { return nil }
+func (s *recordingSessionStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+	return user, nil
+}
 
 func (s *recordingSessionStore) CreateSession(context.Context, authSessionRecord) error { return nil }
 

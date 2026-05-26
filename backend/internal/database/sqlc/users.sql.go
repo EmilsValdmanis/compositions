@@ -7,17 +7,72 @@ package dbsqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, image_url, created_at, updated_at
-FROM users
-WHERE id = $1
+const createAccount = `-- name: CreateAccount :exec
+INSERT INTO accounts (
+    user_id,
+    provider,
+    provider_account_id
+)
+VALUES (
+    $1::uuid,
+    $2,
+    $3
+)
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
-	row := q.db.QueryRow(ctx, getUserByID, id)
-	var i User
+type CreateAccountParams struct {
+	UserID            pgtype.UUID `json:"user_id"`
+	Provider          string      `json:"provider"`
+	ProviderAccountID string      `json:"provider_account_id"`
+}
+
+func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) error {
+	_, err := q.db.Exec(ctx, createAccount, arg.UserID, arg.Provider, arg.ProviderAccountID)
+	return err
+}
+
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (
+    name,
+    email,
+    image_url
+)
+VALUES (
+    $1,
+    $2,
+    $3
+)
+RETURNING
+    id::text AS id,
+    name,
+    email,
+    image_url,
+    created_at,
+    updated_at
+`
+
+type CreateUserParams struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	ImageUrl string `json:"image_url"`
+}
+
+type CreateUserRow struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email"`
+	ImageUrl  string             `json:"image_url"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
+	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Email, arg.ImageUrl)
+	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -29,7 +84,147 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 	return i, err
 }
 
-const upsertUser = `-- name: UpsertUser :exec
+const getUserByAccount = `-- name: GetUserByAccount :one
+SELECT
+    users.id::text AS id,
+    users.name,
+    users.email,
+    users.image_url,
+    users.created_at,
+    users.updated_at
+FROM accounts
+JOIN users ON users.id = accounts.user_id
+WHERE accounts.provider = $1
+  AND accounts.provider_account_id = $2
+`
+
+type GetUserByAccountParams struct {
+	Provider          string `json:"provider"`
+	ProviderAccountID string `json:"provider_account_id"`
+}
+
+type GetUserByAccountRow struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email"`
+	ImageUrl  string             `json:"image_url"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByAccount(ctx context.Context, arg GetUserByAccountParams) (GetUserByAccountRow, error) {
+	row := q.db.QueryRow(ctx, getUserByAccount, arg.Provider, arg.ProviderAccountID)
+	var i GetUserByAccountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT
+    id::text AS id,
+    name,
+    email,
+    image_url,
+    created_at,
+    updated_at
+FROM users
+WHERE LOWER(email) = LOWER($1)
+  AND email <> ''
+`
+
+type GetUserByEmailRow struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email"`
+	ImageUrl  string             `json:"image_url"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, lower)
+	var i GetUserByEmailRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT
+    id::text AS id,
+    name,
+    email,
+    image_url,
+    created_at,
+    updated_at
+FROM users
+WHERE id = $1::uuid
+`
+
+type GetUserByIDRow struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email"`
+	ImageUrl  string             `json:"image_url"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateUserByID = `-- name: UpdateUserByID :exec
+UPDATE users
+SET
+    name = $1,
+    email = $2,
+    image_url = $3,
+    updated_at = NOW()
+WHERE id = $4::uuid
+`
+
+type UpdateUserByIDParams struct {
+	Name     string      `json:"name"`
+	Email    string      `json:"email"`
+	ImageUrl string      `json:"image_url"`
+	ID       pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateUserByID(ctx context.Context, arg UpdateUserByIDParams) error {
+	_, err := q.db.Exec(ctx, updateUserByID,
+		arg.Name,
+		arg.Email,
+		arg.ImageUrl,
+		arg.ID,
+	)
+	return err
+}
+
+const upsertUserByID = `-- name: UpsertUserByID :one
 INSERT INTO users (
     id,
     name,
@@ -37,7 +232,7 @@ INSERT INTO users (
     image_url
 )
 VALUES (
-    $1,
+    $1::uuid,
     $2,
     $3,
     $4
@@ -47,21 +242,46 @@ ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
     image_url = EXCLUDED.image_url,
     updated_at = NOW()
+RETURNING
+    id::text AS id,
+    name,
+    email,
+    image_url,
+    created_at,
+    updated_at
 `
 
-type UpsertUserParams struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	ImageUrl string `json:"image_url"`
+type UpsertUserByIDParams struct {
+	ID       pgtype.UUID `json:"id"`
+	Name     string      `json:"name"`
+	Email    string      `json:"email"`
+	ImageUrl string      `json:"image_url"`
 }
 
-func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) error {
-	_, err := q.db.Exec(ctx, upsertUser,
+type UpsertUserByIDRow struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Email     string             `json:"email"`
+	ImageUrl  string             `json:"image_url"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) UpsertUserByID(ctx context.Context, arg UpsertUserByIDParams) (UpsertUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, upsertUserByID,
 		arg.ID,
 		arg.Name,
 		arg.Email,
 		arg.ImageUrl,
 	)
-	return err
+	var i UpsertUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.ImageUrl,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

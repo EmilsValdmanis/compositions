@@ -13,6 +13,7 @@ import (
 	dbsqlc "github.com/EmilsValdmanis/compositions/internal/database/sqlc"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -22,10 +23,12 @@ var ErrUserConflict = errors.New("user conflict")
 const postgresUniqueViolation = "23505"
 
 type UserRecord struct {
-	ID       string
-	Name     string
-	Email    string
-	ImageURL string
+	ID                string
+	Name              string
+	Email             string
+	ImageURL          string
+	Provider          string
+	ProviderAccountID string
 }
 
 type UserStore struct {
@@ -45,6 +48,13 @@ type SessionUserRecord struct {
 	Email     string
 	ImageURL  string
 	ExpiresAt time.Time
+}
+
+type StoredUserRecord struct {
+	ID       string
+	Name     string
+	Email    string
+	ImageURL string
 }
 
 func URLFromEnv() (string, error) {
@@ -90,34 +100,227 @@ func NewUserStore(ctx context.Context, databaseURL string) (*UserStore, error) {
 	}, nil
 }
 
-func (s *UserStore) UpsertUser(ctx context.Context, user UserRecord) error {
+func (s *UserStore) UpsertUser(ctx context.Context, user UserRecord) (UserRecord, error) {
 	if s == nil || s.queries == nil {
-		return errors.New("user store is not configured")
+		return UserRecord{}, errors.New("user store is not configured")
 	}
 
-	userID := strings.TrimSpace(user.ID)
-	if userID == "" {
-		return errors.New("user id is required")
+	normalizedUser := normalizeUserRecord(user)
+	if normalizedUser.Provider != "" || normalizedUser.ProviderAccountID != "" {
+		if normalizedUser.Provider == "" || normalizedUser.ProviderAccountID == "" {
+			return UserRecord{}, errors.New("provider and provider account id are required together")
+		}
+
+		return s.upsertAccountUser(ctx, normalizedUser)
 	}
 
-	email := normalizeEmail(user.Email)
-	name := strings.TrimSpace(user.Name)
-	imageURL := strings.TrimSpace(user.ImageURL)
+	if normalizedUser.ID == "" {
+		return UserRecord{}, errors.New("user id is required")
+	}
 
-	err := s.queries.UpsertUser(ctx, dbsqlc.UpsertUserParams{
-		ID:       userID,
-		Name:     name,
-		Email:    email,
-		ImageUrl: imageURL,
+	uuidID, err := parseUUID(normalizedUser.ID)
+	if err != nil {
+		return UserRecord{}, err
+	}
+
+	dbUser, err := s.queries.UpsertUserByID(ctx, dbsqlc.UpsertUserByIDParams{
+		ID:       uuidID,
+		Name:     normalizedUser.Name,
+		Email:    normalizedUser.Email,
+		ImageUrl: normalizedUser.ImageURL,
 	})
 	if isUniqueViolation(err) {
-		return ErrUserConflict
+		return UserRecord{}, ErrUserConflict
 	}
-	return err
+	if err != nil {
+		return UserRecord{}, err
+	}
+
+	return userRecordFromRow(dbUser.ID, dbUser.Name, dbUser.Email, dbUser.ImageUrl), nil
+}
+
+func normalizeUserRecord(user UserRecord) UserRecord {
+	return UserRecord{
+		ID:                strings.TrimSpace(user.ID),
+		Name:              strings.TrimSpace(user.Name),
+		Email:             normalizeEmail(user.Email),
+		ImageURL:          strings.TrimSpace(user.ImageURL),
+		Provider:          strings.TrimSpace(user.Provider),
+		ProviderAccountID: strings.TrimSpace(user.ProviderAccountID),
+	}
+}
+
+func userRecordFromRow(id, name, email, imageURL string) UserRecord {
+	return UserRecord{
+		ID:       strings.TrimSpace(id),
+		Name:     strings.TrimSpace(name),
+		Email:    normalizeEmail(email),
+		ImageURL: strings.TrimSpace(imageURL),
+	}
+}
+
+func storedUserRecordFromRow(id, name, email, imageURL string) StoredUserRecord {
+	return StoredUserRecord{
+		ID:       strings.TrimSpace(id),
+		Name:     strings.TrimSpace(name),
+		Email:    normalizeEmail(email),
+		ImageURL: strings.TrimSpace(imageURL),
+	}
+}
+
+func (s *UserStore) upsertAccountUser(ctx context.Context, user UserRecord) (UserRecord, error) {
+	if s == nil || s.pool == nil || s.queries == nil {
+		return UserRecord{}, errors.New("user store is not configured")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return UserRecord{}, err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	queries := s.queries.WithTx(tx)
+	storedUser, err := resolveAccountUser(ctx, queries, user)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return UserRecord{}, ErrUserConflict
+		}
+		return UserRecord{}, err
+	}
+
+	storedUserID, err := parseUUID(storedUser.ID)
+	if err != nil {
+		return UserRecord{}, err
+	}
+
+	err = queries.UpdateUserByID(ctx, dbsqlc.UpdateUserByIDParams{
+		Name:     user.Name,
+		Email:    user.Email,
+		ImageUrl: user.ImageURL,
+		ID:       storedUserID,
+	})
+	if isUniqueViolation(err) {
+		return UserRecord{}, ErrUserConflict
+	}
+	if err != nil {
+		return UserRecord{}, err
+	}
+
+	updatedUser, err := queries.GetUserByID(ctx, storedUserID)
+	if err != nil {
+		return UserRecord{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return UserRecord{}, err
+	}
+
+	return userRecordFromRow(updatedUser.ID, updatedUser.Name, updatedUser.Email, updatedUser.ImageUrl), nil
+}
+
+func resolveAccountUser(ctx context.Context, queries *dbsqlc.Queries, user UserRecord) (StoredUserRecord, error) {
+	storedUser, err := queries.GetUserByAccount(ctx, dbsqlc.GetUserByAccountParams{
+		Provider:          user.Provider,
+		ProviderAccountID: user.ProviderAccountID,
+	})
+	if err == nil {
+		return storedUserRecordFromRow(storedUser.ID, storedUser.Name, storedUser.Email, storedUser.ImageUrl), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return StoredUserRecord{}, err
+	}
+
+	if user.Email != "" {
+		emailUser, emailErr := queries.GetUserByEmail(ctx, user.Email)
+		if emailErr == nil {
+			storedUserID, parseErr := parseUUID(emailUser.ID)
+			if parseErr != nil {
+				return StoredUserRecord{}, parseErr
+			}
+
+			if err := queries.CreateAccount(ctx, dbsqlc.CreateAccountParams{
+				UserID:            storedUserID,
+				Provider:          user.Provider,
+				ProviderAccountID: user.ProviderAccountID,
+			}); err != nil && !isUniqueViolation(err) {
+				return StoredUserRecord{}, err
+			}
+
+			linkedUser, linkErr := queries.GetUserByAccount(ctx, dbsqlc.GetUserByAccountParams{
+				Provider:          user.Provider,
+				ProviderAccountID: user.ProviderAccountID,
+			})
+			if linkErr == nil {
+				return storedUserRecordFromRow(linkedUser.ID, linkedUser.Name, linkedUser.Email, linkedUser.ImageUrl), nil
+			}
+			if !errors.Is(linkErr, pgx.ErrNoRows) {
+				return StoredUserRecord{}, linkErr
+			}
+
+			return storedUserRecordFromRow(emailUser.ID, emailUser.Name, emailUser.Email, emailUser.ImageUrl), nil
+		}
+		if !errors.Is(emailErr, pgx.ErrNoRows) {
+			return StoredUserRecord{}, emailErr
+		}
+	}
+
+	createdUser, err := queries.CreateUser(ctx, dbsqlc.CreateUserParams{
+		Name:     user.Name,
+		Email:    user.Email,
+		ImageUrl: user.ImageURL,
+	})
+	var createdOrExistingUser StoredUserRecord
+	if isUniqueViolation(err) && user.Email != "" {
+		emailUser, lookupErr := queries.GetUserByEmail(ctx, user.Email)
+		err = lookupErr
+		if lookupErr == nil {
+			createdOrExistingUser = storedUserRecordFromRow(emailUser.ID, emailUser.Name, emailUser.Email, emailUser.ImageUrl)
+		}
+	} else if err == nil {
+		createdOrExistingUser = storedUserRecordFromRow(createdUser.ID, createdUser.Name, createdUser.Email, createdUser.ImageUrl)
+	}
+	if err != nil {
+		return StoredUserRecord{}, err
+	}
+
+	storedUserID, err := parseUUID(createdOrExistingUser.ID)
+	if err != nil {
+		return StoredUserRecord{}, err
+	}
+
+	if err := queries.CreateAccount(ctx, dbsqlc.CreateAccountParams{
+		UserID:            storedUserID,
+		Provider:          user.Provider,
+		ProviderAccountID: user.ProviderAccountID,
+	}); err != nil && !isUniqueViolation(err) {
+		return StoredUserRecord{}, err
+	}
+
+	linkedUser, err := queries.GetUserByAccount(ctx, dbsqlc.GetUserByAccountParams{
+		Provider:          user.Provider,
+		ProviderAccountID: user.ProviderAccountID,
+	})
+	if err == nil {
+		return storedUserRecordFromRow(linkedUser.ID, linkedUser.Name, linkedUser.Email, linkedUser.ImageUrl), nil
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return StoredUserRecord{}, err
+	}
+
+	return createdOrExistingUser, nil
 }
 
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
+}
+
+func parseUUID(value string) (pgtype.UUID, error) {
+	var uuid pgtype.UUID
+	if err := uuid.Scan(strings.TrimSpace(value)); err != nil {
+		return pgtype.UUID{}, fmt.Errorf("invalid user id: %w", err)
+	}
+	return uuid, nil
 }
 
 func hashSessionToken(sessionToken string) (string, error) {
@@ -176,7 +379,7 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 
 	var record SessionUserRecord
 	err = s.pool.QueryRow(ctx, `
-		SELECT u.id, u.name, u.email, u.image_url, s.expires_at
+		SELECT u.id::text, u.name, u.email, u.image_url, s.expires_at
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1
@@ -219,12 +422,22 @@ func (s *UserStore) DeleteSession(ctx context.Context, sessionToken string) erro
 	return nil
 }
 
-func (s *UserStore) GetUserByID(ctx context.Context, userID string) (dbsqlc.User, error) {
+func (s *UserStore) GetUserByID(ctx context.Context, userID string) (StoredUserRecord, error) {
 	if s == nil || s.queries == nil {
-		return dbsqlc.User{}, errors.New("user store is not configured")
+		return StoredUserRecord{}, errors.New("user store is not configured")
 	}
 
-	return s.queries.GetUserByID(ctx, strings.TrimSpace(userID))
+	uuidID, err := parseUUID(userID)
+	if err != nil {
+		return StoredUserRecord{}, err
+	}
+
+	user, err := s.queries.GetUserByID(ctx, uuidID)
+	if err != nil {
+		return StoredUserRecord{}, err
+	}
+
+	return storedUserRecordFromRow(user.ID, user.Name, user.Email, user.ImageUrl), nil
 }
 
 func (s *UserStore) Close() {
