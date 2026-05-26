@@ -1,6 +1,7 @@
 import { useTransition } from "react";
 import { Login01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { toast } from "sonner";
 import { Spinner } from "#/components/ui/spinner";
 import { Button } from "#/components/ui/button";
 import { authClient } from "#/lib/auth-client";
@@ -10,7 +11,10 @@ export default function SignInButton() {
 
   const handleGoogleSignIn = () => {
     startTransition(() => {
-      void authClient.signIn.social({ provider: "google" });
+      void authClient.signIn.social({ provider: "google" }).catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : "failed to start sign in";
+        toast.error(message);
+      });
     });
   };
 
