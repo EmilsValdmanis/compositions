@@ -827,7 +827,11 @@ export function resolveDraftViews(
   const allEntryByKey = new Map(allHandEntries.map((entry) => [entry.key, entry]));
 
   return {
-    tableCompositions: buildTableCompositionViews(activeCompositions, draftCompositions, allEntryByKey),
+    tableCompositions: buildTableCompositionViews(
+      activeCompositions,
+      draftCompositions,
+      allEntryByKey,
+    ),
     virtualReclaimedJokers,
     draftCompositions,
     allHandEntries,
