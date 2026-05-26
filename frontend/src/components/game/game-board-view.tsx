@@ -402,6 +402,7 @@ function useGameBoardController({
     compositions: [],
   });
   const nextDraftIdRef = useRef(0);
+  const skipNextDraftSyncRef = useRef(false);
   const rawHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
   const handOrder =
     handOrderState.scopeKey === handOrderScopeKey && handOrderState.order
@@ -508,10 +509,19 @@ function useGameBoardController({
       return;
     }
 
+    if (skipNextDraftSyncRef.current) {
+      skipNextDraftSyncRef.current = false;
+      return;
+    }
+
     syncTurnDrafts(JSON.parse(serializedDrafts) as DraftCompositionSnapshot[]);
   }, [disableDraftSync, serializedDrafts, turnState.isMyTurn]);
 
-  function resetDraftCompositions() {
+  function resetDraftCompositions({ sync = true }: { sync?: boolean } = {}) {
+    if (!sync) {
+      skipNextDraftSyncRef.current = true;
+    }
+
     setDraftCompositionState({
       scopeKey: currentDraftScopeKey,
       compositions: [],
@@ -527,8 +537,44 @@ function useGameBoardController({
       buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
     );
 
-    resetDraftCompositions();
+    resetDraftCompositions({ sync: false });
     return result;
+  }
+
+  function handIndexAfterSubmittedDrafts(handKey: string) {
+    const draggedEntry = allEntryByKey.get(handKey);
+
+    if (!draggedEntry || draggedEntry.isVirtual) {
+      return null;
+    }
+
+    const playedSourceIndices = new Set<number>();
+    for (const composition of draftedCompositionsView) {
+      for (const entry of composition.entries) {
+        if (!entry.isVirtual) {
+          playedSourceIndices.add(entry.sourceIndex);
+        }
+      }
+    }
+
+    if (playedSourceIndices.has(draggedEntry.sourceIndex)) {
+      return null;
+    }
+
+    let nextIndex = 0;
+    for (const entry of allHandEntries) {
+      if (entry.isVirtual) {
+        continue;
+      }
+      if (entry.sourceIndex === draggedEntry.sourceIndex) {
+        return nextIndex;
+      }
+      if (!playedSourceIndices.has(entry.sourceIndex)) {
+        nextIndex += 1;
+      }
+    }
+
+    return null;
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -678,11 +724,20 @@ function useGameBoardController({
       }
       if (typeof cardIndex === "number") {
         void (async () => {
+          const discardIndex =
+            draftedCompositionsView.length > 0
+              ? handIndexAfterSubmittedDrafts(draggedHandKey)
+              : cardIndex;
+
+          if (discardIndex === null) {
+            return;
+          }
+
           if (draftedCompositionsView.length > 0) {
             await submitDraftCompositions();
           }
 
-          await onDiscardCard(cardIndex);
+          await onDiscardCard(discardIndex);
         })();
       }
       return;
