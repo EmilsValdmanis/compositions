@@ -110,7 +110,11 @@ export function GameLobbyView({
                     aria-label="Room join link"
                     className="h-10 font-mono text-xs"
                   />
-                  <Button type="button" className="sm:ml-auto" onClick={() => void onCopyRoomLink()}>
+                  <Button
+                    type="button"
+                    className="sm:ml-auto"
+                    onClick={() => void onCopyRoomLink()}
+                  >
                     Copy link
                   </Button>
                 </div>
@@ -156,7 +160,9 @@ export function GameLobbyView({
                     Last winner
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">{victor?.name ?? "A player"}</span>{" "}
+                    <span className="font-medium text-foreground">
+                      {victor?.name ?? "A player"}
+                    </span>{" "}
                     in round {completedGame.game.round}
                   </p>
                 </div>
