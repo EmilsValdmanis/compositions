@@ -215,6 +215,7 @@ func TestHandleLogout(t *testing.T) {
 func TestHandleGoogleSignInSetsStateAndPKCECookies(t *testing.T) {
 	handler := &authHandler{
 		config: authConfig{
+			cookieDomain: "kompozicijas.xyz",
 			oauthConfig: &oauth2.Config{
 				Endpoint: oauth2.Endpoint{AuthURL: "https://accounts.google.com/o/oauth2/v2/auth"},
 			},
@@ -253,6 +254,11 @@ func TestHandleGoogleSignInSetsStateAndPKCECookies(t *testing.T) {
 	}
 	if cookies[0].Name != oauthPKCECookieName && cookies[1].Name != oauthPKCECookieName {
 		t.Fatal("oauth pkce cookie not set")
+	}
+	for _, cookie := range cookies {
+		if cookie.Domain != "kompozicijas.xyz" {
+			t.Fatalf("cookie %q domain = %q; want kompozicijas.xyz", cookie.Name, cookie.Domain)
+		}
 	}
 }
 
@@ -362,6 +368,7 @@ func TestAuthConfigHelpers(t *testing.T) {
 		t.Setenv("FRONTEND_URL", "https://frontend.test")
 		t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 		t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+		t.Setenv("COOKIE_DOMAIN", "kompozicijas.xyz")
 		t.Setenv("COOKIE_SECURE", "false")
 		handler, err := newConfiguredAuthHandler(&stubAuthStore{})
 		if err != nil {
@@ -372,6 +379,9 @@ func TestAuthConfigHelpers(t *testing.T) {
 		}
 		if handler.config.frontendOrigin != "https://frontend.test" {
 			t.Fatalf("frontendOrigin = %q; want https://frontend.test", handler.config.frontendOrigin)
+		}
+		if handler.config.cookieDomain != "kompozicijas.xyz" {
+			t.Fatalf("cookieDomain = %q; want kompozicijas.xyz", handler.config.cookieDomain)
 		}
 	})
 
@@ -426,6 +436,24 @@ func TestAuthConfigHelpers(t *testing.T) {
 		}
 		if frontendOrigin != "http://frontend.test" {
 			t.Fatalf("frontendOrigin = %q; want http://frontend.test", frontendOrigin)
+		}
+
+		if domain, err := cookieDomainFromEnv(); err != nil {
+			t.Fatalf("cookieDomainFromEnv() error = %v", err)
+		} else if domain != "" {
+			t.Fatalf("cookieDomain = %q; want empty", domain)
+		}
+
+		t.Setenv("COOKIE_DOMAIN", "https://kompozicijas.xyz")
+		if _, err := cookieDomainFromEnv(); err == nil || err.Error() != "COOKIE_DOMAIN must be a valid cookie domain" {
+			t.Fatalf("cookieDomainFromEnv() error = %v; want invalid cookie domain", err)
+		}
+
+		t.Setenv("COOKIE_DOMAIN", ".kompozicijas.xyz")
+		if domain, err := cookieDomainFromEnv(); err != nil {
+			t.Fatalf("cookieDomainFromEnv() error = %v", err)
+		} else if domain != "kompozicijas.xyz" {
+			t.Fatalf("cookieDomain = %q; want kompozicijas.xyz", domain)
 		}
 	})
 
@@ -780,6 +808,33 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 			}
 			if store.createdSessions[0].UserID != "user-123" {
 				t.Fatalf("session user id = %q; want user-123", store.createdSessions[0].UserID)
+			}
+			cookies := response.Result().Cookies()
+			if len(cookies) == 0 {
+				t.Fatal("cookies = 0; want session cookie")
+			}
+			if cookies[0].Domain != "" {
+				t.Fatalf("session cookie domain = %q; want empty by default", cookies[0].Domain)
+			}
+		})
+
+		t.Run("success with shared cookie domain", func(t *testing.T) {
+			store := &stubAuthStore{upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
+			handler := newOAuthCallbackHandler(store, now)
+			handler.config.cookieDomain = "kompozicijas.xyz"
+			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
+			request := newOAuthCallbackRequest("state=state-token&code=code", client)
+			response := httptest.NewRecorder()
+			handler.handleGoogleCallback(response, request)
+			if response.Code != http.StatusFound {
+				t.Fatalf("status = %d; want 302", response.Code)
+			}
+			cookies := response.Result().Cookies()
+			if len(cookies) == 0 {
+				t.Fatal("cookies = 0; want session cookie")
+			}
+			if cookies[0].Domain != "kompozicijas.xyz" {
+				t.Fatalf("session cookie domain = %q; want kompozicijas.xyz", cookies[0].Domain)
 			}
 		})
 	})
