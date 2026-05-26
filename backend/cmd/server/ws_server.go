@@ -782,7 +782,7 @@ func inferComposition(cards []game.Card) (*game.Composition, bool) {
 		return comp, true
 	}
 
-	return game.NewRun(cards)
+	return game.NewUnorderedRun(cards)
 }
 
 func additionsFromRequest(requests []compositionAdditionRequest) ([]game.CompositionAddition, error) {

@@ -45,6 +45,10 @@ func NewComposition(cards []Card, variant compositionVariant) (*Composition, boo
 	return newComposition(cards, variant, false)
 }
 
+func NewUnorderedRun(cards []Card) (*Composition, bool) {
+	return newComposition(cards, run, false)
+}
+
 func NewSet(cards []Card) (*Composition, bool) {
 	return newComposition(cards, set, false)
 }
