@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ClientOnly } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
+import { ClientOnly, getRouteApi, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
@@ -8,13 +8,7 @@ import { playerName } from "#/components/game/game-view-helpers";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 
-function initialRoomCode() {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? "";
-}
+const protectedHomeRoute = getRouteApi("/_protected/");
 
 function roomShareUrl(code: string) {
   if (typeof window === "undefined") {
@@ -26,15 +20,9 @@ function roomShareUrl(code: string) {
   return url.toString();
 }
 
-function requestedRoomCode() {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  return new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? null;
-}
-
 export function ProtectedHome() {
+  const search = protectedHomeRoute.useSearch();
+  const router = useRouter();
   const {
     state,
     createRoom,
@@ -48,10 +36,11 @@ export function ProtectedHome() {
     playTable,
     discardCard,
   } = useGameWebSocket();
-  const [roomCode, setRoomCode] = useState(initialRoomCode);
+  const autoJoinAttemptedRoomCodeRef = useRef<string | null>(null);
   const players = state.room?.players ?? [];
   const currentPlayer = players.find((player) => player.playerId === state.playerId) ?? null;
   const connectedPlayers = players.filter((player) => player.connected).length;
+  const roomCode = state.room?.code ?? search.room ?? "";
   const phase = state.room?.phase ?? "lobby";
   const isLobbyPhase = !state.room || phase === "lobby";
   const isHost = currentPlayer?.isHost ?? false;
@@ -85,25 +74,30 @@ export function ProtectedHome() {
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
 
   useEffect(() => {
-    const requestedCode = requestedRoomCode();
     if (
       state.connectionStatus !== "connected" ||
       state.room ||
-      !requestedCode ||
-      requestedCode !== roomCode.trim() ||
-      roomCode.trim() === ""
+      !search.room ||
+      autoJoinAttemptedRoomCodeRef.current === search.room
     ) {
       return;
     }
 
-    joinRoom(requestedCode);
-  }, [joinRoom, roomCode, state.connectionStatus, state.room]);
+    autoJoinAttemptedRoomCodeRef.current = search.room;
+    joinRoom(search.room);
+  }, [joinRoom, search.room, state.connectionStatus, state.room]);
 
   useEffect(() => {
-    if (state.room?.code) {
-      setRoomCode(state.room.code);
+    if (!state.room?.code || search.room === state.room.code) {
+      return;
     }
-  }, [state.room?.code]);
+
+    void router.navigate({
+      to: "/",
+      search: { room: state.room.code },
+      replace: true,
+    });
+  }, [router, search.room, state.room?.code]);
 
   useEffect(() => {
     if (!state.lastError) {
@@ -136,6 +130,32 @@ export function ProtectedHome() {
     }
 
     await copyText(roomShareUrl(state.room.code), "Room link copied");
+  }
+
+  function handleRoomCodeChange(nextRoomCode: string) {
+    const normalizedRoomCode = nextRoomCode.trim().toUpperCase();
+
+    if (normalizedRoomCode !== autoJoinAttemptedRoomCodeRef.current) {
+      autoJoinAttemptedRoomCodeRef.current = null;
+    }
+
+    void router.navigate({
+      to: "/",
+      search: {
+        room: normalizedRoomCode === "" ? undefined : normalizedRoomCode,
+      },
+      replace: true,
+    });
+  }
+
+  function handleLeaveRoom() {
+    autoJoinAttemptedRoomCodeRef.current = null;
+    void router.navigate({
+      to: "/",
+      search: {},
+      replace: true,
+    });
+    leaveRoom();
   }
 
   async function handleDiscardCard(cardIndex: number) {
@@ -184,12 +204,12 @@ export function ProtectedHome() {
                 isDealChooser: Boolean(isDealChooser),
               }}
               roomLink={state.room?.code ? roomShareUrl(state.room.code) : null}
-              onRoomCodeChange={setRoomCode}
+              onRoomCodeChange={handleRoomCodeChange}
               onCreateRoom={createRoom}
               onJoinRoom={joinRoom}
               onStartGame={startGame}
               onChooseDealing={chooseDealing}
-              onLeaveRoom={leaveRoom}
+              onLeaveRoom={handleLeaveRoom}
               onCopyRoomCode={copyRoomCode}
               onCopyRoomLink={copyRoomLink}
             />
