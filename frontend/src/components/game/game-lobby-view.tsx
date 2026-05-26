@@ -7,9 +7,11 @@ import {
 } from "#/components/game-websocket-provider";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { compactId } from "#/components/game/game-view-helpers";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { Input } from "#/components/ui/input";
+import { Separator } from "#/components/ui/separator";
 
 type AsyncAction = () => Promise<void> | void;
 
@@ -69,54 +71,55 @@ export function GameLobbyView({
   const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
   const victorPlayerId = completedGame?.game.players[completedGame.game.roundWinnerIndex]?.playerId;
   const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
+  const connectedCount = players.filter((player) => player.connected).length;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-      <Card>
+    <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
+      <Card className="border border-border/70 shadow-sm">
         <CardHeader>
-          <CardTitle>Lobby</CardTitle>
-          <CardDescription>{room ? "Room is open" : "Create or join a room"}</CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Lobby</CardTitle>
+              <CardDescription>{room ? "Ready room" : "Create or join"}</CardDescription>
+            </div>
+            <Badge variant={room ? "secondary" : "outline"}>
+              {room ? `${connectedCount}/${players.length} online` : "Offline"}
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent className="grid gap-4">
           {room ? (
             <div className="grid gap-4">
-              <div className="grid gap-4 rounded-3xl border border-border/70 bg-muted/20 p-4">
-                <div className="grid gap-1">
-                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                    Room code
-                  </p>
-                  <div className="flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                      <p className="text-3xl font-semibold tracking-tight">{room.code}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Copy the join link to drop players straight into this lobby.
-                      </p>
-                    </div>
-                    <Button type="button" variant="outline" onClick={() => void onCopyRoomCode()}>
-                      Copy code
-                    </Button>
+              <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                      Room code
+                    </p>
+                    <p className="text-4xl font-semibold tracking-tight">{room.code}</p>
                   </div>
+                  <Button type="button" variant="outline" onClick={() => void onCopyRoomCode()}>
+                    Copy code
+                  </Button>
                 </div>
 
-                <div className="rounded-3xl border border-border/70 bg-background/80 p-3">
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      value={roomLink ?? room.code}
-                      readOnly
-                      aria-label="Room join link"
-                      className="font-mono text-xs"
-                    />
-                    <Button
-                      type="button"
-                      className="sm:ml-auto"
-                      onClick={() => void onCopyRoomLink()}
-                    >
-                      Copy join link
-                    </Button>
-                  </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={roomLink ?? room.code}
+                    readOnly
+                    aria-label="Room join link"
+                    className="h-10 font-mono text-xs"
+                  />
+                  <Button
+                    type="button"
+                    className="sm:ml-auto"
+                    onClick={() => void onCopyRoomLink()}
+                  >
+                    Copy link
+                  </Button>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <Button type="button" onClick={onStartGame} disabled={!canStartGame}>
                   Start game
                 </Button>
@@ -130,14 +133,12 @@ export function GameLobbyView({
                 </Button>
               </div>
               {pendingDealChoice ? (
-                <div className="grid gap-3 rounded-3xl border border-border/70 bg-muted/20 p-4">
-                  <div className="grid gap-1">
-                    <p className="text-sm font-medium">Choose dealing type</p>
-                    <p className="text-sm text-muted-foreground">
-                      {isDealChooser
-                        ? "You need to choose how this round will be dealt."
-                        : `${dealChooserName ?? "A player"} needs to choose how this round will be dealt.`}
-                    </p>
+                <div className="grid gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">Deal choice</p>
+                    <Badge variant={isDealChooser ? "default" : "outline"}>
+                      {isDealChooser ? "Your pick" : (dealChooserName ?? "Waiting")}
+                    </Badge>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
@@ -154,20 +155,26 @@ export function GameLobbyView({
                 </div>
               ) : null}
               {completedGame ? (
-                <div className="grid gap-2 rounded-3xl border border-border/70 bg-muted/20 p-4">
-                  <p className="text-sm font-medium">Last game winner</p>
+                <div className="grid gap-1 rounded-2xl border border-border/70 bg-muted/20 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    Last winner
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    {victor?.name ?? "A player"} won the game in round {completedGame.game.round}.
+                    <span className="font-medium text-foreground">
+                      {victor?.name ?? "A player"}
+                    </span>{" "}
+                    in round {completedGame.game.round}
                   </p>
                 </div>
               ) : null}
             </div>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-4">
               <Button type="button" onClick={onCreateRoom} disabled={!canCreateRoom}>
                 Create room
               </Button>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="grid gap-2">
+                <Separator />
                 <Input
                   value={roomCode}
                   onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
@@ -186,7 +193,7 @@ export function GameLobbyView({
             </div>
           )}
 
-          <div className="grid gap-2 rounded-3xl border border-border/70 bg-muted/20 p-4 text-sm">
+          <div className="grid gap-2 rounded-2xl border border-border/70 bg-background p-3 text-sm">
             <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">Player ID</span>
               <span className="font-medium">{compactId(playerId)}</span>
@@ -195,19 +202,22 @@ export function GameLobbyView({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="border border-border/70 shadow-sm">
         <CardHeader>
-          <CardTitle>Players</CardTitle>
-          <CardDescription>
-            {players.length ? "Seats and connection state" : "No room yet"}
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Players</CardTitle>
+              <CardDescription>{players.length ? "Seats" : "No room yet"}</CardDescription>
+            </div>
+            {players.length ? <Badge variant="outline">{players.length} seated</Badge> : null}
+          </div>
         </CardHeader>
         <CardContent>
           {players.length ? (
             <PlayerStrip players={players} game={game} />
           ) : (
-            <div className="rounded-3xl border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
-              Connect first, then create or join.
+            <div className="rounded-2xl border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
+              Create or join a room.
             </div>
           )}
         </CardContent>
