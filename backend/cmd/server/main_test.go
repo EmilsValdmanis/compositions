@@ -131,6 +131,7 @@ func TestRunServerReturnsEnvErrorBeforeListen(t *testing.T) {
 	originalListen := listenAndServe
 	defer func() { listenAndServe = originalListen }()
 	t.Setenv("BASE_URL", "")
+	t.Setenv("FRONTEND_URL", "http://frontend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 

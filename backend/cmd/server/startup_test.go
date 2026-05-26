@@ -50,6 +50,7 @@ func TestNewConfiguredWSServerPropagatesStoreError(t *testing.T) {
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 
 	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	openConfiguredUserStore = func() (userStore, error) {
@@ -95,6 +96,7 @@ func TestRunServerWarnsWhenCloseFails(t *testing.T) {
 	defer slog.SetDefault(originalLogger)
 
 	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	store := &closingUserStore{err: errors.New("close boom")}
@@ -127,6 +129,7 @@ func TestNewConfiguredWSServerClosesStoreOnAuthError(t *testing.T) {
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 
 	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	store := &closingUserStore{}
@@ -143,5 +146,33 @@ func TestNewConfiguredWSServerClosesStoreOnAuthError(t *testing.T) {
 	}
 	if !store.closed {
 		t.Fatal("store.closed = false; want true")
+	}
+}
+
+func TestNewConfiguredWSServerUsesFrontendOrigin(t *testing.T) {
+	originalOpenConfiguredUserStore := openConfiguredUserStore
+	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
+
+	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+	store := &closingUserStore{}
+	openConfiguredUserStore = func() (userStore, error) {
+		return store, nil
+	}
+
+	server, err := newConfiguredWSServer()
+	if err != nil {
+		t.Fatalf("newConfiguredWSServer() error = %v", err)
+	}
+	defer func() {
+		if err := server.Close(); err != nil {
+			t.Fatalf("server.Close() error = %v", err)
+		}
+	}()
+
+	if server.allowedOrigin != "https://frontend.test" {
+		t.Fatalf("server.allowedOrigin = %q; want https://frontend.test", server.allowedOrigin)
 	}
 }

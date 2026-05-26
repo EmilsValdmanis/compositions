@@ -224,11 +224,14 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 }
 
 func newConfiguredWSServer() (*wsServer, error) {
-	baseURL, err := baseURLFromEnv()
+	if _, err := baseURLFromEnv(); err != nil {
+		return nil, err
+	}
+
+	_, frontendOrigin, err := frontendConfigFromEnv()
 	if err != nil {
 		return nil, err
 	}
-	allowedOrigin := originFromBaseURL(baseURL)
 
 	store, err := openConfiguredUserStore()
 	if err != nil {
@@ -240,7 +243,7 @@ func newConfiguredWSServer() (*wsServer, error) {
 		_ = store.Close()
 		return nil, err
 	}
-	return newWSServerWithDependencies(auth, store, allowedOrigin), nil
+	return newWSServerWithDependencies(auth, store, frontendOrigin), nil
 }
 
 func (s *wsServer) Close() error {

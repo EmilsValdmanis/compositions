@@ -478,11 +478,12 @@ func TestWebSocketOriginHelpers(t *testing.T) {
 }
 
 func TestNewConfiguredWSServerRejectsInvalidOriginConfig(t *testing.T) {
-	t.Setenv("BASE_URL", "frontend.test")
+	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "frontend.test")
 
 	server, err := newConfiguredWSServer()
-	if err == nil || err.Error() != "BASE_URL must be a valid absolute URL" {
-		t.Fatalf("newConfiguredWSServer() error = %v; want BASE_URL must be a valid absolute URL", err)
+	if err == nil || err.Error() != "FRONTEND_URL must be a valid absolute URL" {
+		t.Fatalf("newConfiguredWSServer() error = %v; want FRONTEND_URL must be a valid absolute URL", err)
 	}
 	if server != nil {
 		t.Fatalf("server = %#v; want nil", server)
