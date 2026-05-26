@@ -54,15 +54,6 @@ import {
   tableCompositionInsertIndexForEdge,
   tableCompositionJokerTargetFromDropId,
 } from "#/components/game/game-board-view-state";
-import { Button } from "#/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
 
 type GameBoardTurnState = {
   canDrawDeck: boolean;
@@ -364,16 +355,12 @@ type GameBoardController = {
   newCompositions: DraftedCompositionView[];
   draftedCompositionsCount: number;
   canSubmitTablePlay: boolean;
-  pendingDiscardIndex: number | null;
   handleDragStart: (event: DragStartEvent) => void;
   handleDragOver: (event: DragOverEvent) => void;
   handleDragEnd: (event: DragEndEvent) => void;
   handleDragCancel: () => void;
-  closePendingDiscardDialog: () => void;
-  discardWithoutSubmitting: () => void;
-  submitBeforeDiscard: () => void;
   resetDraftCompositions: () => void;
-  submitDraftCompositions: () => void;
+  submitDraftCompositions: () => Promise<ActionResult | void>;
 };
 
 function useGameBoardController({
@@ -415,7 +402,6 @@ function useGameBoardController({
     scopeKey: null,
     compositions: [],
   });
-  const [pendingDiscardIndex, setPendingDiscardIndex] = useState<number | null>(null);
   const nextDraftIdRef = useRef(0);
   const rawHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
   const handOrder =
@@ -570,33 +556,17 @@ function useGameBoardController({
     });
   }
 
-  function submitDraftCompositions() {
+  async function submitDraftCompositions() {
     if (!canSubmitTablePlay) {
       return;
     }
 
-    return onPlayTable(
+    const result = await onPlayTable(
       buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
     );
-  }
-
-  function closePendingDiscardDialog() {
-    setPendingDiscardIndex(null);
-  }
-
-  function discardWithoutSubmitting() {
-    if (pendingDiscardIndex === null) {
-      return;
-    }
 
     resetDraftCompositions();
-    void onDiscardCard(pendingDiscardIndex);
-    closePendingDiscardDialog();
-  }
-
-  function submitBeforeDiscard() {
-    void submitDraftCompositions();
-    closePendingDiscardDialog();
+    return result;
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -745,11 +715,13 @@ function useGameBoardController({
         return;
       }
       if (typeof cardIndex === "number") {
-        if (draftedCompositionsView.length > 0) {
-          setPendingDiscardIndex(cardIndex);
-        } else {
-          void onDiscardCard(cardIndex);
-        }
+        void (async () => {
+          if (draftedCompositionsView.length > 0) {
+            await submitDraftCompositions();
+          }
+
+          await onDiscardCard(cardIndex);
+        })();
       }
       return;
     }
@@ -909,14 +881,10 @@ function useGameBoardController({
     newCompositions,
     draftedCompositionsCount: draftedCompositionsView.length,
     canSubmitTablePlay,
-    pendingDiscardIndex,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
     handleDragCancel,
-    closePendingDiscardDialog,
-    discardWithoutSubmitting,
-    submitBeforeDiscard,
     resetDraftCompositions,
     submitDraftCompositions,
   };
@@ -968,86 +936,53 @@ export function GameBoardView({
   );
 
   return (
-    <>
-      <DndContext
-        collisionDetection={collisionDetection}
-        onDragStart={controller.handleDragStart}
-        onDragOver={controller.handleDragOver}
-        onDragEnd={controller.handleDragEnd}
-        onDragCancel={controller.handleDragCancel}
-      >
-        <GameBoardLayout
-          game={game}
-          tableCompositions={controller.tableCompositions}
-          newCompositions={controller.newCompositions}
-          submittedCompositionActivities={submittedCompositionActivities}
-          turnState={turnState}
-          topDiscardCard={topDiscardCard}
-          players={players}
-          connectedPlayers={connectedPlayers}
-          availableHandEntries={controller.availableHandEntries}
-          sortableIds={controller.sortableIds}
-          activeDrag={controller.activeDrag}
-          draftedCompositionsCount={controller.draftedCompositionsCount}
-          spectatorDrafts={spectatorDrafts}
-          onResetDraftCompositions={controller.resetDraftCompositions}
-        />
-        <DragOverlay dropAnimation={null}>
-          {activeDraw ? (
-            <GameCard
-              card={
-                (activeDraw.revealedHandKey
-                  ? controller.availableHandEntries.find(
-                      (entry) => entry.key === activeDraw.revealedHandKey,
-                    )?.card
-                  : null) ??
-                activeDraw.card ??
-                FACE_DOWN_CARD
-              }
-              faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
-              size="hand"
-              className="rotate-3 shadow-xl ring-1 ring-foreground/10"
-            />
-          ) : controller.activeEntry ? (
-            <GameCard
-              card={controller.activeEntry.card}
-              size="hand"
-              className="rotate-3 shadow-xl ring-1 ring-foreground/10"
-            />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-
-      <Dialog
-        open={controller.pendingDiscardIndex !== null}
-        onOpenChange={(open) => !open && controller.closePendingDiscardDialog()}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Submit staged cards first?</DialogTitle>
-            <DialogDescription>
-              You have cards staged in new compositions or table additions. Submit them now, or
-              discard anyway and clear those staged cards.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={controller.discardWithoutSubmitting}
-            >
-              Discard anyway
-            </Button>
-            <Button
-              type="button"
-              onClick={controller.submitBeforeDiscard}
-              disabled={!controller.canSubmitTablePlay}
-            >
-              Submit staged cards
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <DndContext
+      collisionDetection={collisionDetection}
+      onDragStart={controller.handleDragStart}
+      onDragOver={controller.handleDragOver}
+      onDragEnd={controller.handleDragEnd}
+      onDragCancel={controller.handleDragCancel}
+    >
+      <GameBoardLayout
+        game={game}
+        tableCompositions={controller.tableCompositions}
+        newCompositions={controller.newCompositions}
+        submittedCompositionActivities={submittedCompositionActivities}
+        turnState={turnState}
+        topDiscardCard={topDiscardCard}
+        players={players}
+        connectedPlayers={connectedPlayers}
+        availableHandEntries={controller.availableHandEntries}
+        sortableIds={controller.sortableIds}
+        activeDrag={controller.activeDrag}
+        draftedCompositionsCount={controller.draftedCompositionsCount}
+        spectatorDrafts={spectatorDrafts}
+        onResetDraftCompositions={controller.resetDraftCompositions}
+      />
+      <DragOverlay dropAnimation={null}>
+        {activeDraw ? (
+          <GameCard
+            card={
+              (activeDraw.revealedHandKey
+                ? controller.availableHandEntries.find(
+                    (entry) => entry.key === activeDraw.revealedHandKey,
+                  )?.card
+                : null) ??
+              activeDraw.card ??
+              FACE_DOWN_CARD
+            }
+            faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
+            size="hand"
+            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
+          />
+        ) : controller.activeEntry ? (
+          <GameCard
+            card={controller.activeEntry.card}
+            size="hand"
+            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
+          />
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }
