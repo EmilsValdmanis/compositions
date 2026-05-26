@@ -67,6 +67,7 @@ type authConfig struct {
 	baseURL        string
 	frontendURL    string
 	frontendOrigin string
+	cookieDomain   string
 	secureCookie   bool
 	oauthConfig    *oauth2.Config
 	sessionTTL     time.Duration
@@ -128,6 +129,20 @@ func frontendConfigFromEnv() (string, string, error) {
 	}
 	parsed, _ := url.Parse(absoluteURL)
 	return absoluteURL + "/", parsed.Scheme + "://" + parsed.Host, nil
+}
+
+func cookieDomainFromEnv() (string, error) {
+	rawDomain := strings.TrimSpace(os.Getenv("COOKIE_DOMAIN"))
+	if rawDomain == "" {
+		return "", nil
+	}
+
+	domain := strings.TrimPrefix(rawDomain, ".")
+	if domain == "" || strings.Contains(domain, "://") || strings.Contains(domain, "/") || strings.Contains(domain, ":") {
+		return "", errors.New("COOKIE_DOMAIN must be a valid cookie domain")
+	}
+
+	return domain, nil
 }
 
 func secureCookieFromBaseURL(baseURL string) (bool, error) {
@@ -195,6 +210,10 @@ func newConfiguredAuthHandler(store authStore) (*authHandler, error) {
 	if err != nil {
 		return nil, err
 	}
+	cookieDomain, err := cookieDomainFromEnv()
+	if err != nil {
+		return nil, err
+	}
 	secureCookie, err := secureCookieFromBaseURL(baseURL)
 	if err != nil {
 		return nil, err
@@ -205,6 +224,7 @@ func newConfiguredAuthHandler(store authStore) (*authHandler, error) {
 			baseURL:        baseURL,
 			frontendURL:    frontendURL,
 			frontendOrigin: frontendOrigin,
+			cookieDomain:   cookieDomain,
 			secureCookie:   secureCookie,
 			oauthConfig:    oauthConfig,
 			sessionTTL:     defaultSessionLifetime,
@@ -441,6 +461,7 @@ func (h *authHandler) cookie(name, value string, expiresAt time.Time) *http.Cook
 	return &http.Cookie{
 		Name:     name,
 		Value:    value,
+		Domain:   h.config.cookieDomain,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   h.config.secureCookie,
