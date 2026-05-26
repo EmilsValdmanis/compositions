@@ -9,13 +9,6 @@ import { PlayerStrip } from "#/components/game/player-strip";
 import { compactId } from "#/components/game/game-view-helpers";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
 
 type AsyncAction = () => Promise<void> | void;
@@ -50,7 +43,7 @@ type GameLobbyViewProps = {
   onLeaveRoom: () => void;
   onCopyRoomCode: AsyncAction;
   onCopyRoomLink: AsyncAction;
-  onShareRoom: AsyncAction;
+  roomLink: string | null;
 };
 
 export function GameLobbyView({
@@ -70,7 +63,7 @@ export function GameLobbyView({
   onLeaveRoom,
   onCopyRoomCode,
   onCopyRoomLink,
-  onShareRoom,
+  roomLink,
 }: GameLobbyViewProps) {
   const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame } = roomActions;
   const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
@@ -87,32 +80,40 @@ export function GameLobbyView({
         <CardContent className="grid gap-4">
           {room ? (
             <div className="grid gap-4">
-              <div className="rounded-3xl border border-border/70 bg-muted/20 p-4">
-                <p className="text-xs uppercase text-muted-foreground">Room code</p>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-3xl font-semibold tracking-tight">{room.code}</p>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline">
-                        Room actions
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => void onCopyRoomCode()}>
-                        Copy code
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => void onCopyRoomLink()}>
-                        Copy link
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => void onShareRoom()}>
-                        Share link
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={onLeaveRoom} disabled={!canLeaveRoom}>
-                        Leave room
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              <div className="grid gap-4 rounded-3xl border border-border/70 bg-muted/20 p-4">
+                <div className="grid gap-1">
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    Room code
+                  </p>
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                      <p className="text-3xl font-semibold tracking-tight">{room.code}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Copy the join link to drop players straight into this lobby.
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => void onCopyRoomCode()}>
+                      Copy code
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-border/70 bg-background/80 p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      value={roomLink ?? room.code}
+                      readOnly
+                      aria-label="Room join link"
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      className="sm:ml-auto"
+                      onClick={() => void onCopyRoomLink()}
+                    >
+                      Copy join link
+                    </Button>
+                  </div>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">

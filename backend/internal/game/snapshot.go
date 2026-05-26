@@ -44,10 +44,11 @@ type TurnActivitySnapshot struct {
 }
 
 type PlayerStateSnapshot struct {
-	PlayerID    string `json:"playerId"`
-	HandCount   int    `json:"handCount"`
-	TotalPoints int    `json:"totalPoints"`
-	HasOpened   bool   `json:"hasOpened"`
+	PlayerID     string `json:"playerId"`
+	HandCount    int    `json:"handCount"`
+	TotalPoints  int    `json:"totalPoints"`
+	PointsGained int    `json:"pointsGained"`
+	HasOpened    bool   `json:"hasOpened"`
 }
 
 type TurnSnapshot struct {
@@ -153,10 +154,11 @@ func playerStateSnapshots(players []*Player) []PlayerStateSnapshot {
 			continue
 		}
 		snapshots = append(snapshots, PlayerStateSnapshot{
-			PlayerID:    player.ID,
-			HandCount:   len(player.hand.cards),
-			TotalPoints: player.totalPoints,
-			HasOpened:   player.hasOpened,
+			PlayerID:     player.ID,
+			HandCount:    len(player.hand.cards),
+			TotalPoints:  player.totalPoints,
+			PointsGained: player.pointsGained,
+			HasOpened:    player.hasOpened,
 		})
 	}
 	return snapshots

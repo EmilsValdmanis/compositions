@@ -14,6 +14,9 @@ func TestNewPlayerInitializesDefaults(t *testing.T) {
 	if player.totalPoints != 0 {
 		t.Errorf("player totalPoints = %d; want 0", player.totalPoints)
 	}
+	if player.pointsGained != 0 {
+		t.Errorf("player pointsGained = %d; want 0", player.pointsGained)
+	}
 }
 
 func TestNewPlayerIDsAreUnique(t *testing.T) {
