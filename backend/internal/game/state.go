@@ -294,9 +294,14 @@ func (gs *GameState) finishRound(winnerIndex int) {
 
 	for i, player := range gs.players {
 		if i == winnerIndex || player == nil {
+			if player != nil {
+				player.pointsGained = 0
+			}
 			continue
 		}
-		player.totalPoints += player.hand.Points()
+		roundPoints := player.hand.Points()
+		player.pointsGained = roundPoints
+		player.totalPoints += roundPoints
 	}
 
 	if gs.allOtherPlayersOverHundred(winnerIndex) {
@@ -499,6 +504,7 @@ func (gs *GameState) resetRoundState(drawPile *CardPile) {
 		}
 
 		player.hand = NewHand()
+		player.pointsGained = 0
 		player.hasOpened = false
 	}
 }

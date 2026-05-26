@@ -53,6 +53,7 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	second.ID = "second"
 	first.hand.cards = []Card{NewCard(King, Hearts), NewJoker()}
 	first.totalPoints = 12
+	first.pointsGained = 5
 	first.hasOpened = true
 	second.hand.cards = []Card{NewCard(Two, Clubs)}
 	state.players = []*Player{first, nil, second}
@@ -80,7 +81,7 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	if len(snapshot.Players) != 2 {
 		t.Fatalf("len(snapshot.Players) = %d; want 2", len(snapshot.Players))
 	}
-	if snapshot.Players[0].PlayerID != "first" || snapshot.Players[0].HandCount != 2 || snapshot.Players[0].TotalPoints != 12 || !snapshot.Players[0].HasOpened {
+	if snapshot.Players[0].PlayerID != "first" || snapshot.Players[0].HandCount != 2 || snapshot.Players[0].TotalPoints != 12 || snapshot.Players[0].PointsGained != 5 || !snapshot.Players[0].HasOpened {
 		t.Fatalf("snapshot.Players[0] = %#v; want first player state", snapshot.Players[0])
 	}
 	if len(snapshot.Hand) != 2 || snapshot.Hand[0].Rank != King || !snapshot.Hand[1].IsJoker {

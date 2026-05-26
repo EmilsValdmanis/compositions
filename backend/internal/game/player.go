@@ -6,6 +6,7 @@ type Player struct {
 	ID          string
 	hand        *Hand
 	totalPoints int
+	pointsGained int
 	hasOpened   bool
 }
 

@@ -78,6 +78,7 @@ export type PlayerStateSnapshot = {
   playerId: string;
   handCount: number;
   totalPoints: number;
+  pointsGained: number;
   hasOpened: boolean;
 };
 

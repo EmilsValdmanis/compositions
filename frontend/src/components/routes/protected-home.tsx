@@ -26,6 +26,14 @@ function roomShareUrl(code: string) {
   return url.toString();
 }
 
+function requestedRoomCode() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return new URLSearchParams(window.location.search).get("room")?.toUpperCase() ?? null;
+}
+
 export function ProtectedHome() {
   const {
     state,
@@ -77,6 +85,21 @@ export function ProtectedHome() {
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
 
   useEffect(() => {
+    const requestedCode = requestedRoomCode();
+    if (
+      state.connectionStatus !== "connected" ||
+      state.room ||
+      !requestedCode ||
+      requestedCode !== roomCode.trim() ||
+      roomCode.trim() === ""
+    ) {
+      return;
+    }
+
+    joinRoom(requestedCode);
+  }, [joinRoom, roomCode, state.connectionStatus, state.room]);
+
+  useEffect(() => {
     if (state.room?.code) {
       setRoomCode(state.room.code);
     }
@@ -113,28 +136,6 @@ export function ProtectedHome() {
     }
 
     await copyText(roomShareUrl(state.room.code), "Room link copied");
-  }
-
-  async function shareRoom() {
-    if (!state.room?.code) {
-      return;
-    }
-
-    const url = roomShareUrl(state.room.code);
-
-    if (!navigator.share) {
-      await copyText(url, "Room link copied");
-      return;
-    }
-
-    try {
-      await navigator.share({ title: "Compositions", text: `Join room ${state.room.code}`, url });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return;
-      }
-      toast.error("Could not share room link");
-    }
   }
 
   async function handleDiscardCard(cardIndex: number) {
@@ -182,6 +183,7 @@ export function ProtectedHome() {
                 dealChooserName: dealChooser?.name ?? null,
                 isDealChooser: Boolean(isDealChooser),
               }}
+              roomLink={state.room?.code ? roomShareUrl(state.room.code) : null}
               onRoomCodeChange={setRoomCode}
               onCreateRoom={createRoom}
               onJoinRoom={joinRoom}
@@ -190,7 +192,6 @@ export function ProtectedHome() {
               onLeaveRoom={leaveRoom}
               onCopyRoomCode={copyRoomCode}
               onCopyRoomLink={copyRoomLink}
-              onShareRoom={shareRoom}
             />
           </div>
         ) : (
