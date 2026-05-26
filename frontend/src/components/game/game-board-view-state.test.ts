@@ -9,6 +9,7 @@ import {
   insertHandKeyIntoDraft,
   moveHandEntry,
   removeHandKeyFromDrafts,
+  resolveDraftViews,
 } from "#/components/game/game-board-view-state";
 
 describe("applyHandEntryOrder", () => {
@@ -429,6 +430,46 @@ describe("buildVirtualReclaimedJokers", () => {
       entries[1]?.key,
       entries[0]?.key,
     ]);
+  });
+
+  it("keeps a reclaimed joker visible when it is staged into a new composition", () => {
+    const handEntries = buildHandEntries([
+      { rank: 10, suit: 2 },
+      { rank: 11, suit: 2 },
+      { rank: 12, suit: 2 },
+    ]);
+
+    const resolved = resolveDraftViews(
+      [
+        {
+          type: "run",
+          cards: [{ rank: 8, suit: 0 }, { isJoker: true }, { rank: 10, suit: 0 }],
+          jokerRepresentations: {
+            1: [{ rank: 9, suit: 0 }],
+          },
+          points: 27,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-reclaim",
+          tableIndex: 0,
+          handKeys: ["9-0-1"],
+          reclaimTargets: { "9-0-1": 1 },
+        },
+        {
+          id: "draft-new",
+          tableIndex: null,
+          handKeys: [...handEntries.map((entry) => entry.key), "reclaimed-joker-0-1"],
+        },
+      ],
+      [{ key: "9-0-1", card: { rank: 9, suit: 0 }, sourceIndex: 0 }, ...handEntries],
+    );
+
+    expect(resolved.virtualReclaimedJokers).toHaveLength(1);
+    expect(resolved.draftCompositions[1]?.handKeys).toContain("reclaimed-joker-0-1");
+    expect(resolved.allHandEntries.some((entry) => entry.key === "reclaimed-joker-0-1")).toBe(true);
   });
 });
 

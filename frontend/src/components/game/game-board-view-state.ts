@@ -807,6 +807,34 @@ export function buildTableCompositionViews(
   return views;
 }
 
+export function resolveDraftViews(
+  activeCompositions: CompositionSnapshot[],
+  scopedDraftCompositions: DraftComposition[],
+  handEntries: HandEntry[],
+) {
+  const validHandKeys = new Set(handEntries.map((entry) => entry.key));
+  const draftCompositionsFromHand = pruneDraftCompositions(scopedDraftCompositions, validHandKeys);
+  const entryByKey = new Map(handEntries.map((entry) => [entry.key, entry]));
+  const tableCompositions = buildTableCompositionViews(
+    activeCompositions,
+    draftCompositionsFromHand,
+    entryByKey,
+  );
+  const virtualReclaimedJokers = buildVirtualReclaimedJokers(tableCompositions);
+  const allHandEntries = [...handEntries, ...virtualReclaimedJokers.map((joker) => joker.entry)];
+  const allValidHandKeys = new Set(allHandEntries.map((entry) => entry.key));
+  const draftCompositions = pruneDraftCompositions(scopedDraftCompositions, allValidHandKeys);
+  const allEntryByKey = new Map(allHandEntries.map((entry) => [entry.key, entry]));
+
+  return {
+    tableCompositions: buildTableCompositionViews(activeCompositions, draftCompositions, allEntryByKey),
+    virtualReclaimedJokers,
+    draftCompositions,
+    allHandEntries,
+    allEntryByKey,
+  };
+}
+
 export function buildVirtualReclaimedJokers(tableCompositions: TableCompositionView[]) {
   const virtualJokers: VirtualReclaimedJoker[] = [];
 

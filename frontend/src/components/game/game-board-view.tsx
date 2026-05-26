@@ -46,8 +46,8 @@ import {
   mapHandKeysToEntries,
   moveHandEntry,
   moveDraftCompositionInsertIndex,
-  pruneDraftCompositions,
   removeHandKeyFromDrafts,
+  resolveDraftViews,
   setDraftCardInsertIndex,
   setDraftCardReclaimTarget,
   tableCompositionEdgeTargetFromDropId,
@@ -442,10 +442,6 @@ function useGameBoardController({
     });
   }
 
-  const validHandKeys = useMemo(
-    () => new Set(handEntries.map((entry) => entry.key)),
-    [handEntries],
-  );
   const scopedDraftCompositions = useMemo(
     () =>
       draftCompositionState.scopeKey === currentDraftScopeKey
@@ -453,51 +449,19 @@ function useGameBoardController({
         : [],
     [currentDraftScopeKey, draftCompositionState.compositions, draftCompositionState.scopeKey],
   );
-  const draftCompositionsFromHand = useMemo(
-    () => pruneDraftCompositions(scopedDraftCompositions, validHandKeys),
-    [scopedDraftCompositions, validHandKeys],
+  const draftResolution = useMemo(
+    () => resolveDraftViews(game?.activeCompositions ?? [], scopedDraftCompositions, handEntries),
+    [game?.activeCompositions, handEntries, scopedDraftCompositions],
   );
-  const entryByKey = useMemo(
-    () => new Map(handEntries.map((entry) => [entry.key, entry])),
-    [handEntries],
-  );
-  const draftedCompositionsViewFromHand = useMemo(
-    () => buildDraftedCompositionViews(draftCompositionsFromHand, entryByKey),
-    [draftCompositionsFromHand, entryByKey],
-  );
-  const tableCompositions = useMemo(
-    () =>
-      buildTableCompositionViews(
-        game?.activeCompositions ?? [],
-        draftedCompositionsViewFromHand,
-        entryByKey,
-      ),
-    [draftedCompositionsViewFromHand, entryByKey, game?.activeCompositions],
-  );
-  const virtualReclaimedJokers = useMemo(
-    () => buildVirtualReclaimedJokers(tableCompositions),
-    [tableCompositions],
-  );
-  const allHandEntries = useMemo(
-    () => [...handEntries, ...virtualReclaimedJokers.map((joker) => joker.entry)],
-    [handEntries, virtualReclaimedJokers],
-  );
-  const allValidHandKeys = useMemo(
-    () => new Set(allHandEntries.map((entry) => entry.key)),
-    [allHandEntries],
-  );
-  const draftCompositions = useMemo(
-    () => pruneDraftCompositions(scopedDraftCompositions, allValidHandKeys),
-    [allValidHandKeys, scopedDraftCompositions],
-  );
+  const tableCompositions = draftResolution.tableCompositions;
+  const virtualReclaimedJokers = draftResolution.virtualReclaimedJokers;
+  const allHandEntries = draftResolution.allHandEntries;
+  const draftCompositions = draftResolution.draftCompositions;
   const activeEntry =
     activeDrag?.type === "hand"
       ? (allHandEntries.find((entry) => entry.key === activeDrag.handKey) ?? null)
       : null;
-  const allEntryByKey = useMemo(
-    () => new Map(allHandEntries.map((entry) => [entry.key, entry])),
-    [allHandEntries],
-  );
+  const allEntryByKey = draftResolution.allEntryByKey;
   const stagedHandKeySet = useMemo(
     () => new Set(draftCompositions.flatMap((composition) => composition.handKeys)),
     [draftCompositions],

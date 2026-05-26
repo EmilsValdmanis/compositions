@@ -1707,6 +1707,9 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	if comps, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{cardReq(game.Five, game.Hearts), cardReq(game.Six, game.Hearts), jokerReq()}}}); err != nil || len(comps) != 1 {
 		t.Fatalf("compositionsFromRequest(valid run) = %v, %v; want one comp", comps, err)
 	}
+	if comps, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{jokerReq(), cardReq(game.Nine, game.Hearts), cardReq(game.Eight, game.Hearts)}}}); err != nil || len(comps) != 1 {
+		t.Fatalf("compositionsFromRequest(unordered joker run) = %v, %v; want one comp", comps, err)
+	}
 	if comps, err := compositionsFromRequest([]compositionRequest{{Cards: []cardRequest{jokerReq(), jokerReq(), jokerReq()}}}); err != nil || len(comps) != 1 || comps[0].Points() != 30 {
 		t.Fatalf("compositionsFromRequest(ambiguous jokers) = %v, %v; want one inferred set", comps, err)
 	}
