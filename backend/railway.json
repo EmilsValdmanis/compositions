@@ -3,7 +3,7 @@
     "build": {
         "builder": "RAILPACK",
         "buildCommand": "mkdir -p dist && go build -o dist/server ./cmd/server && go build -o dist/migrate ./cmd/migrate",
-        "watchPatterns": ["/backend/**"]
+        "watchPatterns": ["backend/**"]
     },
     "deploy": {
         "preDeployCommand": ["./dist/migrate up"],
