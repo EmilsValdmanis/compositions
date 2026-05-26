@@ -22,18 +22,22 @@ type stubAuthStore struct {
 	createdSessions []authSessionRecord
 	deletedTokens   []string
 	sessionUser     database.SessionUserRecord
+	upsertedUser    authenticatedUser
 	sessionErr      error
 	upsertErr       error
 	createErr       error
 	deleteErr       error
 }
 
-func (s *stubAuthStore) UpsertUser(_ context.Context, user authenticatedUser) error {
+func (s *stubAuthStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
 	if s.upsertErr != nil {
-		return s.upsertErr
+		return authenticatedUser{}, s.upsertErr
 	}
 	s.upsertedUsers = append(s.upsertedUsers, user)
-	return nil
+	if s.upsertedUser.ID != "" {
+		return s.upsertedUser, nil
+	}
+	return user, nil
 }
 
 func (s *stubAuthStore) CreateSession(_ context.Context, session authSessionRecord) error {
@@ -112,7 +116,7 @@ func TestSessionFromRequest(t *testing.T) {
 
 	t.Run("returns authenticated session from store", func(t *testing.T) {
 		store := &stubAuthStore{sessionUser: database.SessionUserRecord{
-			ID:        "google_123",
+			ID:        "user-123",
 			Name:      "Player One",
 			Email:     "player@example.com",
 			ImageURL:  "https://cdn.example.com/player.png",
@@ -126,7 +130,7 @@ func TestSessionFromRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("sessionFromRequest() error = %v", err)
 		}
-		if !session.valid || session.user.ID != "google_123" || session.token != "session-token" {
+		if !session.valid || session.user.ID != "user-123" || session.token != "session-token" {
 			t.Fatalf("session = %#v; want valid authenticated session", session)
 		}
 	})
@@ -168,7 +172,7 @@ func TestHandleSession(t *testing.T) {
 
 	t.Run("returns session payload for authenticated request", func(t *testing.T) {
 		store := &stubAuthStore{sessionUser: database.SessionUserRecord{
-			ID:        "google_123",
+			ID:        "user-123",
 			Name:      "Player One",
 			Email:     "player@example.com",
 			ImageURL:  "https://cdn.example.com/player.png",
@@ -185,7 +189,7 @@ func TestHandleSession(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("json.Unmarshal() error = %v", err)
 		}
-		if payload.User.ID != "google_123" || payload.User.Email != "player@example.com" {
+		if payload.User.ID != "user-123" || payload.User.Email != "player@example.com" {
 			t.Fatalf("payload = %#v; want authenticated session payload", payload)
 		}
 	})
@@ -249,12 +253,6 @@ func TestHandleGoogleSignInSetsStateAndPKCECookies(t *testing.T) {
 	}
 	if cookies[0].Name != oauthPKCECookieName && cookies[1].Name != oauthPKCECookieName {
 		t.Fatal("oauth pkce cookie not set")
-	}
-}
-
-func TestGoogleUserID(t *testing.T) {
-	if got := googleUserID(" 12345 "); got != "google_12345" {
-		t.Fatalf("googleUserID() = %q; want google_12345", got)
 	}
 }
 
@@ -603,7 +601,7 @@ func TestFetchGoogleUserCoverage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("fetchGoogleUser() error = %v", err)
 		}
-		if user.ID != "google_123" || user.Name != "Player@Example.com" || user.Email != "player@example.com" || user.Image != "https://cdn.example.com/player.png" {
+		if user.ID != "" || user.Provider != googleProvider || user.ProviderAccountID != "123" || user.Name != "Player@Example.com" || user.Email != "player@example.com" || user.Image != "https://cdn.example.com/player.png" {
 			t.Fatalf("user = %#v; want normalized google user", user)
 		}
 	})
@@ -765,7 +763,7 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 		})
 
 		t.Run("success", func(t *testing.T) {
-			store := &stubAuthStore{}
+			store := &stubAuthStore{upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
 			handler := newOAuthCallbackHandler(store, now)
 			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
 			request := newOAuthCallbackRequest("state=state-token&code=code", client)
@@ -779,6 +777,9 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 			}
 			if len(store.upsertedUsers) != 1 || len(store.createdSessions) != 1 {
 				t.Fatalf("persisted records = users:%d sessions:%d; want 1 each", len(store.upsertedUsers), len(store.createdSessions))
+			}
+			if store.createdSessions[0].UserID != "user-123" {
+				t.Fatalf("session user id = %q; want user-123", store.createdSessions[0].UserID)
 			}
 		})
 	})

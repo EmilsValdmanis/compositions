@@ -14,6 +14,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
@@ -44,13 +45,17 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	defer store.Close()
 
 	createdUser := UserRecord{
-		ID:       "user-1",
+		ID:       uuid.NewString(),
 		Name:     "Player One",
 		Email:    "player1@example.com",
 		ImageURL: "https://cdn.example.com/player-1.png",
 	}
-	if err := store.UpsertUser(ctx, createdUser); err != nil {
+	storedCreatedUser, err := store.UpsertUser(ctx, createdUser)
+	if err != nil {
 		t.Fatalf("UpsertUser(create) error = %v", err)
+	}
+	if storedCreatedUser.ID != createdUser.ID {
+		t.Fatalf("stored created id = %q; want %q", storedCreatedUser.ID, createdUser.ID)
 	}
 
 	createdRecord, err := store.GetUserByID(ctx, createdUser.ID)
@@ -63,18 +68,22 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	if createdRecord.Email != createdUser.Email {
 		t.Fatalf("created email = %q; want %q", createdRecord.Email, createdUser.Email)
 	}
-	if createdRecord.ImageUrl != createdUser.ImageURL {
-		t.Fatalf("created image_url = %q; want %q", createdRecord.ImageUrl, createdUser.ImageURL)
+	if createdRecord.ImageURL != createdUser.ImageURL {
+		t.Fatalf("created image_url = %q; want %q", createdRecord.ImageURL, createdUser.ImageURL)
 	}
 
 	updatedUser := UserRecord{
-		ID:       "user-1",
+		ID:       createdUser.ID,
 		Name:     "Updated Player",
 		Email:    "player1@example.com",
 		ImageURL: "https://cdn.example.com/player-1-updated.png",
 	}
-	if err := store.UpsertUser(ctx, updatedUser); err != nil {
+	storedUpdatedUser, err := store.UpsertUser(ctx, updatedUser)
+	if err != nil {
 		t.Fatalf("UpsertUser(update) error = %v", err)
+	}
+	if storedUpdatedUser.ID != updatedUser.ID {
+		t.Fatalf("stored updated id = %q; want %q", storedUpdatedUser.ID, updatedUser.ID)
 	}
 
 	updatedRecord, err := store.GetUserByID(ctx, updatedUser.ID)
@@ -87,23 +96,17 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	if updatedRecord.Email != updatedUser.Email {
 		t.Fatalf("updated email = %q; want %q", updatedRecord.Email, updatedUser.Email)
 	}
-	if updatedRecord.ImageUrl != updatedUser.ImageURL {
-		t.Fatalf("updated image_url = %q; want %q", updatedRecord.ImageUrl, updatedUser.ImageURL)
-	}
-	if !updatedRecord.CreatedAt.Valid || !updatedRecord.UpdatedAt.Valid {
-		t.Fatalf("expected valid timestamps, got created_at=%#v updated_at=%#v", updatedRecord.CreatedAt, updatedRecord.UpdatedAt)
-	}
-	if updatedRecord.UpdatedAt.Time.Before(updatedRecord.CreatedAt.Time) {
-		t.Fatalf("updated timestamps are inconsistent: created_at=%v updated_at=%v", updatedRecord.CreatedAt, updatedRecord.UpdatedAt)
+	if updatedRecord.ImageURL != updatedUser.ImageURL {
+		t.Fatalf("updated image_url = %q; want %q", updatedRecord.ImageURL, updatedUser.ImageURL)
 	}
 
 	conflictingUser := UserRecord{
-		ID:       "user-2",
+		ID:       uuid.NewString(),
 		Name:     " Conflicting Player ",
 		Email:    " PLAYER1@EXAMPLE.COM ",
 		ImageURL: " https://cdn.example.com/player-2.png ",
 	}
-	if err := store.UpsertUser(ctx, conflictingUser); !errors.Is(err, ErrUserConflict) {
+	if _, err := store.UpsertUser(ctx, conflictingUser); !errors.Is(err, ErrUserConflict) {
 		t.Fatalf("UpsertUser(conflicting) error = %v; want %v", err, ErrUserConflict)
 	}
 
@@ -121,11 +124,76 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	if preservedRecord.Email != updatedUser.Email {
 		t.Fatalf("preserved email = %q; want %q", preservedRecord.Email, updatedUser.Email)
 	}
-	if preservedRecord.ImageUrl != updatedUser.ImageURL {
-		t.Fatalf("preserved image_url = %q; want %q", preservedRecord.ImageUrl, updatedUser.ImageURL)
+	if preservedRecord.ImageURL != updatedUser.ImageURL {
+		t.Fatalf("preserved image_url = %q; want %q", preservedRecord.ImageURL, updatedUser.ImageURL)
 	}
 	if _, err := store.GetUserByID(ctx, strings.TrimSpace(conflictingUser.ID)); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("GetUserByID(conflicting id) error = %v; want %v", err, pgx.ErrNoRows)
+	}
+}
+
+func TestUserStoreUpsertUserByAccount(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+
+	pool, err := OpenPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	if err := RunMigrations(ctx, databaseURL, MigrationUp); err != nil {
+		t.Fatalf("RunMigrations(up) error = %v", err)
+	}
+
+	store, err := NewUserStore(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("NewUserStore() error = %v", err)
+	}
+	defer store.Close()
+
+	createdUser, err := store.UpsertUser(ctx, UserRecord{
+		Name:              "Player One",
+		Email:             "player@example.com",
+		ImageURL:          "https://cdn.example.com/player.png",
+		Provider:          "google",
+		ProviderAccountID: "123",
+	})
+	if err != nil {
+		t.Fatalf("UpsertUser(create account user) error = %v", err)
+	}
+	if _, err := uuid.Parse(createdUser.ID); err != nil {
+		t.Fatalf("created user id = %q; want uuid: %v", createdUser.ID, err)
+	}
+
+	updatedUser, err := store.UpsertUser(ctx, UserRecord{
+		Name:              "Updated Player",
+		Email:             "player@example.com",
+		ImageURL:          "https://cdn.example.com/player-updated.png",
+		Provider:          "google",
+		ProviderAccountID: "123",
+	})
+	if err != nil {
+		t.Fatalf("UpsertUser(update account user) error = %v", err)
+	}
+	if updatedUser.ID != createdUser.ID {
+		t.Fatalf("updated user id = %q; want %q", updatedUser.ID, createdUser.ID)
+	}
+
+	record, err := store.GetUserByID(ctx, createdUser.ID)
+	if err != nil {
+		t.Fatalf("GetUserByID() error = %v", err)
+	}
+	if record.Name != "Updated Player" || record.ImageURL != "https://cdn.example.com/player-updated.png" {
+		t.Fatalf("stored record = %#v; want updated account-linked user", record)
+	}
+
+	var accountCount int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM accounts WHERE provider = $1 AND provider_account_id = $2`, "google", "123").Scan(&accountCount); err != nil {
+		t.Fatalf("count account rows error = %v", err)
+	}
+	if accountCount != 1 {
+		t.Fatalf("google account rows = %d; want 1", accountCount)
 	}
 }
 
@@ -211,6 +279,76 @@ func TestUserEmailUniquenessMigrationDeduplicatesExistingRows(t *testing.T) {
 		VALUES ($1, $2, $3, $4)
 	`, "user-3", "Third Player", "PLAYER@example.com", "https://cdn.example.com/player-3.png"); err == nil {
 		t.Fatal("expected duplicate email insert to fail")
+	}
+}
+
+func TestUUIDUserMigrationPreservesLegacyGoogleAccounts(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+
+	migrationDB, err := OpenMigrationDB(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenMigrationDB() error = %v", err)
+	}
+	defer migrationDB.Close()
+
+	migrator := newTestMigrator(t, migrationDB)
+	if err := migrator.Steps(3); err != nil {
+		t.Fatalf("migrator.Steps(3) error = %v", err)
+	}
+
+	pool, err := OpenPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPool() error = %v", err)
+	}
+	defer pool.Close()
+
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO users (id, name, email, image_url)
+		VALUES ($1, $2, $3, $4)
+	`, "google_123", "Player One", "player@example.com", "https://cdn.example.com/player.png"); err != nil {
+		t.Fatalf("seed legacy user error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO sessions (token_hash, user_id, expires_at)
+		VALUES ($1, $2, $3)
+	`, "session-hash", "google_123", time.Date(2026, time.May, 30, 12, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("seed legacy session error = %v", err)
+	}
+
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(1 uuid migration) error = %v", err)
+	}
+
+	var userID string
+	if err := pool.QueryRow(ctx, `SELECT id::text FROM users LIMIT 1`).Scan(&userID); err != nil {
+		t.Fatalf("select migrated user id error = %v", err)
+	}
+	if _, err := uuid.Parse(userID); err != nil {
+		t.Fatalf("migrated user id = %q; want uuid: %v", userID, err)
+	}
+
+	var accountUserID, provider, providerAccountID string
+	if err := pool.QueryRow(ctx, `
+		SELECT user_id::text, provider, provider_account_id
+		FROM accounts
+		LIMIT 1
+	`).Scan(&accountUserID, &provider, &providerAccountID); err != nil {
+		t.Fatalf("select migrated account error = %v", err)
+	}
+	if accountUserID != userID {
+		t.Fatalf("account user id = %q; want %q", accountUserID, userID)
+	}
+	if provider != "google" || providerAccountID != "123" {
+		t.Fatalf("migrated account = (%q, %q); want (google, 123)", provider, providerAccountID)
+	}
+
+	var sessionUserID string
+	if err := pool.QueryRow(ctx, `SELECT user_id::text FROM sessions WHERE token_hash = $1`, "session-hash").Scan(&sessionUserID); err != nil {
+		t.Fatalf("select migrated session error = %v", err)
+	}
+	if sessionUserID != userID {
+		t.Fatalf("session user id = %q; want %q", sessionUserID, userID)
 	}
 }
 

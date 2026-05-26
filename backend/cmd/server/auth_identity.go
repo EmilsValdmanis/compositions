@@ -5,10 +5,12 @@ import "strings"
 var errAuthenticationRequired = errorString("authentication required")
 
 type authenticatedUser struct {
-	ID    string
-	Name  string
-	Email string
-	Image string
+	ID                string
+	Name              string
+	Email             string
+	Image             string
+	Provider          string
+	ProviderAccountID string
 }
 
 func (u authenticatedUser) isAuthenticated() bool {

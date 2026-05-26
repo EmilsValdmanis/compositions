@@ -18,8 +18,8 @@ type closingUserStore struct {
 	closed bool
 }
 
-func (s *closingUserStore) UpsertUser(_ context.Context, _ authenticatedUser) error {
-	return nil
+func (s *closingUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+	return user, nil
 }
 
 func (s *closingUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }

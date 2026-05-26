@@ -437,7 +437,7 @@ func (s *wsServer) persistAuthenticatedUser(user authenticatedUser) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 
-	if err := s.userStore.UpsertUser(ctx, user); err != nil {
+	if _, err := s.userStore.UpsertUser(ctx, user); err != nil {
 		return fmt.Errorf("save user: %w", err)
 	}
 
