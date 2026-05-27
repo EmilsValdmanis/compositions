@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { ClientOnly, getRouteApi, useRouter } from "@tanstack/react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ClientOnly, getRouteApi } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
@@ -22,7 +22,7 @@ function roomShareUrl(code: string) {
 
 export function ProtectedHome() {
   const search = protectedHomeRoute.useSearch();
-  const router = useRouter();
+  const navigate = protectedHomeRoute.useNavigate();
   const {
     state,
     createRoom,
@@ -37,10 +37,10 @@ export function ProtectedHome() {
     discardCard,
   } = useGameWebSocket();
   const autoJoinAttemptedRoomCodeRef = useRef<string | null>(null);
+  const [roomCode, setRoomCode] = useState(search.room ?? "");
   const players = state.room?.players ?? [];
   const currentPlayer = players.find((player) => player.playerId === state.playerId) ?? null;
   const connectedPlayers = players.filter((player) => player.connected).length;
-  const roomCode = state.room?.code ?? search.room ?? "";
   const phase = state.room?.phase ?? "lobby";
   const isLobbyPhase = !state.room || phase === "lobby";
   const isHost = currentPlayer?.isHost ?? false;
@@ -73,6 +73,13 @@ export function ProtectedHome() {
     state.connectionStatus === "idle" ||
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
 
+  const clearRoomSearch = useCallback(() => {
+    void navigate({
+      search: {},
+      replace: true,
+    });
+  }, [navigate]);
+
   useEffect(() => {
     if (
       state.connectionStatus !== "connected" ||
@@ -83,21 +90,18 @@ export function ProtectedHome() {
       return;
     }
 
-    autoJoinAttemptedRoomCodeRef.current = search.room;
-    joinRoom(search.room);
-  }, [joinRoom, search.room, state.connectionStatus, state.room]);
+    const inviteRoomCode = search.room;
+    autoJoinAttemptedRoomCodeRef.current = inviteRoomCode;
+    setRoomCode("");
+    joinRoom(inviteRoomCode);
+    clearRoomSearch();
+  }, [clearRoomSearch, joinRoom, search.room, state.connectionStatus, state.room]);
 
   useEffect(() => {
-    if (!state.room?.code || search.room === state.room.code) {
-      return;
+    if (search.room && state.room) {
+      clearRoomSearch();
     }
-
-    void router.navigate({
-      to: "/",
-      search: { room: state.room.code },
-      replace: true,
-    });
-  }, [router, search.room, state.room?.code]);
+  }, [clearRoomSearch, search.room, state.room]);
 
   useEffect(() => {
     if (!state.lastError) {
@@ -139,22 +143,13 @@ export function ProtectedHome() {
       autoJoinAttemptedRoomCodeRef.current = null;
     }
 
-    void router.navigate({
-      to: "/",
-      search: {
-        room: normalizedRoomCode === "" ? undefined : normalizedRoomCode,
-      },
-      replace: true,
-    });
+    setRoomCode(normalizedRoomCode);
   }
 
   function handleLeaveRoom() {
     autoJoinAttemptedRoomCodeRef.current = null;
-    void router.navigate({
-      to: "/",
-      search: {},
-      replace: true,
-    });
+    setRoomCode("");
+    clearRoomSearch();
     leaveRoom();
   }
 
