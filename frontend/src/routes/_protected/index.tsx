@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 import { ProtectedHome } from "#/components/routes/protected-home";
+import * as z from "zod";
 
 export const Route = createFileRoute("/_protected/")({
   validateSearch: z.object({

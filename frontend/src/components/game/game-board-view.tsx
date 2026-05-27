@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import {
   closestCenter,
   DndContext,
@@ -388,10 +388,7 @@ function useGameBoardController({
   | "disableDraftSync"
 >): GameBoardController {
   const { updateTurnDrafts } = useGameWebSocket();
-  const handOrderScopeKey = useMemo(
-    () => (roomCode && playerId ? `${roomCode}:${playerId}` : null),
-    [playerId, roomCode],
-  );
+  const handOrderScopeKey = roomCode && playerId ? `${roomCode}:${playerId}` : null;
   const persistedHandOrder = usePersistedHandOrder(handOrderScopeKey);
   const [handOrderState, setHandOrderState] = useState<HandOrderState>({
     scopeKey: null,
@@ -404,15 +401,12 @@ function useGameBoardController({
   });
   const nextDraftIdRef = useRef(0);
   const skipNextDraftSyncRef = useRef(false);
-  const rawHandEntries = useMemo(() => buildHandEntries(game?.hand ?? []), [game?.hand]);
+  const rawHandEntries = buildHandEntries(game?.hand ?? []);
   const handOrder =
     handOrderState.scopeKey === handOrderScopeKey && handOrderState.order
       ? handOrderState.order
       : persistedHandOrder;
-  const handEntries = useMemo(
-    () => applyHandEntryOrder(rawHandEntries, handOrder),
-    [handOrder, rawHandEntries],
-  );
+  const handEntries = applyHandEntryOrder(rawHandEntries, handOrder);
   const currentDraftScopeKey = draftScopeKey(game, playerId, turnState.isMyTurn);
 
   function updateHandOrder(order: string[]) {
@@ -443,16 +437,14 @@ function useGameBoardController({
     });
   }
 
-  const scopedDraftCompositions = useMemo(
-    () =>
-      draftCompositionState.scopeKey === currentDraftScopeKey
-        ? draftCompositionState.compositions
-        : [],
-    [currentDraftScopeKey, draftCompositionState.compositions, draftCompositionState.scopeKey],
-  );
-  const draftResolution = useMemo(
-    () => resolveDraftViews(game?.activeCompositions ?? [], scopedDraftCompositions, handEntries),
-    [game?.activeCompositions, handEntries, scopedDraftCompositions],
+  const scopedDraftCompositions =
+    draftCompositionState.scopeKey === currentDraftScopeKey
+      ? draftCompositionState.compositions
+      : [];
+  const draftResolution = resolveDraftViews(
+    game?.activeCompositions ?? [],
+    scopedDraftCompositions,
+    handEntries,
   );
   const tableCompositions = draftResolution.tableCompositions;
   const allHandEntries = draftResolution.allHandEntries;
@@ -462,44 +454,29 @@ function useGameBoardController({
       ? (allHandEntries.find((entry) => entry.key === activeDrag.handKey) ?? null)
       : null;
   const allEntryByKey = draftResolution.allEntryByKey;
-  const stagedHandKeySet = useMemo(
-    () => new Set(draftCompositions.flatMap((composition) => composition.handKeys)),
-    [draftCompositions],
+  const stagedHandKeySet = new Set(
+    draftCompositions.flatMap((composition) => composition.handKeys),
   );
-  const availableHandEntries = useMemo(
-    () => allHandEntries.filter((entry) => !stagedHandKeySet.has(entry.key)),
-    [allHandEntries, stagedHandKeySet],
-  );
-  const sortableIds = useMemo(
-    () => availableHandEntries.map((entry) => entry.key),
-    [availableHandEntries],
-  );
-  const draftedCompositionsView = useMemo(
-    () => buildDraftedCompositionViews(draftCompositions, allEntryByKey),
-    [draftCompositions, allEntryByKey],
-  );
-  const newCompositions = useMemo(
-    () => draftedCompositionsView.filter((composition) => composition.tableIndex === null),
-    [draftedCompositionsView],
+  const availableHandEntries = allHandEntries.filter((entry) => !stagedHandKeySet.has(entry.key));
+  const sortableIds = availableHandEntries.map((entry) => entry.key);
+  const draftedCompositionsView = buildDraftedCompositionViews(draftCompositions, allEntryByKey);
+  const newCompositions = draftedCompositionsView.filter(
+    (composition) => composition.tableIndex === null,
   );
   const canCompose = turnState.canDiscard;
   const canSubmitTablePlay = canCompose && draftedCompositionsView.length > 0;
 
-  const serializedDrafts = useMemo(
-    () =>
-      JSON.stringify(
-        draftedCompositionsView.map(
-          (composition) =>
-            ({
-              tableIndex: composition.tableIndex ?? undefined,
-              insertIndex: composition.insertIndex,
-              cardInsertIndices: composition.cardInsertIndices,
-              reclaimTargets: composition.reclaimTargets,
-              cards: composition.entries.map((entry) => entry.card),
-            }) satisfies DraftCompositionSnapshot,
-        ),
-      ),
-    [draftedCompositionsView],
+  const serializedDrafts = JSON.stringify(
+    draftedCompositionsView.map(
+      (composition) =>
+        ({
+          tableIndex: composition.tableIndex ?? undefined,
+          insertIndex: composition.insertIndex,
+          cardInsertIndices: composition.cardInsertIndices,
+          reclaimTargets: composition.reclaimTargets,
+          cards: composition.entries.map((entry) => entry.card),
+        }) satisfies DraftCompositionSnapshot,
+    ),
   );
   const syncTurnDrafts = useEffectEvent((drafts: DraftCompositionSnapshot[]) => {
     updateTurnDrafts({ compositions: drafts });
@@ -903,22 +880,14 @@ export function GameBoardView({
     disableDraftSync,
   });
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;
-  const submittedCompositionActivities = useMemo(
-    () =>
-      buildSubmittedCompositionActivityMap(
-        game?.turnActivity?.baselineCompositions ?? game?.activeCompositions ?? [],
-        game?.activeCompositions ?? [],
-        game?.turnActivity,
-      ),
-    [game?.activeCompositions, game?.turnActivity],
+  const submittedCompositionActivities = buildSubmittedCompositionActivityMap(
+    game?.turnActivity?.baselineCompositions ?? game?.activeCompositions ?? [],
+    game?.activeCompositions ?? [],
+    game?.turnActivity,
   );
   const spectatorDrafts = game?.turnActivity?.draftCompositions ?? [];
-  const collisionDetection = useMemo(
-    () =>
-      createBoardCollisionDetection(
-        new Set(controller.availableHandEntries.map((entry) => entry.key)),
-      ),
-    [controller.availableHandEntries],
+  const collisionDetection = createBoardCollisionDetection(
+    new Set(controller.availableHandEntries.map((entry) => entry.key)),
   );
 
   return (

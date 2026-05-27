@@ -322,10 +322,7 @@ export function mapHandKeysToEntries(handKeys: string[], entryByKey: Map<string,
   return entries;
 }
 
-export function pruneDraftCompositions(
-  compositions: DraftComposition[],
-  validHandKeys: Set<string>,
-) {
+function pruneDraftCompositions(compositions: DraftComposition[], validHandKeys: Set<string>) {
   const next: DraftComposition[] = [];
 
   for (const composition of compositions) {

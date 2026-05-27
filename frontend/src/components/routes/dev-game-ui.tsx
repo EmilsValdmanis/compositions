@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { playerName } from "#/components/game/game-view-helpers";
@@ -216,10 +216,11 @@ export function DevGameUi() {
 
   const players = scenario?.players ?? [];
   const room = scenario ? cloneRoom(scenario.room) : null;
-  const rawGame = useMemo(
-    () => (gameOverride ? cloneGame(gameOverride) : scenario ? cloneGame(scenario.game) : null),
-    [gameOverride, scenario],
-  );
+  const rawGame = gameOverride
+    ? cloneGame(gameOverride)
+    : scenario
+      ? cloneGame(scenario.game)
+      : null;
   const game = rawGame;
 
   const resolvedPerspectiveId = scenario?.controlledPlayerId ?? "";
