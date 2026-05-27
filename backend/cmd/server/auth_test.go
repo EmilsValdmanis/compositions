@@ -330,6 +330,15 @@ func newOAuthCallbackRequest(rawQuery string, client *http.Client) *http.Request
 	return request.WithContext(context.WithValue(request.Context(), oauth2.HTTPClient, client))
 }
 
+func cookieValue(cookies []*http.Cookie, name string) string {
+	for _, cookie := range cookies {
+		if cookie.Name == name {
+			return cookie.Value
+		}
+	}
+	return ""
+}
+
 func TestAuthConfigHelpers(t *testing.T) {
 	t.Run("google oauth config env validation", func(t *testing.T) {
 		t.Setenv("GOOGLE_CLIENT_ID", "")
@@ -815,6 +824,74 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 			}
 			if cookies[0].Domain != "" {
 				t.Fatalf("session cookie domain = %q; want empty by default", cookies[0].Domain)
+			}
+		})
+
+		t.Run("success reuses existing same user session", func(t *testing.T) {
+			store := &stubAuthStore{
+				upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"},
+				sessionUser: database.SessionUserRecord{
+					ID:        "user-123",
+					Name:      "Player One",
+					Email:     "player@example.com",
+					ImageURL:  "https://cdn.example.com/player.png",
+					ExpiresAt: now.Add(time.Hour),
+				},
+			}
+			handler := newOAuthCallbackHandler(store, now)
+			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
+			request := newOAuthCallbackRequest("state=state-token&code=code", client)
+			request.AddCookie(&http.Cookie{Name: authCookieName, Value: "existing-session-token"})
+			response := httptest.NewRecorder()
+
+			handler.handleGoogleCallback(response, request)
+
+			if response.Code != http.StatusFound {
+				t.Fatalf("status = %d; want 302", response.Code)
+			}
+			if len(store.createdSessions) != 1 {
+				t.Fatalf("created sessions = %d; want 1 renewal", len(store.createdSessions))
+			}
+			if store.createdSessions[0].Token != "existing-session-token" {
+				t.Fatalf("renewed session token = %q; want existing-session-token", store.createdSessions[0].Token)
+			}
+			if len(store.deletedTokens) != 0 {
+				t.Fatalf("deleted tokens = %#v; want none", store.deletedTokens)
+			}
+			if got := cookieValue(response.Result().Cookies(), authCookieName); got != "existing-session-token" {
+				t.Fatalf("session cookie = %q; want existing-session-token", got)
+			}
+		})
+
+		t.Run("success replaces existing different user session", func(t *testing.T) {
+			store := &stubAuthStore{
+				upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"},
+				sessionUser: database.SessionUserRecord{
+					ID:        "other-user",
+					Name:      "Other Player",
+					Email:     "other@example.com",
+					ExpiresAt: now.Add(time.Hour),
+				},
+			}
+			handler := newOAuthCallbackHandler(store, now)
+			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
+			request := newOAuthCallbackRequest("state=state-token&code=code", client)
+			request.AddCookie(&http.Cookie{Name: authCookieName, Value: "other-session-token"})
+			response := httptest.NewRecorder()
+
+			handler.handleGoogleCallback(response, request)
+
+			if response.Code != http.StatusFound {
+				t.Fatalf("status = %d; want 302", response.Code)
+			}
+			if len(store.deletedTokens) != 1 || store.deletedTokens[0] != "other-session-token" {
+				t.Fatalf("deleted tokens = %#v; want other-session-token", store.deletedTokens)
+			}
+			if len(store.createdSessions) != 1 {
+				t.Fatalf("created sessions = %d; want 1", len(store.createdSessions))
+			}
+			if store.createdSessions[0].Token == "" || store.createdSessions[0].Token == "other-session-token" {
+				t.Fatalf("created session token = %q; want a new token", store.createdSessions[0].Token)
 			}
 		})
 
