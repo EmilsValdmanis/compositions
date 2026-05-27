@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClientOnly, getRouteApi } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
@@ -73,13 +73,6 @@ export function ProtectedHome() {
     state.connectionStatus === "idle" ||
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
 
-  const clearRoomSearch = useCallback(() => {
-    void navigate({
-      search: {},
-      replace: true,
-    });
-  }, [navigate]);
-
   useEffect(() => {
     if (
       state.connectionStatus !== "connected" ||
@@ -94,14 +87,20 @@ export function ProtectedHome() {
     autoJoinAttemptedRoomCodeRef.current = inviteRoomCode;
     setRoomCode("");
     joinRoom(inviteRoomCode);
-    clearRoomSearch();
-  }, [clearRoomSearch, joinRoom, search.room, state.connectionStatus, state.room]);
+    void navigate({
+      search: {},
+      replace: true,
+    });
+  }, [joinRoom, navigate, search.room, state.connectionStatus, state.room]);
 
   useEffect(() => {
     if (search.room && state.room) {
-      clearRoomSearch();
+      void navigate({
+        search: {},
+        replace: true,
+      });
     }
-  }, [clearRoomSearch, search.room, state.room]);
+  }, [navigate, search.room, state.room]);
 
   useEffect(() => {
     if (!state.lastError) {
@@ -149,7 +148,6 @@ export function ProtectedHome() {
   function handleLeaveRoom() {
     autoJoinAttemptedRoomCodeRef.current = null;
     setRoomCode("");
-    clearRoomSearch();
     leaveRoom();
   }
 
