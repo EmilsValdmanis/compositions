@@ -5,6 +5,7 @@ import {
   buildTablePlayRequest,
   buildTableCompositionViews,
   buildVirtualReclaimedJokers,
+  handIndexAfterSubmittedDrafts,
   inferPlannedJokerReclaims,
   insertHandKeyIntoDraft,
   moveHandEntry,
@@ -27,6 +28,53 @@ describe("applyHandEntryOrder", () => {
       entries[0].key,
       entries[1].key,
     ]);
+  });
+});
+
+describe("handIndexAfterSubmittedDrafts", () => {
+  it("uses raw hand order after staged cards are removed from a reordered hand", () => {
+    const rawEntries = buildHandEntries([
+      { rank: 1, suit: 0 },
+      { rank: 13, suit: 3 },
+      { rank: 12, suit: 2 },
+      { rank: 11, suit: 1 },
+    ]);
+    const visuallyReorderedEntries = applyHandEntryOrder(rawEntries, [
+      rawEntries[2]!.key,
+      rawEntries[0]!.key,
+      rawEntries[1]!.key,
+      rawEntries[3]!.key,
+    ]);
+
+    const discardIndex = handIndexAfterSubmittedDrafts(rawEntries, rawEntries[2]!.key, [
+      {
+        id: "draft-1",
+        tableIndex: null,
+        handKeys: [rawEntries[0]!.key],
+        entries: [rawEntries[0]!],
+      },
+    ]);
+
+    expect(visuallyReorderedEntries[0]?.key).toBe(rawEntries[2]?.key);
+    expect(discardIndex).toBe(1);
+  });
+
+  it("does not return an index for a card already staged for play", () => {
+    const rawEntries = buildHandEntries([
+      { rank: 1, suit: 0 },
+      { rank: 13, suit: 3 },
+    ]);
+
+    const discardIndex = handIndexAfterSubmittedDrafts(rawEntries, rawEntries[0]!.key, [
+      {
+        id: "draft-1",
+        tableIndex: null,
+        handKeys: [rawEntries[0]!.key],
+        entries: [rawEntries[0]!],
+      },
+    ]);
+
+    expect(discardIndex).toBeNull();
   });
 });
 

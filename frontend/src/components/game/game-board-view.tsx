@@ -40,6 +40,7 @@ import {
   buildHandEntries,
   compositionIdFromDropId,
   findNewHandEntry,
+  handIndexAfterSubmittedDrafts,
   handEntryOrder,
   insertHandKeyIntoDraft,
   mapHandKeysToEntries,
@@ -541,42 +542,6 @@ function useGameBoardController({
     return result;
   }
 
-  function handIndexAfterSubmittedDrafts(handKey: string) {
-    const draggedEntry = allEntryByKey.get(handKey);
-
-    if (!draggedEntry || draggedEntry.isVirtual) {
-      return null;
-    }
-
-    const playedSourceIndices = new Set<number>();
-    for (const composition of draftedCompositionsView) {
-      for (const entry of composition.entries) {
-        if (!entry.isVirtual) {
-          playedSourceIndices.add(entry.sourceIndex);
-        }
-      }
-    }
-
-    if (playedSourceIndices.has(draggedEntry.sourceIndex)) {
-      return null;
-    }
-
-    let nextIndex = 0;
-    for (const entry of allHandEntries) {
-      if (entry.isVirtual) {
-        continue;
-      }
-      if (entry.sourceIndex === draggedEntry.sourceIndex) {
-        return nextIndex;
-      }
-      if (!playedSourceIndices.has(entry.sourceIndex)) {
-        nextIndex += 1;
-      }
-    }
-
-    return null;
-  }
-
   function handleDragStart(event: DragStartEvent) {
     const drawSource = event.active.data.current?.drawSource;
 
@@ -726,7 +691,11 @@ function useGameBoardController({
         void (async () => {
           const discardIndex =
             draftedCompositionsView.length > 0
-              ? handIndexAfterSubmittedDrafts(draggedHandKey)
+              ? handIndexAfterSubmittedDrafts(
+                  rawHandEntries,
+                  draggedHandKey,
+                  draftedCompositionsView,
+                )
               : cardIndex;
 
           if (discardIndex === null) {

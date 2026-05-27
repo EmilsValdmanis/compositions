@@ -130,6 +130,46 @@ export function applyHandEntryOrder(entries: HandEntry[], orderedKeys: string[])
   return ordered;
 }
 
+export function handIndexAfterSubmittedDrafts(
+  rawHandEntries: HandEntry[],
+  handKey: string,
+  draftedCompositions: DraftedCompositionView[],
+) {
+  const draggedEntry = rawHandEntries.find((entry) => entry.key === handKey);
+
+  if (!draggedEntry || draggedEntry.isVirtual) {
+    return null;
+  }
+
+  const playedSourceIndices = new Set<number>();
+  for (const composition of draftedCompositions) {
+    for (const entry of composition.entries) {
+      if (!entry.isVirtual) {
+        playedSourceIndices.add(entry.sourceIndex);
+      }
+    }
+  }
+
+  if (playedSourceIndices.has(draggedEntry.sourceIndex)) {
+    return null;
+  }
+
+  let nextIndex = 0;
+  for (const entry of rawHandEntries) {
+    if (entry.isVirtual) {
+      continue;
+    }
+    if (entry.sourceIndex === draggedEntry.sourceIndex) {
+      return nextIndex;
+    }
+    if (!playedSourceIndices.has(entry.sourceIndex)) {
+      nextIndex += 1;
+    }
+  }
+
+  return null;
+}
+
 export function findNewHandEntry(current: HandEntry[], next: HandEntry[]) {
   const currentKeys = new Set(current.map((entry) => entry.key));
   return next.find((entry) => !currentKeys.has(entry.key)) ?? null;
