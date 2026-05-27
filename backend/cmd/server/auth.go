@@ -322,14 +322,9 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	sessionToken, err := randomToken()
-	if err != nil {
-		slog.Error("generate session token failed", "error", err)
-		http.Error(w, "failed to create session", http.StatusInternalServerError)
-		return
-	}
 	expiresAt := h.now().Add(h.config.sessionTTL).UTC()
-	if err := h.store.CreateSession(r.Context(), authSessionRecord{Token: sessionToken, UserID: user.ID, ExpiresAt: expiresAt}); err != nil {
+	sessionToken, err := h.sessionTokenForUser(r, user, expiresAt)
+	if err != nil {
 		slog.Error("persist session failed", "userID", user.ID, "error", err)
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
@@ -337,6 +332,33 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 
 	setCookie(w, h.cookie(authCookieName, sessionToken, expiresAt))
 	http.Redirect(w, r, h.config.frontendURL, http.StatusFound)
+}
+
+func (h *authHandler) sessionTokenForUser(r *http.Request, user authenticatedUser, expiresAt time.Time) (string, error) {
+	session, err := h.sessionFromRequest(r)
+	if err == nil {
+		if session.user.ID == user.ID {
+			return session.token, h.store.CreateSession(r.Context(), authSessionRecord{
+				Token:     session.token,
+				UserID:    user.ID,
+				ExpiresAt: expiresAt,
+			})
+		}
+		if deleteErr := h.store.DeleteSession(r.Context(), session.token); deleteErr != nil && !errors.Is(deleteErr, database.ErrSessionNotFound) {
+			slog.Warn("delete previous user session failed", "error", deleteErr)
+		}
+	} else if !errors.Is(err, errAuthenticationRequired) {
+		return "", err
+	}
+
+	sessionToken, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	if err := h.store.CreateSession(r.Context(), authSessionRecord{Token: sessionToken, UserID: user.ID, ExpiresAt: expiresAt}); err != nil {
+		return "", err
+	}
+	return sessionToken, nil
 }
 
 func (h *authHandler) handleSession(w http.ResponseWriter, r *http.Request) {

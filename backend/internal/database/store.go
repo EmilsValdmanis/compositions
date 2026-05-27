@@ -368,9 +368,6 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 
 	tokenHash, err := hashSessionToken(sessionToken)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return SessionUserRecord{}, ErrSessionNotFound
-		}
 		return SessionUserRecord{}, err
 	}
 	if now.IsZero() {
@@ -393,6 +390,13 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
+			if _, deleteErr := s.pool.Exec(ctx, `
+				DELETE FROM sessions
+				WHERE token_hash = $1
+				  AND expires_at <= $2
+			`, tokenHash, now.UTC()); deleteErr != nil {
+				return SessionUserRecord{}, deleteErr
+			}
 			return SessionUserRecord{}, ErrSessionNotFound
 		}
 		return SessionUserRecord{}, err
