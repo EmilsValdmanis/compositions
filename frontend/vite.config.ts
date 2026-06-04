@@ -26,7 +26,7 @@ const config = defineConfig({
       org: "emils-valdmanis",
       project: "frontend",
       sourcemaps: {
-        disable: process.env.NODE_ENV !== "production",
+        disable: !process.env.SENTRY_AUTH_TOKEN,
       },
       telemetry: false,
       authToken: process.env.SENTRY_AUTH_TOKEN,

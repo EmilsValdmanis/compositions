@@ -880,12 +880,18 @@ export function GameBoardView({
     disableDraftSync,
   });
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;
-  const submittedCompositionActivities = buildSubmittedCompositionActivityMap(
-    game?.turnActivity?.baselineCompositions ?? game?.activeCompositions ?? [],
-    game?.activeCompositions ?? [],
-    game?.turnActivity,
-  );
-  const spectatorDrafts = game?.turnActivity?.draftCompositions ?? [];
+  const hasSubmittedTurnActivity =
+    (game?.turnActivity?.compositionActivities?.length ?? 0) > 0;
+  const submittedCompositionActivities = hasSubmittedTurnActivity
+    ? new Map<number, SubmittedCompositionActivity>()
+    : buildSubmittedCompositionActivityMap(
+        game?.turnActivity?.baselineCompositions ?? game?.activeCompositions ?? [],
+        game?.activeCompositions ?? [],
+        game?.turnActivity,
+      );
+  const spectatorDrafts = hasSubmittedTurnActivity
+    ? []
+    : (game?.turnActivity?.draftCompositions ?? []);
   const collisionDetection = createBoardCollisionDetection(
     new Set(controller.availableHandEntries.map((entry) => entry.key)),
   );
