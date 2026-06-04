@@ -880,8 +880,7 @@ export function GameBoardView({
     disableDraftSync,
   });
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;
-  const hasSubmittedTurnActivity =
-    (game?.turnActivity?.compositionActivities?.length ?? 0) > 0;
+  const hasSubmittedTurnActivity = (game?.turnActivity?.compositionActivities?.length ?? 0) > 0;
   const submittedCompositionActivities = hasSubmittedTurnActivity
     ? new Map<number, SubmittedCompositionActivity>()
     : buildSubmittedCompositionActivityMap(
