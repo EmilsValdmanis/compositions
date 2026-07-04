@@ -108,9 +108,7 @@ function makeRoom(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
   };
 }
 
-function renderLobby(
-  overrides: Partial<React.ComponentProps<typeof GameLobbyView>> = {},
-) {
+function renderLobby(overrides: Partial<React.ComponentProps<typeof GameLobbyView>> = {}) {
   const props: React.ComponentProps<typeof GameLobbyView> = {
     room: null,
     game: null as GameSnapshot | null,
