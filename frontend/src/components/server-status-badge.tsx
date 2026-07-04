@@ -49,16 +49,14 @@ export function ServerStatusBadge() {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="icon" className="relative">
-          <HugeiconsIcon icon={BadgeInfoIcon} />
-          {hasIssue && (
-            <span className="absolute right-0 top-0 flex size-2.5">
-              <span className="bg-destructive absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" />
-              <span className="bg-destructive relative inline-flex size-2.5 rounded-full" />
-            </span>
-          )}
-        </Button>
+      <PopoverTrigger render={<Button variant="outline" size="icon" className="relative" />}>
+        <HugeiconsIcon icon={BadgeInfoIcon} />
+        {hasIssue && (
+          <span className="absolute right-0 top-0 flex size-2.5">
+            <span className="bg-destructive absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" />
+            <span className="bg-destructive relative inline-flex size-2.5 rounded-full" />
+          </span>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start">
         <div className="space-y-1">

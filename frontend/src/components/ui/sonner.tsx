@@ -1,3 +1,5 @@
+"use client";
+
 import { Toaster as Sonner, type ToasterProps } from "sonner";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {

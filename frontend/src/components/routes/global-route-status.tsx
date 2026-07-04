@@ -56,8 +56,8 @@ class GlobalRouteErrorBoundary extends React.Component<ErrorComponentProps> {
         <Button type="button" onClick={this.props.reset}>
           Try again
         </Button>
-        <Button type="button" variant="outline" asChild>
-          <Link to="/">Go home</Link>
+        <Button render={<Link to="/" />} variant="outline">
+          Go home
         </Button>
       </RouteStatusFrame>
     );
@@ -89,9 +89,7 @@ export function GlobalNotFoundComponent(_: NotFoundRouteProps) {
       title="Page not found"
       description="The page you requested does not exist or may have moved."
     >
-      <Button type="button" asChild>
-        <Link to="/">Back to home</Link>
-      </Button>
+      <Button render={<Link to="/" />}>Back to home</Button>
     </RouteStatusFrame>
   );
 }
