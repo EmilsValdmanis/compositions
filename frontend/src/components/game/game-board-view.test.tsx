@@ -1,13 +1,41 @@
 // @vitest-environment jsdom
-import { act, render } from "@testing-library/react";
+import { createRequire } from "node:module";
+import { act, render, waitFor } from "@testing-library/react";
 import { type ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vite-plus/test";
 import { GameBoardView } from "#/components/game/game-board-view";
 import {
   type ActionResult,
   type GameSnapshot,
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
+
+if (typeof globalThis.document === "undefined") {
+  const require = createRequire(import.meta.url);
+  const { JSDOM } = require("jsdom") as {
+    JSDOM: new (
+      html?: string,
+      options?: Record<string, unknown>,
+    ) => {
+      window: Window & typeof globalThis;
+    };
+  };
+
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+    url: "http://localhost/",
+  });
+
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.Node = dom.window.Node;
+  globalThis.MutationObserver = dom.window.MutationObserver;
+  globalThis.getComputedStyle = dom.window.getComputedStyle.bind(dom.window);
+  Object.defineProperty(globalThis, "navigator", {
+    value: dom.window.navigator,
+    configurable: true,
+  });
+}
 
 let dndContextProps: {
   onDragStart?: (event: any) => void;
@@ -186,7 +214,7 @@ describe("GameBoardView discard drops", () => {
       dragEnd("12-2-1", "discard-pile", 2);
     });
 
-    await vi.waitFor(() => expect(onPlayTable).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onPlayTable).toHaveBeenCalledTimes(1));
     expect(onDiscardCard).not.toHaveBeenCalled();
   });
 });
