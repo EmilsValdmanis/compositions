@@ -6,12 +6,19 @@ import {
   type PlayerSnapshot,
   type RoomSnapshot,
 } from "#/components/game-websocket-provider";
+import { ChevronDownIcon, Copy01Icon, CopyLinkIcon, Share08Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerStrip } from "#/components/game/player-strip";
-import { compactId } from "#/components/game/game-view-helpers";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
 
@@ -36,7 +43,6 @@ type GameLobbyViewProps = {
   completedGame: CompletedGameSnapshot | null;
   players: PlayerSnapshot[];
   roomCode: string;
-  playerId: string;
   roomActions: RoomActions;
   dealChoice: DealChoiceState;
   onRoomCodeChange: (roomCode: string) => void;
@@ -47,7 +53,6 @@ type GameLobbyViewProps = {
   onLeaveRoom: () => void;
   onCopyRoomCode: AsyncAction;
   onCopyRoomLink: AsyncAction;
-  roomLink: string | null;
 };
 
 export function GameLobbyView({
@@ -56,7 +61,6 @@ export function GameLobbyView({
   completedGame,
   players,
   roomCode,
-  playerId,
   roomActions,
   dealChoice,
   onRoomCodeChange,
@@ -67,7 +71,6 @@ export function GameLobbyView({
   onLeaveRoom,
   onCopyRoomCode,
   onCopyRoomLink,
-  roomLink,
 }: GameLobbyViewProps) {
   const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame } = roomActions;
   const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
@@ -76,7 +79,7 @@ export function GameLobbyView({
   const connectedCount = players.filter((player) => player.connected).length;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)]">
+    <div className="mx-auto my-auto grid w-full max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <Card className="border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -100,25 +103,27 @@ export function GameLobbyView({
                     </p>
                     <p className="text-4xl font-semibold tracking-tight">{room.code}</p>
                   </div>
-                  <Button type="button" variant="outline" onClick={() => void onCopyRoomCode()}>
-                    Copy code
-                  </Button>
-                </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    value={roomLink ?? room.code}
-                    readOnly
-                    aria-label="Room join link"
-                    className="h-10 font-mono text-xs"
-                  />
-                  <Button
-                    type="button"
-                    className="sm:ml-auto"
-                    onClick={() => void onCopyRoomLink()}
-                  >
-                    Copy link
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button type="button" variant="outline" />}>
+                      <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
+                      Share
+                      <HugeiconsIcon
+                        icon={ChevronDownIcon}
+                        strokeWidth={2}
+                        data-icon="inline-end"
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onClick={() => void onCopyRoomCode()}>
+                        <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
+                        Copy code
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void onCopyRoomLink()}>
+                        <HugeiconsIcon icon={CopyLinkIcon} strokeWidth={2} />
+                        Copy link
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -127,7 +132,7 @@ export function GameLobbyView({
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="destructive"
                   onClick={onLeaveRoom}
                   disabled={!canLeaveRoom}
                 >
@@ -181,13 +186,6 @@ export function GameLobbyView({
               </div>
             </div>
           )}
-
-          <div className="grid gap-2 rounded-2xl border border-border/70 bg-background p-3 text-sm">
-            <div className="flex justify-between gap-3">
-              <span className="text-muted-foreground">Player ID</span>
-              <span className="font-medium">{compactId(playerId)}</span>
-            </div>
-          </div>
         </CardContent>
       </Card>
 
