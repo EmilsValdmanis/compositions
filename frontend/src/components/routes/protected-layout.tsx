@@ -55,8 +55,13 @@ export function ProtectedLayout() {
 
           <div className="flex items-center justify-end gap-1 justify-self-end">
             {import.meta.env.DEV ? (
-              <Button asChild variant="outline" size="sm" className="hidden md:inline-flex">
-                <Link to="/dev-ui">Dev UI</Link>
+              <Button
+                render={<Link to="/dev-ui" />}
+                variant="outline"
+                size="sm"
+                className="hidden md:inline-flex"
+              >
+                Dev UI
               </Button>
             ) : null}
             <UserDropdown />

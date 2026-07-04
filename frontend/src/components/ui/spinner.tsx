@@ -7,6 +7,7 @@ function Spinner({ className, strokeWidth, ...props }: React.ComponentProps<"svg
     <HugeiconsIcon
       icon={Loading03Icon}
       strokeWidth={strokeWidth !== undefined ? Number(strokeWidth) : 2}
+      data-slot="spinner"
       role="status"
       aria-label="Loading"
       className={cn("size-4 animate-spin", className)}
