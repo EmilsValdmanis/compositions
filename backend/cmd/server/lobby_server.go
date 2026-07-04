@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"maps"
@@ -62,6 +63,49 @@ type dealingChoiceOptions struct {
 	cutSize *int
 }
 
+const persistedLobbyStateVersion = 1
+
+type persistedLobbyState struct {
+	Version  int                      `json:"version"`
+	Sessions []persistedPlayerSession `json:"sessions"`
+	Rooms    []persistedRoom          `json:"rooms"`
+}
+
+type persistedPlayerSession struct {
+	SessionID     string `json:"sessionId"`
+	PlayerID      string `json:"playerId"`
+	RoomCode      string `json:"roomCode,omitempty"`
+	AuthUserID    string `json:"authUserId,omitempty"`
+	DisplayName   string `json:"displayName,omitempty"`
+	ImageURL      string `json:"imageUrl,omitempty"`
+	Authenticated bool   `json:"authenticated"`
+}
+
+type persistedRoom struct {
+	Code              string                      `json:"code"`
+	GameState         game.PersistenceSnapshot    `json:"gameState"`
+	Players           []persistedRoomPlayer       `json:"players"`
+	HostID            string                      `json:"hostId"`
+	PendingDealChoice *persistedPendingDealChoice `json:"pendingDealChoice,omitempty"`
+	TurnBaseline      *game.GameSnapshot          `json:"turnBaseline,omitempty"`
+	TurnActivity      *game.TurnActivitySnapshot  `json:"turnActivity,omitempty"`
+}
+
+type persistedPendingDealChoice struct {
+	DealerIndex  int `json:"dealerIndex"`
+	ChooserIndex int `json:"chooserIndex"`
+}
+
+type persistedRoomPlayer struct {
+	PlayerID  string `json:"playerId"`
+	Name      string `json:"name"`
+	ImageURL  string `json:"imageUrl,omitempty"`
+	SessionID string `json:"sessionId"`
+	Connected bool   `json:"connected"`
+	Seat      int    `json:"seat"`
+	Host      bool   `json:"host"`
+}
+
 type gameStateRecipient struct {
 	conn  *websocket.Conn
 	event gameStateEvent
@@ -70,6 +114,7 @@ type gameStateRecipient struct {
 type lobbyServer struct {
 	mu       sync.Mutex
 	rng      *rand.Rand
+	store    userStore
 	sessions map[string]*playerSession
 	rooms    map[string]*room
 }
@@ -80,8 +125,16 @@ var addPlayerToGameState = func(state *game.GameState, player *game.Player) erro
 }
 
 func newLobbyServer() *lobbyServer {
+	return newLobbyServerWithStore(noopUserStore{})
+}
+
+func newLobbyServerWithStore(store userStore) *lobbyServer {
+	if store == nil {
+		store = noopUserStore{}
+	}
 	return &lobbyServer{
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		store:    store,
 		sessions: make(map[string]*playerSession),
 		rooms:    make(map[string]*room),
 	}
@@ -95,13 +148,20 @@ func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticat
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	if existingSessionID != "" {
-		return l.connectExistingSessionWithUser(existingSessionID, user, conn)
-	}
 	if user.isAuthenticated() {
+		if existingSessionID != "" {
+			if session := l.sessions[existingSessionID]; session != nil && session.authenticated && session.authUserID == user.ID {
+				return l.connectExistingSessionWithUser(existingSessionID, user, conn)
+			}
+			slog.Warn("ignoring session id that does not belong to authenticated user", "sessionID", existingSessionID, "userID", user.ID)
+			existingSessionID = ""
+		}
 		if existingSession := l.sessionByAuthUserID(user.ID); existingSession != nil {
 			return l.connectExistingSessionWithUser(existingSession.sessionID, user, conn)
 		}
+	}
+	if existingSessionID != "" {
+		return l.connectExistingSessionWithUser(existingSessionID, user, conn)
 	}
 
 	sessionID := uuid.NewString()
@@ -122,6 +182,7 @@ func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticat
 		"authenticated", user.isAuthenticated(),
 		"displayName", user.displayName(),
 	)
+	l.persistLocked("session created")
 	return connectedEvent{SessionID: sessionID, PlayerID: playerID}, nil, nil, nil
 }
 
@@ -172,6 +233,7 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 		)
 	}
 
+	l.persistLocked("session reconnected")
 	return connectedEvent{SessionID: session.sessionID, PlayerID: session.playerID}, roomState, recipients, nil
 }
 
@@ -220,6 +282,7 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	session.roomCode = room.code
 
 	slog.Info("room created", "roomCode", room.code, "sessionID", session.sessionID, "playerID", session.playerID)
+	l.persistLocked("room created")
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -270,6 +333,7 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	session.roomCode = room.code
 
 	slog.Info("player joined room", "roomCode", room.code, "sessionID", session.sessionID, "playerID", session.playerID, "playerName", cleanName)
+	l.persistLocked("player joined room")
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -305,6 +369,7 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex}
 
 	slog.Info("game start requested", "roomCode", room.code, "sessionID", session.sessionID, "dealerIndex", dealerIndex, "chooserIndex", chooserIndex, "playerCount", len(room.players))
+	l.persistLocked("game start requested")
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -377,6 +442,7 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
+	l.persistLocked("dealing chosen")
 	return roomState, recipients, nil
 }
 
@@ -413,6 +479,7 @@ func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []*websock
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex}
 
 	roomState := room.snapshot()
+	l.persistLocked("next round requested")
 	return roomState, room.connectedConns(l.sessions), nil
 }
 
@@ -448,6 +515,7 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 		delete(l.rooms, roomCode)
 		session.roomCode = ""
 		slog.Info("room disbanded", "roomCode", roomCode, "sessionID", session.sessionID)
+		l.persistLocked("room disbanded")
 		return nil, nil, roomCode, nil
 	}
 
@@ -483,6 +551,7 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 		"newHostID", nextHostID,
 	)
 	snapshot := room.snapshot()
+	l.persistLocked("player left room")
 	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
 }
 
@@ -553,6 +622,7 @@ func (l *lobbyServer) updateDraftActivity(sessionID string, drafts []game.DraftC
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
+	l.persistLocked("draft activity updated")
 	return roomState, recipients, nil
 }
 
@@ -592,6 +662,7 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
 	result := actionResultEvent{Action: action, PlayerID: session.playerID, OK: true}
+	l.persistLocked("game action applied")
 	return roomState, recipients, result, nil
 }
 
@@ -614,6 +685,7 @@ func (l *lobbyServer) resetRoomAfterGameOver(roomCode string) (*roomSnapshot, []
 	}
 
 	snapshot := room.snapshot()
+	l.persistLocked("room reset after game over")
 	return &snapshot, room.connectedConns(l.sessions), nil
 }
 
@@ -665,6 +737,188 @@ func (l *lobbyServer) broadcastDisconnect(roomState roomSnapshot, recipients []*
 		}
 		_ = emitEvent(conn, "room_state", roomStateEvent{Room: roomState})
 	}
+}
+
+func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
+	if l == nil || l.store == nil {
+		return nil
+	}
+
+	state, err := l.store.LoadLobbyState(ctx)
+	if err != nil {
+		return err
+	}
+	if state.Version == 0 && len(state.Rooms) == 0 && len(state.Sessions) == 0 {
+		return nil
+	}
+	if state.Version != persistedLobbyStateVersion {
+		return errors.New("unsupported lobby persistence snapshot version")
+	}
+
+	sessions := make(map[string]*playerSession, len(state.Sessions))
+	for _, persistedSession := range state.Sessions {
+		if persistedSession.SessionID == "" || persistedSession.PlayerID == "" {
+			return errors.New("persisted session requires session and player ids")
+		}
+		if persistedSession.Authenticated && persistedSession.AuthUserID == "" {
+			return errors.New("persisted authenticated session requires auth user id")
+		}
+		sessions[persistedSession.SessionID] = &playerSession{
+			sessionID:     persistedSession.SessionID,
+			playerID:      persistedSession.PlayerID,
+			roomCode:      normalizeRoomCode(persistedSession.RoomCode),
+			authUserID:    persistedSession.AuthUserID,
+			displayName:   persistedSession.DisplayName,
+			imageURL:      persistedSession.ImageURL,
+			authenticated: persistedSession.Authenticated,
+		}
+	}
+
+	rooms := make(map[string]*room, len(state.Rooms))
+	for _, persistedRoom := range state.Rooms {
+		roomCode := normalizeRoomCode(persistedRoom.Code)
+		if roomCode == "" {
+			return errors.New("persisted room requires code")
+		}
+		gameState, err := game.RestoreGameState(persistedRoom.GameState)
+		if err != nil {
+			return err
+		}
+		restoredRoom := &room{
+			code:         roomCode,
+			gameState:    gameState,
+			players:      make([]*roomPlayer, 0, len(persistedRoom.Players)),
+			hostID:       persistedRoom.HostID,
+			turnBaseline: persistedRoom.TurnBaseline,
+			turnActivity: persistedRoom.TurnActivity,
+		}
+		if persistedRoom.PendingDealChoice != nil {
+			restoredRoom.pendingDealChoice = &pendingDealChoice{
+				dealerIndex:  persistedRoom.PendingDealChoice.DealerIndex,
+				chooserIndex: persistedRoom.PendingDealChoice.ChooserIndex,
+			}
+		}
+		for _, persistedPlayer := range persistedRoom.Players {
+			if persistedPlayer.PlayerID == "" || persistedPlayer.SessionID == "" {
+				return errors.New("persisted room player requires player and session ids")
+			}
+			if _, ok := sessions[persistedPlayer.SessionID]; !ok {
+				return errors.New("persisted room player references missing session")
+			}
+			restoredRoom.players = append(restoredRoom.players, &roomPlayer{
+				player:    newPlayerWithID(persistedPlayer.PlayerID),
+				name:      persistedPlayer.Name,
+				imageURL:  persistedPlayer.ImageURL,
+				sessionID: persistedPlayer.SessionID,
+				connected: false,
+				seat:      persistedPlayer.Seat,
+				host:      persistedPlayer.Host,
+			})
+			sessions[persistedPlayer.SessionID].roomCode = roomCode
+		}
+		if restoredRoom.hostID == "" && len(restoredRoom.players) > 0 {
+			restoredRoom.hostID = restoredRoom.players[0].player.ID
+			restoredRoom.players[0].host = true
+		}
+		if restoredRoom.pendingDealChoice != nil {
+			if restoredRoom.pendingDealChoice.dealerIndex < 0 ||
+				restoredRoom.pendingDealChoice.dealerIndex >= len(restoredRoom.players) ||
+				restoredRoom.pendingDealChoice.chooserIndex < 0 ||
+				restoredRoom.pendingDealChoice.chooserIndex >= len(restoredRoom.players) {
+				return errors.New("invalid persisted deal choice")
+			}
+		}
+		rooms[roomCode] = restoredRoom
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.sessions = sessions
+	l.rooms = rooms
+
+	slog.Info("lobby state restored", "rooms", len(rooms), "sessions", len(sessions))
+	return nil
+}
+
+func (l *lobbyServer) persistLocked(reason string) {
+	if l == nil || l.store == nil {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
+		slog.Error("persist lobby state failed", "reason", reason, "error", err)
+	}
+}
+
+func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
+	state := persistedLobbyState{
+		Version:  persistedLobbyStateVersion,
+		Sessions: make([]persistedPlayerSession, 0, len(l.sessions)),
+		Rooms:    make([]persistedRoom, 0, len(l.rooms)),
+	}
+
+	for _, session := range l.sessions {
+		if session == nil {
+			continue
+		}
+		state.Sessions = append(state.Sessions, persistedPlayerSession{
+			SessionID:     session.sessionID,
+			PlayerID:      session.playerID,
+			RoomCode:      session.roomCode,
+			AuthUserID:    session.authUserID,
+			DisplayName:   session.displayName,
+			ImageURL:      session.imageURL,
+			Authenticated: session.authenticated,
+		})
+	}
+	sort.Slice(state.Sessions, func(i, j int) bool {
+		return state.Sessions[i].SessionID < state.Sessions[j].SessionID
+	})
+
+	for _, room := range l.rooms {
+		if room == nil || room.gameState == nil {
+			continue
+		}
+		persistedRoom := persistedRoom{
+			Code:         room.code,
+			GameState:    room.gameState.PersistenceSnapshot(),
+			Players:      make([]persistedRoomPlayer, 0, len(room.players)),
+			HostID:       room.hostID,
+			TurnBaseline: cloneGameSnapshot(room.turnBaseline),
+			TurnActivity: cloneTurnActivitySnapshot(room.turnActivity),
+		}
+		if room.pendingDealChoice != nil {
+			persistedRoom.PendingDealChoice = &persistedPendingDealChoice{
+				DealerIndex:  room.pendingDealChoice.dealerIndex,
+				ChooserIndex: room.pendingDealChoice.chooserIndex,
+			}
+		}
+		for _, player := range room.players {
+			if player == nil || player.player == nil {
+				continue
+			}
+			persistedRoom.Players = append(persistedRoom.Players, persistedRoomPlayer{
+				PlayerID:  player.player.ID,
+				Name:      player.name,
+				ImageURL:  player.imageURL,
+				SessionID: player.sessionID,
+				Connected: player.connected,
+				Seat:      player.seat,
+				Host:      player.host,
+			})
+		}
+		sort.Slice(persistedRoom.Players, func(i, j int) bool {
+			return persistedRoom.Players[i].Seat < persistedRoom.Players[j].Seat
+		})
+		state.Rooms = append(state.Rooms, persistedRoom)
+	}
+	sort.Slice(state.Rooms, func(i, j int) bool {
+		return state.Rooms[i].Code < state.Rooms[j].Code
+	})
+
+	return state
 }
 
 func (l *lobbyServer) requireSession(sessionID string) (*playerSession, error) {
@@ -1110,6 +1364,30 @@ func cloneCompositionActivitySnapshots(source []game.CompositionActivitySnapshot
 		cloned = append(cloned, next)
 	}
 	return cloned
+}
+
+func cloneGameSnapshot(source *game.GameSnapshot) *game.GameSnapshot {
+	if source == nil {
+		return nil
+	}
+	cloned := *source
+	cloned.Players = append([]game.PlayerStateSnapshot(nil), source.Players...)
+	cloned.Hand = append([]game.CardSnapshot(nil), source.Hand...)
+	cloned.DiscardPile = append([]game.CardSnapshot(nil), source.DiscardPile...)
+	cloned.ActiveCompositions = cloneCompositionSnapshots(source.ActiveCompositions)
+	cloned.TurnActivity = cloneTurnActivitySnapshot(source.TurnActivity)
+	return &cloned
+}
+
+func cloneTurnActivitySnapshot(source *game.TurnActivitySnapshot) *game.TurnActivitySnapshot {
+	if source == nil {
+		return nil
+	}
+	cloned := *source
+	cloned.BaselineCompositions = cloneCompositionSnapshots(source.BaselineCompositions)
+	cloned.DraftCompositions = cloneDraftCompositionSnapshots(source.DraftCompositions)
+	cloned.CompositionActivities = cloneCompositionActivitySnapshots(source.CompositionActivities)
+	return &cloned
 }
 
 func (r *room) playerByID(playerID string) *roomPlayer {

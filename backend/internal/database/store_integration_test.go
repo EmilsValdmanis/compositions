@@ -5,6 +5,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -194,6 +195,62 @@ func TestUserStoreUpsertUserByAccount(t *testing.T) {
 	}
 	if accountCount != 1 {
 		t.Fatalf("google account rows = %d; want 1", accountCount)
+	}
+}
+
+func TestUserStoreLobbyState(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+
+	if err := RunMigrations(ctx, databaseURL, MigrationUp); err != nil {
+		t.Fatalf("RunMigrations(up) error = %v", err)
+	}
+
+	store, err := NewUserStore(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("NewUserStore() error = %v", err)
+	}
+	defer store.Close()
+
+	if _, err := store.LoadLobbyState(ctx); !errors.Is(err, ErrLobbyStateNotFound) {
+		t.Fatalf("LoadLobbyState(empty) error = %v; want %v", err, ErrLobbyStateNotFound)
+	}
+	if err := store.SaveLobbyState(ctx, json.RawMessage(`{"version":1,"rooms":[{"code":"ABC123"}]}`)); err != nil {
+		t.Fatalf("SaveLobbyState(first) error = %v", err)
+	}
+	loaded, err := store.LoadLobbyState(ctx)
+	if err != nil {
+		t.Fatalf("LoadLobbyState(first) error = %v", err)
+	}
+	var loadedFirst struct {
+		Version int `json:"version"`
+		Rooms   []struct {
+			Code string `json:"code"`
+		} `json:"rooms"`
+	}
+	if err := json.Unmarshal(loaded, &loadedFirst); err != nil {
+		t.Fatalf("Unmarshal(first lobby state) error = %v", err)
+	}
+	if loadedFirst.Version != 1 || len(loadedFirst.Rooms) != 1 || loadedFirst.Rooms[0].Code != "ABC123" {
+		t.Fatalf("loaded first state = %#v; want one ABC123 room", loadedFirst)
+	}
+
+	if err := store.SaveLobbyState(ctx, json.RawMessage(`{"version":1,"rooms":[]}`)); err != nil {
+		t.Fatalf("SaveLobbyState(update) error = %v", err)
+	}
+	loaded, err = store.LoadLobbyState(ctx)
+	if err != nil {
+		t.Fatalf("LoadLobbyState(update) error = %v", err)
+	}
+	var loadedUpdated struct {
+		Version int               `json:"version"`
+		Rooms   []json.RawMessage `json:"rooms"`
+	}
+	if err := json.Unmarshal(loaded, &loadedUpdated); err != nil {
+		t.Fatalf("Unmarshal(updated lobby state) error = %v", err)
+	}
+	if loadedUpdated.Version != 1 || len(loadedUpdated.Rooms) != 0 {
+		t.Fatalf("loaded updated state = %#v; want empty room list", loadedUpdated)
 	}
 }
 

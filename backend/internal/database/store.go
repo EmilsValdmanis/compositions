@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -19,6 +20,7 @@ import (
 
 var ErrSessionNotFound = errors.New("session not found")
 var ErrUserConflict = errors.New("user conflict")
+var ErrLobbyStateNotFound = errors.New("lobby state not found")
 
 const postgresUniqueViolation = "23505"
 
@@ -137,6 +139,41 @@ func (s *UserStore) UpsertUser(ctx context.Context, user UserRecord) (UserRecord
 	}
 
 	return userRecordFromRow(dbUser.ID, dbUser.Name, dbUser.Email, dbUser.ImageUrl), nil
+}
+
+func (s *UserStore) SaveLobbyState(ctx context.Context, state json.RawMessage) error {
+	if s == nil || s.pool == nil {
+		return errors.New("user store is not configured")
+	}
+	if len(state) == 0 || !json.Valid(state) {
+		return errors.New("lobby state must be valid json")
+	}
+
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO lobby_state (id, state)
+		VALUES (TRUE, $1)
+		ON CONFLICT (id) DO UPDATE SET
+			state = EXCLUDED.state,
+			updated_at = NOW()
+	`, state)
+	return err
+}
+
+func (s *UserStore) LoadLobbyState(ctx context.Context) (json.RawMessage, error) {
+	if s == nil || s.pool == nil {
+		return nil, errors.New("user store is not configured")
+	}
+
+	var state json.RawMessage
+	err := s.pool.QueryRow(ctx, `SELECT state FROM lobby_state WHERE id = TRUE`).Scan(&state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrLobbyStateNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return state, nil
 }
 
 func normalizeUserRecord(user UserRecord) UserRecord {
