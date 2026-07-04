@@ -302,7 +302,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
   const socketRef = useRef<WebSocket | null>(null);
   const connectAttemptRef = useRef(0);
   const connectInFlightRef = useRef(false);
-  const reconnectTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
   const nextPendingActionIdRef = useRef(0);
   const pendingActionsRef = useRef<PendingAction[]>([]);
