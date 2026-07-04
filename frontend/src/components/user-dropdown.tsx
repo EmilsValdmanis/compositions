@@ -49,7 +49,9 @@ export function UserDropdown() {
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-0.5">
             <span className="font-medium text-foreground">{displayName || "Account"}</span>
-            {user?.email ? <span className="text-muted-foreground text-xs">{user.email}</span> : null}
+            {user?.email ? (
+              <span className="text-muted-foreground text-xs">{user.email}</span>
+            ) : null}
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
