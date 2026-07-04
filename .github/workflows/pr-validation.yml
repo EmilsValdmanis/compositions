@@ -13,10 +13,10 @@ jobs:
                 working-directory: backend
         steps:
             - name: Check out repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Set up Go
-              uses: actions/setup-go@v5
+              uses: actions/setup-go@v6
               with:
                   go-version-file: backend/go.mod
                   cache-dependency-path: backend/go.sum
@@ -46,12 +46,12 @@ jobs:
                 working-directory: frontend
         steps:
             - name: Check out repository
-              uses: actions/checkout@v4
+              uses: actions/checkout@v5
 
             - name: Set up Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v5
               with:
-                  node-version: 22
+                  node-version: 24
 
             - name: Set up Bun
               uses: oven-sh/setup-bun@v2
