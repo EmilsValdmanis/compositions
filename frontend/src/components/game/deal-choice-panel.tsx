@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { closestCenter, DndContext, type DragEndEvent } from "@dnd-kit/core";
+import { closestCenter, DndContext, type DragEndEvent, type Modifier } from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
@@ -12,6 +12,7 @@ import {
   ArrowRight01Icon,
   Cards02Icon,
   DragDropVerticalIcon,
+  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -21,8 +22,9 @@ import {
 } from "#/components/game-websocket-provider";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
+import { Slider } from "#/components/ui/slider";
+import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import { cn } from "#/lib/utils";
 
 const GAME_DECK_CARD_COUNT = 108;
@@ -30,6 +32,21 @@ const VISUAL_CARD_COUNT = 30;
 
 type DealMode = "round_robin" | "tap";
 type DealStep = "cut" | "deal";
+
+const restrictTapOrderDrag: Modifier = ({ activeNodeRect, containerNodeRect, transform }) => {
+  if (!activeNodeRect || !containerNodeRect) {
+    return { ...transform, x: 0 };
+  }
+
+  const minY = containerNodeRect.top - activeNodeRect.top;
+  const maxY = containerNodeRect.bottom - activeNodeRect.bottom;
+
+  return {
+    ...transform,
+    x: 0,
+    y: Math.min(Math.max(transform.y, minY), maxY),
+  };
+};
 
 type DealChoicePanelProps = {
   players: PlayerSnapshot[];
@@ -74,7 +91,7 @@ function DeckCard({ index, cutVisualCount }: { index: number; cutVisualCount: nu
   return (
     <div
       className={cn(
-        "absolute size-[4.25rem] rounded-md border shadow-sm transition-[transform,opacity,box-shadow] duration-300 ease-out",
+        "absolute size-16 rounded-md border shadow-sm transition-[transform,opacity,box-shadow] duration-300 ease-out",
         isCut
           ? "border-primary/55 bg-primary/10 shadow-md"
           : "border-border bg-card shadow-foreground/5",
@@ -95,12 +112,10 @@ function DeckCard({ index, cutVisualCount }: { index: number; cutVisualCount: nu
 }
 
 function CutDeckControl({
-  cutSize,
   clampedCutSize,
   maxCutSize,
   onCutSizeChange,
 }: {
-  cutSize: string;
   clampedCutSize: number;
   maxCutSize: number;
   onCutSizeChange: (cutSize: string) => void;
@@ -110,10 +125,10 @@ function CutDeckControl({
     maxCutSize > 0 ? Math.round((clampedCutSize / maxCutSize) * VISUAL_CARD_COUNT) : 0;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-3">
       <div className="grid gap-3 rounded-lg border border-border/70 bg-background p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Label htmlFor="cut-size" className="text-xs font-medium uppercase tracking-[0.16em]">
+          <Label id="cut-size-label" className="text-xs font-medium uppercase tracking-[0.16em]">
             Cut size
           </Label>
           <div className="flex items-center gap-2">
@@ -127,38 +142,26 @@ function CutDeckControl({
             <span>Cut packet</span>
             <span>Dealing deck</span>
           </div>
-          <div className="absolute left-2 top-12 h-24 w-[15.75rem] sm:left-1/2 sm:-translate-x-1/2">
+          <div className="absolute left-2 top-10 h-24 w-63 sm:left-1/2 sm:-translate-x-1/2">
             {Array.from({ length: VISUAL_CARD_COUNT }, (_, index) => (
               <DeckCard key={index} index={index} cutVisualCount={cutVisualCount} />
             ))}
           </div>
         </div>
 
-        <Input
+        <Slider
           id="cut-size"
-          type="range"
           min={0}
           max={maxCutSize}
-          value={clampedCutSize}
-          onChange={(event) => onCutSizeChange(event.target.value)}
-          className="h-2 cursor-pointer p-0 accent-primary"
-        />
+          step={1}
+          thumbAriaLabelledBy="cut-size-label"
+          value={[clampedCutSize]}
+          onValueChange={(value) => {
+            const nextCutSize = Array.isArray(value) ? value[0] : value;
 
-        <div className="grid grid-cols-[minmax(0,1fr)_5rem] items-center gap-2">
-          <p className="text-xs text-muted-foreground">
-            Main {remainingCards} / packet {clampedCutSize}
-          </p>
-          <Input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={maxCutSize}
-            value={cutSize}
-            onChange={(event) => onCutSizeChange(event.target.value)}
-            aria-label="Exact cut size"
-            className="h-9 text-right"
-          />
-        </div>
+            onCutSizeChange(String(nextCutSize ?? 0));
+          }}
+        />
       </div>
     </div>
   );
@@ -177,9 +180,7 @@ function SortableDealOrderPlayer({
     id: dealPlayerId(playerIndex),
   });
   const style = {
-    transform: transform
-      ? `translate3d(${Math.round(transform.x)}px, ${Math.round(transform.y)}px, 0)`
-      : undefined,
+    transform: transform ? `translate3d(0, ${Math.round(transform.y)}px, 0)` : undefined,
     transition,
   };
 
@@ -188,7 +189,7 @@ function SortableDealOrderPlayer({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex min-h-14 items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-sm",
+        "flex min-h-14 w-full min-w-0 cursor-grab touch-none items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-sm active:cursor-grabbing",
         isDragging ? "opacity-60" : undefined,
       )}
       {...attributes}
@@ -221,7 +222,7 @@ function StepMarker({ step, active, done }: { step: number; active: boolean; don
             : "border-border bg-background text-muted-foreground",
         )}
       >
-        {step}
+        {done ? <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" /> : step}
       </span>
       <span
         className={cn("text-sm font-medium", active ? "text-foreground" : "text-muted-foreground")}
@@ -296,7 +297,7 @@ export function DealChoicePanel({
   }
 
   return (
-    <div className="grid gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4">
+    <div className="grid gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-sm font-medium">Deal choice</p>
@@ -310,7 +311,7 @@ export function DealChoicePanel({
       </div>
 
       {isDealChooser ? (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background p-2">
             <StepMarker step={1} active={dealStep === "cut"} done={dealStep === "deal"} />
             <div className="h-px min-w-6 flex-1 bg-border" />
@@ -318,9 +319,8 @@ export function DealChoicePanel({
           </div>
 
           {dealStep === "cut" ? (
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               <CutDeckControl
-                cutSize={cutSize}
                 clampedCutSize={clampedCutSize}
                 maxCutSize={maxCutSize}
                 onCutSizeChange={setCutSize}
@@ -331,39 +331,45 @@ export function DealChoicePanel({
               </Button>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid min-w-0 gap-3 overflow-hidden">
               <div className="grid gap-2">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                   Dealing style
                 </p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={dealMode === "round_robin" ? "default" : "outline"}
-                    onClick={() => setDealMode("round_robin")}
-                  >
-                    <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} data-icon="inline-start" />
-                    Round robin
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={dealMode === "tap" ? "default" : "outline"}
-                    onClick={() => setDealMode("tap")}
-                  >
-                    <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} data-icon="inline-start" />
-                    Tap order
-                  </Button>
-                </div>
+                <Tabs
+                  value={dealMode}
+                  onValueChange={(value) => {
+                    if (value === "round_robin" || value === "tap") {
+                      setDealMode(value);
+                    }
+                  }}
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="round_robin">
+                      <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} data-icon="inline-start" />
+                      Round robin
+                    </TabsTrigger>
+                    <TabsTrigger value="tap">
+                      <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} data-icon="inline-start" />
+                      Tap order
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
               </div>
 
               {dealMode === "tap" ? (
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2 overflow-hidden">
                   <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
                     Dealing order
                   </p>
-                  <DndContext collisionDetection={closestCenter} onDragEnd={handleTapOrderDragEnd}>
+                  <DndContext
+                    autoScroll={false}
+                    collisionDetection={closestCenter}
+                    modifiers={[restrictTapOrderDrag]}
+                    onDragEnd={handleTapOrderDragEnd}
+                  >
                     <SortableContext items={tapOrderIds} strategy={verticalListSortingStrategy}>
-                      <div className="grid gap-2">
+                      <div className="grid max-h-56 min-w-0 gap-2 overflow-y-auto overflow-x-hidden pr-1">
                         {tapOrder.map((playerIndex, index) => {
                           const player = players[playerIndex];
 

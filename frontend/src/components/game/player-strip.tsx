@@ -6,9 +6,11 @@ import { cn, getUserInitials } from "#/lib/utils";
 export function PlayerStrip({
   players,
   game,
+  showHostBadges = true,
 }: {
   players: PlayerSnapshot[];
   game: GameSnapshot | null;
+  showHostBadges?: boolean;
 }) {
   const playerStates = game?.players ?? [];
   return (
@@ -37,7 +39,7 @@ export function PlayerStrip({
               </div>
             </div>
             <div className="flex flex-wrap justify-end gap-1.5">
-              {player.isHost ? <Badge variant="secondary">Host</Badge> : null}
+              {showHostBadges && player.isHost ? <Badge variant="secondary">Host</Badge> : null}
               {gamePlayer ? <Badge variant="outline">{gamePlayer.handCount} cards</Badge> : null}
             </div>
           </div>

@@ -30,7 +30,7 @@ export function GameBoardPlayers({
         </CardAction>
       </CardHeader>
       <CardContent className="flex h-full flex-col gap-3">
-        <PlayerStrip players={players} game={game} />
+        <PlayerStrip players={players} game={game} showHostBadges={false} />
 
         {hasDraftedCompositions ? (
           <Button

@@ -188,21 +188,19 @@ export function ProtectedHome() {
             />
           </div>
         ) : isLobbyPhase ? (
-          <div key="lobby">
+          <div key="lobby" className="flex min-h-0 flex-1 overflow-auto">
             <GameLobbyView
               room={state.room}
               game={state.game}
               completedGame={completedGame}
               players={players}
               roomCode={roomCode}
-              playerId={state.playerId}
               roomActions={{ canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame }}
               dealChoice={{
                 pendingDealChoice,
                 dealChooserName: dealChooser?.name ?? null,
                 isDealChooser: Boolean(isDealChooser),
               }}
-              roomLink={state.room?.code ? roomShareUrl(state.room.code) : null}
               onRoomCodeChange={handleRoomCodeChange}
               onCreateRoom={createRoom}
               onJoinRoom={joinRoom}

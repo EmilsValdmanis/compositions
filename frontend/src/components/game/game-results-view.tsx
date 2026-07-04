@@ -9,7 +9,14 @@ import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
-import { Separator } from "#/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "#/components/ui/table";
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -37,14 +44,6 @@ function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
     }));
 }
 
-function pointsLabel(points: number) {
-  if (points <= 0) {
-    return "No points added";
-  }
-
-  return `+${points} pts`;
-}
-
 export function GameResultsView({
   room,
   game,
@@ -59,15 +58,14 @@ export function GameResultsView({
   );
   const isGameOver = room?.phase === "game_over";
   const isHost = room?.hostPlayerId === playerId;
-  const totalRoundPoints = game.players.reduce((sum, player) => sum + player.pointsGained, 0);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col justify-center gap-4">
+    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4">
       <Card className="border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>{isGameOver ? "Game finished" : `Round ${game.round}`}</CardTitle>
+              <CardTitle>{isGameOver ? "Game finished" : "Round complete"}</CardTitle>
               <CardDescription>
                 {winner?.name ?? "A player"} {isGameOver ? "wins the game" : "won the round"}
               </CardDescription>
@@ -78,70 +76,39 @@ export function GameResultsView({
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
-          <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] sm:items-center">
-            <div className="grid gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge>{winner?.name ?? "Unknown winner"}</Badge>
-                <Badge variant="outline">Round {game.round}</Badge>
-                <Badge variant="outline">Dealer seat #{game.dealerIndex + 1}</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">Lowest total leads.</p>
-            </div>
-            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border/70 bg-background p-3 text-sm">
-              <div>
-                <p className="text-muted-foreground">Players</p>
-                <p className="font-medium">{game.players.length}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Round points</p>
-                <p className="font-medium">{totalRoundPoints} pts</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            {rankingRows(game, players).map(({ rank, player, playerState }) => (
-              <div
-                key={playerState.playerId}
-                className="grid gap-3 rounded-2xl border border-border/70 bg-background px-4 py-3 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-              >
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-medium">
-                        #{rank} {player?.name ?? "Unknown player"}
-                      </p>
-                      {playerState.playerId === game.players[game.roundWinnerIndex]?.playerId ? (
-                        <Badge>Winner</Badge>
-                      ) : null}
-                      {playerState.playerId === playerId ? (
-                        <Badge variant="outline">You</Badge>
-                      ) : null}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {playerState.handCount} cards left after the round
-                    </p>
-                  </div>
-
-                  <div className="min-w-40 rounded-xl border border-border/70 bg-muted/20 px-3 py-2 text-right">
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Change
-                    </p>
-                    <p className="text-lg font-semibold tracking-tight">
-                      {pointsLabel(playerState.pointsGained)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-2 text-sm sm:min-w-44 sm:text-right">
-                  <div>
-                    <p className="text-muted-foreground">Total score</p>
-                    <p className="font-medium">{playerState.totalPoints} pts</p>
-                  </div>
-                  <Separator className="sm:hidden" />
-                </div>
-              </div>
-            ))}
+          <div className="overflow-hidden rounded-lg border border-border/70">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-14">#</TableHead>
+                  <TableHead>Player</TableHead>
+                  <TableHead className="text-right">Cards</TableHead>
+                  <TableHead className="text-right">Score</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rankingRows(game, players).map(({ rank, player, playerState }) => (
+                  <TableRow key={playerState.playerId}>
+                    <TableCell className="font-medium">{rank}</TableCell>
+                    <TableCell>
+                      <div className="flex min-w-40 flex-wrap items-center gap-2">
+                        <span className="font-medium">{player?.name ?? "Unknown player"}</span>
+                        {playerState.playerId === game.players[game.roundWinnerIndex]?.playerId ? (
+                          <Badge>Winner</Badge>
+                        ) : null}
+                        {playerState.playerId === playerId ? (
+                          <Badge variant="outline">You</Badge>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">{playerState.handCount}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {playerState.totalPoints}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
 
           {!isGameOver ? (
@@ -154,10 +121,10 @@ export function GameResultsView({
                 onChooseDealing={onChooseDealing}
               />
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
-                <p className="text-sm text-muted-foreground">
-                  {isHost ? "Start when ready." : "Waiting for the host."}
-                </p>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {!isHost ? (
+                  <p className="text-sm text-muted-foreground">Waiting for the host.</p>
+                ) : null}
                 <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
                   Start next round
                 </Button>

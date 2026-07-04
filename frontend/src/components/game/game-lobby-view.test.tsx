@@ -118,7 +118,6 @@ function renderLobby(overrides: Partial<React.ComponentProps<typeof GameLobbyVie
     completedGame: null as CompletedGameSnapshot | null,
     players: [],
     roomCode: "",
-    playerId: "player-1",
     roomActions: {
       canCreateRoom: true,
       canJoinRoom: true,
@@ -138,7 +137,6 @@ function renderLobby(overrides: Partial<React.ComponentProps<typeof GameLobbyVie
     onLeaveRoom: vi.fn(),
     onCopyRoomCode: vi.fn(),
     onCopyRoomLink: vi.fn(),
-    roomLink: null,
     ...overrides,
   };
 
@@ -192,7 +190,6 @@ describe("GameLobbyView", () => {
         },
       }),
       players,
-      playerId: "player-2",
       roomActions: {
         canCreateRoom: false,
         canJoinRoom: false,
@@ -208,7 +205,6 @@ describe("GameLobbyView", () => {
         dealChooserName: "Casey",
         isDealChooser: false,
       },
-      roomLink: "http://localhost/?room=ABCD12",
     });
 
     expect(view.getByText("ABCD12")).toBeTruthy();
@@ -232,7 +228,6 @@ describe("GameLobbyView", () => {
         completedGame={null}
         players={players}
         roomCode=""
-        playerId="player-3"
         roomActions={{
           canCreateRoom: false,
           canJoinRoom: false,
@@ -252,7 +247,6 @@ describe("GameLobbyView", () => {
         onLeaveRoom={vi.fn()}
         onCopyRoomCode={vi.fn()}
         onCopyRoomLink={vi.fn()}
-        roomLink={null}
       />,
     );
     const { rerender } = view;
@@ -273,7 +267,6 @@ describe("GameLobbyView", () => {
         completedGame={null}
         players={players}
         roomCode=""
-        playerId="player-3"
         roomActions={{
           canCreateRoom: false,
           canJoinRoom: false,
@@ -293,14 +286,13 @@ describe("GameLobbyView", () => {
         onLeaveRoom={vi.fn()}
         onCopyRoomCode={vi.fn()}
         onCopyRoomLink={vi.fn()}
-        roomLink={null}
       />,
     );
 
     fireEvent.click(view.getByRole("button", { name: "Back" }));
     fireEvent.input(view.getByLabelText("Cut size"), { target: { value: "4" } });
     fireEvent.click(view.getByRole("button", { name: /Continue/ }));
-    fireEvent.click(view.getByRole("button", { name: "Tap order" }));
+    fireEvent.click(view.getByRole("tab", { name: "Tap order" }));
     act(() => {
       dndContextProps.onDragEnd?.({
         active: { id: "deal-player-1" },
