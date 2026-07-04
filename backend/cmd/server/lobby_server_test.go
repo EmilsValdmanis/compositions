@@ -156,8 +156,8 @@ func TestLobbyServerCoverage(t *testing.T) {
 	if _, _, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin"); err == nil {
 		t.Fatal("chooseDealing(non chooser) error = nil; want error")
 	}
-	if _, _, err := lobby.chooseDealing(fourthEvent.SessionID, "tap"); err == nil {
-		t.Fatal("chooseDealing(tap) error = nil; want error")
+	if _, _, err := lobby.chooseDealing(fourthEvent.SessionID, "tap"); !errors.Is(err, game.ErrInvalidDealingOrder) {
+		t.Fatalf("chooseDealing(tap without order) error = %v; want ErrInvalidDealingOrder", err)
 	}
 	startedRoom, gameRecipients, err := lobby.chooseDealing(fourthEvent.SessionID, "round_robin")
 	if err != nil {
@@ -263,6 +263,71 @@ func TestLobbyServerCoverage(t *testing.T) {
 		return errors.New("emit boom")
 	}
 	lobby.broadcastDisconnect(hostRoom, []*websocket.Conn{nil, broadcastConn})
+}
+
+func TestLobbyChooseDealingOptions(t *testing.T) {
+	cases := []struct {
+		name     string
+		dealType string
+		options  dealingChoiceOptions
+	}{
+		{
+			name:     "round robin with cut size",
+			dealType: "round_robin",
+			options:  dealingChoiceOptions{cutSize: intPtr(7)},
+		},
+		{
+			name:     "tap with player order",
+			dealType: "tap",
+			options:  dealingChoiceOptions{order: []int{2, 0, 1}, cutSize: intPtr(5)},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			lobby := newLobbyServer()
+			hostEvent, _, _, err := lobby.connect("", nil)
+			if err != nil {
+				t.Fatalf("connect(host) error = %v", err)
+			}
+			hostRoom, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+			if err != nil {
+				t.Fatalf("createRoom() error = %v", err)
+			}
+			firstGuestEvent, _, _, err := lobby.connect("", nil)
+			if err != nil {
+				t.Fatalf("connect(first guest) error = %v", err)
+			}
+			if _, _, err := lobby.joinRoom(firstGuestEvent.SessionID, hostRoom.Code, "First Guest"); err != nil {
+				t.Fatalf("joinRoom(first guest) error = %v", err)
+			}
+			chooserEvent, _, _, err := lobby.connect("", nil)
+			if err != nil {
+				t.Fatalf("connect(chooser) error = %v", err)
+			}
+			if _, _, err := lobby.joinRoom(chooserEvent.SessionID, hostRoom.Code, "Chooser"); err != nil {
+				t.Fatalf("joinRoom(chooser) error = %v", err)
+			}
+			if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+				t.Fatalf("startGame() error = %v", err)
+			}
+
+			startedRoom, _, err := lobby.chooseDealing(chooserEvent.SessionID, tt.dealType, tt.options)
+			if err != nil {
+				t.Fatalf("chooseDealing() error = %v", err)
+			}
+			if startedRoom.Phase != "in_progress" {
+				t.Fatalf("startedRoom.Phase = %q; want in_progress", startedRoom.Phase)
+			}
+			if startedRoom.PendingDealChoice != nil {
+				t.Fatalf("startedRoom.PendingDealChoice = %#v; want nil", startedRoom.PendingDealChoice)
+			}
+		})
+	}
+}
+
+func intPtr(value int) *int {
+	return &value
 }
 
 func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {

@@ -460,9 +460,6 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	if dt == DealInBlocks && order == nil {
 		return ErrInvalidDealingOrder
 	}
-	if dt == DealInBlocks && cutSize != 0 {
-		return ErrInvalidCutSize
-	}
 	if len(gs.drawPile.cards) < InitialHandSize*len(gs.players)+1 {
 		return ErrNotEnoughCardsInDrawPile
 	}
@@ -1046,26 +1043,34 @@ func (gs *GameState) dealInitialHands(dt DealTypes, order []int, cutSize int) er
 	case DealRoundRobin:
 		return dealRoundRobin(gs.players, gs.drawPile, gs.dealerIndex, cutSize)
 	case DealInBlocks:
-		return dealInBlocks(gs.players, gs.drawPile, order)
+		return dealInBlocks(gs.players, gs.drawPile, order, cutSize)
 	default:
 		return ErrInvalidDealingType
 	}
 }
 
-func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize int) error {
-	required := InitialHandSize * len(players)
+func cutMainPile(drawPile *CardPile, required, cutSize int) (*CardPile, []Card, error) {
 	if len(drawPile.cards) < required {
-		return ErrNotEnoughCardsInDrawPile
-	}
-	if !isValidPlayerIndex(dealerIndex, len(players)) {
-		return ErrInvalidDealer
+		return nil, nil, ErrNotEnoughCardsInDrawPile
 	}
 	if cutSize < 0 || cutSize > len(drawPile.cards)-required {
-		return ErrInvalidCutSize
+		return nil, nil, ErrInvalidCutSize
 	}
 
 	setAside := append([]Card{}, drawPile.cards[:cutSize]...)
 	mainPile := &CardPile{cards: append([]Card{}, drawPile.cards[cutSize:]...)}
+	return mainPile, setAside, nil
+}
+
+func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize int) error {
+	required := InitialHandSize * len(players)
+	if !isValidPlayerIndex(dealerIndex, len(players)) {
+		return ErrInvalidDealer
+	}
+	mainPile, setAside, err := cutMainPile(drawPile, required, cutSize)
+	if err != nil {
+		return err
+	}
 
 	for range InitialHandSize {
 		for offset := 1; offset <= len(players); offset++ {
@@ -1079,24 +1084,26 @@ func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize 
 	return nil
 }
 
-func dealInBlocks(players []*Player, drawPile *CardPile, order []int) error {
+func dealInBlocks(players []*Player, drawPile *CardPile, order []int, cutSize int) error {
 	required := InitialHandSize * len(players)
-	if len(drawPile.cards) < required {
-		return ErrNotEnoughCardsInDrawPile
-	}
 	if !validateOrder(order, len(players)) {
 		return ErrInvalidDealingOrder
+	}
+	mainPile, setAside, err := cutMainPile(drawPile, required, cutSize)
+	if err != nil {
+		return err
 	}
 
 	for _, i := range order {
 		player := players[i]
 
 		for range InitialHandSize {
-			card, _ := drawPile.DrawOne()
+			card, _ := mainPile.DrawOne()
 			player.hand.cards = append(player.hand.cards, card)
 		}
 	}
 
+	drawPile.cards = append(mainPile.cards, setAside...)
 	return nil
 }
 
