@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -26,6 +27,8 @@ type userStore interface {
 	CreateSession(ctx context.Context, session authSessionRecord) error
 	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
 	DeleteSession(ctx context.Context, sessionToken string) error
+	SaveLobbyState(ctx context.Context, state persistedLobbyState) error
+	LoadLobbyState(ctx context.Context) (persistedLobbyState, error)
 	Close() error
 }
 
@@ -42,6 +45,12 @@ func (noopUserStore) GetSessionUserByToken(context.Context, string, time.Time) (
 }
 
 func (noopUserStore) DeleteSession(context.Context, string) error { return database.ErrSessionNotFound }
+
+func (noopUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
+
+func (noopUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
+	return persistedLobbyState{}, nil
+}
 
 func (noopUserStore) Close() error { return nil }
 
@@ -128,4 +137,38 @@ func (s *postgresUserStore) DeleteSession(ctx context.Context, sessionToken stri
 	}
 
 	return s.store.DeleteSession(ctx, strings.TrimSpace(sessionToken))
+}
+
+func (s *postgresUserStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+
+	return s.store.SaveLobbyState(ctx, data)
+}
+
+func (s *postgresUserStore) LoadLobbyState(ctx context.Context) (persistedLobbyState, error) {
+	if s == nil || s.store == nil {
+		return persistedLobbyState{}, errors.New("user store is not configured")
+	}
+
+	data, err := s.store.LoadLobbyState(ctx)
+	if errors.Is(err, database.ErrLobbyStateNotFound) {
+		return persistedLobbyState{}, nil
+	}
+	if err != nil {
+		return persistedLobbyState{}, err
+	}
+
+	var state persistedLobbyState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return persistedLobbyState{}, err
+	}
+
+	return state, nil
 }

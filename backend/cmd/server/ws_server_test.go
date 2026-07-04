@@ -224,7 +224,18 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 	hijackConn := mustDialWSWithCookie(t, httpServer.URL, "guest-token")
 	defer hijackConn.Close()
 	mustSendEnvelope(t, hijackConn, "connect", connectRequest{SessionID: hostConnected.SessionID})
-	mustReadError(t, hijackConn, "session belongs to a different user")
+	hijackConnected := mustReadConnectedEvent(t, hijackConn)
+	if hijackConnected.SessionID != guestConnected.SessionID || hijackConnected.PlayerID != guestConnected.PlayerID {
+		t.Fatalf("hijackConnected = %#v; want guest session/player", hijackConnected)
+	}
+	hijackRoom := mustReadRoomState(t, hijackConn)
+	if hijackRoom.Code != hostRoom.Code || hijackRoom.Phase != "in_progress" {
+		t.Fatalf("hijackRoom = %#v; want guest's in-progress room", hijackRoom)
+	}
+	hijackGame := mustReadGameState(t, hijackConn, hijackRoom.Code)
+	if len(hijackGame.Game.Hand) != game.InitialHandSize {
+		t.Fatalf("hijack hand = %d; want guest private hand", len(hijackGame.Game.Hand))
+	}
 }
 
 func TestAuthenticatedWebSocketReplacesSecondLiveSocketForSameUser(t *testing.T) {

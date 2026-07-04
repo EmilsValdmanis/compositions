@@ -213,7 +213,7 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 	}
 
 	server := &wsServer{
-		lobby:         newLobbyServer(),
+		lobby:         newLobbyServerWithStore(store),
 		auth:          auth,
 		userStore:     store,
 		allowedOrigin: normalizeOrigin(allowedOrigin),
@@ -247,7 +247,16 @@ func newConfiguredWSServer() (*wsServer, error) {
 		_ = store.Close()
 		return nil, err
 	}
-	return newWSServerWithDependencies(auth, store, frontendOrigin), nil
+	server := newWSServerWithDependencies(auth, store, frontendOrigin)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+	if err := server.lobby.restorePersistedState(ctx); err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf("restore lobby state: %w", err)
+	}
+
+	return server, nil
 }
 
 func (s *wsServer) Close() error {

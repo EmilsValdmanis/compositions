@@ -174,6 +174,9 @@ type Envelope<T = unknown> = {
 
 type ConnectionAuth = Awaited<ReturnType<typeof getGameConnectionAuth>>;
 
+const reconnectBaseDelayMs = 500;
+const reconnectMaxDelayMs = 5_000;
+
 type GameWebSocketContextValue = {
   state: LobbyState;
   connect: () => Promise<void>;
@@ -229,6 +232,10 @@ function clearError(current: LobbyState, partial?: Partial<LobbyState>): LobbySt
   };
 }
 
+function isRejectedSessionError(message: string) {
+  return message === "session not found" || message === "session belongs to a different user";
+}
+
 const incomingMessageReducers: Record<string, (current: LobbyState, data: any) => LobbyState> = {
   connected: (current, data) =>
     clearError(current, {
@@ -271,12 +278,15 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
       completedGame: null,
       lastEvent: "left_room",
     }),
-  error: (current, data) =>
-    withError(current, data?.message ?? "unknown error", {
+  error: (current, data) => {
+    const message = data?.message ?? "unknown error";
+    return withError(current, message, {
       connectionStatus:
         current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
+      sessionId: isRejectedSessionError(message) ? "" : current.sessionId,
       lastEvent: "error",
-    }),
+    });
+  },
 };
 
 function getDealerIndex(room: RoomSnapshot | null) {
@@ -292,12 +302,22 @@ function useGameWebSocketController(): GameWebSocketContextValue {
   const socketRef = useRef<WebSocket | null>(null);
   const connectAttemptRef = useRef(0);
   const connectInFlightRef = useRef(false);
+  const reconnectTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
   const nextPendingActionIdRef = useRef(0);
   const pendingActionsRef = useRef<PendingAction[]>([]);
   const state = useSelector(gameWebSocketStore);
 
   useEffect(() => {
+    function clearReconnectTimer() {
+      if (reconnectTimerRef.current) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    }
+
     function cancelPendingConnect() {
+      clearReconnectTimer();
       connectAttemptRef.current += 1;
       connectInFlightRef.current = false;
 
@@ -478,6 +498,11 @@ function useGameWebSocketController(): GameWebSocketContextValue {
   }
 
   async function connect() {
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+
     const currentSocket = socketRef.current;
 
     if (connectInFlightRef.current) {
@@ -545,6 +570,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
         }
 
         connectInFlightRef.current = false;
+        reconnectAttemptRef.current = 0;
         socket.send(
           JSON.stringify({
             type: "connect",
@@ -581,12 +607,28 @@ function useGameWebSocketController(): GameWebSocketContextValue {
             ...current,
             connectionStatus: "disconnected",
           }));
+
+          const reconnectAttempt = reconnectAttemptRef.current;
+          reconnectAttemptRef.current += 1;
+          const reconnectDelay = Math.min(
+            reconnectBaseDelayMs * 2 ** reconnectAttempt,
+            reconnectMaxDelayMs,
+          );
+          reconnectTimerRef.current = window.setTimeout(() => {
+            reconnectTimerRef.current = null;
+            void connect();
+          }, reconnectDelay);
         }
       };
     });
   }
 
   function disconnect() {
+    if (reconnectTimerRef.current) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
     connectAttemptRef.current += 1;
     connectInFlightRef.current = false;
 

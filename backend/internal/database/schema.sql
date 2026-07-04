@@ -31,3 +31,11 @@ CREATE TABLE sessions (
 
 CREATE INDEX sessions_user_id_idx ON sessions (user_id);
 CREATE INDEX sessions_expires_at_idx ON sessions (expires_at);
+
+CREATE TABLE lobby_state (
+    id BOOLEAN PRIMARY KEY DEFAULT TRUE,
+    state JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT lobby_state_singleton CHECK (id)
+);

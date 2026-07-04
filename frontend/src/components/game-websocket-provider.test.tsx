@@ -107,6 +107,7 @@ describe("GameWebSocketProvider", () => {
   beforeEach(() => {
     cleanup();
     sockets.splice(0);
+    window.localStorage.clear();
     process.env.VITE_GAME_SERVER_URL = "ws://localhost:8080";
     Object.defineProperty(globalThis, "WebSocket", {
       value: FakeWebSocket,
@@ -145,18 +146,36 @@ describe("GameWebSocketProvider", () => {
       });
     });
     await waitFor(() => expect(screen.getByTestId("session-id").textContent).toBe("session-1"));
+    expect(window.localStorage.getItem("compositions.game.sessionId")).toBeNull();
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      sockets[0]!.close();
     });
-    await waitFor(() => expect(sockets).toHaveLength(2));
+    await waitFor(() =>
+      expect(screen.getByTestId("connection-status").textContent).toBe("disconnected"),
+    );
+    await waitFor(() => expect(sockets).toHaveLength(2), { timeout: 1_500 });
 
     await act(async () => {
       sockets[1]!.open();
     });
 
     expect(connectEnvelope(sockets[1]!)).toEqual({
+      type: "connect",
+      data: { sessionId: "session-1" },
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(3));
+
+    await act(async () => {
+      sockets[2]!.open();
+    });
+
+    expect(connectEnvelope(sockets[2]!)).toEqual({
       type: "connect",
       data: { sessionId: "session-1" },
     });

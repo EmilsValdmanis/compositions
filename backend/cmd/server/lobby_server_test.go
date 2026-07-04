@@ -1,21 +1,151 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
 
+	"github.com/EmilsValdmanis/compositions/internal/database"
 	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/gorilla/websocket"
 )
+
+type jsonLobbyStateStore struct {
+	data  []byte
+	saves int
+}
+
+func (s *jsonLobbyStateStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+	return user, nil
+}
+
+func (s *jsonLobbyStateStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+
+func (s *jsonLobbyStateStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
+	return database.SessionUserRecord{}, database.ErrSessionNotFound
+}
+
+func (s *jsonLobbyStateStore) DeleteSession(context.Context, string) error {
+	return database.ErrSessionNotFound
+}
+
+func (s *jsonLobbyStateStore) SaveLobbyState(_ context.Context, state persistedLobbyState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	s.data = data
+	s.saves++
+	return nil
+}
+
+func (s *jsonLobbyStateStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
+	if len(s.data) == 0 {
+		return persistedLobbyState{}, nil
+	}
+	var state persistedLobbyState
+	if err := json.Unmarshal(s.data, &state); err != nil {
+		return persistedLobbyState{}, err
+	}
+	return state, nil
+}
+
+func (s *jsonLobbyStateStore) Close() error { return nil }
 
 func setGameStatePhaseForTest(t *testing.T, state *game.GameState, phase game.GamePhase) {
 	t.Helper()
 
 	field := reflect.ValueOf(state).Elem().FieldByName("phase")
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().SetInt(int64(phase))
+}
+
+func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
+	store := &jsonLobbyStateStore{}
+	lobby := newLobbyServerWithStore(store)
+
+	hostUser := authenticatedUser{ID: "auth-host", Name: "Host"}
+	guestUser := authenticatedUser{ID: "auth-guest", Name: "Guest"}
+	hostEvent, _, _, err := lobby.connectWithUser("", hostUser, nil)
+	if err != nil {
+		t.Fatalf("host connect() error = %v", err)
+	}
+	roomState, _, err := lobby.createRoom(hostEvent.SessionID, "ignored")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	guestEvent, _, _, err := lobby.connectWithUser("", guestUser, nil)
+	if err != nil {
+		t.Fatalf("guest connect() error = %v", err)
+	}
+	if _, _, err := lobby.joinRoom(guestEvent.SessionID, roomState.Code, "ignored"); err != nil {
+		t.Fatalf("joinRoom() error = %v", err)
+	}
+	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+		t.Fatalf("startGame() error = %v", err)
+	}
+	if store.saves == 0 {
+		t.Fatal("store.saves = 0; want persisted lobby state")
+	}
+
+	restoredPending := newLobbyServerWithStore(store)
+	if err := restoredPending.restorePersistedState(context.Background()); err != nil {
+		t.Fatalf("restorePersistedState(pending) error = %v", err)
+	}
+	pendingRoom := restoredPending.rooms[roomState.Code]
+	if pendingRoom == nil || pendingRoom.pendingDealChoice == nil {
+		t.Fatalf("restored pending room = %#v; want pending deal choice", pendingRoom)
+	}
+	if pendingRoom.pendingDealChoice.dealerIndex != 0 || pendingRoom.pendingDealChoice.chooserIndex != 1 {
+		t.Fatalf("pendingDealChoice = %#v; want dealer 0 chooser 1", pendingRoom.pendingDealChoice)
+	}
+
+	cutSize := 0
+	if _, _, err := restoredPending.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: &cutSize}); err != nil {
+		t.Fatalf("chooseDealing(restored pending) error = %v", err)
+	}
+
+	restoredGame := newLobbyServerWithStore(store)
+	if err := restoredGame.restorePersistedState(context.Background()); err != nil {
+		t.Fatalf("restorePersistedState(game) error = %v", err)
+	}
+	restoredRoom := restoredGame.rooms[roomState.Code]
+	if restoredRoom == nil {
+		t.Fatal("restored game room = nil; want room")
+	}
+	if restoredRoom.players[0].connected || restoredRoom.players[1].connected {
+		t.Fatalf("restored connected flags = %v/%v; want both false before reconnect", restoredRoom.players[0].connected, restoredRoom.players[1].connected)
+	}
+
+	hostReconnect, hostRoomState, _, err := restoredGame.connectWithUser("", hostUser, nil)
+	if err != nil {
+		t.Fatalf("host reconnect error = %v", err)
+	}
+	if hostReconnect.PlayerID != hostEvent.PlayerID {
+		t.Fatalf("host reconnect playerID = %q; want %q", hostReconnect.PlayerID, hostEvent.PlayerID)
+	}
+	if hostRoomState == nil || hostRoomState.Code != roomState.Code || hostRoomState.Phase != "in_progress" {
+		t.Fatalf("host reconnect room = %#v; want in-progress room %s", hostRoomState, roomState.Code)
+	}
+	hostGameState, err := restoredGame.gameStateForSession(hostReconnect.SessionID, *hostRoomState)
+	if err != nil {
+		t.Fatalf("gameStateForSession(host) error = %v", err)
+	}
+	if hostGameState == nil || hostGameState.Game.Phase != game.PhaseInProgress || len(hostGameState.Game.Hand) != game.InitialHandSize {
+		t.Fatalf("host game state = %#v; want in-progress private hand", hostGameState)
+	}
+
+	_, guestRoomState, _, err := restoredGame.connectWithUser("", guestUser, nil)
+	if err != nil {
+		t.Fatalf("guest reconnect error = %v", err)
+	}
+	if guestRoomState == nil || !guestRoomState.Players[0].Connected || !guestRoomState.Players[1].Connected {
+		t.Fatalf("guest reconnect room = %#v; want both players connected", guestRoomState)
+	}
 }
 
 func TestLobbyServerCoverage(t *testing.T) {
@@ -401,6 +531,47 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 
 		if _, _, _, err := lobby.connectExistingSessionWithUser(event.SessionID, authenticatedUser{}, reconnectConn); !errors.Is(err, errAuthenticationRequired) {
 			t.Fatalf("connectExistingSessionWithUser() error = %v; want errAuthenticationRequired", err)
+		}
+	})
+
+	t.Run("authenticated connect ignores another users supplied session id", func(t *testing.T) {
+		lobby := newLobbyServer()
+		firstConn, _, firstCleanup := newSocketPair(t)
+		defer firstCleanup()
+
+		firstEvent, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "user-1", Name: "First User"}, firstConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(first) error = %v", err)
+		}
+		firstRoom, _, err := lobby.createRoom(firstEvent.SessionID, "ignored")
+		if err != nil {
+			t.Fatalf("createRoom(first) error = %v", err)
+		}
+
+		secondConn, _, secondCleanup := newSocketPair(t)
+		defer secondCleanup()
+
+		secondEvent, secondRoomState, secondRecipients, err := lobby.connectWithUser(firstEvent.SessionID, authenticatedUser{ID: "user-2", Name: "Second User"}, secondConn)
+		if err != nil {
+			t.Fatalf("connectWithUser(second with stolen session id) error = %v", err)
+		}
+		if secondEvent.SessionID == firstEvent.SessionID {
+			t.Fatal("secondEvent.SessionID reused first user's session; want independent session")
+		}
+		if secondEvent.PlayerID == firstEvent.PlayerID {
+			t.Fatal("secondEvent.PlayerID reused first user's player; want independent player")
+		}
+		if secondRoomState != nil {
+			t.Fatalf("secondRoomState = %#v; want nil", secondRoomState)
+		}
+		if len(secondRecipients) != 0 {
+			t.Fatalf("len(secondRecipients) = %d; want 0", len(secondRecipients))
+		}
+		if lobby.sessions[firstEvent.SessionID].roomCode != firstRoom.Code {
+			t.Fatalf("first user's roomCode = %q; want %q", lobby.sessions[firstEvent.SessionID].roomCode, firstRoom.Code)
+		}
+		if lobby.sessions[secondEvent.SessionID].authUserID != "user-2" {
+			t.Fatalf("second session authUserID = %q; want user-2", lobby.sessions[secondEvent.SessionID].authUserID)
 		}
 	})
 
