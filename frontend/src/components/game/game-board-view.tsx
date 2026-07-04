@@ -515,6 +515,10 @@ function useGameBoardController({
       buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
     );
 
+    if (result?.ok === false) {
+      return result;
+    }
+
     resetDraftCompositions({ sync: false });
     return result;
   }
@@ -680,7 +684,10 @@ function useGameBoardController({
           }
 
           if (draftedCompositionsView.length > 0) {
-            await submitDraftCompositions();
+            const tablePlayResult = await submitDraftCompositions();
+            if (tablePlayResult?.ok === false) {
+              return;
+            }
           }
 
           await onDiscardCard(discardIndex);
