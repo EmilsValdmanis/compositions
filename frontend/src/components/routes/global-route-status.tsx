@@ -56,7 +56,7 @@ class GlobalRouteErrorBoundary extends React.Component<ErrorComponentProps> {
         <Button type="button" onClick={this.props.reset}>
           Try again
         </Button>
-        <Button render={<Link to="/" />} variant="outline">
+        <Button render={<Link to="/" />} nativeButton={false} variant="outline">
           Go home
         </Button>
       </RouteStatusFrame>
@@ -79,6 +79,10 @@ const SentryWrappedGlobalRouteErrorBoundary = Sentry.withErrorBoundary(GlobalRou
 });
 
 export function GlobalErrorComponent(props: ErrorComponentProps) {
+  React.useEffect(() => {
+    Sentry.captureException(props.error);
+  }, [props.error]);
+
   return <SentryWrappedGlobalRouteErrorBoundary {...props} />;
 }
 
@@ -89,7 +93,9 @@ export function GlobalNotFoundComponent(_: NotFoundRouteProps) {
       title="Page not found"
       description="The page you requested does not exist or may have moved."
     >
-      <Button render={<Link to="/" />}>Back to home</Button>
+      <Button render={<Link to="/" />} nativeButton={false}>
+        Back to home
+      </Button>
     </RouteStatusFrame>
   );
 }

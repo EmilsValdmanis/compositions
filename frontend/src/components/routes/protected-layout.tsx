@@ -4,6 +4,20 @@ import { ServerStatusBadge } from "#/components/server-status-badge";
 import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
 
+function BrandTitle({ roomCode }: { roomCode?: string }) {
+  return (
+    <span className="inline-flex min-w-0 items-center justify-center gap-2">
+      <img src="/favicon.svg" alt="" className="size-5 shrink-0" aria-hidden="true" />
+      <span className="truncate">Compositions</span>
+      {roomCode ? (
+        <span className="hidden font-normal normal-case tracking-normal text-muted-foreground sm:inline">
+          {` · Room ${roomCode}`}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function ProtectedLayoutStatus() {
   const { state } = useGameWebSocket();
   const roomCode = state.room?.code;
@@ -17,7 +31,7 @@ function ProtectedLayoutStatus() {
     return (
       <div className="min-w-0 text-center">
         <p className="truncate text-sm font-semibold tracking-[0.16em] uppercase text-foreground/90 md:text-base">
-          Compositions
+          <BrandTitle />
         </p>
       </div>
     );
@@ -32,10 +46,7 @@ function ProtectedLayoutStatus() {
   return (
     <div className="min-w-0 text-center">
       <p className="truncate text-sm font-semibold tracking-[0.16em] uppercase text-foreground/90 md:text-base">
-        Compositions
-        <span className="hidden font-normal normal-case tracking-normal text-muted-foreground sm:inline">
-          {` · Room ${roomCode}`}
-        </span>
+        <BrandTitle roomCode={roomCode} />
       </p>
       <p className="truncate text-[0.72rem] text-muted-foreground">{detail}</p>
     </div>
@@ -57,6 +68,7 @@ export function ProtectedLayout() {
             {import.meta.env.DEV ? (
               <Button
                 render={<Link to="/dev-ui" />}
+                nativeButton={false}
                 variant="outline"
                 size="sm"
                 className="hidden md:inline-flex"
