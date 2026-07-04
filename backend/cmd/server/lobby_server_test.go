@@ -156,10 +156,10 @@ func TestLobbyServerCoverage(t *testing.T) {
 	if _, _, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin"); err == nil {
 		t.Fatal("chooseDealing(non chooser) error = nil; want error")
 	}
-	if _, _, err := lobby.chooseDealing(fourthEvent.SessionID, "tap"); !errors.Is(err, game.ErrInvalidDealingOrder) {
+	if _, _, err := lobby.chooseDealing(fourthEvent.SessionID, "tap", dealingChoiceOptions{cutSize: intPtr(0)}); !errors.Is(err, game.ErrInvalidDealingOrder) {
 		t.Fatalf("chooseDealing(tap without order) error = %v; want ErrInvalidDealingOrder", err)
 	}
-	startedRoom, gameRecipients, err := lobby.chooseDealing(fourthEvent.SessionID, "round_robin")
+	startedRoom, gameRecipients, err := lobby.chooseDealing(fourthEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)})
 	if err != nil {
 		t.Fatalf("chooseDealing() error = %v", err)
 	}
@@ -1264,7 +1264,7 @@ func BenchmarkLobbyServerCreateJoinStartGame(b *testing.B) {
 		if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
 			b.Fatalf("startGame() error = %v", err)
 		}
-		if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+		if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err != nil {
 			b.Fatalf("chooseDealing() error = %v", err)
 		}
 	}
@@ -1424,7 +1424,7 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
 		t.Fatalf("startGame() error = %v", err)
 	}
-	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err != nil {
 		t.Fatalf("chooseDealing() error = %v", err)
 	}
 	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "not your turn" {
@@ -1522,7 +1522,7 @@ func TestLobbyStartGameGameStateRecipientsError(t *testing.T) {
 	} else if roomState.PendingDealChoice == nil || len(recipients) != 2 {
 		t.Fatalf("startGame() = room:%#v recipients:%d; want pending choice and 2 recipients", roomState, len(recipients))
 	}
-	if _, _, err := lobby.chooseDealing(guestSessionID, "round_robin"); err == nil || err.Error() != "game state snapshot failed" {
+	if _, _, err := lobby.chooseDealing(guestSessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err == nil || err.Error() != "game state snapshot failed" {
 		t.Fatalf("chooseDealing(snapshot failure) error = %v; want game state snapshot failed", err)
 	}
 }
@@ -1563,12 +1563,15 @@ func TestLobbyChooseDealingValidationErrors(t *testing.T) {
 	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
 		t.Fatalf("startGame() error = %v", err)
 	}
-	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "banana"); !errors.Is(err, game.ErrInvalidDealingType) {
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "banana", dealingChoiceOptions{cutSize: intPtr(0)}); !errors.Is(err, game.ErrInvalidDealingType) {
 		t.Fatalf("chooseDealing(invalid type) error = %v; want ErrInvalidDealingType", err)
+	}
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err == nil || err.Error() != "cut size is required" {
+		t.Fatalf("chooseDealing(missing cut size) error = %v; want cut size is required", err)
 	}
 	room := lobby.rooms[hostRoom.Code]
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: 99, chooserIndex: 1}
-	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); !errors.Is(err, game.ErrInvalidDealer) {
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); !errors.Is(err, game.ErrInvalidDealer) {
 		t.Fatalf("chooseDealing(start game failure) error = %v; want ErrInvalidDealer", err)
 	}
 }
@@ -1606,7 +1609,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 	if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
 		t.Fatalf("startGame() error = %v", err)
 	}
-	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+	if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err != nil {
 		t.Fatalf("chooseDealing() error = %v", err)
 	}
 
@@ -1643,17 +1646,31 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("startNextRound() error = %v", err)
 	}
-	if roomState.Phase != "in_progress" {
-		t.Fatalf("roomState.Phase = %q; want in_progress", roomState.Phase)
+	if roomState.Phase != "round_over" {
+		t.Fatalf("roomState.Phase = %q; want round_over", roomState.Phase)
 	}
-	if roomState.DealerIndex != 1 {
-		t.Fatalf("roomState.DealerIndex = %d; want 1", roomState.DealerIndex)
+	if roomState.PendingDealChoice == nil {
+		t.Fatal("roomState.PendingDealChoice = nil; want pending dealing choice")
+	}
+	if roomState.PendingDealChoice.DealerIndex != 1 {
+		t.Fatalf("roomState.PendingDealChoice.DealerIndex = %d; want 1", roomState.PendingDealChoice.DealerIndex)
 	}
 	if len(recipients) != 2 {
 		t.Fatalf("len(recipients) = %d; want 2", len(recipients))
 	}
-	if recipients[0].event.Game.Round != 2 {
-		t.Fatalf("recipients[0].event.Game.Round = %d; want 2", recipients[0].event.Game.Round)
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "dealing choice already pending" {
+		t.Fatalf("startNextRound(pending choice) error = %v; want dealing choice already pending", err)
+	}
+
+	startedRoom, gameRecipients, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)})
+	if err != nil {
+		t.Fatalf("chooseDealing(next round) error = %v", err)
+	}
+	if startedRoom.Phase != "in_progress" {
+		t.Fatalf("startedRoom.Phase = %q; want in_progress", startedRoom.Phase)
+	}
+	if gameRecipients[0].event.Game.Round != 2 {
+		t.Fatalf("gameRecipients[0].event.Game.Round = %d; want 2", gameRecipients[0].event.Game.Round)
 	}
 
 	room.gameState = game.NewGameState()
@@ -1664,8 +1681,11 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 		t.Fatalf("AddPlayer(state-guest) error = %v", err)
 	}
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseRoundOver)
-	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "game state snapshot failed" {
-		t.Fatalf("startNextRound(snapshot failure) error = %v; want game state snapshot failed", err)
+	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err != nil {
+		t.Fatalf("startNextRound(snapshot setup) error = %v", err)
+	}
+	if _, _, err := lobby.chooseDealing(hostEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err == nil || err.Error() != "game state snapshot failed" {
+		t.Fatalf("chooseDealing(snapshot failure) error = %v; want game state snapshot failed", err)
 	}
 }
 

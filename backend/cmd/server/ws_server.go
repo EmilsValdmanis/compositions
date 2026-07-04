@@ -551,9 +551,7 @@ func (s *wsServer) handleStartNextRound(conn *websocket.Conn, sessionID string, 
 		s.writeError(conn, err)
 		return
 	}
-	conns := gameRecipientConns(recipients)
-	s.broadcastRoomState(roomState, conns)
-	s.broadcastGameState(recipients)
+	s.broadcastRoomState(roomState, recipients)
 }
 
 func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) bool {

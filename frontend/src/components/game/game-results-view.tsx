@@ -1,19 +1,30 @@
 import {
   type CompletedGameSnapshot,
+  type DealingChoiceRequest,
   type GameSnapshot,
+  type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
+import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
+
+type DealChoiceState = {
+  pendingDealChoice: PendingDealChoiceSnapshot | null;
+  dealChooserName: string | null;
+  isDealChooser: boolean;
+};
 
 type GameResultsViewProps = {
   room: CompletedGameSnapshot["room"] | null;
   game: GameSnapshot;
   players: PlayerSnapshot[];
   playerId: string;
+  dealChoice: DealChoiceState;
   onStartNextRound?: () => void;
+  onChooseDealing: (choice: DealingChoiceRequest | string) => void;
 };
 
 function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
@@ -39,7 +50,9 @@ export function GameResultsView({
   game,
   players,
   playerId,
+  dealChoice,
   onStartNextRound,
+  onChooseDealing,
 }: GameResultsViewProps) {
   const winner = players.find(
     (player) => player.playerId === game.players[game.roundWinnerIndex]?.playerId,
@@ -132,14 +145,24 @@ export function GameResultsView({
           </div>
 
           {!isGameOver ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/20 p-4">
-              <p className="text-sm text-muted-foreground">
-                {isHost ? "Start when ready." : "Waiting for the host."}
-              </p>
-              <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
-                Start next round
-              </Button>
-            </div>
+            dealChoice.pendingDealChoice ? (
+              <DealChoicePanel
+                players={players}
+                pendingDealChoice={dealChoice.pendingDealChoice}
+                dealChooserName={dealChoice.dealChooserName}
+                isDealChooser={dealChoice.isDealChooser}
+                onChooseDealing={onChooseDealing}
+              />
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 p-4">
+                <p className="text-sm text-muted-foreground">
+                  {isHost ? "Start when ready." : "Waiting for the host."}
+                </p>
+                <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
+                  Start next round
+                </Button>
+              </div>
+            )
           ) : null}
         </CardContent>
       </Card>
