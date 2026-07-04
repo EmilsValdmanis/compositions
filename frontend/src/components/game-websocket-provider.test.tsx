@@ -29,18 +29,15 @@ if (typeof globalThis.document === "undefined") {
   });
 }
 
-const { act, cleanup, fireEvent, render, screen, waitFor } = await import(
-  "@testing-library/react"
-);
+const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
 const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
 
 vi.mock("#/lib/game-auth", () => ({
   getGameConnectionAuth: vi.fn().mockResolvedValue({ playerId: "player-1" }),
 }));
 
-const { GameWebSocketProvider, useGameWebSocket } = await import(
-  "#/components/game-websocket-provider"
-);
+const { GameWebSocketProvider, useGameWebSocket } =
+  await import("#/components/game-websocket-provider");
 
 const sockets: FakeWebSocket[] = [];
 
