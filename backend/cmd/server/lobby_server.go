@@ -327,35 +327,44 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	if chooser == nil || chooser.player.ID != session.playerID {
 		return roomSnapshot{}, nil, errors.New("only the deal chooser can choose dealing type")
 	}
+	if room.gameState == nil {
+		return roomSnapshot{}, nil, errors.New("game state not initialized")
+	}
 
 	choiceOptions := dealingChoiceOptions{}
 	if len(options) > 0 {
 		choiceOptions = options[0]
 	}
+	if choiceOptions.cutSize == nil {
+		return roomSnapshot{}, nil, errors.New("cut size is required")
+	}
+
+	cutSize := *choiceOptions.cutSize
+
+	startRound := func(dt game.DealTypes, order []int) error {
+		switch room.gameStatePhase() {
+		case game.PhaseLobby:
+			return room.gameState.StartGame(
+				room.pendingDealChoice.dealerIndex,
+				room.pendingDealChoice.chooserIndex,
+				dt,
+				order,
+				cutSize,
+			)
+		case game.PhaseRoundOver:
+			return room.gameState.StartNextRound(dt, order, cutSize)
+		default:
+			return errors.New("game is not waiting for a dealing choice")
+		}
+	}
 
 	switch normalizeDealType(dealType) {
 	case "round_robin":
-		cutSize := 0
-		if choiceOptions.cutSize != nil {
-			cutSize = *choiceOptions.cutSize
-		}
-		if err := room.gameState.StartGame(
-			room.pendingDealChoice.dealerIndex,
-			room.pendingDealChoice.chooserIndex,
-			game.DealRoundRobin,
-			nil,
-			cutSize,
-		); err != nil {
+		if err := startRound(game.DealRoundRobin, nil); err != nil {
 			return roomSnapshot{}, nil, err
 		}
 	case "tap":
-		if err := room.gameState.StartGame(
-			room.pendingDealChoice.dealerIndex,
-			room.pendingDealChoice.chooserIndex,
-			game.DealInBlocks,
-			choiceOptions.order,
-			0,
-		); err != nil {
+		if err := startRound(game.DealInBlocks, choiceOptions.order); err != nil {
 			return roomSnapshot{}, nil, err
 		}
 	default:
@@ -371,7 +380,7 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	return roomState, recipients, nil
 }
 
-func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []gameStateRecipient, error) {
+func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []*websocket.Conn, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -392,16 +401,19 @@ func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []gameStat
 	if room.gameState == nil {
 		return roomSnapshot{}, nil, errors.New("game state not initialized")
 	}
-	if err := room.gameState.StartNextRound(game.DealRoundRobin, nil, 0); err != nil {
-		return roomSnapshot{}, nil, err
+	if room.pendingDealChoice != nil {
+		return roomSnapshot{}, nil, errors.New("dealing choice already pending")
+	}
+	if room.gameStatePhase() != game.PhaseRoundOver {
+		return roomSnapshot{}, nil, game.ErrCannotStartNextRound
 	}
 
+	dealerIndex := (room.gameStateDealerIndex() + 1) % len(room.players)
+	chooserIndex := (dealerIndex - 1 + len(room.players)) % len(room.players)
+	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex}
+
 	roomState := room.snapshot()
-	recipients, err := room.gameStateRecipients(l.sessions, roomState)
-	if err != nil {
-		return roomSnapshot{}, nil, err
-	}
-	return roomState, recipients, nil
+	return roomState, room.connectedConns(l.sessions), nil
 }
 
 func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.Conn, string, error) {

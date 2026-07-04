@@ -94,7 +94,7 @@ func TestWebSocketLobbyFlowCreateJoinDisconnectReconnectAndStart(t *testing.T) {
 			t.Fatalf("room.PendingDealChoice.ChooserPlayerID = %q; want %q", room.PendingDealChoice.ChooserPlayerID, hostConnected.PlayerID)
 		}
 	}
-	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	hostStarted := mustReadRoomState(t, hostConn)
 	guestStarted := mustReadRoomState(t, reconnectedGuestConn)
 	hostInitialGame := mustReadGameState(t, hostConn, hostStarted.Code)
@@ -193,7 +193,7 @@ func TestAuthenticatedWebSocketRequiresVerifiedUser(t *testing.T) {
 			t.Fatalf("pending room = %#v; want host as pending chooser", room)
 		}
 	}
-	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	startedHostRoom := mustReadRoomState(t, hostConn)
 	startedGuestRoom := mustReadRoomState(t, guestConn)
 	_ = mustReadGameState(t, hostConn, startedHostRoom.Code)
@@ -358,7 +358,7 @@ func TestHandleConnectResumeGameStateErrorPaths(t *testing.T) {
 		if _, _, err := server.lobby.startGame(hostEvent.SessionID, 0); err != nil {
 			t.Fatalf("startGame() error = %v", err)
 		}
-		if _, _, err := server.lobby.chooseDealing(guestEvent.SessionID, "round_robin"); err != nil {
+		if _, _, err := server.lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err != nil {
 			t.Fatalf("chooseDealing() error = %v", err)
 		}
 		server.lobby.sessions[hostEvent.SessionID].conn = nil
@@ -1167,7 +1167,7 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 		t.Fatalf("WriteJSON(choose_dealing missing data) error = %v", err)
 	}
 	mustReadError(t, conn, "missing data")
-	mustSendEnvelope(t, conn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, conn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	mustReadError(t, conn, "no dealing choice is pending")
 	mustSendEnvelope(t, conn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, conn, "need at least 2 players to start")
@@ -1197,9 +1197,9 @@ func TestHandleConnectionOperationErrors(t *testing.T) {
 	if pendingRoom.PendingDealChoice == nil || guestPendingRoom.PendingDealChoice == nil {
 		t.Fatalf("pending deal choice = host:%#v guest:%#v; want pending state", pendingRoom.PendingDealChoice, guestPendingRoom.PendingDealChoice)
 	}
-	mustSendEnvelope(t, conn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, conn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	mustReadError(t, conn, "only the deal chooser can choose dealing type")
-	mustSendEnvelope(t, guestConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, guestConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	startedRoom := mustReadRoomState(t, conn)
 	guestStartedRoom := mustReadRoomState(t, guestConn)
 	_ = mustReadGameState(t, conn, startedRoom.Code)
@@ -1352,6 +1352,19 @@ func TestHandleStartNextRound(t *testing.T) {
 	mustReadError(t, guestConn, "only the host can start the next round")
 
 	mustSendEnvelope(t, hostConn, "start_next_round", startNextRoundRequest{})
+	hostPendingRoom := mustReadRoomState(t, hostConn)
+	guestPendingRoom := mustReadRoomState(t, guestConn)
+	if hostPendingRoom.Phase != "round_over" || guestPendingRoom.Phase != "round_over" {
+		t.Fatalf("pending phases = %q/%q; want round_over", hostPendingRoom.Phase, guestPendingRoom.Phase)
+	}
+	if hostPendingRoom.PendingDealChoice == nil || guestPendingRoom.PendingDealChoice == nil {
+		t.Fatalf("pending deal choice = host:%#v guest:%#v; want pending state", hostPendingRoom.PendingDealChoice, guestPendingRoom.PendingDealChoice)
+	}
+	if hostPendingRoom.PendingDealChoice.ChooserPlayerID != hostConnected.PlayerID {
+		t.Fatalf("chooser = %q; want host %q", hostPendingRoom.PendingDealChoice.ChooserPlayerID, hostConnected.PlayerID)
+	}
+
+	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	hostStartedRoom := mustReadRoomState(t, hostConn)
 	guestStartedRoom := mustReadRoomState(t, guestConn)
 	hostGame := mustReadGameState(t, hostConn, hostStartedRoom.Code)
@@ -1541,7 +1554,7 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 	if pendingHostRoom.PendingDealChoice == nil || pendingGuestRoom.PendingDealChoice == nil {
 		t.Fatalf("pending deal choice = host:%#v guest:%#v; want pending state", pendingHostRoom.PendingDealChoice, pendingGuestRoom.PendingDealChoice)
 	}
-	mustSendEnvelope(t, guestConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, guestConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	hostStartedRoom := mustReadRoomState(t, hostConn)
 	guestStartedRoom := mustReadRoomState(t, guestConn)
 	hostInitialGame := mustReadGameState(t, hostConn, hostStartedRoom.Code)
@@ -1757,7 +1770,7 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 	mustSendEnvelope(t, hostConn, "start_game", startGameRequest{DealerIndex: 1})
 	_ = mustReadRoomState(t, hostConn)
 	_ = mustReadRoomState(t, guestConn)
-	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin"})
+	mustSendEnvelope(t, hostConn, "choose_dealing", chooseDealingRequest{DealType: "round_robin", CutSize: intPtr(0)})
 	hostStartedRoom := mustReadRoomState(t, hostConn)
 	guestStartedRoom := mustReadRoomState(t, guestConn)
 	_ = mustReadGameState(t, hostConn, hostStartedRoom.Code)

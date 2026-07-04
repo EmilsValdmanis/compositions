@@ -72,7 +72,7 @@ export type TablePlayRequest = {
 
 export type DealingChoiceRequest = {
   dealType: string;
-  cutSize?: number;
+  cutSize: number;
   order?: number[];
 };
 

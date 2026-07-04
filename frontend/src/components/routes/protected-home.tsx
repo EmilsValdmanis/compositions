@@ -178,7 +178,13 @@ export function ProtectedHome() {
               game={roundResultsGame}
               players={players}
               playerId={state.playerId}
+              dealChoice={{
+                pendingDealChoice,
+                dealChooserName: dealChooser?.name ?? null,
+                isDealChooser: Boolean(isDealChooser),
+              }}
               onStartNextRound={startNextRound}
+              onChooseDealing={chooseDealing}
             />
           </div>
         ) : isLobbyPhase ? (

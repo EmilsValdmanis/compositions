@@ -242,6 +242,7 @@ describe("GameLobbyView", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Cut size"), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
     fireEvent.click(screen.getByRole("button", { name: "Start round" }));
 
     expect(onChooseDealing).toHaveBeenLastCalledWith({
@@ -280,7 +281,9 @@ describe("GameLobbyView", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
     fireEvent.change(screen.getByLabelText("Cut size"), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
     fireEvent.click(screen.getByRole("button", { name: "Tap order" }));
     act(() => {
       dndContextProps.onDragEnd?.({
