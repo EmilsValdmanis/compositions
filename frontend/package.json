@@ -6,9 +6,10 @@
     "#/*": "./src/*"
   },
   "scripts": {
-    "dev": "vp dev --port 3000",
-    "build": "vp build",
+    "dev": "NODE_ENV=development vp dev --port 3000",
+    "build": "NODE_ENV=production vp build && cp instrument.server.mjs .output/server",
     "preview": "vp preview",
+    "start": "NODE_ENV=production node --import ./.output/server/instrument.server.mjs .output/server/index.mjs",
     "test": "vp test run",
     "deps:update": "bunx npm-check-updates -u --target latest --format group && bun install"
   },

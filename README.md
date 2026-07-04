@@ -1,8 +1,20 @@
-# Compositions
+<p align="center">
+  <img src="frontend/public/favicon.svg" alt="Compositions joker logo" width="96" height="96">
+</p>
 
-Compositions is a project for bringing a family card game online.
+<h1 align="center">Compositions</h1>
 
-The repository is split into separate frontend and backend applications so the game rules, server behavior, and player experience can evolve independently without losing the shape of a single project.
+<p align="center">
+  A family card game brought online, with real-time rooms, server-backed game state, and careful joker handling.
+</p>
+
+<p align="center">
+  <a href="RULES.md">Game Rules</a>
+  ·
+  <a href="frontend/README.md">Frontend</a>
+  ·
+  <a href="backend/README.md">Backend</a>
+</p>
 
 ## The Game
 
@@ -23,14 +35,12 @@ The full rule set lives in [RULES.md](RULES.md).
 
 ## Current Status
 
-The project has the base of the game complete. Next steps include:
+The base game is implemented and playable. Current focus areas:
 
-- need to massively improve the pre-game and post-game UI 
-- improving in-game UI/UX as well as animations and sound effects (emotes, maybe chat etc.)
-- building out statistics and friend groups (maybe basic elo system) now that we have a database
+- improving the pre-game and post-game experience
+- refining in-game interactions, animations, and sound
+- adding social/statistics features now that persistence is in place
 
 ## Working In This Repo
 
-- frontend-specific commands and dependencies live in `frontend/`
-- backend-specific commands and Go tooling live in `backend/`
-- shared project context and rules live at the repository root
+Frontend-specific commands and dependencies live in `frontend/`. Backend commands, database migrations, and Go tooling live in `backend/`. Shared project context and rules live at the repository root.
