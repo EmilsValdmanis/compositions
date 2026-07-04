@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import { act, render, waitFor } from "@testing-library/react";
 import { type ReactNode } from "react";
-import { describe, expect, it, vi } from "vite-plus/test";
-import { GameBoardView } from "#/components/game/game-board-view";
 import {
   type ActionResult,
   type GameSnapshot,
@@ -36,6 +33,9 @@ if (typeof globalThis.document === "undefined") {
     configurable: true,
   });
 }
+
+const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
 
 let dndContextProps: {
   onDragStart?: (event: any) => void;
@@ -90,6 +90,18 @@ vi.mock("@dnd-kit/sortable", () => ({
     isDragging: false,
   }),
 }));
+
+const { GameBoardView } = await import("#/components/game/game-board-view");
+
+beforeEach(() => {
+  cleanup();
+  dndContextProps = {};
+});
+
+afterEach(() => {
+  cleanup();
+  dndContextProps = {};
+});
 
 function makeGame(hand: GameSnapshot["hand"]): GameSnapshot {
   return {
@@ -216,5 +228,102 @@ describe("GameBoardView discard drops", () => {
 
     await waitFor(() => expect(onPlayTable).toHaveBeenCalledTimes(1));
     expect(onDiscardCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("GameBoardView spectator turn drafts", () => {
+  it("shows a duplicate-key joker reclaim draft as reclaim instead of add", () => {
+    const view = render(
+      <GameBoardView
+        game={{
+          ...makeGame([]),
+          turn: {
+            number: 1,
+            playerIndex: 1,
+            playerId: "player-2",
+            hasDrawn: true,
+            mustUseDiscardDraw: false,
+          },
+          activeCompositions: [
+            {
+              type: "run",
+              cards: [
+                { isJoker: true },
+                { rank: 4, suit: 1 },
+                { rank: 5, suit: 1 },
+                { rank: 6, suit: 1 },
+                { rank: 7, suit: 1 },
+              ],
+              jokerRepresentations: {
+                0: [{ rank: 3, suit: 1 }],
+              },
+              points: 30,
+              complete: false,
+            },
+          ],
+          turnActivity: {
+            playerId: "player-2",
+            round: 1,
+            turnNumber: 1,
+            baselineCompositions: [
+              {
+                type: "run",
+                cards: [
+                  { isJoker: true },
+                  { rank: 4, suit: 1 },
+                  { rank: 5, suit: 1 },
+                  { rank: 6, suit: 1 },
+                  { rank: 7, suit: 1 },
+                ],
+                jokerRepresentations: {
+                  0: [{ rank: 3, suit: 1 }],
+                },
+                points: 30,
+                complete: false,
+              },
+            ],
+            draftCompositions: [
+              {
+                tableIndex: 0,
+                cards: [{ rank: 3, suit: 1 }],
+                reclaimTargets: {
+                  "3-1-2": 0,
+                },
+              },
+            ],
+          },
+        }}
+        roomCode="ROOM"
+        playerId="player-1"
+        players={[
+          ...players,
+          {
+            playerId: "player-2",
+            name: "Blair",
+            connected: true,
+            seat: 1,
+            isHost: false,
+            canReconnect: false,
+          },
+        ]}
+        connectedPlayers={2}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: false,
+          isMyTurn: false,
+          turnPlayerName: "Blair",
+        }}
+        topDiscardCard={{ rank: 2, suit: 0 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        disableDraftSync
+      />,
+    );
+
+    expect(view.getByText("Reclaim")).toBeTruthy();
+    expect(view.queryByText("Add")).toBeNull();
   });
 });

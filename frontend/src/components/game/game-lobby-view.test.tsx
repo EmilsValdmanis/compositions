@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import { act, fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode } from "react";
-import { describe, expect, it, vi } from "vite-plus/test";
-import { GameLobbyView } from "#/components/game/game-lobby-view";
+import type * as React from "react";
 import {
   type CompletedGameSnapshot,
   type GameSnapshot,
@@ -38,6 +36,9 @@ if (typeof globalThis.document === "undefined") {
   });
 }
 
+const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
+
 let dndContextProps: {
   onDragEnd?: (event: any) => void;
 } = {};
@@ -70,6 +71,8 @@ vi.mock("@dnd-kit/sortable", () => ({
     isDragging: false,
   }),
 }));
+
+const { GameLobbyView } = await import("#/components/game/game-lobby-view");
 
 const players: PlayerSnapshot[] = [
   {
@@ -139,28 +142,40 @@ function renderLobby(overrides: Partial<React.ComponentProps<typeof GameLobbyVie
     ...overrides,
   };
 
-  render(<GameLobbyView {...props} />);
-  return props;
+  return {
+    props,
+    ...render(<GameLobbyView {...props} />),
+  };
 }
 
 describe("GameLobbyView", () => {
+  beforeEach(() => {
+    cleanup();
+    dndContextProps = {};
+  });
+
+  afterEach(() => {
+    cleanup();
+    dndContextProps = {};
+  });
+
   it("supports the create and join lobby flow", () => {
     const onCreateRoom = vi.fn();
     const onJoinRoom = vi.fn();
     const onRoomCodeChange = vi.fn();
 
-    renderLobby({
+    const view = renderLobby({
       roomCode: "ROOM42",
       onCreateRoom,
       onJoinRoom,
       onRoomCodeChange,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Create room" }));
-    fireEvent.change(screen.getByPlaceholderText("Room code"), {
+    fireEvent.click(view.getByRole("button", { name: "Create room" }));
+    fireEvent.input(view.getByPlaceholderText("Room code"), {
       target: { value: "game7" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Join" }));
+    fireEvent.click(view.getByRole("button", { name: "Join" }));
 
     expect(onCreateRoom).toHaveBeenCalledTimes(1);
     expect(onRoomCodeChange).toHaveBeenCalledWith("GAME7");
@@ -168,7 +183,7 @@ describe("GameLobbyView", () => {
   });
 
   it("renders room state and non-chooser deal status", () => {
-    renderLobby({
+    const view = renderLobby({
       room: makeRoom({
         pendingDealChoice: {
           dealerIndex: 0,
@@ -196,10 +211,10 @@ describe("GameLobbyView", () => {
       roomLink: "http://localhost/?room=ABCD12",
     });
 
-    expect(screen.getByText("ABCD12")).toBeTruthy();
-    expect(screen.getByText("Avery")).toBeTruthy();
-    expect(screen.getByText(/Waiting for/).textContent).toContain("Casey");
-    expect(screen.getByText("Dealer: Avery")).toBeTruthy();
+    expect(view.getByText("ABCD12")).toBeTruthy();
+    expect(view.getByText("Avery")).toBeTruthy();
+    expect(view.getByText(/Waiting for/).textContent).toContain("Casey");
+    expect(view.getByText("Dealer: Avery")).toBeTruthy();
   });
 
   it("submits cut size and tapped player order choices", () => {
@@ -210,7 +225,7 @@ describe("GameLobbyView", () => {
       chooserPlayerId: "player-3",
     };
 
-    const { rerender } = render(
+    const view = render(
       <GameLobbyView
         room={makeRoom({ pendingDealChoice })}
         game={null}
@@ -240,10 +255,11 @@ describe("GameLobbyView", () => {
         roomLink={null}
       />,
     );
+    const { rerender } = view;
 
-    fireEvent.change(screen.getByLabelText("Cut size"), { target: { value: "7" } });
-    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Start round" }));
+    fireEvent.input(view.getByLabelText("Cut size"), { target: { value: "7" } });
+    fireEvent.click(view.getByRole("button", { name: /Continue/ }));
+    fireEvent.click(view.getByRole("button", { name: "Start round" }));
 
     expect(onChooseDealing).toHaveBeenLastCalledWith({
       dealType: "round_robin",
@@ -281,17 +297,17 @@ describe("GameLobbyView", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
-    fireEvent.change(screen.getByLabelText("Cut size"), { target: { value: "4" } });
-    fireEvent.click(screen.getByRole("button", { name: /Continue/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Tap order" }));
+    fireEvent.click(view.getByRole("button", { name: "Back" }));
+    fireEvent.input(view.getByLabelText("Cut size"), { target: { value: "4" } });
+    fireEvent.click(view.getByRole("button", { name: /Continue/ }));
+    fireEvent.click(view.getByRole("button", { name: "Tap order" }));
     act(() => {
       dndContextProps.onDragEnd?.({
         active: { id: "deal-player-1" },
         over: { id: "deal-player-0" },
       });
     });
-    fireEvent.click(screen.getByRole("button", { name: "Start round" }));
+    fireEvent.click(view.getByRole("button", { name: "Start round" }));
 
     expect(onChooseDealing).toHaveBeenLastCalledWith({
       dealType: "tap",

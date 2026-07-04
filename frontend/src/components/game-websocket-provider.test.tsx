@@ -1,9 +1,6 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import { GameWebSocketProvider, useGameWebSocket } from "#/components/game-websocket-provider";
 
 if (typeof globalThis.document === "undefined") {
   const require = createRequire(import.meta.url);
@@ -32,9 +29,15 @@ if (typeof globalThis.document === "undefined") {
   });
 }
 
+const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
+
 vi.mock("#/lib/game-auth", () => ({
   getGameConnectionAuth: vi.fn().mockResolvedValue({ playerId: "player-1" }),
 }));
+
+const { GameWebSocketProvider, useGameWebSocket } =
+  await import("#/components/game-websocket-provider");
 
 const sockets: FakeWebSocket[] = [];
 
@@ -102,12 +105,17 @@ function connectEnvelope(socket: FakeWebSocket) {
 
 describe("GameWebSocketProvider", () => {
   beforeEach(() => {
+    cleanup();
     sockets.splice(0);
-    vi.stubEnv("VITE_GAME_SERVER_URL", "ws://localhost:8080");
+    process.env.VITE_GAME_SERVER_URL = "ws://localhost:8080";
     Object.defineProperty(globalThis, "WebSocket", {
       value: FakeWebSocket,
       configurable: true,
     });
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("restores the server session id when reconnecting", async () => {
@@ -117,26 +125,36 @@ describe("GameWebSocketProvider", () => {
       </GameWebSocketProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
     await waitFor(() => expect(sockets).toHaveLength(1));
 
-    sockets[0]!.open();
+    await act(async () => {
+      sockets[0]!.open();
+    });
     expect(connectEnvelope(sockets[0]!)).toEqual({
       type: "connect",
       data: { sessionId: "" },
     });
 
-    sockets[0]!.message({
-      type: "connected",
-      data: { sessionId: "session-1", playerId: "player-1" },
+    await act(async () => {
+      sockets[0]!.message({
+        type: "connected",
+        data: { sessionId: "session-1", playerId: "player-1" },
+      });
     });
     await waitFor(() => expect(screen.getByTestId("session-id").textContent).toBe("session-1"));
 
-    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
-    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
     await waitFor(() => expect(sockets).toHaveLength(2));
 
-    sockets[1]!.open();
+    await act(async () => {
+      sockets[1]!.open();
+    });
 
     expect(connectEnvelope(sockets[1]!)).toEqual({
       type: "connect",
