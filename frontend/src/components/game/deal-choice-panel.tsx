@@ -61,13 +61,7 @@ function clampCutSize(rawCutSize: string, maxCutSize: number) {
   return Math.min(Math.max(parsed, 0), maxCutSize);
 }
 
-function DeckCard({
-  index,
-  cutVisualCount,
-}: {
-  index: number;
-  cutVisualCount: number;
-}) {
+function DeckCard({ index, cutVisualCount }: { index: number; cutVisualCount: number }) {
   const isCut = index < cutVisualCount;
   const cutIndex = cutVisualCount - index - 1;
   const mainIndex = index - cutVisualCount;
@@ -94,10 +88,7 @@ function DeckCard({
     >
       <div className={cn("m-2 h-1.5 rounded-full", isCut ? "bg-primary/35" : "bg-muted")} />
       <div
-        className={cn(
-          "mx-2 mt-8 h-1.5 rounded-full",
-          isCut ? "bg-primary/20" : "bg-muted/70",
-        )}
+        className={cn("mx-2 mt-8 h-1.5 rounded-full", isCut ? "bg-primary/20" : "bg-muted/70")}
       />
     </div>
   );
@@ -210,20 +201,16 @@ function SortableDealOrderPlayer({
         <p className="truncate font-medium">{player.name}</p>
         <p className="text-xs text-muted-foreground">Seat {player.seat + 1}</p>
       </div>
-      <HugeiconsIcon icon={DragDropVerticalIcon} strokeWidth={2} className="text-muted-foreground" />
+      <HugeiconsIcon
+        icon={DragDropVerticalIcon}
+        strokeWidth={2}
+        className="text-muted-foreground"
+      />
     </div>
   );
 }
 
-function StepMarker({
-  step,
-  active,
-  done,
-}: {
-  step: number;
-  active: boolean;
-  done: boolean;
-}) {
+function StepMarker({ step, active, done }: { step: number; active: boolean; done: boolean }) {
   return (
     <div className="flex items-center gap-2">
       <span
@@ -236,7 +223,9 @@ function StepMarker({
       >
         {step}
       </span>
-      <span className={cn("text-sm font-medium", active ? "text-foreground" : "text-muted-foreground")}>
+      <span
+        className={cn("text-sm font-medium", active ? "text-foreground" : "text-muted-foreground")}
+      >
         {step === 1 ? "Cut" : "Deal"}
       </span>
     </div>
