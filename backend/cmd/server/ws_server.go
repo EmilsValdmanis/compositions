@@ -189,6 +189,7 @@ type wsServer struct {
 	auth          *authHandler
 	userStore     userStore
 	allowedOrigin string
+	rateLimits    *wsRateLimiters
 	upgrader      websocket.Upgrader
 }
 
@@ -214,6 +215,7 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 		auth:          auth,
 		userStore:     store,
 		allowedOrigin: normalizeOrigin(allowedOrigin),
+		rateLimits:    newWSRateLimiters(defaultWSRateLimitConfig()),
 	}
 	server.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -297,6 +299,12 @@ func (s *wsServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
+	if !s.rateLimits.allowConnectionAttempt(r) {
+		http.Error(w, errRateLimitExceeded.Error(), http.StatusTooManyRequests)
+		slog.Warn("websocket connection rate limited", "remote", r.RemoteAddr)
+		return
+	}
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		slog.Warn("websocket upgrade failed", "error", err, "remote", r.RemoteAddr)
@@ -324,6 +332,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 		runHeartbeatPingLoop(conn, pingDone, ticker.C)
 	}()
 
+	messageLimiter := s.rateLimits.newMessageLimiter()
 	sessionID := ""
 	for {
 		var envelope wsEnvelope
@@ -334,6 +343,11 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				slog.Debug("websocket read error", "sessionID", sessionID, "error", err)
 			}
+			return
+		}
+		if !messageLimiter.Allow() {
+			slog.Warn("websocket message rate limited", "sessionID", sessionID, "remote", conn.RemoteAddr().String())
+			s.writeError(conn, errRateLimitExceeded)
 			return
 		}
 		_ = setWSReadDeadline(conn)
@@ -452,6 +466,10 @@ func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, enve
 	if !ok {
 		return
 	}
+	if !s.rateLimits.allowCreateRoom(sessionID) {
+		s.writeError(conn, errRateLimitExceeded)
+		return
+	}
 
 	roomState, recipients, err := s.lobby.createRoom(sessionID, req.Name)
 	if err != nil {
@@ -466,6 +484,10 @@ func (s *wsServer) handleCreateRoom(conn *websocket.Conn, sessionID string, enve
 func (s *wsServer) handleJoinRoom(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
 	req, ok := decodeSessionRequest[joinRoomRequest](s, conn, sessionID, envelope)
 	if !ok {
+		return
+	}
+	if !s.rateLimits.allowJoinRoom(sessionID) {
+		s.writeError(conn, errRateLimitExceeded)
 		return
 	}
 

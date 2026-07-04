@@ -33,7 +33,7 @@ Realtime game server checklist.
 - [x] 1. Expose a minimal WebSocket lobby surface in `backend/cmd/server`, so clients can connect, create a room, join a room, reconnect, and start a game over a persistent connection.
 - [x] 2. Define connection, player-session, and game-room lifecycle rules for connect, websocket-close disconnect handling, reconnect, host ownership, and room start flow.
 - [x] 3. Add server-level tests for the lobby/session/start flow, including reconnect handling, invalid lobby operations, and room-state broadcasts.
-- [ ] 4. Add WebSocket rate limiting for connection attempts, room creation/join attempts, and per-connection message throughput to reduce brute-force room joins and flooding.
+- [x] 4. Add WebSocket rate limiting for connection attempts, room creation/join attempts, and per-connection message throughput to reduce brute-force room joins and flooding.
 - [x] 5. Extend the WebSocket surface so clients can submit turn actions such as draw, play, add, reclaim, and discard.
 - [x] 6. Broadcast in-game state changes and action results to all room participants during active play.
 - [x] 7. Add server-level integration tests that drive realistic multiplayer turn flow, including invalid actions and state broadcasts during active rounds.
