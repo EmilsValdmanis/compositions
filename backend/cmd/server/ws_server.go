@@ -72,6 +72,8 @@ type startGameRequest struct {
 
 type chooseDealingRequest struct {
 	DealType string `json:"dealType"`
+	Order    []int  `json:"order,omitempty"`
+	CutSize  *int   `json:"cutSize,omitempty"`
 }
 
 type startNextRoundRequest struct{}
@@ -523,7 +525,10 @@ func (s *wsServer) handleChooseDealing(conn *websocket.Conn, sessionID string, e
 		return
 	}
 
-	roomState, recipients, err := s.lobby.chooseDealing(sessionID, req.DealType)
+	roomState, recipients, err := s.lobby.chooseDealing(sessionID, req.DealType, dealingChoiceOptions{
+		order:   req.Order,
+		cutSize: req.CutSize,
+	})
 	if err != nil {
 		slog.Warn("choose dealing failed", "sessionID", sessionID, "dealType", req.DealType, "error", err)
 		s.writeError(conn, err)

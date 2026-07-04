@@ -70,6 +70,12 @@ export type TablePlayRequest = {
   reclaims: JokerReclaimRequest[];
 };
 
+export type DealingChoiceRequest = {
+  dealType: string;
+  cutSize?: number;
+  order?: number[];
+};
+
 export type TurnDraftUpdateRequest = {
   compositions: DraftCompositionSnapshot[];
 };
@@ -176,7 +182,7 @@ type GameWebSocketContextValue = {
   joinRoom: (roomCode: string) => void;
   startGame: () => void;
   startNextRound: () => void;
-  chooseDealing: (dealType: string) => void;
+  chooseDealing: (choice: DealingChoiceRequest | string) => void;
   leaveRoom: () => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
@@ -605,7 +611,8 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     joinRoom: (roomCode) => send("join_room", { roomCode }),
     startGame: () => send("start_game", { dealerIndex: getDealerIndex(state.room) }),
     startNextRound: () => send("start_next_round", {}),
-    chooseDealing: (dealType) => send("choose_dealing", { dealType }),
+    chooseDealing: (choice) =>
+      send("choose_dealing", typeof choice === "string" ? { dealType: choice } : choice),
     leaveRoom: () => send("leave_room", {}),
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),

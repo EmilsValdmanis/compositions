@@ -427,7 +427,7 @@ func TestGameStateStartGameRejectsCutThatLeavesTooFewCardsToDeal(t *testing.T) {
 	}
 }
 
-func TestGameStateStartGameRejectsCutWhenDeckWasTapped(t *testing.T) {
+func TestGameStateStartGameCutsDeckWhenDeckWasTapped(t *testing.T) {
 	state := NewGameState()
 	first := NewPlayer()
 	second := NewPlayer()
@@ -445,8 +445,17 @@ func TestGameStateStartGameRejectsCutWhenDeckWasTapped(t *testing.T) {
 
 	err := state.StartGame(1, 0, DealInBlocks, []int{2, 0, 1}, 1)
 
-	if !errors.Is(err, ErrInvalidCutSize) {
-		t.Fatalf("StartGame() error = %v; want %v", err, ErrInvalidCutSize)
+	if err != nil {
+		t.Fatalf("StartGame() error = %v", err)
+	}
+	if len(first.hand.cards) != InitialHandSize {
+		t.Fatalf("len(first.hand.cards) = %d; want %d", len(first.hand.cards), InitialHandSize)
+	}
+	if len(second.hand.cards) != InitialHandSize {
+		t.Fatalf("len(second.hand.cards) = %d; want %d", len(second.hand.cards), InitialHandSize)
+	}
+	if len(third.hand.cards) != InitialHandSize {
+		t.Fatalf("len(third.hand.cards) = %d; want %d", len(third.hand.cards), InitialHandSize)
 	}
 }
 
@@ -658,7 +667,7 @@ func TestDealInBlocksUsesChosenOrder(t *testing.T) {
 		card(Ten, Spades),
 	}}
 
-	err := dealInBlocks(players, drawPile, []int{2, 0, 1})
+	err := dealInBlocks(players, drawPile, []int{2, 0, 1}, 0)
 
 	if err != nil {
 		t.Fatalf("dealInBlocks() error = %v", err)
@@ -680,6 +689,67 @@ func TestDealInBlocksUsesChosenOrder(t *testing.T) {
 	}
 	if got := players[1].hand.cards[0]; !cardsEqual(got, card(Queen, Clubs)) {
 		t.Fatalf("players[1].hand.cards[0] = %+v; want %+v", got, card(Queen, Clubs))
+	}
+	if got := len(drawPile.cards); got != 0 {
+		t.Fatalf("len(drawPile.cards) = %d; want 0", got)
+	}
+}
+
+func TestDealInBlocksCutsDeckBeforeChosenOrder(t *testing.T) {
+	players := []*Player{NewPlayer(), NewPlayer()}
+	drawPile := &CardPile{cards: []Card{
+		card(Ace, Hearts),
+		card(Two, Hearts),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+		card(Six, Hearts),
+		card(Seven, Hearts),
+		card(Eight, Hearts),
+		card(Nine, Hearts),
+		card(Ten, Hearts),
+		card(Jack, Hearts),
+		card(Queen, Hearts),
+		card(King, Hearts),
+		card(Ace, Clubs),
+		card(Two, Clubs),
+		card(Three, Clubs),
+		card(Four, Clubs),
+		card(Five, Clubs),
+		card(Six, Clubs),
+		card(Seven, Clubs),
+		card(Eight, Clubs),
+		card(Nine, Clubs),
+		card(Ten, Clubs),
+		card(Jack, Clubs),
+		card(Queen, Clubs),
+		card(King, Clubs),
+		card(Ace, Spades),
+		card(Two, Spades),
+	}}
+
+	err := dealInBlocks(players, drawPile, []int{1, 0}, 2)
+
+	if err != nil {
+		t.Fatalf("dealInBlocks() error = %v", err)
+	}
+	if got := players[1].hand.cards[0]; !cardsEqual(got, card(Three, Hearts)) {
+		t.Fatalf("players[1].hand.cards[0] = %+v; want %+v", got, card(Three, Hearts))
+	}
+	if got := players[0].hand.cards[0]; !cardsEqual(got, card(Two, Clubs)) {
+		t.Fatalf("players[0].hand.cards[0] = %+v; want %+v", got, card(Two, Clubs))
+	}
+	if got := drawPile.cards[0]; !cardsEqual(got, card(Ace, Spades)) {
+		t.Fatalf("drawPile.cards[0] = %+v; want %+v", got, card(Ace, Spades))
+	}
+	if got := drawPile.cards[1]; !cardsEqual(got, card(Two, Spades)) {
+		t.Fatalf("drawPile.cards[1] = %+v; want %+v", got, card(Two, Spades))
+	}
+	if got := drawPile.cards[2]; !cardsEqual(got, card(Ace, Hearts)) {
+		t.Fatalf("drawPile.cards[2] = %+v; want %+v", got, card(Ace, Hearts))
+	}
+	if got := drawPile.cards[3]; !cardsEqual(got, card(Two, Hearts)) {
+		t.Fatalf("drawPile.cards[3] = %+v; want %+v", got, card(Two, Hearts))
 	}
 }
 
@@ -3265,7 +3335,7 @@ func TestDealRoundRobinRejectsShortPileAndInvalidDealer(t *testing.T) {
 func TestDealInBlocksRejectsShortPile(t *testing.T) {
 	players := []*Player{NewPlayer(), NewPlayer()}
 
-	err := dealInBlocks(players, &CardPile{cards: []Card{}}, []int{0, 1})
+	err := dealInBlocks(players, &CardPile{cards: []Card{}}, []int{0, 1}, 0)
 
 	if !errors.Is(err, ErrNotEnoughCardsInDrawPile) {
 		t.Fatalf("dealInBlocks() error = %v; want %v", err, ErrNotEnoughCardsInDrawPile)

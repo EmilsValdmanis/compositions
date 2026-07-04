@@ -57,6 +57,11 @@ type pendingDealChoice struct {
 	chooserIndex int
 }
 
+type dealingChoiceOptions struct {
+	order   []int
+	cutSize *int
+}
+
 type gameStateRecipient struct {
 	conn  *websocket.Conn
 	event gameStateEvent
@@ -303,7 +308,7 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
-func (l *lobbyServer) chooseDealing(sessionID, dealType string) (roomSnapshot, []gameStateRecipient, error) {
+func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...dealingChoiceOptions) (roomSnapshot, []gameStateRecipient, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -323,19 +328,36 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string) (roomSnapshot, [
 		return roomSnapshot{}, nil, errors.New("only the deal chooser can choose dealing type")
 	}
 
+	choiceOptions := dealingChoiceOptions{}
+	if len(options) > 0 {
+		choiceOptions = options[0]
+	}
+
 	switch normalizeDealType(dealType) {
 	case "round_robin":
+		cutSize := 0
+		if choiceOptions.cutSize != nil {
+			cutSize = *choiceOptions.cutSize
+		}
 		if err := room.gameState.StartGame(
 			room.pendingDealChoice.dealerIndex,
 			room.pendingDealChoice.chooserIndex,
 			game.DealRoundRobin,
 			nil,
-			0,
+			cutSize,
 		); err != nil {
 			return roomSnapshot{}, nil, err
 		}
 	case "tap":
-		return roomSnapshot{}, nil, errors.New("tap dealing is not available yet")
+		if err := room.gameState.StartGame(
+			room.pendingDealChoice.dealerIndex,
+			room.pendingDealChoice.chooserIndex,
+			game.DealInBlocks,
+			choiceOptions.order,
+			0,
+		); err != nil {
+			return roomSnapshot{}, nil, err
+		}
 	default:
 		return roomSnapshot{}, nil, game.ErrInvalidDealingType
 	}
