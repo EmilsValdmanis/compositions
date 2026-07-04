@@ -59,8 +59,45 @@ function draftPreviewForComposition(
   }
 
   const insertIndex = draft.insertIndex ?? tableComposition.snapshot.cards.length;
+  const reclaimTargetsByEntryKey = new Map<string, number>();
+  const usedReclaimTargetKeys = new Set<string>();
+  const usedJokerIndices = new Set<number>();
+  const reclaimTargets = Object.entries(draft.reclaimTargets ?? {});
+
+  for (const entry of stagedEntries) {
+    const directJokerIndex = draft.reclaimTargets?.[entry.key];
+    if (
+      typeof directJokerIndex === "number" &&
+      canReclaimJokerWithCard(tableComposition.snapshot, directJokerIndex, entry.card)
+    ) {
+      reclaimTargetsByEntryKey.set(entry.key, directJokerIndex);
+      usedReclaimTargetKeys.add(entry.key);
+      usedJokerIndices.add(directJokerIndex);
+    }
+  }
+
+  for (const entry of stagedEntries) {
+    if (reclaimTargetsByEntryKey.has(entry.key)) {
+      continue;
+    }
+
+    for (const [targetKey, jokerIndex] of reclaimTargets) {
+      if (usedReclaimTargetKeys.has(targetKey) || usedJokerIndices.has(jokerIndex)) {
+        continue;
+      }
+      if (!canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)) {
+        continue;
+      }
+
+      reclaimTargetsByEntryKey.set(entry.key, jokerIndex);
+      usedReclaimTargetKeys.add(targetKey);
+      usedJokerIndices.add(jokerIndex);
+      break;
+    }
+  }
+
   const reclaims = stagedEntries.flatMap((entry) => {
-    const jokerIndex = draft.reclaimTargets?.[entry.key];
+    const jokerIndex = reclaimTargetsByEntryKey.get(entry.key);
     return typeof jokerIndex === "number" &&
       canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)
       ? [{ jokerIndex, replacementEntry: entry } satisfies PlannedJokerReclaim]
