@@ -91,7 +91,6 @@ export function GameResultsView({
                   <TableHead className="w-14">#</TableHead>
                   <TableHead>Player</TableHead>
                   <TableHead className="text-right">Cards</TableHead>
-                  <TableHead className="text-right">Gain</TableHead>
                   <TableHead className="text-right">Score</TableHead>
                 </TableRow>
               </TableHeader>
@@ -120,19 +119,14 @@ export function GameResultsView({
                       </TableCell>
                       <TableCell className="text-right">{playerState.handCount}</TableCell>
                       <TableCell className="text-right">
-                        <span
-                          className={cn(
-                            "font-medium tabular-nums",
-                            playerState.pointsGained > 0
-                              ? "text-primary"
-                              : "text-muted-foreground",
-                          )}
-                        >
-                          {pointsGainedLabel(playerState.pointsGained)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {playerState.totalPoints}
+                        <div className="flex items-baseline justify-end gap-1.5 tabular-nums">
+                          <span className="font-medium">{playerState.totalPoints}</span>
+                          {playerState.pointsGained > 0 ? (
+                            <span className="text-xs font-medium text-primary">
+                              {pointsGainedLabel(playerState.pointsGained)}
+                            </span>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ),
