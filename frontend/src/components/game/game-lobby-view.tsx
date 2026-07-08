@@ -83,7 +83,7 @@ export function GameLobbyView({
 
   return (
     <div className="mx-auto my-auto grid w-full max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="border border-border/70 shadow-sm">
+      <Card className="min-w-0 border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -192,7 +192,7 @@ export function GameLobbyView({
         </CardContent>
       </Card>
 
-      <Card className="border border-border/70 shadow-sm">
+      <Card className="min-w-0 border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -207,7 +207,7 @@ export function GameLobbyView({
             ) : null}
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="min-w-0">
           {players.length ? (
             <PlayerStrip players={players} game={game} />
           ) : (
