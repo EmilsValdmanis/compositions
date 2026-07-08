@@ -69,6 +69,11 @@ export type VirtualReclaimedJoker = {
   entry: HandEntry;
 };
 
+export type OpeningTablePlayValidation = {
+  canSubmit: boolean;
+  reason?: "missing-own-composition";
+};
+
 export const FACE_DOWN_CARD: CardSnapshot = {};
 export const HAND_DROP_ID = "hand-drop-zone";
 export const NEW_COMPOSITION_DROP_ID = "new-composition-drop-zone";
@@ -797,6 +802,26 @@ export function buildTablePlayRequest(
     additions,
     reclaims,
   };
+}
+
+export function validateOpeningTablePlay(
+  playerHasOpened: boolean,
+  draftedCompositionsView: DraftedCompositionView[],
+): OpeningTablePlayValidation {
+  if (playerHasOpened) {
+    return { canSubmit: true };
+  }
+
+  const hasOwnComposition = draftedCompositionsView.some(
+    (composition) =>
+      composition.tableIndex === null &&
+      composition.entries.length > 0 &&
+      composition.entries.every((entry) => !entry.isVirtual),
+  );
+
+  return hasOwnComposition
+    ? { canSubmit: true }
+    : { canSubmit: false, reason: "missing-own-composition" };
 }
 
 export function buildTableCompositionViews(

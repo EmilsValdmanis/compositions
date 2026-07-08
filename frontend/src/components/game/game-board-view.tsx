@@ -53,6 +53,7 @@ import {
   tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
   tableCompositionJokerTargetFromDropId,
+  validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
 
 type GameBoardTurnState = {
@@ -468,7 +469,14 @@ function useGameBoardController({
     (composition) => composition.tableIndex === null,
   );
   const canCompose = turnState.canDiscard;
-  const canSubmitTablePlay = canCompose && draftedCompositionsView.length > 0;
+  const currentPlayerHasOpened =
+    game?.players.find((player) => player.playerId === playerId)?.hasOpened ?? false;
+  const openingTablePlayValidation = validateOpeningTablePlay(
+    currentPlayerHasOpened,
+    draftedCompositionsView,
+  );
+  const canSubmitTablePlay =
+    canCompose && draftedCompositionsView.length > 0 && openingTablePlayValidation.canSubmit;
 
   const serializedDrafts = JSON.stringify(
     draftedCompositionsView.map(
@@ -512,7 +520,7 @@ function useGameBoardController({
 
   async function submitDraftCompositions() {
     if (!canSubmitTablePlay) {
-      return;
+      return { action: "play_table", playerId, ok: false };
     }
 
     const result = await onPlayTable(
