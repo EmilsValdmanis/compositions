@@ -11,6 +11,7 @@ import {
   moveHandEntry,
   removeHandKeyFromDrafts,
   resolveDraftViews,
+  validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
 
 describe("applyHandEntryOrder", () => {
@@ -358,6 +359,89 @@ describe("buildTablePlayRequest", () => {
         ],
       },
     ]);
+  });
+});
+
+describe("validateOpeningTablePlay", () => {
+  it("does not count a composition built from a reclaimed joker as the opening composition", () => {
+    const entries = buildHandEntries([
+      { rank: 8, suit: 2 },
+      { rank: 9, suit: 2 },
+    ]);
+
+    const validation = validateOpeningTablePlay(false, [
+      {
+        id: "draft-reclaim",
+        tableIndex: 0,
+        handKeys: ["6-0-1"],
+        reclaimTargets: { "6-0-1": 1 },
+        entries: [{ key: "6-0-1", card: { rank: 6, suit: 0 }, sourceIndex: 0 }],
+      },
+      {
+        id: "draft-new",
+        tableIndex: null,
+        handKeys: [...entries.map((entry) => entry.key), "reclaimed-joker-0-1"],
+        entries: [
+          ...entries,
+          {
+            key: "reclaimed-joker-0-1",
+            card: { isJoker: true },
+            sourceIndex: -1,
+            isVirtual: true,
+          },
+        ],
+      },
+    ]);
+
+    expect(validation).toEqual({ canSubmit: false, reason: "missing-own-composition" });
+  });
+
+  it("allows an unopened player to reclaim and reuse a joker after staging an own composition", () => {
+    const openingEntries = buildHandEntries([
+      { rank: 10, suit: 2 },
+      { rank: 11, suit: 2 },
+      { rank: 12, suit: 2 },
+      { isJoker: true },
+    ]);
+    const reclaimedJokerEntries = buildHandEntries([
+      { rank: 8, suit: 1 },
+      { rank: 9, suit: 1 },
+    ]);
+
+    const validation = validateOpeningTablePlay(false, [
+      {
+        id: "draft-opening",
+        tableIndex: null,
+        handKeys: openingEntries.map((entry) => entry.key),
+        entries: openingEntries,
+      },
+      {
+        id: "draft-reclaim",
+        tableIndex: 0,
+        handKeys: ["6-0-1"],
+        reclaimTargets: { "6-0-1": 1 },
+        entries: [{ key: "6-0-1", card: { rank: 6, suit: 0 }, sourceIndex: 0 }],
+      },
+      {
+        id: "draft-reused-joker",
+        tableIndex: null,
+        handKeys: [
+          ...reclaimedJokerEntries.map((entry) => entry.key),
+          "reclaimed-joker-0-1",
+        ],
+        entries: [
+          ...reclaimedJokerEntries,
+          {
+            key: "reclaimed-joker-0-1",
+            card: { isJoker: true },
+            sourceIndex: -1,
+            isVirtual: true,
+          },
+        ],
+      },
+    ]);
+
+    expect(validation).toEqual({ canSubmit: true });
   });
 });
 

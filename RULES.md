@@ -71,6 +71,10 @@ Each turn consists of:
      includes at least one new composition of their own and the total value of
      all cards they place that turn, counting both new compositions and
      additions, is at least 40 points.
+   - A player who has not yet met the initial requirement may also reclaim a
+     joker during that same opening turn, but at least one new composition in
+     that turn must be made from cards already in their hand, not from a joker
+     reclaimed during that turn.
 
 3. **Discard one card**
 
@@ -88,10 +92,18 @@ Each turn consists of:
 
 - To place your first compositions, the total points you place on the board
   must be **at least 40 points**.
-- Until this is done, you **cannot play any cards to the table**.
+- Jokers already in your hand may be used in those first compositions and count
+  toward the 40 points according to the card they represent.
+- Until this is done, you **cannot play any cards to the table** unless the
+  same turn includes a valid opening play.
 - Adding only to other table compositions does not satisfy this requirement by
   itself; your opening turn must include at least one valid new composition of
   your own.
+- Reclaiming a joker from the table does not by itself satisfy the initial
+  requirement. A joker reclaimed during your opening turn may be reused later in
+  that same submitted table play and may help reach 40 points, but only if the
+  turn also includes at least one new composition made from cards already in
+  your hand.
 
 ---
 

@@ -68,6 +68,11 @@ type tablePlayState struct {
 	hasOpened          bool
 }
 
+type openingPlayCandidate struct {
+	cards          []Card
+	newComposition bool
+}
+
 type selectedAddition struct {
 	compositionIndex int
 	insertIndex      *int
@@ -874,8 +879,6 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
 			return false
 		}
-		reclaimPoints, _ := target.ReclaimPoints(reclaim.JokerIndex)
-		openingPoints += reclaimPoints
 		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
 		storeComposition(reclaim.CompositionIndex, updated)
 	}
@@ -939,10 +942,28 @@ func tablePlayUsesCard(comps []*Composition, additions []CompositionAddition, re
 	return false
 }
 
+func hasOpeningCompositionFromHand(handCards []Card, candidates []openingPlayCandidate) bool {
+	openingHand := &Hand{cards: append([]Card(nil), handCards...)}
+
+	for _, candidate := range candidates {
+		if !candidate.newComposition {
+			continue
+		}
+		if !openingHand.RemoveCards(candidate.cards) {
+			continue
+		}
+
+		return true
+	}
+
+	return false
+}
+
 func applyTablePlayState(state tablePlayState, comps []*Composition, additions []CompositionAddition, reclaims []JokerReclaim) (tablePlayState, error) {
 	playedCards := make([]Card, 0)
 	reclaimedCards := make([]Card, 0, len(reclaims))
 	openingPoints := 0
+	openingCandidates := make([]openingPlayCandidate, 0, len(comps)+len(additions))
 	for _, comp := range comps {
 		if comp == nil {
 			return tablePlayState{}, ErrInvalidComposition
@@ -958,6 +979,10 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		}
 		playedCards = append(playedCards, comp.cards...)
 		openingPoints += comp.Points()
+		openingCandidates = append(openingCandidates, openingPlayCandidate{
+			cards:          comp.cards,
+			newComposition: true,
+		})
 	}
 
 	updatedCompositions := make([]*Composition, len(state.activeCompositions))
@@ -989,6 +1014,9 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		updatedCompositions[addition.CompositionIndex] = extended
 		playedCards = append(playedCards, addition.Cards...)
 		openingPoints += extended.Points() - target.Points()
+		openingCandidates = append(openingCandidates, openingPlayCandidate{
+			cards: addition.Cards,
+		})
 	}
 
 	for _, reclaim := range reclaims {
@@ -1005,19 +1033,22 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		if !ok {
 			return tablePlayState{}, ErrInvalidComposition
 		}
-		reclaimPoints, _ := target.ReclaimPoints(reclaim.JokerIndex)
 
 		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
 		playedCards = append(playedCards, reclaim.ReplacementCard)
-		openingPoints += reclaimPoints
 		updatedCompositions[reclaim.CompositionIndex] = updated
 	}
 
 	if !state.hasOpened && len(comps) == 0 {
 		return tablePlayState{}, ErrInitialPlayRequiresOwnComp
 	}
-	if !state.hasOpened && openingPoints < 40 {
-		return tablePlayState{}, ErrInitialPointsNotMet
+	if !state.hasOpened {
+		if !hasOpeningCompositionFromHand(state.handCards, openingCandidates) {
+			return tablePlayState{}, ErrInitialPlayRequiresOwnComp
+		}
+		if openingPoints < 40 {
+			return tablePlayState{}, ErrInitialPointsNotMet
+		}
 	}
 
 	nextHand := &Hand{cards: make([]Card, 0, len(state.handCards)+len(reclaimedCards))}

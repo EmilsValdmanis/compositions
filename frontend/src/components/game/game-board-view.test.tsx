@@ -24,6 +24,7 @@ if (typeof globalThis.document === "undefined") {
 
   globalThis.window = dom.window;
   globalThis.document = dom.window.document;
+  globalThis.Element = dom.window.Element;
   globalThis.HTMLElement = dom.window.HTMLElement;
   globalThis.Node = dom.window.Node;
   globalThis.MutationObserver = dom.window.MutationObserver;
@@ -103,7 +104,13 @@ afterEach(() => {
   dndContextProps = {};
 });
 
-function makeGame(hand: GameSnapshot["hand"]): GameSnapshot {
+function makeGame(
+  hand: GameSnapshot["hand"],
+  overrides: Partial<GameSnapshot> & {
+    players?: GameSnapshot["players"];
+    activeCompositions?: GameSnapshot["activeCompositions"];
+  } = {},
+): GameSnapshot {
   return {
     phase: 1,
     round: 1,
@@ -129,6 +136,7 @@ function makeGame(hand: GameSnapshot["hand"]): GameSnapshot {
     drawPileCount: 20,
     discardPile: [{ rank: 2, suit: 0 }],
     activeCompositions: [],
+    ...overrides,
   };
 }
 
@@ -230,6 +238,86 @@ describe("GameBoardView discard drops", () => {
     });
 
     await waitFor(() => expect(onPlayTable).toHaveBeenCalledTimes(1));
+    expect(onDiscardCard).not.toHaveBeenCalled();
+  });
+
+  it("does not discard an unopened player's reclaim-only draft", async () => {
+    const onDiscardCard = vi.fn<() => Promise<ActionResult>>().mockResolvedValue({
+      action: "discard_card",
+      playerId: "player-1",
+      ok: true,
+    });
+    const onPlayTable = vi.fn<() => Promise<ActionResult>>().mockResolvedValue({
+      action: "play_table",
+      playerId: "player-1",
+      ok: true,
+    });
+
+    render(
+      <GameBoardView
+        game={makeGame(
+          [
+            { rank: 6, suit: 0 },
+            { rank: 2, suit: 3 },
+          ],
+          {
+            players: [
+              {
+                playerId: "player-1",
+                handCount: 2,
+                totalPoints: 0,
+                pointsGained: 0,
+                hasOpened: false,
+              },
+            ],
+            activeCompositions: [
+              {
+                type: "run",
+                cards: [{ rank: 5, suit: 0 }, { isJoker: true }, { rank: 7, suit: 0 }],
+                jokerRepresentations: {
+                  1: [{ rank: 6, suit: 0 }],
+                },
+                points: 18,
+                complete: false,
+              },
+            ],
+          },
+        )}
+        roomCode="ROOM"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 2, suit: 0 }}
+        onDiscardCard={onDiscardCard}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={onPlayTable}
+        onSendEmote={vi.fn()}
+        disableDraftSync
+      />,
+    );
+
+    await act(async () => {
+      dragStart("6-0-1", 0);
+    });
+    await act(async () => {
+      dragEnd("6-0-1", "table-composition-joker-0-1", 0);
+    });
+    await act(async () => {
+      dragStart("2-3-1", 1);
+    });
+    await act(async () => {
+      dragEnd("2-3-1", "discard-pile", 1);
+    });
+
+    expect(onPlayTable).not.toHaveBeenCalled();
     expect(onDiscardCard).not.toHaveBeenCalled();
   });
 });
