@@ -425,10 +425,7 @@ describe("validateOpeningTablePlay", () => {
       {
         id: "draft-reused-joker",
         tableIndex: null,
-        handKeys: [
-          ...reclaimedJokerEntries.map((entry) => entry.key),
-          "reclaimed-joker-0-1",
-        ],
+        handKeys: [...reclaimedJokerEntries.map((entry) => entry.key), "reclaimed-joker-0-1"],
         entries: [
           ...reclaimedJokerEntries,
           {
