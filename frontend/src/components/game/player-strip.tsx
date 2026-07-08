@@ -16,7 +16,7 @@ export function PlayerStrip({
 }) {
   const playerStates = game?.players ?? [];
   return (
-    <div className="grid min-w-0 gap-2">
+    <div className="grid w-full min-w-0 max-w-full gap-2">
       {players.map((player) => {
         const gamePlayer = playerStates.find((item) => item.playerId === player.playerId);
         const isTurn = game?.turn.playerId === player.playerId;
@@ -24,7 +24,7 @@ export function PlayerStrip({
           <div
             key={player.playerId}
             className={cn(
-              "relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-3xl border px-3 py-2",
+              "relative grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 overflow-hidden rounded-3xl border px-3 py-2",
               isTurn ? "border-primary/40 bg-primary/10" : "border-border/60 bg-muted/20",
             )}
           >
@@ -36,21 +36,19 @@ export function PlayerStrip({
                 className={cn("ring-border", player.connected ? "bg-primary" : "bg-destructive")}
               />
             </Avatar>
-            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-              <p
-                className="w-0 min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-medium"
-                title={player.name}
-              >
-                {player.name}
-              </p>
+            <p
+              className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium"
+              title={player.name}
+            >
+              {player.name}
+            </p>
+            <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-1.5">
               {isTurn ? (
                 <Spinner
                   className="size-5 shrink-0 text-primary"
                   aria-label={`${player.name}'s turn`}
                 />
               ) : null}
-            </div>
-            <div className="flex shrink-0 flex-nowrap justify-end gap-1.5">
               {showHostBadges && player.isHost ? <Badge variant="secondary">Host</Badge> : null}
               {gamePlayer ? <Badge variant="outline">{gamePlayer.handCount} cards</Badge> : null}
             </div>
