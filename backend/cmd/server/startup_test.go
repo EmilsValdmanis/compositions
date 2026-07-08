@@ -14,8 +14,9 @@ import (
 )
 
 type closingUserStore struct {
-	err    error
-	closed bool
+	err     error
+	loadErr error
+	closed  bool
 }
 
 func (s *closingUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
@@ -33,6 +34,9 @@ func (s *closingUserStore) DeleteSession(context.Context, string) error { return
 func (s *closingUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
 
 func (s *closingUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
+	if s.loadErr != nil {
+		return persistedLobbyState{}, s.loadErr
+	}
 	return persistedLobbyState{}, nil
 }
 
@@ -155,6 +159,31 @@ func TestNewConfiguredWSServerClosesStoreOnAuthError(t *testing.T) {
 	}
 }
 
+func TestNewConfiguredWSServerClosesStoreOnRestoreError(t *testing.T) {
+	originalOpenConfiguredUserStore := openConfiguredUserStore
+	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
+
+	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+	store := &closingUserStore{loadErr: errors.New("restore boom")}
+	openConfiguredUserStore = func() (userStore, error) {
+		return store, nil
+	}
+
+	server, err := newConfiguredWSServer()
+	if err == nil || err.Error() != "restore lobby state: restore boom" {
+		t.Fatalf("newConfiguredWSServer() error = %v; want restore lobby state: restore boom", err)
+	}
+	if server != nil {
+		t.Fatalf("server = %#v; want nil", server)
+	}
+	if !store.closed {
+		t.Fatal("store.closed = false; want true")
+	}
+}
+
 func TestNewConfiguredWSServerUsesFrontendOrigin(t *testing.T) {
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
@@ -180,5 +209,12 @@ func TestNewConfiguredWSServerUsesFrontendOrigin(t *testing.T) {
 
 	if server.allowedOrigin != "https://frontend.test" {
 		t.Fatalf("server.allowedOrigin = %q; want https://frontend.test", server.allowedOrigin)
+	}
+}
+
+func TestDefaultListenAndServeReturnsInvalidAddressError(t *testing.T) {
+	err := listenAndServe("invalid-address\x00", http.NewServeMux())
+	if err == nil {
+		t.Fatal("listenAndServe(invalid address) error = nil; want error")
 	}
 }

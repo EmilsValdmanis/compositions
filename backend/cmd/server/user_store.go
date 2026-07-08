@@ -21,6 +21,12 @@ var upsertStoredUser = func(ctx context.Context, store *database.UserStore, user
 var closeStoredUserStore = func(store *database.UserStore) {
 	store.Close()
 }
+var saveStoredLobbyState = func(ctx context.Context, store *database.UserStore, data []byte) error {
+	return store.SaveLobbyState(ctx, data)
+}
+var loadStoredLobbyState = func(ctx context.Context, store *database.UserStore) ([]byte, error) {
+	return store.LoadLobbyState(ctx)
+}
 
 type userStore interface {
 	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
@@ -144,12 +150,8 @@ func (s *postgresUserStore) SaveLobbyState(ctx context.Context, state persistedL
 		return errors.New("user store is not configured")
 	}
 
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-
-	return s.store.SaveLobbyState(ctx, data)
+	data, _ := json.Marshal(state)
+	return saveStoredLobbyState(ctx, s.store, data)
 }
 
 func (s *postgresUserStore) LoadLobbyState(ctx context.Context) (persistedLobbyState, error) {
@@ -157,7 +159,7 @@ func (s *postgresUserStore) LoadLobbyState(ctx context.Context) (persistedLobbyS
 		return persistedLobbyState{}, errors.New("user store is not configured")
 	}
 
-	data, err := s.store.LoadLobbyState(ctx)
+	data, err := loadStoredLobbyState(ctx, s.store)
 	if errors.Is(err, database.ErrLobbyStateNotFound) {
 		return persistedLobbyState{}, nil
 	}

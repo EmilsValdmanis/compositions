@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -112,6 +113,132 @@ func TestPostgresUserStoreUpsertUser(t *testing.T) {
 		}
 		if !called {
 			t.Fatal("upsertStoredUser was not called")
+		}
+	})
+
+	t.Run("returns upsert error", func(t *testing.T) {
+		upsertStoredUser = func(context.Context, *database.UserStore, database.UserRecord) (database.UserRecord, error) {
+			return database.UserRecord{}, errors.New("upsert boom")
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		if _, err := store.UpsertUser(context.Background(), authenticatedUser{ID: "user-1"}); err == nil || err.Error() != "upsert boom" {
+			t.Fatalf("UpsertUser() error = %v; want upsert boom", err)
+		}
+	})
+}
+
+func TestPostgresUserStoreDefaultDatabaseWrappers(t *testing.T) {
+	store := &database.UserStore{}
+	if _, err := upsertStoredUser(context.Background(), store, database.UserRecord{}); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("upsertStoredUser(default) error = %v; want user store is not configured", err)
+	}
+	if err := saveStoredLobbyState(context.Background(), store, nil); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("saveStoredLobbyState(default) error = %v; want user store is not configured", err)
+	}
+	if _, err := loadStoredLobbyState(context.Background(), store); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("loadStoredLobbyState(default) error = %v; want user store is not configured", err)
+	}
+	closeStoredUserStore(store)
+}
+
+func TestPostgresUserStoreLobbyState(t *testing.T) {
+	originalSaveStoredLobbyState := saveStoredLobbyState
+	defer func() { saveStoredLobbyState = originalSaveStoredLobbyState }()
+	originalLoadStoredLobbyState := loadStoredLobbyState
+	defer func() { loadStoredLobbyState = originalLoadStoredLobbyState }()
+
+	t.Run("requires configured store", func(t *testing.T) {
+		var store *postgresUserStore
+		if err := store.SaveLobbyState(context.Background(), persistedLobbyState{}); err == nil || err.Error() != "user store is not configured" {
+			t.Fatalf("SaveLobbyState(nil) error = %v; want user store is not configured", err)
+		}
+		if _, err := store.LoadLobbyState(context.Background()); err == nil || err.Error() != "user store is not configured" {
+			t.Fatalf("LoadLobbyState(nil) error = %v; want user store is not configured", err)
+		}
+	})
+
+	t.Run("saves marshaled state", func(t *testing.T) {
+		saveStoredLobbyState = func(ctx context.Context, store *database.UserStore, data []byte) error {
+			if store == nil {
+				t.Fatal("store = nil; want configured store")
+			}
+			var state persistedLobbyState
+			if err := json.Unmarshal(data, &state); err != nil {
+				t.Fatalf("Unmarshal(saved data) error = %v", err)
+			}
+			if state.Version != persistedLobbyStateVersion {
+				t.Fatalf("saved version = %d; want %d", state.Version, persistedLobbyStateVersion)
+			}
+			return nil
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		if err := store.SaveLobbyState(context.Background(), persistedLobbyState{Version: persistedLobbyStateVersion}); err != nil {
+			t.Fatalf("SaveLobbyState() error = %v", err)
+		}
+	})
+
+	t.Run("returns save error", func(t *testing.T) {
+		saveStoredLobbyState = func(context.Context, *database.UserStore, []byte) error {
+			return errors.New("save boom")
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		if err := store.SaveLobbyState(context.Background(), persistedLobbyState{}); err == nil || err.Error() != "save boom" {
+			t.Fatalf("SaveLobbyState() error = %v; want save boom", err)
+		}
+	})
+
+	t.Run("maps not found to empty state", func(t *testing.T) {
+		loadStoredLobbyState = func(context.Context, *database.UserStore) ([]byte, error) {
+			return nil, database.ErrLobbyStateNotFound
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		state, err := store.LoadLobbyState(context.Background())
+		if err != nil {
+			t.Fatalf("LoadLobbyState() error = %v", err)
+		}
+		if state.Version != 0 || len(state.Sessions) != 0 || len(state.Rooms) != 0 {
+			t.Fatalf("LoadLobbyState() = %#v; want empty state", state)
+		}
+	})
+
+	t.Run("returns load error", func(t *testing.T) {
+		loadStoredLobbyState = func(context.Context, *database.UserStore) ([]byte, error) {
+			return nil, errors.New("load boom")
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		if _, err := store.LoadLobbyState(context.Background()); err == nil || err.Error() != "load boom" {
+			t.Fatalf("LoadLobbyState() error = %v; want load boom", err)
+		}
+	})
+
+	t.Run("rejects invalid json", func(t *testing.T) {
+		loadStoredLobbyState = func(context.Context, *database.UserStore) ([]byte, error) {
+			return []byte("{"), nil
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		if _, err := store.LoadLobbyState(context.Background()); err == nil {
+			t.Fatal("LoadLobbyState(invalid json) error = nil; want error")
+		}
+	})
+
+	t.Run("loads state", func(t *testing.T) {
+		loadStoredLobbyState = func(context.Context, *database.UserStore) ([]byte, error) {
+			return json.Marshal(persistedLobbyState{Version: persistedLobbyStateVersion})
+		}
+
+		store := &postgresUserStore{store: &database.UserStore{}}
+		state, err := store.LoadLobbyState(context.Background())
+		if err != nil {
+			t.Fatalf("LoadLobbyState() error = %v", err)
+		}
+		if state.Version != persistedLobbyStateVersion {
+			t.Fatalf("LoadLobbyState().Version = %d; want %d", state.Version, persistedLobbyStateVersion)
 		}
 	})
 }

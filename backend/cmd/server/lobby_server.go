@@ -591,9 +591,6 @@ func (l *lobbyServer) sendEmote(sessionID, emoji string) (roomSnapshot, []*webso
 	}
 
 	player := room.playerByID(session.playerID)
-	if player == nil {
-		return roomSnapshot{}, nil, errors.New("player not found")
-	}
 	player.activeEmote = &playerEmote{
 		id:        uuid.NewString(),
 		emoji:     emoji,

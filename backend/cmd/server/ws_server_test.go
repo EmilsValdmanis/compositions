@@ -485,7 +485,27 @@ func TestWebSocketOriginHelpers(t *testing.T) {
 		if got := originFromBaseURL("frontend.test"); got != "" {
 			t.Fatalf("originFromBaseURL(missing scheme) = %q; want empty", got)
 		}
+		if got := originFromBaseURL("https://backend.test/api/"); got != "https://backend.test" {
+			t.Fatalf("originFromBaseURL(valid) = %q; want https://backend.test", got)
+		}
 	})
+}
+
+func TestHandleSendEmoteReturnsOnInvalidPayload(t *testing.T) {
+	server := newWSServer()
+	serverConn, clientConn, cleanup := newSocketPair(t)
+	defer cleanup()
+	connected, _, _, err := server.lobby.connect("", serverConn)
+	if err != nil {
+		t.Fatalf("connect() error = %v", err)
+	}
+
+	server.handleSendEmote(serverConn, connected.SessionID, wsEnvelope{
+		Type: "send_emote",
+		Data: mustMarshalRawMessage(map[string]any{"emoji": 42}),
+	})
+
+	mustReadError(t, clientConn, "invalid data")
 }
 
 func TestNewConfiguredWSServerRejectsInvalidOriginConfig(t *testing.T) {
