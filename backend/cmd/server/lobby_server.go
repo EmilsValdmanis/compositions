@@ -26,12 +26,16 @@ const (
 var allowedPlayerEmotes = map[string]struct{}{
 	"👋":  {},
 	"👍":  {},
+	"😂":  {},
 	"😅":  {},
 	"🤔":  {},
 	"😮":  {},
-	"🃏":  {},
+	"😡":  {},
+	"👀":  {},
+	"😭":  {},
 	"🔥":  {},
 	"❤️": {},
+	"🎉":  {},
 }
 
 type playerSession struct {

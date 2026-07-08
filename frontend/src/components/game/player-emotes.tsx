@@ -5,7 +5,20 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { cn } from "#/lib/utils";
 
-export const PLAYER_EMOTES = ["👋", "👍", "😅", "🤔", "😮", "🃏", "🔥", "❤️"] as const;
+export const PLAYER_EMOTES = [
+  "👋",
+  "👍",
+  "😂",
+  "😅",
+  "🤔",
+  "😮",
+  "😡",
+  "👀",
+  "😭",
+  "🔥",
+  "❤️",
+  "🎉",
+] as const;
 
 const emojiFont = {
   fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
