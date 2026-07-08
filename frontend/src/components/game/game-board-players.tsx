@@ -23,7 +23,7 @@ export function GameBoardPlayers({
   onSendEmote: (emoji: string) => void;
 }) {
   return (
-    <Card size="sm" className="grow overflow-y-auto">
+    <Card size="sm" className="min-w-0 grow overflow-y-auto">
       <CardHeader>
         <CardTitle>Players</CardTitle>
         <CardAction>
@@ -35,7 +35,7 @@ export function GameBoardPlayers({
           </div>
         </CardAction>
       </CardHeader>
-      <CardContent className="flex h-full flex-col gap-3">
+      <CardContent className="flex h-full min-w-0 flex-col gap-3">
         <PlayerStrip players={players} game={game} showHostBadges={false} />
 
         {hasDraftedCompositions ? (

@@ -1,8 +1,11 @@
 import { Link, Outlet } from "@tanstack/react-router";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
+import { GameRulesDialog } from "#/components/game/game-rules-dialog";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { CodeXmlIcon } from "@hugeicons/core-free-icons";
 
 function BrandTitle({ roomCode }: { roomCode?: string }) {
   return (
@@ -65,14 +68,15 @@ export function ProtectedLayout() {
           <ProtectedLayoutStatus />
 
           <div className="flex items-center justify-end gap-1 justify-self-end">
+            <GameRulesDialog />
             {import.meta.env.DEV ? (
               <Button
                 render={<Link to="/dev-ui" />}
                 nativeButton={false}
                 variant="outline"
-                size="sm"
                 className="hidden md:inline-flex"
               >
+                <HugeiconsIcon icon={CodeXmlIcon} data-icon="inline-start" />
                 Dev UI
               </Button>
             ) : null}
