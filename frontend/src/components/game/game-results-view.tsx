@@ -95,42 +95,40 @@ export function GameResultsView({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rankingRows(game, players).map(
-                  ({ rank, player, playerState, isRoundWinner }) => (
-                    <TableRow
-                      key={playerState.playerId}
-                      className={cn(
-                        isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
-                      )}
-                    >
-                      <TableCell className={cn("font-medium", isRoundWinner && "text-primary")}>
-                        {rank}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex min-w-40 flex-wrap items-center gap-2">
-                          <span className={cn("font-medium", isRoundWinner && "text-primary")}>
-                            {player?.name ?? "Unknown player"}
+                {rankingRows(game, players).map(({ rank, player, playerState, isRoundWinner }) => (
+                  <TableRow
+                    key={playerState.playerId}
+                    className={cn(
+                      isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+                    )}
+                  >
+                    <TableCell className={cn("font-medium", isRoundWinner && "text-primary")}>
+                      {rank}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex min-w-40 flex-wrap items-center gap-2">
+                        <span className={cn("font-medium", isRoundWinner && "text-primary")}>
+                          {player?.name ?? "Unknown player"}
+                        </span>
+                        {isRoundWinner ? <Badge>Winner</Badge> : null}
+                        {playerState.playerId === playerId ? (
+                          <Badge variant="outline">You</Badge>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">{playerState.handCount}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-baseline justify-end gap-1.5 tabular-nums">
+                        <span className="font-medium">{playerState.totalPoints}</span>
+                        {playerState.pointsGained > 0 ? (
+                          <span className="text-xs font-medium text-primary">
+                            {pointsGainedLabel(playerState.pointsGained)}
                           </span>
-                          {isRoundWinner ? <Badge>Winner</Badge> : null}
-                          {playerState.playerId === playerId ? (
-                            <Badge variant="outline">You</Badge>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">{playerState.handCount}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-baseline justify-end gap-1.5 tabular-nums">
-                          <span className="font-medium">{playerState.totalPoints}</span>
-                          {playerState.pointsGained > 0 ? (
-                            <span className="text-xs font-medium text-primary">
-                              {pointsGainedLabel(playerState.pointsGained)}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ),
-                )}
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
