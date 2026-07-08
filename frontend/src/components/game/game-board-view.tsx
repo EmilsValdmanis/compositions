@@ -139,6 +139,7 @@ type GameBoardViewProps = {
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
   onPlayTable: (play: TablePlayRequest) => Promise<ActionResult> | void;
+  onSendEmote: (emoji: string) => void;
   disableDraftSync?: boolean;
 };
 
@@ -267,6 +268,7 @@ function GameBoardLayout({
   draftedCompositionsCount,
   spectatorDrafts,
   onResetDraftCompositions,
+  onSendEmote,
 }: {
   game: GameSnapshot | null;
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
@@ -282,6 +284,7 @@ function GameBoardLayout({
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
   onResetDraftCompositions: () => void;
+  onSendEmote: (emoji: string) => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -316,6 +319,7 @@ function GameBoardLayout({
             connectedPlayers={connectedPlayers}
             hasDraftedCompositions={draftedCompositionsCount > 0}
             onResetDraftCompositions={onResetDraftCompositions}
+            onSendEmote={onSendEmote}
           />
           <GameBoardPiles
             drawPileCount={game?.drawPileCount ?? 0}
@@ -872,6 +876,7 @@ export function GameBoardView({
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayTable,
+  onSendEmote,
   disableDraftSync,
 }: GameBoardViewProps) {
   const controller = useGameBoardController({
@@ -925,6 +930,7 @@ export function GameBoardView({
         draftedCompositionsCount={controller.draftedCompositionsCount}
         spectatorDrafts={spectatorDrafts}
         onResetDraftCompositions={controller.resetDraftCompositions}
+        onSendEmote={onSendEmote}
       />
       <DragOverlay dropAnimation={null}>
         {activeDraw ? (

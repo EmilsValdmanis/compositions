@@ -20,7 +20,19 @@ const (
 	minPlayersToStart = 2
 	maxPlayersPerRoom = 4
 	roomCodeLength    = 6
+	playerEmoteTTL    = 4 * time.Second
 )
+
+var allowedPlayerEmotes = map[string]struct{}{
+	"👋":  {},
+	"👍":  {},
+	"😅":  {},
+	"🤔":  {},
+	"😮":  {},
+	"🃏":  {},
+	"🔥":  {},
+	"❤️": {},
+}
 
 type playerSession struct {
 	sessionID     string
@@ -34,13 +46,20 @@ type playerSession struct {
 }
 
 type roomPlayer struct {
-	player    *game.Player
-	name      string
-	imageURL  string
-	sessionID string
-	connected bool
-	seat      int
-	host      bool
+	player      *game.Player
+	name        string
+	imageURL    string
+	sessionID   string
+	connected   bool
+	seat        int
+	host        bool
+	activeEmote *playerEmote
+}
+
+type playerEmote struct {
+	id        string
+	emoji     string
+	expiresAt time.Time
 }
 
 type room struct {
@@ -555,6 +574,35 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
 }
 
+func (l *lobbyServer) sendEmote(sessionID, emoji string) (roomSnapshot, []*websocket.Conn, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, errors.New("join a room first")
+	}
+	if _, ok := allowedPlayerEmotes[emoji]; !ok {
+		return roomSnapshot{}, nil, errors.New("unknown emote")
+	}
+
+	player := room.playerByID(session.playerID)
+	if player == nil {
+		return roomSnapshot{}, nil, errors.New("player not found")
+	}
+	player.activeEmote = &playerEmote{
+		id:        uuid.NewString(),
+		emoji:     emoji,
+		expiresAt: time.Now().Add(playerEmoteTTL),
+	}
+
+	return room.snapshot(), room.connectedConns(l.sessions), nil
+}
+
 func (l *lobbyServer) draw(sessionID, source string) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "draw", func(state *game.GameState) error {
 		switch source {
@@ -1029,11 +1077,12 @@ func normalizeDealType(dealType string) string {
 
 func (r *room) snapshot() roomSnapshot {
 	players := make([]playerSnapshot, 0, len(r.players))
+	now := time.Now()
 	for _, player := range r.players {
 		if player == nil {
 			continue
 		}
-		players = append(players, playerSnapshot{
+		snapshot := playerSnapshot{
 			PlayerID:     player.player.ID,
 			Name:         player.name,
 			ImageURL:     player.imageURL,
@@ -1041,7 +1090,19 @@ func (r *room) snapshot() roomSnapshot {
 			Seat:         player.seat,
 			IsHost:       player.host,
 			CanReconnect: true,
-		})
+		}
+		if player.activeEmote != nil {
+			if player.activeEmote.expiresAt.After(now) {
+				snapshot.ActiveEmote = &playerEmoteSnapshot{
+					ID:        player.activeEmote.id,
+					Emoji:     player.activeEmote.emoji,
+					ExpiresAt: player.activeEmote.expiresAt,
+				}
+			} else {
+				player.activeEmote = nil
+			}
+		}
+		players = append(players, snapshot)
 	}
 	sort.Slice(players, func(i, j int) bool {
 		return players[i].Seat < players[j].Seat

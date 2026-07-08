@@ -31,6 +31,7 @@ export function ProtectedHome() {
     startGame,
     startNextRound,
     chooseDealing,
+    sendEmote,
     drawFromDeck,
     drawFromDiscard,
     playTable,
@@ -207,6 +208,7 @@ export function ProtectedHome() {
               onStartGame={startGame}
               onChooseDealing={chooseDealing}
               onLeaveRoom={handleLeaveRoom}
+              onSendEmote={sendEmote}
               onCopyRoomCode={copyRoomCode}
               onCopyRoomLink={copyRoomLink}
             />
@@ -231,6 +233,7 @@ export function ProtectedHome() {
               onDrawFromDeck={drawFromDeck}
               onDrawFromDiscard={drawFromDiscard}
               onPlayTable={handlePlayTable}
+              onSendEmote={sendEmote}
             />
           </div>
         )}

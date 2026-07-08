@@ -552,6 +552,48 @@ func TestWebSocketLeaveRoomFlow(t *testing.T) {
 	mustReadError(t, guestConn, "join a room first")
 }
 
+func TestWebSocketEmoteBroadcastsToRoom(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	hostConn := mustDialWS(t, httpServer.URL)
+	defer hostConn.Close()
+	hostConnected := mustConnectSession(t, hostConn, "")
+	mustSendEnvelope(t, hostConn, "create_room", createRoomRequest{Name: "Host"})
+	hostRoom := mustReadRoomState(t, hostConn)
+
+	guestConn := mustDialWS(t, httpServer.URL)
+	defer guestConn.Close()
+	mustConnectSession(t, guestConn, "")
+	mustSendEnvelope(t, guestConn, "join_room", joinRoomRequest{RoomCode: hostRoom.Code, Name: "Guest"})
+	_ = mustReadRoomState(t, guestConn)
+	_ = mustReadRoomState(t, hostConn)
+
+	mustSendEnvelope(t, hostConn, "send_emote", sendEmoteRequest{Emoji: "👋"})
+
+	hostUpdate := mustReadRoomState(t, hostConn)
+	guestUpdate := mustReadRoomState(t, guestConn)
+	for _, room := range []roomSnapshot{hostUpdate, guestUpdate} {
+		hostPlayer := room.Players[0]
+		if hostPlayer.PlayerID != hostConnected.PlayerID {
+			t.Fatalf("host player id = %q; want %q", hostPlayer.PlayerID, hostConnected.PlayerID)
+		}
+		if hostPlayer.ActiveEmote == nil {
+			t.Fatal("host ActiveEmote = nil; want emote")
+		}
+		if hostPlayer.ActiveEmote.Emoji != "👋" {
+			t.Fatalf("host ActiveEmote.Emoji = %q; want 👋", hostPlayer.ActiveEmote.Emoji)
+		}
+		if !hostPlayer.ActiveEmote.ExpiresAt.After(time.Now()) {
+			t.Fatalf("host ActiveEmote.ExpiresAt = %v; want future expiry", hostPlayer.ActiveEmote.ExpiresAt)
+		}
+	}
+
+	mustSendEnvelope(t, guestConn, "send_emote", sendEmoteRequest{Emoji: "❌"})
+	mustReadError(t, guestConn, "unknown emote")
+}
+
 func TestSecondLiveWebSocketConnectionForSessionReplacesActiveSocket(t *testing.T) {
 	server := newWSServer()
 	httpServer := httptest.NewServer(server.routes())
