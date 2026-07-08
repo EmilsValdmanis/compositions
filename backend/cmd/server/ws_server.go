@@ -80,6 +80,10 @@ type startNextRoundRequest struct{}
 
 type leaveRoomRequest struct{}
 
+type sendEmoteRequest struct {
+	Emoji string `json:"emoji"`
+}
+
 type drawRequest struct {
 	Source string `json:"source"`
 }
@@ -176,14 +180,21 @@ type pendingDealChoiceSnapshot struct {
 }
 
 type playerSnapshot struct {
-	PlayerID     string `json:"playerId"`
-	SessionID    string `json:"sessionId,omitempty"`
-	Name         string `json:"name"`
-	ImageURL     string `json:"imageUrl,omitempty"`
-	Connected    bool   `json:"connected"`
-	Seat         int    `json:"seat"`
-	IsHost       bool   `json:"isHost"`
-	CanReconnect bool   `json:"canReconnect"`
+	PlayerID     string               `json:"playerId"`
+	SessionID    string               `json:"sessionId,omitempty"`
+	Name         string               `json:"name"`
+	ImageURL     string               `json:"imageUrl,omitempty"`
+	Connected    bool                 `json:"connected"`
+	Seat         int                  `json:"seat"`
+	IsHost       bool                 `json:"isHost"`
+	CanReconnect bool                 `json:"canReconnect"`
+	ActiveEmote  *playerEmoteSnapshot `json:"activeEmote,omitempty"`
+}
+
+type playerEmoteSnapshot struct {
+	ID        string    `json:"id"`
+	Emoji     string    `json:"emoji"`
+	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 type wsServer struct {
@@ -386,6 +397,8 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			if s.handleLeaveRoom(conn, sessionID, envelope) {
 				return
 			}
+		case "send_emote":
+			s.handleSendEmote(conn, sessionID, envelope)
 		case "draw":
 			s.handleDraw(conn, sessionID, envelope)
 		case "play":
@@ -583,6 +596,21 @@ func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envel
 		s.broadcastRoomState(*roomState, recipients)
 	}
 	return false
+}
+
+func (s *wsServer) handleSendEmote(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[sendEmoteRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	roomState, recipients, err := s.lobby.sendEmote(sessionID, req.Emoji)
+	if err != nil {
+		slog.Warn("send emote failed", "sessionID", sessionID, "emoji", req.Emoji, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastRoomState(roomState, recipients)
 }
 
 func (s *wsServer) handleDraw(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {

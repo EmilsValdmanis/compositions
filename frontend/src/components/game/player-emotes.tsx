@@ -1,0 +1,99 @@
+import { useState } from "react";
+import { motion } from "motion/react";
+import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
+import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
+import { cn } from "#/lib/utils";
+
+export const PLAYER_EMOTES = ["👋", "👍", "😅", "🤔", "😮", "🃏", "🔥", "❤️"] as const;
+
+const emojiFont = {
+  fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+};
+
+export function PlayerEmoteBubble({
+  emote,
+}: {
+  emote: { id: string; emoji: string; expiresAt: string };
+}) {
+  return (
+    <Badge
+      key={emote.id}
+      variant="outline"
+      aria-label="Player emote"
+      render={
+        <motion.span
+          initial={{ opacity: 0, y: 4, scale: 0.78 }}
+          animate={{
+            opacity: [0, 1, 1, 0],
+            y: [4, -4, -2, -14],
+            scale: [0.78, 1.08, 1, 0.9],
+          }}
+          transition={{
+            duration: 4,
+            ease: "easeOut",
+            times: [0, 0.12, 0.72, 1],
+          }}
+        />
+      }
+      className="pointer-events-none absolute -top-6 left-8 z-20 grid size-9 place-items-center rounded-full bg-background/95 p-0 text-xl shadow-lg ring-1 ring-foreground/5"
+      style={emojiFont}
+    >
+      {emote.emoji}
+    </Badge>
+  );
+}
+
+export function PlayerEmotePicker({
+  onSendEmote,
+  className,
+}: {
+  onSendEmote: (emoji: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  function handleSendEmote(emoji: string) {
+    onSendEmote(emoji);
+    setOpen(false);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            className={cn("text-base", className)}
+            aria-label="Open emotes"
+          />
+        }
+      >
+        <span aria-hidden style={emojiFont}>
+          🙂
+        </span>
+      </PopoverTrigger>
+      <PopoverContent align="end" sideOffset={8} className="w-auto rounded-2xl p-2">
+        <div className="grid grid-cols-4 gap-1">
+          {PLAYER_EMOTES.map((emoji) => (
+            <Button
+              key={emoji}
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-lg hover:scale-105"
+              aria-label={`Send ${emoji}`}
+              onClick={() => handleSendEmote(emoji)}
+            >
+              <span aria-hidden style={emojiFont}>
+                {emoji}
+              </span>
+            </Button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

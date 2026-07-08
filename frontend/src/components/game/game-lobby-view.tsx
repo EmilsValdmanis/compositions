@@ -9,6 +9,7 @@ import {
 import { ChevronDownIcon, Copy01Icon, CopyLinkIcon, Share08Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
+import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -51,6 +52,7 @@ type GameLobbyViewProps = {
   onStartGame: () => void;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
   onLeaveRoom: () => void;
+  onSendEmote: (emoji: string) => void;
   onCopyRoomCode: AsyncAction;
   onCopyRoomLink: AsyncAction;
 };
@@ -69,6 +71,7 @@ export function GameLobbyView({
   onStartGame,
   onChooseDealing,
   onLeaveRoom,
+  onSendEmote,
   onCopyRoomCode,
   onCopyRoomLink,
 }: GameLobbyViewProps) {
@@ -196,7 +199,12 @@ export function GameLobbyView({
               <CardTitle>Players</CardTitle>
               <CardDescription>{players.length ? "Seats" : "No room yet"}</CardDescription>
             </div>
-            {players.length ? <Badge variant="outline">{players.length} seated</Badge> : null}
+            {players.length ? (
+              <div className="flex items-center gap-2">
+                <PlayerEmotePicker onSendEmote={onSendEmote} />
+                <Badge variant="outline">{players.length} seated</Badge>
+              </div>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>

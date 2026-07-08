@@ -135,6 +135,7 @@ function renderLobby(overrides: Partial<React.ComponentProps<typeof GameLobbyVie
     onStartGame: vi.fn(),
     onChooseDealing: vi.fn(),
     onLeaveRoom: vi.fn(),
+    onSendEmote: vi.fn(),
     onCopyRoomCode: vi.fn(),
     onCopyRoomLink: vi.fn(),
     ...overrides,
@@ -213,6 +214,41 @@ describe("GameLobbyView", () => {
     expect(view.getByText("Dealer: Avery")).toBeTruthy();
   });
 
+  it("renders player emotes and sends picker selections", () => {
+    const onSendEmote = vi.fn();
+    const playersWithEmote: PlayerSnapshot[] = players.map((player) =>
+      player.playerId === "player-1"
+        ? {
+            ...player,
+            activeEmote: {
+              id: "emote-1",
+              emoji: "🔥",
+              expiresAt: new Date(Date.now() + 4000).toISOString(),
+            },
+          }
+        : player,
+    );
+
+    const view = renderLobby({
+      room: makeRoom({ players: playersWithEmote }),
+      players: playersWithEmote,
+      roomActions: {
+        canCreateRoom: false,
+        canJoinRoom: false,
+        canLeaveRoom: true,
+        canStartGame: true,
+      },
+      onSendEmote,
+    });
+
+    expect(view.getByLabelText("Player emote").textContent).toBe("🔥");
+
+    fireEvent.click(view.getByRole("button", { name: "Open emotes" }));
+    fireEvent.click(view.getByRole("button", { name: "Send 👍" }));
+
+    expect(onSendEmote).toHaveBeenCalledWith("👍");
+  });
+
   it("submits cut size and tapped player order choices", () => {
     const onChooseDealing = vi.fn();
     const pendingDealChoice = {
@@ -245,6 +281,7 @@ describe("GameLobbyView", () => {
         onStartGame={vi.fn()}
         onChooseDealing={onChooseDealing}
         onLeaveRoom={vi.fn()}
+        onSendEmote={vi.fn()}
         onCopyRoomCode={vi.fn()}
         onCopyRoomLink={vi.fn()}
       />,
@@ -284,6 +321,7 @@ describe("GameLobbyView", () => {
         onStartGame={vi.fn()}
         onChooseDealing={onChooseDealing}
         onLeaveRoom={vi.fn()}
+        onSendEmote={vi.fn()}
         onCopyRoomCode={vi.fn()}
         onCopyRoomLink={vi.fn()}
       />,

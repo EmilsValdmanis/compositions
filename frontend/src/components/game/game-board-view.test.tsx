@@ -185,7 +185,7 @@ describe("GameBoardView discard drops", () => {
       ok: false,
     });
 
-    render(
+    const view = render(
       <GameBoardView
         game={makeGame([
           { rank: 1, suit: 0 },
@@ -209,9 +209,12 @@ describe("GameBoardView discard drops", () => {
         onDrawFromDeck={vi.fn()}
         onDrawFromDiscard={vi.fn()}
         onPlayTable={onPlayTable}
+        onSendEmote={vi.fn()}
         disableDraftSync
       />,
     );
+
+    expect(view.getByLabelText("Avery's turn")).toBeTruthy();
 
     await act(async () => {
       dragStart("1-0-1", 0);
@@ -319,6 +322,7 @@ describe("GameBoardView spectator turn drafts", () => {
         onDrawFromDeck={vi.fn()}
         onDrawFromDiscard={vi.fn()}
         onPlayTable={vi.fn()}
+        onSendEmote={vi.fn()}
         disableDraftSync
       />,
     );

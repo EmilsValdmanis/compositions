@@ -16,8 +16,10 @@ import (
 )
 
 type jsonLobbyStateStore struct {
-	data  []byte
-	saves int
+	data    []byte
+	saves   int
+	saveErr error
+	loadErr error
 }
 
 func (s *jsonLobbyStateStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
@@ -35,6 +37,9 @@ func (s *jsonLobbyStateStore) DeleteSession(context.Context, string) error {
 }
 
 func (s *jsonLobbyStateStore) SaveLobbyState(_ context.Context, state persistedLobbyState) error {
+	if s.saveErr != nil {
+		return s.saveErr
+	}
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err
@@ -45,6 +50,9 @@ func (s *jsonLobbyStateStore) SaveLobbyState(_ context.Context, state persistedL
 }
 
 func (s *jsonLobbyStateStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
+	if s.loadErr != nil {
+		return persistedLobbyState{}, s.loadErr
+	}
 	if len(s.data) == 0 {
 		return persistedLobbyState{}, nil
 	}
@@ -145,6 +153,206 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 	}
 	if guestRoomState == nil || !guestRoomState.Players[0].Connected || !guestRoomState.Players[1].Connected {
 		t.Fatalf("guest reconnect room = %#v; want both players connected", guestRoomState)
+	}
+}
+
+func TestLobbyServerRestorePersistedStateValidation(t *testing.T) {
+	validGameSnapshot := game.NewGameState().PersistenceSnapshot()
+	validState := func() persistedLobbyState {
+		return persistedLobbyState{
+			Version: persistedLobbyStateVersion,
+			Sessions: []persistedPlayerSession{
+				{SessionID: "session-1", PlayerID: "player-1"},
+			},
+			Rooms: []persistedRoom{
+				{
+					Code:      "room1",
+					GameState: validGameSnapshot,
+					Players: []persistedRoomPlayer{
+						{PlayerID: "player-1", SessionID: "session-1", Name: "Player One"},
+					},
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*persistedLobbyState)
+	}{
+		{"load error", func(state *persistedLobbyState) { *state = persistedLobbyState{} }},
+		{"version", func(state *persistedLobbyState) { state.Version = 99 }},
+		{"session ids", func(state *persistedLobbyState) { state.Sessions[0].SessionID = "" }},
+		{"authenticated user id", func(state *persistedLobbyState) {
+			state.Sessions[0].Authenticated = true
+		}},
+		{"room code", func(state *persistedLobbyState) { state.Rooms[0].Code = "" }},
+		{"game state", func(state *persistedLobbyState) { state.Rooms[0].GameState.Version = 99 }},
+		{"room player ids", func(state *persistedLobbyState) { state.Rooms[0].Players[0].PlayerID = "" }},
+		{"missing session", func(state *persistedLobbyState) { state.Rooms[0].Players[0].SessionID = "missing" }},
+		{"deal choice", func(state *persistedLobbyState) {
+			state.Rooms[0].PendingDealChoice = &persistedPendingDealChoice{DealerIndex: 0, ChooserIndex: 9}
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := &jsonLobbyStateStore{}
+			if test.name == "load error" {
+				store.loadErr = errors.New("load boom")
+			} else {
+				state := validState()
+				test.mutate(&state)
+				data, err := json.Marshal(state)
+				if err != nil {
+					t.Fatalf("Marshal() error = %v", err)
+				}
+				store.data = data
+			}
+			lobby := newLobbyServerWithStore(store)
+			if err := lobby.restorePersistedState(context.Background()); err == nil {
+				t.Fatal("restorePersistedState() error = nil; want error")
+			}
+		})
+	}
+}
+
+func TestLobbyServerPersistenceEdgeBranches(t *testing.T) {
+	if err := (*lobbyServer)(nil).restorePersistedState(context.Background()); err != nil {
+		t.Fatalf("nil restorePersistedState() error = %v", err)
+	}
+	(*lobbyServer)(nil).persistLocked("nil receiver")
+
+	lobby := newLobbyServerWithStore(nil)
+	if _, ok := lobby.store.(noopUserStore); !ok {
+		t.Fatalf("store type = %T; want noopUserStore", lobby.store)
+	}
+
+	errorStore := &jsonLobbyStateStore{saveErr: errors.New("save boom")}
+	lobby = newLobbyServerWithStore(errorStore)
+	lobby.sessions["nil-session"] = nil
+	lobby.sessions["session-1"] = &playerSession{sessionID: "session-1", playerID: "player-1"}
+	lobby.rooms["nil-room"] = nil
+	lobby.rooms["no-game"] = &room{code: "no-game"}
+	lobby.rooms["with-skips"] = &room{
+		code:      "with-skips",
+		gameState: game.NewGameState(),
+		players: []*roomPlayer{
+			nil,
+			{},
+			{player: newPlayerWithID("player-1"), sessionID: "session-1", name: "Player One"},
+		},
+	}
+
+	snapshot := lobby.persistenceSnapshotLocked()
+	if len(snapshot.Sessions) != 1 {
+		t.Fatalf("len(snapshot.Sessions) = %d; want 1", len(snapshot.Sessions))
+	}
+	if len(snapshot.Rooms) != 1 || len(snapshot.Rooms[0].Players) != 1 {
+		t.Fatalf("snapshot.Rooms = %#v; want one room with one player", snapshot.Rooms)
+	}
+	lobby.persistLocked("save error is logged")
+}
+
+func TestLobbyServerAuthenticatedReconnectWithExistingSessionID(t *testing.T) {
+	lobby := newLobbyServer()
+	user := authenticatedUser{ID: "user-1", Name: "Player One"}
+	event, _, _, err := lobby.connectWithUser("", user, nil)
+	if err != nil {
+		t.Fatalf("connectWithUser() error = %v", err)
+	}
+
+	reconnected, _, _, err := lobby.connectWithUser(event.SessionID, user, nil)
+	if err != nil {
+		t.Fatalf("connectWithUser(existing authenticated) error = %v", err)
+	}
+	if reconnected.SessionID != event.SessionID {
+		t.Fatalf("reconnected sessionID = %q; want %q", reconnected.SessionID, event.SessionID)
+	}
+
+	if _, _, _, err := lobby.connectExistingSessionWithUser(event.SessionID, authenticatedUser{ID: "user-2", Name: "Player Two"}, nil); err == nil || err.Error() != "session belongs to a different user" {
+		t.Fatalf("connectExistingSessionWithUser(different user) error = %v; want session belongs to a different user", err)
+	}
+}
+
+func TestLobbyServerChooseDealingRejectsMissingGameStateAndUnexpectedPhase(t *testing.T) {
+	t.Run("missing game state", func(t *testing.T) {
+		lobby := newLobbyServer()
+		hostEvent, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect(host) error = %v", err)
+		}
+		roomState, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		guestEvent, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect(guest) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestEvent.SessionID, roomState.Code, "Guest"); err != nil {
+			t.Fatalf("joinRoom() error = %v", err)
+		}
+		if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+			t.Fatalf("startGame() error = %v", err)
+		}
+		lobby.rooms[roomState.Code].gameState = nil
+		if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err == nil || err.Error() != "game state not initialized" {
+			t.Fatalf("chooseDealing() error = %v; want game state not initialized", err)
+		}
+	})
+
+	t.Run("unexpected phase", func(t *testing.T) {
+		lobby := newLobbyServer()
+		hostEvent, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect(host) error = %v", err)
+		}
+		roomState, _, err := lobby.createRoom(hostEvent.SessionID, "Host")
+		if err != nil {
+			t.Fatalf("createRoom() error = %v", err)
+		}
+		guestEvent, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect(guest) error = %v", err)
+		}
+		if _, _, err := lobby.joinRoom(guestEvent.SessionID, roomState.Code, "Guest"); err != nil {
+			t.Fatalf("joinRoom() error = %v", err)
+		}
+		if _, _, err := lobby.startGame(hostEvent.SessionID, 0); err != nil {
+			t.Fatalf("startGame() error = %v", err)
+		}
+		setGameStatePhaseForTest(t, lobby.rooms[roomState.Code].gameState, game.PhaseGameOver)
+		if _, _, err := lobby.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: intPtr(0)}); err == nil || err.Error() != "game is not waiting for a dealing choice" {
+			t.Fatalf("chooseDealing() error = %v; want game is not waiting for a dealing choice", err)
+		}
+	})
+}
+
+func TestLobbyServerSendEmoteErrorBranchesAndExpiredSnapshot(t *testing.T) {
+	lobby := newLobbyServer()
+	if _, _, err := lobby.sendEmote("missing", "👋"); err == nil {
+		t.Fatal("sendEmote(missing session) error = nil; want error")
+	}
+
+	event, _, _, err := lobby.connect("", nil)
+	if err != nil {
+		t.Fatalf("connect() error = %v", err)
+	}
+	if _, _, err := lobby.sendEmote(event.SessionID, "👋"); err == nil || err.Error() != "join a room first" {
+		t.Fatalf("sendEmote(no room) error = %v; want join a room first", err)
+	}
+	roomState, _, err := lobby.createRoom(event.SessionID, "Host")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	room := lobby.rooms[roomState.Code]
+	room.players[0].activeEmote = &playerEmote{id: "expired", emoji: "👋", expiresAt: time.Now().Add(-time.Second)}
+	if snapshot := room.snapshot(); len(snapshot.Players) != 1 || snapshot.Players[0].ActiveEmote != nil {
+		t.Fatalf("expired emote snapshot = %#v; want no active emote", snapshot.Players)
+	}
+	if room.players[0].activeEmote != nil {
+		t.Fatal("expired activeEmote was not cleared")
 	}
 }
 

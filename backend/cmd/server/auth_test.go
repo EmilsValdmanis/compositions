@@ -146,6 +146,61 @@ func TestSessionFromRequest(t *testing.T) {
 			t.Fatalf("sessionFromRequest() error = %v; want errAuthenticationRequired", err)
 		}
 	})
+
+	t.Run("returns unexpected store error", func(t *testing.T) {
+		store := &stubAuthStore{sessionErr: errors.New("session store boom")}
+		handler := &authHandler{store: store, now: func() time.Time { return now }}
+		request := httptest.NewRequest(http.MethodGet, "/auth/session", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+
+		_, err := handler.sessionFromRequest(request)
+		if err == nil || err.Error() != "session store boom" {
+			t.Fatalf("sessionFromRequest() error = %v; want session store boom", err)
+		}
+	})
+}
+
+func TestSessionTokenForUserReplacesDifferentExistingSession(t *testing.T) {
+	now := time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC)
+	store := &stubAuthStore{
+		sessionUser: database.SessionUserRecord{
+			ID:        "old-user",
+			Name:      "Old User",
+			Email:     "old@example.com",
+			ExpiresAt: now.Add(time.Hour),
+		},
+		deleteErr: errors.New("delete boom"),
+	}
+	handler := &authHandler{store: store, now: func() time.Time { return now }}
+	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
+	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old-token"})
+
+	token, err := handler.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, now.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("sessionTokenForUser() error = %v", err)
+	}
+	if token == "" || token == "old-token" {
+		t.Fatalf("sessionTokenForUser() token = %q; want fresh token", token)
+	}
+	if len(store.deletedTokens) != 1 || store.deletedTokens[0] != "old-token" {
+		t.Fatalf("deletedTokens = %#v; want old-token", store.deletedTokens)
+	}
+	if len(store.createdSessions) != 1 || store.createdSessions[0].UserID != "new-user" {
+		t.Fatalf("createdSessions = %#v; want new-user session", store.createdSessions)
+	}
+}
+
+func TestSessionTokenForUserReturnsUnexpectedSessionError(t *testing.T) {
+	now := time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC)
+	store := &stubAuthStore{sessionErr: errors.New("session lookup boom")}
+	handler := &authHandler{store: store, now: func() time.Time { return now }}
+	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
+	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old-token"})
+
+	_, err := handler.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, now.Add(time.Hour))
+	if err == nil || err.Error() != "session lookup boom" {
+		t.Fatalf("sessionTokenForUser() error = %v; want session lookup boom", err)
+	}
 }
 
 func TestHandleSession(t *testing.T) {
@@ -404,6 +459,68 @@ func TestAuthConfigHelpers(t *testing.T) {
 		_, err := newConfiguredAuthHandler(&stubAuthStore{})
 		if err == nil || err.Error() != "BASE_URL must use https outside localhost when auth cookies are enabled" {
 			t.Fatalf("newConfiguredAuthHandler() error = %v; want https requirement", err)
+		}
+	})
+
+	t.Run("secure cookie validates base url and localhost override", func(t *testing.T) {
+		if _, err := secureCookieFromBaseURL("://bad"); err == nil || err.Error() != "BASE_URL must be a valid absolute URL" {
+			t.Fatalf("secureCookieFromBaseURL(invalid) error = %v; want absolute URL error", err)
+		}
+
+		t.Setenv("COOKIE_SECURE", "true")
+		secure, err := secureCookieFromBaseURL("http://localhost:3000")
+		if err != nil {
+			t.Fatalf("secureCookieFromBaseURL(localhost) error = %v", err)
+		}
+		if !secure {
+			t.Fatal("secureCookieFromBaseURL(localhost) = false; want true with COOKIE_SECURE=true")
+		}
+
+		t.Setenv("COOKIE_SECURE", "false")
+		secure, err = secureCookieFromBaseURL("http://127.0.0.1:3000")
+		if err != nil {
+			t.Fatalf("secureCookieFromBaseURL(127.0.0.1) error = %v", err)
+		}
+		if secure {
+			t.Fatal("secureCookieFromBaseURL(127.0.0.1) = true; want false")
+		}
+	})
+
+	t.Run("configured auth handler returns intermediate config errors", func(t *testing.T) {
+		t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+		t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+		t.Setenv("BASE_URL", "frontend.test")
+		if _, err := newConfiguredAuthHandler(&stubAuthStore{}); err == nil || err.Error() != "BASE_URL must be a valid absolute URL" {
+			t.Fatalf("newConfiguredAuthHandler(base url) error = %v; want BASE_URL error", err)
+		}
+
+		t.Setenv("BASE_URL", "https://backend.test")
+		t.Setenv("FRONTEND_URL", "frontend.test")
+		if _, err := newConfiguredAuthHandler(&stubAuthStore{}); err == nil || err.Error() != "FRONTEND_URL must be a valid absolute URL" {
+			t.Fatalf("newConfiguredAuthHandler(frontend url) error = %v; want FRONTEND_URL error", err)
+		}
+
+		t.Setenv("FRONTEND_URL", "https://frontend.test")
+		t.Setenv("COOKIE_DOMAIN", "https://bad.test")
+		if _, err := newConfiguredAuthHandler(&stubAuthStore{}); err == nil || err.Error() != "COOKIE_DOMAIN must be a valid cookie domain" {
+			t.Fatalf("newConfiguredAuthHandler(cookie domain) error = %v; want COOKIE_DOMAIN error", err)
+		}
+	})
+
+	t.Run("frontend origin fallback", func(t *testing.T) {
+		handler := &authHandler{config: authConfig{frontendOrigin: "https://configured.test"}}
+		if got := frontendOriginFromHandler(handler); got != "https://configured.test" {
+			t.Fatalf("frontendOriginFromHandler(handler) = %q; want configured origin", got)
+		}
+
+		t.Setenv("FRONTEND_URL", "https://frontend.test")
+		if got := frontendOriginFromHandler(nil); got != "https://frontend.test" {
+			t.Fatalf("frontendOriginFromHandler(nil) = %q; want https://frontend.test", got)
+		}
+
+		t.Setenv("FRONTEND_URL", "frontend.test")
+		if got := frontendOriginFromHandler(nil); got != "" {
+			t.Fatalf("frontendOriginFromHandler(invalid env) = %q; want empty", got)
 		}
 	})
 

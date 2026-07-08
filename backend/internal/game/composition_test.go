@@ -208,6 +208,24 @@ func TestCompositionReclaimJokerRejectsAmbiguousSetJoker(t *testing.T) {
 	}
 }
 
+func TestNewUnorderedRunAcceptsSortableCards(t *testing.T) {
+	comp, ok := NewUnorderedRun([]Card{
+		card(Seven, Clubs),
+		card(Five, Clubs),
+		card(Six, Clubs),
+	})
+	if !ok {
+		t.Fatal("NewUnorderedRun() returned false; want true")
+	}
+	if !slices.EqualFunc(comp.cards, []Card{
+		card(Five, Clubs),
+		card(Six, Clubs),
+		card(Seven, Clubs),
+	}, cardsEqual) {
+		t.Fatalf("NewUnorderedRun().cards = %#v; want sorted run", comp.cards)
+	}
+}
+
 func TestNewSet_InvalidTwoCards(t *testing.T) {
 	cards := []Card{
 		card(Nine, Hearts),

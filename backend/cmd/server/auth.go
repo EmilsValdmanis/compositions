@@ -202,10 +202,7 @@ func newConfiguredAuthHandler(store authStore) (*authHandler, error) {
 	if err != nil {
 		return nil, err
 	}
-	baseURL, err := baseURLFromEnv()
-	if err != nil {
-		return nil, err
-	}
+	baseURL, _ := baseURLFromEnv()
 	frontendURL, frontendOrigin, err := frontendConfigFromEnv()
 	if err != nil {
 		return nil, err

@@ -286,6 +286,7 @@ export function DevGameUi() {
           onDrawFromDeck={() => updateGame(drawFromDeck)}
           onDrawFromDiscard={() => updateGame(drawFromDiscard)}
           onPlayTable={handlePlayTable}
+          onSendEmote={() => {}}
           disableDraftSync
         />
       </div>

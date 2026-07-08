@@ -119,6 +119,11 @@ export type PlayerSnapshot = {
   seat: number;
   isHost: boolean;
   canReconnect: boolean;
+  activeEmote?: {
+    id: string;
+    emoji: string;
+    expiresAt: string;
+  };
 };
 
 export type PendingDealChoiceSnapshot = {
@@ -187,6 +192,7 @@ type GameWebSocketContextValue = {
   startNextRound: () => void;
   chooseDealing: (choice: DealingChoiceRequest | string) => void;
   leaveRoom: () => void;
+  sendEmote: (emoji: string) => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
   updateTurnDrafts: (draft: TurnDraftUpdateRequest) => void;
@@ -656,6 +662,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     chooseDealing: (choice) =>
       send("choose_dealing", typeof choice === "string" ? { dealType: choice } : choice),
     leaveRoom: () => send("leave_room", {}),
+    sendEmote: (emoji) => send("send_emote", { emoji }),
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),
     updateTurnDrafts: (draft) => send("draft_update", draft),
