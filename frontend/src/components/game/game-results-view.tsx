@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "#/components/ui/table";
+import { cn } from "#/lib/utils";
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -35,13 +36,20 @@ type GameResultsViewProps = {
 };
 
 function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
+  const roundWinnerPlayerId = game.players[game.roundWinnerIndex]?.playerId;
+
   return game.players
     .toSorted((left, right) => left.totalPoints - right.totalPoints)
     .map((playerState, index) => ({
       rank: index + 1,
       player: players.find((player) => player.playerId === playerState.playerId) ?? null,
       playerState,
+      isRoundWinner: playerState.playerId === roundWinnerPlayerId,
     }));
+}
+
+function pointsGainedLabel(pointsGained: number) {
+  return pointsGained > 0 ? `+${pointsGained}` : "0";
 }
 
 export function GameResultsView({
@@ -83,30 +91,52 @@ export function GameResultsView({
                   <TableHead className="w-14">#</TableHead>
                   <TableHead>Player</TableHead>
                   <TableHead className="text-right">Cards</TableHead>
+                  <TableHead className="text-right">Gain</TableHead>
                   <TableHead className="text-right">Score</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rankingRows(game, players).map(({ rank, player, playerState }) => (
-                  <TableRow key={playerState.playerId}>
-                    <TableCell className="font-medium">{rank}</TableCell>
-                    <TableCell>
-                      <div className="flex min-w-40 flex-wrap items-center gap-2">
-                        <span className="font-medium">{player?.name ?? "Unknown player"}</span>
-                        {playerState.playerId === game.players[game.roundWinnerIndex]?.playerId ? (
-                          <Badge>Winner</Badge>
-                        ) : null}
-                        {playerState.playerId === playerId ? (
-                          <Badge variant="outline">You</Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">{playerState.handCount}</TableCell>
-                    <TableCell className="text-right font-medium">
-                      {playerState.totalPoints}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {rankingRows(game, players).map(
+                  ({ rank, player, playerState, isRoundWinner }) => (
+                    <TableRow
+                      key={playerState.playerId}
+                      className={cn(
+                        isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+                      )}
+                    >
+                      <TableCell className={cn("font-medium", isRoundWinner && "text-primary")}>
+                        {rank}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex min-w-40 flex-wrap items-center gap-2">
+                          <span className={cn("font-medium", isRoundWinner && "text-primary")}>
+                            {player?.name ?? "Unknown player"}
+                          </span>
+                          {isRoundWinner ? <Badge>Winner</Badge> : null}
+                          {playerState.playerId === playerId ? (
+                            <Badge variant="outline">You</Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{playerState.handCount}</TableCell>
+                      <TableCell className="text-right">
+                        <span
+                          className={cn(
+                            "font-medium tabular-nums",
+                            playerState.pointsGained > 0
+                              ? "text-primary"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {pointsGainedLabel(playerState.pointsGained)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {playerState.totalPoints}
+                      </TableCell>
+                    </TableRow>
+                  ),
+                )}
               </TableBody>
             </Table>
           </div>
