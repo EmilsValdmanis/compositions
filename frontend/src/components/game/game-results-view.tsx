@@ -9,12 +9,12 @@ import {
 } from "#/components/game-websocket-provider";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
+import { GameCard } from "#/components/game/game-card";
 import { cardName } from "#/components/game/game-card-utils";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
-import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "#/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { cn, getUserInitials } from "#/lib/utils";
 
 type DealChoiceState = {
@@ -63,7 +64,7 @@ function pointsGainedLabel(pointsGained: number) {
 
 function noopResetDraftCompositions() {}
 
-function LeftoverHandPopover({
+function LeftoverHandTooltip({
   handCount,
   hand,
   playerName,
@@ -78,8 +79,8 @@ function LeftoverHandPopover({
     : `${handCount} cards left`;
 
   return (
-    <Popover>
-      <PopoverTrigger
+    <Tooltip>
+      <TooltipTrigger
         render={
           <Button
             type="button"
@@ -98,23 +99,25 @@ function LeftoverHandPopover({
       >
         <span>{handCount}</span>
         <HugeiconsIcon icon={Cards01Icon} strokeWidth={2} data-icon="inline-end" />
-      </PopoverTrigger>
+      </TooltipTrigger>
       {hasRevealedHand ? (
-        <PopoverContent align="end" sideOffset={8} className="w-64 gap-3 rounded-2xl p-3">
+        <TooltipContent
+          align="end"
+          sideOffset={8}
+          className="max-w-80 flex-col items-stretch gap-3 rounded-2xl bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10"
+        >
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">{playerName}</p>
             <Badge variant="outline">{handCount} left</Badge>
           </div>
-          <div className="flex max-h-44 flex-wrap gap-1.5 overflow-auto">
+          <div className="flex max-h-56 flex-wrap gap-2 overflow-auto">
             {hand.map((card, index) => (
-              <Badge key={`${cardName(card)}-${index}`} variant="secondary">
-                {cardName(card)}
-              </Badge>
+              <GameCard key={`${cardName(card)}-${index}`} card={card} size="compact" />
             ))}
           </div>
-        </PopoverContent>
+        </TooltipContent>
       ) : null}
-    </Popover>
+    </Tooltip>
   );
 }
 
@@ -202,7 +205,7 @@ export function GameResultsView({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <LeftoverHandPopover
+                        <LeftoverHandTooltip
                           handCount={playerState.handCount}
                           hand={playerState.hand}
                           playerName={playerName}
@@ -259,6 +262,7 @@ export function GameResultsView({
         game={game}
         connectedPlayers={connectedPlayers}
         hasDraftedCompositions={false}
+        showTurnIndicator={false}
         onResetDraftCompositions={noopResetDraftCompositions}
         onSendEmote={onSendEmote}
       />

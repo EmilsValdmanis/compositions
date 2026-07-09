@@ -19,7 +19,7 @@ import {
 import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { cardPointTotal } from "#/components/game/game-card-utils";
+import { draftCompositionPointTotal } from "#/components/game/game-card-utils";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
@@ -157,9 +157,9 @@ export function GameBoardTable({
     (composition) => composition.tableIndex === undefined,
   );
   const visibleDraftPointTotals = [
-    ...stagedNewDrafts.map((composition) => cardPointTotal(composition.cards)),
+    ...stagedNewDrafts.map((composition) => draftCompositionPointTotal(composition.cards)),
     ...newCompositions.map((composition) =>
-      cardPointTotal(composition.entries.map((entry) => entry.card)),
+      draftCompositionPointTotal(composition.entries.map((entry) => entry.card)),
     ),
   ];
   const visibleDraftPointsTotal = visibleDraftPointTotals.reduce(
@@ -267,7 +267,9 @@ export function GameBoardTable({
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
-                  <Badge variant="outline">{cardPointTotal(composition.cards)} pts</Badge>
+                  <Badge variant="outline">
+                    {draftCompositionPointTotal(composition.cards)} pts
+                  </Badge>
                 </div>
                 <div className="flex items-start gap-2">
                   {draftCardInstances(composition.cards).map(({ card, key }) => (
@@ -290,7 +292,7 @@ export function GameBoardTable({
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
                   <Badge variant="outline">
-                    {cardPointTotal(composition.entries.map((entry) => entry.card))} pts
+                    {draftCompositionPointTotal(composition.entries.map((entry) => entry.card))} pts
                   </Badge>
                 </div>
                 <SortableContext

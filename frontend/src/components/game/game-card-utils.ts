@@ -53,3 +53,96 @@ export function cardPointValue(card: CardSnapshot) {
 export function cardPointTotal(cards: CardSnapshot[]) {
   return cards.reduce((total, card) => total + cardPointValue(card), 0);
 }
+
+function rankPointValue(rank: number, aceLow = false) {
+  if (rank === 1) {
+    return aceLow ? 1 : 10;
+  }
+
+  if (rank >= 11 && rank <= 13) {
+    return 10;
+  }
+
+  if (rank >= 2 && rank <= 10) {
+    return rank;
+  }
+
+  return 0;
+}
+
+function draftSetPointTotal(cards: CardSnapshot[]) {
+  if (cards.length < 3 || cards.length > 4) {
+    return null;
+  }
+
+  const naturalCards = cards.filter((card) => !card.isJoker);
+  const setRank = naturalCards[0]?.rank ?? 1;
+  const seenSuits = new Set<number>();
+
+  for (const card of naturalCards) {
+    if (card.rank !== setRank || typeof card.suit !== "number" || seenSuits.has(card.suit)) {
+      return null;
+    }
+    seenSuits.add(card.suit);
+  }
+
+  return cards.length * rankPointValue(setRank);
+}
+
+function draftRunPointTotal(cards: CardSnapshot[]) {
+  if (cards.length < 3 || cards.length > 14) {
+    return null;
+  }
+
+  const naturalCards = cards.filter((card) => !card.isJoker);
+  const runSuit = naturalCards[0]?.suit;
+
+  if (naturalCards.some((card) => card.suit !== runSuit || typeof card.rank !== "number")) {
+    return null;
+  }
+
+  let best: number | null = null;
+  const runLength = cards.length;
+
+  for (let start = 1; start <= 15 - runLength; start += 1) {
+    const end = start + runLength - 1;
+    const usedPositions = new Set<number>();
+    let fits = true;
+
+    for (const card of naturalCards) {
+      const rank = card.rank ?? 0;
+      const possiblePositions = rank === 1 ? [1, 14] : [rank];
+      const position = possiblePositions.find((candidate) => {
+        return candidate >= start && candidate <= end && !usedPositions.has(candidate);
+      });
+
+      if (position === undefined) {
+        fits = false;
+        break;
+      }
+
+      usedPositions.add(position);
+    }
+
+    if (!fits) {
+      continue;
+    }
+
+    let total = 0;
+    for (let rank = start; rank <= end; rank += 1) {
+      total += rankPointValue(rank === 14 ? 1 : rank, rank === 1);
+    }
+
+    best = Math.max(best ?? 0, total);
+  }
+
+  return best;
+}
+
+export function draftCompositionPointTotal(cards: CardSnapshot[]) {
+  const validTotals = [draftSetPointTotal(cards), draftRunPointTotal(cards)].filter(
+    (total): total is number => typeof total === "number",
+  );
+
+  return validTotals.length > 0 ? Math.max(...validTotals) : cardPointTotal(cards);
+}

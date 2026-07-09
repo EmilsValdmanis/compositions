@@ -12,6 +12,7 @@ export function GameBoardPlayers({
   game,
   connectedPlayers,
   hasDraftedCompositions,
+  showTurnIndicator = true,
   onResetDraftCompositions,
   onSendEmote,
 }: {
@@ -19,6 +20,7 @@ export function GameBoardPlayers({
   game: GameSnapshot | null;
   connectedPlayers: number;
   hasDraftedCompositions: boolean;
+  showTurnIndicator?: boolean;
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
 }) {
@@ -36,7 +38,12 @@ export function GameBoardPlayers({
         </CardAction>
       </CardHeader>
       <CardContent className="flex h-full min-w-0 flex-col gap-3">
-        <PlayerStrip players={players} game={game} showHostBadges={false} />
+        <PlayerStrip
+          players={players}
+          game={game}
+          showHostBadges={false}
+          showTurnIndicator={showTurnIndicator}
+        />
 
         {hasDraftedCompositions ? (
           <Button

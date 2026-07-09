@@ -11,10 +11,12 @@ export function PlayerStrip({
   players,
   game,
   showHostBadges = true,
+  showTurnIndicator = true,
 }: {
   players: PlayerSnapshot[];
   game: GameSnapshot | null;
   showHostBadges?: boolean;
+  showTurnIndicator?: boolean;
 }) {
   const playerStates = game?.players ?? [];
   return (
@@ -22,12 +24,15 @@ export function PlayerStrip({
       {players.map((player) => {
         const gamePlayer = playerStates.find((item) => item.playerId === player.playerId);
         const isTurn = game?.turn.playerId === player.playerId;
+        const showActiveTurn = showTurnIndicator && isTurn;
         return (
           <div
             key={player.playerId}
             className={cn(
               "relative grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-3xl border px-3 py-2",
-              isTurn ? "border-primary/40 bg-primary/10" : "border-border/60 bg-muted/20",
+              showActiveTurn
+                ? "border-primary/40 bg-primary/10"
+                : "border-border/60 bg-muted/20",
             )}
           >
             {player.activeEmote ? <PlayerEmoteBubble emote={player.activeEmote} /> : null}
@@ -45,7 +50,7 @@ export function PlayerStrip({
               {player.name}
             </p>
             <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-1.5">
-              {isTurn ? (
+              {showActiveTurn ? (
                 <Spinner
                   className="size-5 shrink-0 text-primary"
                   aria-label={`${player.name}'s turn`}
