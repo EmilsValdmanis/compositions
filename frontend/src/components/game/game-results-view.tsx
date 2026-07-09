@@ -199,13 +199,11 @@ export function GameResultsView({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        {playerState.hand && (
-                          <LeftoverHandTooltip
-                            handCount={playerState.handCount}
-                            hand={playerState.hand}
-                            playerName={playerName}
-                          />
-                        )}
+                        <LeftoverHandTooltip
+                          handCount={playerState.handCount}
+                          hand={playerState.hand ?? []}
+                          playerName={playerName}
+                        />
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {playerState.totalPoints}
