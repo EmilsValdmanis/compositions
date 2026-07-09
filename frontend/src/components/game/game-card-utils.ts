@@ -32,3 +32,24 @@ export function cardName(card: CardSnapshot) {
   const suit = suitNames[card.suit ?? -1] ?? "Unknown";
   return `${rank} of ${suit}`;
 }
+
+export function cardPointValue(card: CardSnapshot) {
+  if (card.isJoker) {
+    return 20;
+  }
+
+  const rank = card.rank ?? 0;
+  if (rank === 1 || (rank >= 11 && rank <= 13)) {
+    return 10;
+  }
+
+  if (rank >= 2 && rank <= 10) {
+    return rank;
+  }
+
+  return 0;
+}
+
+export function cardPointTotal(cards: CardSnapshot[]) {
+  return cards.reduce((total, card) => total + cardPointValue(card), 0);
+}

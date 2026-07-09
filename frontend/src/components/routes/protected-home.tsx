@@ -39,11 +39,13 @@ export function ProtectedHome() {
   } = useGameWebSocket();
   const autoJoinAttemptedRoomCodeRef = useRef<string | null>(null);
   const [roomCode, setRoomCode] = useState(search.room ?? "");
+  const [dismissedCompletedGameKey, setDismissedCompletedGameKey] = useState<string | null>(null);
   const players = state.room?.players ?? [];
   const currentPlayer = players.find((player) => player.playerId === state.playerId) ?? null;
   const connectedPlayers = players.filter((player) => player.connected).length;
   const phase = state.room?.phase ?? "lobby";
   const isLobbyPhase = !state.room || phase === "lobby";
+  const isGameInProgress = phase === "in_progress";
   const isHost = currentPlayer?.isHost ?? false;
   const pendingDealChoice = state.room?.pendingDealChoice ?? null;
   const dealChooser =
@@ -60,16 +62,29 @@ export function ProtectedHome() {
     players.length >= 2 &&
     allPlayersConnected &&
     pendingDealChoice == null;
-  const isMyTurn = state.game?.turn.playerId === state.playerId;
-  const canDraw = Boolean(state.game) && isMyTurn && !state.game?.turn.hasDrawn;
+  const isMyTurn = isGameInProgress && state.game?.turn.playerId === state.playerId;
+  const canDraw = isGameInProgress && Boolean(state.game) && isMyTurn && !state.game?.turn.hasDrawn;
   const canDrawDeck =
     canDraw && !state.game?.turn.mustUseDiscardDraw && (state.game?.drawPileCount ?? 0) > 0;
   const topDiscardCard = state.game?.discardPile[0] ?? null;
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
   const turnPlayerName = playerName(players, state.game?.turn.playerId);
-  const roundResultsGame = phase === "round_over" ? state.game : null;
   const completedGame = state.completedGame;
+  const completedGameKey = completedGame
+    ? `${completedGame.room.code}:${completedGame.game.round}`
+    : null;
+  const roundResults =
+    phase === "round_over" || phase === "game_over"
+      ? state.game
+        ? { room: state.room, game: state.game }
+        : null
+      : completedGame && completedGameKey !== dismissedCompletedGameKey
+        ? completedGame
+        : null;
+  const roundResultsKey = roundResults?.room?.code
+    ? `${roundResults.room.code}:${roundResults.game.round}`
+    : null;
   const isBootstrappingConnection =
     state.connectionStatus === "idle" ||
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
@@ -165,6 +180,12 @@ export function ProtectedHome() {
     return playTable(play);
   }
 
+  function handleReturnToLobby() {
+    if (roundResultsKey) {
+      setDismissedCompletedGameKey(roundResultsKey);
+    }
+  }
+
   if (isBootstrappingConnection) {
     return <GameRouteLoadingScreen />;
   }
@@ -172,20 +193,23 @@ export function ProtectedHome() {
   return (
     <ClientOnly fallback={<GameRouteLoadingScreen />}>
       <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
-        {roundResultsGame ? (
+        {roundResults ? (
           <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
-              room={state.room}
-              game={roundResultsGame}
+              room={roundResults.room}
+              game={roundResults.game}
               players={players}
               playerId={state.playerId}
+              connectedPlayers={connectedPlayers}
               dealChoice={{
                 pendingDealChoice,
                 dealChooserName: dealChooser?.name ?? null,
                 isDealChooser: Boolean(isDealChooser),
               }}
               onStartNextRound={startNextRound}
+              onReturnToLobby={handleReturnToLobby}
               onChooseDealing={chooseDealing}
+              onSendEmote={sendEmote}
             />
           </div>
         ) : isLobbyPhase ? (

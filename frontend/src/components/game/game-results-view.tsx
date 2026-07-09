@@ -1,3 +1,5 @@
+import { Cards01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type CompletedGameSnapshot,
   type DealingChoiceRequest,
@@ -6,9 +8,13 @@ import {
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
+import { GameBoardPlayers } from "#/components/game/game-board-players";
+import { cardName } from "#/components/game/game-card-utils";
+import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import {
   Table,
   TableBody,
@@ -17,7 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "#/components/ui/table";
-import { cn } from "#/lib/utils";
+import { cn, getUserInitials } from "#/lib/utils";
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -30,9 +36,12 @@ type GameResultsViewProps = {
   game: GameSnapshot;
   players: PlayerSnapshot[];
   playerId: string;
+  connectedPlayers: number;
   dealChoice: DealChoiceState;
   onStartNextRound?: () => void;
+  onReturnToLobby?: () => void;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
+  onSendEmote: (emoji: string) => void;
 };
 
 function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
@@ -52,14 +61,74 @@ function pointsGainedLabel(pointsGained: number) {
   return pointsGained > 0 ? `+${pointsGained}` : "0";
 }
 
+function noopResetDraftCompositions() {}
+
+function LeftoverHandPopover({
+  handCount,
+  hand,
+  playerName,
+}: {
+  handCount: number;
+  hand?: GameSnapshot["hand"];
+  playerName: string;
+}) {
+  const hasRevealedHand = hand && hand.length > 0;
+  const handTitle = hasRevealedHand
+    ? hand.map((card) => cardName(card)).join(", ")
+    : `${handCount} cards left`;
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto w-fit px-2 tabular-nums"
+            disabled={!hasRevealedHand}
+            title={handTitle}
+            aria-label={
+              hasRevealedHand
+                ? `${playerName}'s leftover hand`
+                : `${playerName} has ${handCount} cards left`
+            }
+          />
+        }
+      >
+        <span>{handCount}</span>
+        <HugeiconsIcon icon={Cards01Icon} strokeWidth={2} data-icon="inline-end" />
+      </PopoverTrigger>
+      {hasRevealedHand ? (
+        <PopoverContent align="end" sideOffset={8} className="w-64 gap-3 rounded-2xl p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium">{playerName}</p>
+            <Badge variant="outline">{handCount} left</Badge>
+          </div>
+          <div className="flex max-h-44 flex-wrap gap-1.5 overflow-auto">
+            {hand.map((card, index) => (
+              <Badge key={`${cardName(card)}-${index}`} variant="secondary">
+                {cardName(card)}
+              </Badge>
+            ))}
+          </div>
+        </PopoverContent>
+      ) : null}
+    </Popover>
+  );
+}
+
 export function GameResultsView({
   room,
   game,
   players,
   playerId,
+  connectedPlayers,
   dealChoice,
   onStartNextRound,
+  onReturnToLobby,
   onChooseDealing,
+  onSendEmote,
 }: GameResultsViewProps) {
   const winner = players.find(
     (player) => player.playerId === game.players[game.roundWinnerIndex]?.playerId,
@@ -68,7 +137,7 @@ export function GameResultsView({
   const isHost = room?.hostPlayerId === playerId;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-4">
+    <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       <Card className="border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -92,69 +161,107 @@ export function GameResultsView({
                   <TableHead>Player</TableHead>
                   <TableHead className="text-right">Cards</TableHead>
                   <TableHead className="text-right">Score</TableHead>
+                  <TableHead className="w-16 text-right">Round</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rankingRows(game, players).map(({ rank, player, playerState, isRoundWinner }) => (
-                  <TableRow
-                    key={playerState.playerId}
-                    className={cn(
-                      isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
-                    )}
-                  >
-                    <TableCell className={cn("font-medium", isRoundWinner && "text-primary")}>
-                      {rank}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex min-w-40 flex-wrap items-center gap-2">
-                        <span className={cn("font-medium", isRoundWinner && "text-primary")}>
-                          {player?.name ?? "Unknown player"}
-                        </span>
-                        {isRoundWinner ? <Badge>Winner</Badge> : null}
-                        {playerState.playerId === playerId ? (
-                          <Badge variant="outline">You</Badge>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">{playerState.handCount}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-baseline justify-end gap-1.5 tabular-nums">
-                        <span className="font-medium">{playerState.totalPoints}</span>
+                {rankingRows(game, players).map(({ rank, player, playerState, isRoundWinner }) => {
+                  const playerName = player?.name ?? "Unknown player";
+
+                  return (
+                    <TableRow
+                      key={playerState.playerId}
+                      className={cn(
+                        isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+                      )}
+                    >
+                      <TableCell className={cn("font-medium", isRoundWinner && "text-primary")}>
+                        {rank}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex min-w-40 flex-wrap items-center gap-2">
+                          <Avatar size="sm">
+                            {player?.imageUrl ? (
+                              <AvatarImage src={player.imageUrl} alt={playerName} />
+                            ) : null}
+                            <AvatarFallback>
+                              {playerName === "Unknown player" ? (
+                                <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
+                              ) : (
+                                getUserInitials(playerName)
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className={cn("font-medium", isRoundWinner && "text-primary")}>
+                            {playerName}
+                          </span>
+                          {isRoundWinner ? <Badge>Winner</Badge> : null}
+                          {playerState.playerId === playerId ? (
+                            <Badge variant="outline">You</Badge>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <LeftoverHandPopover
+                          handCount={playerState.handCount}
+                          hand={playerState.hand}
+                          playerName={playerName}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right font-medium tabular-nums">
+                        {playerState.totalPoints}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
                         {playerState.pointsGained > 0 ? (
                           <span className="text-xs font-medium text-primary">
                             {pointsGainedLabel(playerState.pointsGained)}
                           </span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                        ) : (
+                          <span className="text-xs text-muted-foreground">0</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>
 
-          {!isGameOver ? (
-            dealChoice.pendingDealChoice ? (
-              <DealChoicePanel
-                players={players}
-                pendingDealChoice={dealChoice.pendingDealChoice}
-                dealChooserName={dealChoice.dealChooserName}
-                isDealChooser={dealChoice.isDealChooser}
-                onChooseDealing={onChooseDealing}
-              />
-            ) : (
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                {!isHost ? (
-                  <p className="text-sm text-muted-foreground">Waiting for the host.</p>
-                ) : null}
-                <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
-                  Start next round
-                </Button>
-              </div>
-            )
-          ) : null}
+          {isGameOver ? (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <Button type="button" onClick={onReturnToLobby}>
+                Back to lobby
+              </Button>
+            </div>
+          ) : dealChoice.pendingDealChoice ? (
+            <DealChoicePanel
+              players={players}
+              pendingDealChoice={dealChoice.pendingDealChoice}
+              dealChooserName={dealChoice.dealChooserName}
+              isDealChooser={dealChoice.isDealChooser}
+              onChooseDealing={onChooseDealing}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {!isHost ? (
+                <p className="text-sm text-muted-foreground">Waiting for the host.</p>
+              ) : null}
+              <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
+                Start next round
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <GameBoardPlayers
+        players={players}
+        game={game}
+        connectedPlayers={connectedPlayers}
+        hasDraftedCompositions={false}
+        onResetDraftCompositions={noopResetDraftCompositions}
+        onSendEmote={onSendEmote}
+      />
     </div>
   );
 }

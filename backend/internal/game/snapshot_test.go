@@ -84,6 +84,9 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	if snapshot.Players[0].PlayerID != "first" || snapshot.Players[0].HandCount != 2 || snapshot.Players[0].TotalPoints != 12 || snapshot.Players[0].PointsGained != 5 || !snapshot.Players[0].HasOpened {
 		t.Fatalf("snapshot.Players[0] = %#v; want first player state", snapshot.Players[0])
 	}
+	if len(snapshot.Players[0].Hand) != 0 || len(snapshot.Players[1].Hand) != 0 {
+		t.Fatalf("snapshot player hands = %#v; want hidden during in-progress play", snapshot.Players)
+	}
 	if len(snapshot.Hand) != 2 || snapshot.Hand[0].Rank != King || !snapshot.Hand[1].IsJoker {
 		t.Fatalf("snapshot.Hand = %#v; want first player's hand", snapshot.Hand)
 	}
@@ -104,6 +107,18 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	}
 	if snapshot.TurnActivity != nil {
 		t.Fatalf("snapshot.TurnActivity = %#v; want nil by default", snapshot.TurnActivity)
+	}
+
+	state.phase = PhaseRoundOver
+	roundSnapshot, ok := state.SnapshotForPlayer("first")
+	if !ok {
+		t.Fatal("SnapshotForPlayer(first round over) ok = false; want true")
+	}
+	if len(roundSnapshot.Players[0].Hand) != 2 || roundSnapshot.Players[0].Hand[0].Rank != King || !roundSnapshot.Players[0].Hand[1].IsJoker {
+		t.Fatalf("round-over first hand = %#v; want revealed first hand", roundSnapshot.Players[0].Hand)
+	}
+	if len(roundSnapshot.Players[1].Hand) != 1 || roundSnapshot.Players[1].Hand[0].Rank != Two {
+		t.Fatalf("round-over second hand = %#v; want revealed second hand", roundSnapshot.Players[1].Hand)
 	}
 }
 

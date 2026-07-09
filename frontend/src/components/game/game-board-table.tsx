@@ -19,7 +19,9 @@ import {
 import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
+import { cardPointTotal } from "#/components/game/game-card-utils";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
+import { Badge } from "#/components/ui/badge";
 import { Card, CardContent } from "#/components/ui/card";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
@@ -154,6 +156,16 @@ export function GameBoardTable({
   const stagedNewDrafts = stagedDrafts.filter(
     (composition) => composition.tableIndex === undefined,
   );
+  const visibleDraftPointTotals = [
+    ...stagedNewDrafts.map((composition) => cardPointTotal(composition.cards)),
+    ...newCompositions.map((composition) =>
+      cardPointTotal(composition.entries.map((entry) => entry.card)),
+    ),
+  ];
+  const visibleDraftPointsTotal = visibleDraftPointTotals.reduce(
+    (total, points) => total + points,
+    0,
+  );
   const isDraggingHandCard =
     active !== null &&
     active.data.current?.drawSource === undefined &&
@@ -242,6 +254,12 @@ export function GameBoardTable({
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
+            {visibleDraftPointTotals.length > 0 ? (
+              <div className="flex min-h-5 basis-full items-center justify-center">
+                <Badge variant="outline">Draft total {visibleDraftPointsTotal} pts</Badge>
+              </div>
+            ) : null}
+
             {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
               <div
                 key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
@@ -249,6 +267,7 @@ export function GameBoardTable({
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
+                  <Badge variant="outline">{cardPointTotal(composition.cards)} pts</Badge>
                 </div>
                 <div className="flex items-start gap-2">
                   {draftCardInstances(composition.cards).map(({ card, key }) => (
@@ -270,6 +289,9 @@ export function GameBoardTable({
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
+                  <Badge variant="outline">
+                    {cardPointTotal(composition.entries.map((entry) => entry.card))} pts
+                  </Badge>
                 </div>
                 <SortableContext
                   items={composition.entries.map((entry) => entry.key)}

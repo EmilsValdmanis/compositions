@@ -1,3 +1,5 @@
+import { Cards02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { PlayerEmoteBubble } from "#/components/game/player-emotes";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
@@ -50,7 +52,12 @@ export function PlayerStrip({
                 />
               ) : null}
               {showHostBadges && player.isHost ? <Badge variant="secondary">Host</Badge> : null}
-              {gamePlayer ? <Badge variant="outline">{gamePlayer.handCount} cards</Badge> : null}
+              {gamePlayer ? (
+                <Badge variant="outline" aria-label={`${gamePlayer.handCount} cards`}>
+                  {gamePlayer.handCount}
+                  <HugeiconsIcon icon={Cards02Icon} aria-hidden="true" />
+                </Badge>
+              ) : null}
             </div>
           </div>
         );
