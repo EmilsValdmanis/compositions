@@ -100,16 +100,10 @@ function LeftoverHandTooltip({
         <span>{handCount}</span>
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
-      <TooltipContent className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-medium">{playerName}</p>
-          <Badge variant="outline">{handCount} left</Badge>
-        </div>
-        <div className="flex max-h-56 flex-wrap gap-2 overflow-auto">
-          {hand.map((card, index) => (
-            <GameCard key={`${cardName(card)}-${index}`} card={card} size="compact" />
-          ))}
-        </div>
+      <TooltipContent className="flex flex-wrap gap-1 py-2.5 max-w-60">
+        {hand.map((card, index) => (
+          <GameCard key={`${cardName(card)}-${index}`} card={card} size="compact" />
+        ))}
       </TooltipContent>
     </Tooltip>
   );
