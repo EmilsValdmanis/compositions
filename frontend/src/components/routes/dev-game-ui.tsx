@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
+import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
+import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import {
   type ActionResult,
   type CardSnapshot,
+  type DealingChoiceRequest,
   type DraftCompositionSnapshot,
   type GameSnapshot,
   type RoomSnapshot,
@@ -12,6 +15,7 @@ import {
 } from "#/components/game-websocket-provider";
 
 const scenarios = mockScenarios;
+type DevViewMode = "board" | "results";
 
 function cloneCards(cards: CardSnapshot[]) {
   return cards.map((card) => ({ ...card }));
@@ -28,7 +32,10 @@ function cloneGame(game: GameSnapshot): GameSnapshot {
   return {
     ...game,
     turn: { ...game.turn },
-    players: game.players.map((player) => ({ ...player })),
+    players: game.players.map((player) => ({
+      ...player,
+      hand: player.hand ? cloneCards(player.hand) : undefined,
+    })),
     hand: cloneCards(game.hand),
     discardPile: cloneCards(game.discardPile),
     activeCompositions: game.activeCompositions.map((composition) => ({
@@ -73,6 +80,61 @@ function cloneRoom(room: RoomSnapshot): RoomSnapshot {
     ...room,
     pendingDealChoice: room.pendingDealChoice ? { ...room.pendingDealChoice } : undefined,
     players: room.players.map((player) => ({ ...player })),
+  };
+}
+
+const leftoverHandsByPlayerId: Record<string, CardSnapshot[]> = {
+  "player-avery": [],
+  "player-blair": [
+    { rank: 3, suit: 0 },
+    { rank: 6, suit: 2 },
+    { rank: 11, suit: 3 },
+    { isJoker: true },
+    { rank: 13, suit: 0 },
+    { rank: 1, suit: 1 },
+  ],
+  "player-casey": [
+    { rank: 2, suit: 3 },
+    { rank: 7, suit: 0 },
+    { rank: 10, suit: 1 },
+    { rank: 12, suit: 2 },
+    { rank: 4, suit: 0 },
+    { rank: 8, suit: 3 },
+    { rank: 9, suit: 1 },
+    { rank: 5, suit: 2 },
+    { rank: 6, suit: 0 },
+  ],
+  "player-devon": [
+    { rank: 1, suit: 0 },
+    { rank: 2, suit: 1 },
+    { rank: 3, suit: 2 },
+    { rank: 4, suit: 3 },
+    { rank: 5, suit: 0 },
+    { rank: 6, suit: 1 },
+    { rank: 7, suit: 2 },
+    { rank: 8, suit: 0 },
+    { rank: 9, suit: 3 },
+    { rank: 10, suit: 0 },
+    { rank: 11, suit: 1 },
+  ],
+};
+
+function revealLeftoverHands(game: GameSnapshot): GameSnapshot {
+  return {
+    ...game,
+    players: game.players.map((player) => {
+      const hand = leftoverHandsByPlayerId[player.playerId];
+
+      if (!hand) {
+        return player;
+      }
+
+      return {
+        ...player,
+        hand: cloneCards(hand),
+        handCount: hand.length,
+      };
+    }),
   };
 }
 
@@ -213,6 +275,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
 export function DevGameUi() {
   const scenario = scenarios[0];
   const [gameOverride, setGameOverride] = useState<GameSnapshot | null>(null);
+  const [viewMode, setViewMode] = useState<DevViewMode>("board");
 
   const players = scenario?.players ?? [];
   const room = scenario ? cloneRoom(scenario.room) : null;
@@ -222,6 +285,7 @@ export function DevGameUi() {
       ? cloneGame(scenario.game)
       : null;
   const game = rawGame;
+  const resultsGame = rawGame ? revealLeftoverHands(rawGame) : null;
 
   const resolvedPerspectiveId = scenario?.controlledPlayerId ?? "";
 
@@ -233,6 +297,13 @@ export function DevGameUi() {
   const canDrawDiscard = canDraw && Boolean(topDiscardCard);
   const canDiscard = Boolean(game) && isMyTurn && Boolean(game.turn.hasDrawn);
   const turnPlayerName = playerName(players, game?.turn.playerId);
+  const resultsRoom = room
+    ? {
+        ...room,
+        phase: "round_over",
+        pendingDealChoice: undefined,
+      }
+    : null;
 
   function updateGame(updater: (current: GameSnapshot) => GameSnapshot) {
     setGameOverride((current) => {
@@ -265,30 +336,71 @@ export function DevGameUi() {
     } satisfies ActionResult;
   }
 
+  function handleStartNextRound() {
+    setGameOverride(null);
+    setViewMode("board");
+  }
+
+  function handleChooseDealing(_choice: DealingChoiceRequest | string) {}
+
   return (
     <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
+      <div className="flex shrink-0 items-center justify-end">
+        <Tabs
+          value={viewMode}
+          onValueChange={(value) => setViewMode(value as DevViewMode)}
+          className="flex-none"
+        >
+          <TabsList aria-label="Dev preview mode">
+            <TabsTrigger value="board">Board</TabsTrigger>
+            <TabsTrigger value="results">Results</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
       <div className="flex min-h-0 flex-1 flex-col overflow-visible">
-        <GameBoardView
-          game={game}
-          roomCode={room.code}
-          playerId={resolvedPerspectiveId}
-          players={players}
-          connectedPlayers={connectedPlayers}
-          turnState={{
-            canDrawDeck,
-            canDrawDiscard,
-            canDiscard,
-            isMyTurn,
-            turnPlayerName,
-          }}
-          topDiscardCard={topDiscardCard}
-          onDiscardCard={handleDiscardCard}
-          onDrawFromDeck={() => updateGame(drawFromDeck)}
-          onDrawFromDiscard={() => updateGame(drawFromDiscard)}
-          onPlayTable={handlePlayTable}
-          onSendEmote={() => {}}
-          disableDraftSync
-        />
+        {viewMode === "results" && resultsGame ? (
+          <div className="flex min-h-0 flex-1 overflow-auto">
+            <GameResultsView
+              room={resultsRoom}
+              game={resultsGame}
+              players={players}
+              playerId={resolvedPerspectiveId}
+              connectedPlayers={connectedPlayers}
+              dealChoice={{
+                pendingDealChoice: null,
+                dealChooserName: null,
+                isDealChooser: false,
+              }}
+              onStartNextRound={handleStartNextRound}
+              onReturnToLobby={() => setViewMode("board")}
+              onChooseDealing={handleChooseDealing}
+              onSendEmote={() => {}}
+            />
+          </div>
+        ) : (
+          <GameBoardView
+            game={game}
+            roomCode={room.code}
+            playerId={resolvedPerspectiveId}
+            players={players}
+            connectedPlayers={connectedPlayers}
+            turnState={{
+              canDrawDeck,
+              canDrawDiscard,
+              canDiscard,
+              isMyTurn,
+              turnPlayerName,
+            }}
+            topDiscardCard={topDiscardCard}
+            onDiscardCard={handleDiscardCard}
+            onDrawFromDeck={() => updateGame(drawFromDeck)}
+            onDrawFromDiscard={() => updateGame(drawFromDiscard)}
+            onPlayTable={handlePlayTable}
+            onSendEmote={() => {}}
+            disableDraftSync
+          />
+        )}
       </div>
     </section>
   );

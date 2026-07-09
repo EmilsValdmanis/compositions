@@ -1,4 +1,4 @@
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, getRouteApi } from "@tanstack/react-router";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRulesDialog } from "#/components/game/game-rules-dialog";
 import { ServerStatusBadge } from "#/components/server-status-badge";
@@ -6,6 +6,8 @@ import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { CodeXmlIcon } from "@hugeicons/core-free-icons";
+
+const rootRouteApi = getRouteApi("__root__");
 
 function BrandTitle({ roomCode }: { roomCode?: string }) {
   return (
@@ -57,6 +59,8 @@ function ProtectedLayoutStatus() {
 }
 
 export function ProtectedLayout() {
+  const { session } = rootRouteApi.useRouteContext();
+
   return (
     <>
       <nav className="w-full border-b bg-background/80 backdrop-blur-sm">
@@ -80,7 +84,7 @@ export function ProtectedLayout() {
                 Dev UI
               </Button>
             ) : null}
-            <UserDropdown />
+            {session ? <UserDropdown /> : null}
           </div>
         </div>
       </nav>
