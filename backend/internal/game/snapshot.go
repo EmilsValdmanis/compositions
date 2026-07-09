@@ -44,11 +44,12 @@ type TurnActivitySnapshot struct {
 }
 
 type PlayerStateSnapshot struct {
-	PlayerID     string `json:"playerId"`
-	HandCount    int    `json:"handCount"`
-	TotalPoints  int    `json:"totalPoints"`
-	PointsGained int    `json:"pointsGained"`
-	HasOpened    bool   `json:"hasOpened"`
+	PlayerID     string         `json:"playerId"`
+	HandCount    int            `json:"handCount"`
+	Hand         []CardSnapshot `json:"hand,omitempty"`
+	TotalPoints  int            `json:"totalPoints"`
+	PointsGained int            `json:"pointsGained"`
+	HasOpened    bool           `json:"hasOpened"`
 }
 
 type TurnSnapshot struct {
@@ -84,7 +85,7 @@ func (gs *GameState) SnapshotForPlayer(playerID string) (GameSnapshot, bool) {
 		DealerIndex:        gs.dealerIndex,
 		RoundWinnerIndex:   gs.roundWinnerIndex,
 		Turn:               gs.turn.snapshot(gs.players),
-		Players:            playerStateSnapshots(gs.players),
+		Players:            playerStateSnapshots(gs.players, gs.phase == PhaseRoundOver || gs.phase == PhaseGameOver),
 		DrawPileCount:      len(gs.drawPile.cards),
 		DiscardPile:        cardSnapshots(gs.discardPile.cards),
 		ActiveCompositions: compositionSnapshots(gs.activeCompositions),
@@ -147,19 +148,23 @@ func (t Turn) snapshot(players []*Player) TurnSnapshot {
 	return snapshot
 }
 
-func playerStateSnapshots(players []*Player) []PlayerStateSnapshot {
+func playerStateSnapshots(players []*Player, revealHands bool) []PlayerStateSnapshot {
 	snapshots := make([]PlayerStateSnapshot, 0, len(players))
 	for _, player := range players {
 		if player == nil {
 			continue
 		}
-		snapshots = append(snapshots, PlayerStateSnapshot{
+		snapshot := PlayerStateSnapshot{
 			PlayerID:     player.ID,
 			HandCount:    len(player.hand.cards),
 			TotalPoints:  player.totalPoints,
 			PointsGained: player.pointsGained,
 			HasOpened:    player.hasOpened,
-		})
+		}
+		if revealHands {
+			snapshot.Hand = cardSnapshots(player.hand.cards)
+		}
+		snapshots = append(snapshots, snapshot)
 	}
 	return snapshots
 }

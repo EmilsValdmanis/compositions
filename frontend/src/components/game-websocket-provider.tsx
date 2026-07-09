@@ -83,6 +83,7 @@ export type TurnDraftUpdateRequest = {
 export type PlayerStateSnapshot = {
   playerId: string;
   handCount: number;
+  hand?: CardSnapshot[];
   totalPoints: number;
   pointsGained: number;
   hasOpened: boolean;
@@ -286,6 +287,12 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
     }),
   error: (current, data) => {
     const message = data?.message ?? "unknown error";
+    if (current.lastEvent === "draft_update" && message === "not your turn") {
+      return clearError(current, {
+        lastEvent: "error",
+      });
+    }
+
     return withError(current, message, {
       connectionStatus:
         current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
