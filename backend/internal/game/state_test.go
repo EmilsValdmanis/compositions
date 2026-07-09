@@ -2056,7 +2056,7 @@ func TestGameStatePlayTableAllowsReclaimedJokerToContributeAfterOwnOpeningCompos
 	}
 }
 
-func TestGameStatePlayTableAppliesInsertionBeforeReclaim(t *testing.T) {
+func TestGameStatePlayTableAppliesReclaimBeforeInsertion(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true
 	state.players[0].hasOpened = true
@@ -2083,7 +2083,7 @@ func TestGameStatePlayTableAppliesInsertionBeforeReclaim(t *testing.T) {
 		Cards:            []Card{{rank: Jack, suit: Hearts}, {isJoker: true}},
 	}}, JokerReclaim{
 		CompositionIndex: 0,
-		JokerIndex:       4,
+		JokerIndex:       2,
 		ReplacementCard:  Card{rank: Ace, suit: Hearts},
 	})
 
@@ -3824,5 +3824,54 @@ func TestApplyTablePlayStateErrorBranches(t *testing.T) {
 	}
 	if _, err := applyTablePlayState(tablePlayState{handCards: []Card{card(Ten, Hearts), card(Two, Clubs)}, activeCompositions: []*Composition{brokenReclaimComp}, hasOpened: true}, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Ten, Hearts)}}); !errors.Is(err, ErrInvalidComposition) {
 		t.Fatalf("applyTablePlayState() error = %v; want %v for unresolved reclaim points", err, ErrInvalidComposition)
+	}
+}
+
+func TestApplyTablePlayStateAllowsReclaimedJokerInsertedIntoSameRun(t *testing.T) {
+	insertAtStart := 0
+	base := tablePlayState{
+		handCards: []Card{
+			card(Four, Hearts),
+			card(Nine, Clubs),
+		},
+		activeCompositions: []*Composition{
+			mustRun(t, card(Three, Hearts), joker(), card(Five, Hearts)),
+		},
+		hasOpened: true,
+	}
+
+	next, err := applyTablePlayState(
+		base,
+		nil,
+		[]CompositionAddition{{
+			CompositionIndex: 0,
+			InsertIndex:      &insertAtStart,
+			Cards:            []Card{joker()},
+		}},
+		[]JokerReclaim{{
+			CompositionIndex: 0,
+			JokerIndex:       1,
+			ReplacementCard:  card(Four, Hearts),
+		}},
+	)
+
+	if err != nil {
+		t.Fatalf("applyTablePlayState() error = %v; want nil", err)
+	}
+	if len(next.activeCompositions) != 1 {
+		t.Fatalf("len(activeCompositions) = %d; want 1", len(next.activeCompositions))
+	}
+	want := []Card{
+		joker(),
+		card(Three, Hearts),
+		card(Four, Hearts),
+		card(Five, Hearts),
+	}
+	if !slices.EqualFunc(next.activeCompositions[0].cards, want, cardsEqual) {
+		t.Fatalf("active composition cards = %+v; want %+v", next.activeCompositions[0].cards, want)
+	}
+	expectJokerRepresentation(t, next.activeCompositions[0], 0, card(Two, Hearts))
+	if !slices.EqualFunc(next.handCards, []Card{card(Nine, Clubs)}, cardsEqual) {
+		t.Fatalf("hand cards = %+v; want Nine of Clubs", next.handCards)
 	}
 }

@@ -838,6 +838,23 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		updatedCount++
 	}
 
+	for _, reclaim := range reclaims {
+		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(baseState.activeCompositions) {
+			return false
+		}
+
+		target := currentComposition(reclaim.CompositionIndex)
+		if target == nil {
+			return false
+		}
+
+		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
+			return false
+		}
+		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
+		storeComposition(reclaim.CompositionIndex, updated)
+	}
+
 	for _, addition := range additions {
 		if addition.compositionIndex < 0 || addition.compositionIndex >= len(baseState.activeCompositions) {
 			return false
@@ -864,23 +881,6 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		}
 		openingPoints += extended.Points() - target.Points()
 		storeComposition(addition.compositionIndex, extended)
-	}
-
-	for _, reclaim := range reclaims {
-		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(baseState.activeCompositions) {
-			return false
-		}
-
-		target := currentComposition(reclaim.CompositionIndex)
-		if target == nil {
-			return false
-		}
-
-		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
-			return false
-		}
-		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
-		storeComposition(reclaim.CompositionIndex, updated)
 	}
 
 	if !baseState.hasOpened && len(compMasks) == 0 {
@@ -988,6 +988,26 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 	updatedCompositions := make([]*Composition, len(state.activeCompositions))
 	copy(updatedCompositions, state.activeCompositions)
 
+	for _, reclaim := range reclaims {
+		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		target := updatedCompositions[reclaim.CompositionIndex]
+		if target == nil {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
+		if !ok {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
+		playedCards = append(playedCards, reclaim.ReplacementCard)
+		updatedCompositions[reclaim.CompositionIndex] = updated
+	}
+
 	for _, addition := range additions {
 		if len(addition.Cards) == 0 {
 			return tablePlayState{}, ErrInvalidComposition
@@ -1017,26 +1037,6 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		openingCandidates = append(openingCandidates, openingPlayCandidate{
 			cards: addition.Cards,
 		})
-	}
-
-	for _, reclaim := range reclaims {
-		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
-		target := updatedCompositions[reclaim.CompositionIndex]
-		if target == nil {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
-		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
-		if !ok {
-			return tablePlayState{}, ErrInvalidComposition
-		}
-
-		reclaimedCards = append(reclaimedCards, target.cards[reclaim.JokerIndex])
-		playedCards = append(playedCards, reclaim.ReplacementCard)
-		updatedCompositions[reclaim.CompositionIndex] = updated
 	}
 
 	if !state.hasOpened && len(comps) == 0 {
