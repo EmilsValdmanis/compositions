@@ -9,6 +9,7 @@ import { GameWebSocketProvider } from "#/components/game-websocket-provider";
 import { ThemeProvider } from "#/components/theme-provider";
 import { AutoConnectWebSocket } from "#/components/routes/auto-connect-websocket";
 import { ThemeAwareToaster } from "#/components/routes/theme-aware-toaster";
+import { TooltipProvider } from "../ui/tooltip";
 
 export function RootDocument({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -29,11 +30,13 @@ export function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <div className="flex h-dvh w-full flex-col">
           <ThemeProvider defaultTheme="system" storageKey="theme">
-            <GameWebSocketProvider>
-              {children}
-              <AutoConnectWebSocket />
-            </GameWebSocketProvider>
-            <ThemeAwareToaster />
+            <TooltipProvider>
+              <GameWebSocketProvider>
+                {children}
+                <AutoConnectWebSocket />
+              </GameWebSocketProvider>
+              <ThemeAwareToaster />
+            </TooltipProvider>
           </ThemeProvider>
           <TanStackDevtools
             config={{

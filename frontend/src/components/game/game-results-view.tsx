@@ -70,7 +70,7 @@ function LeftoverHandTooltip({
   playerName,
 }: {
   handCount: number;
-  hand?: GameSnapshot["hand"];
+  hand: GameSnapshot["hand"];
   playerName: string;
 }) {
   const hasRevealedHand = hand && hand.length > 0;
@@ -100,23 +100,21 @@ function LeftoverHandTooltip({
         <span>{handCount}</span>
         <HugeiconsIcon icon={Cards01Icon} strokeWidth={2} data-icon="inline-end" />
       </TooltipTrigger>
-      {hasRevealedHand ? (
-        <TooltipContent
-          align="end"
-          sideOffset={8}
-          className="max-w-80 flex-col items-stretch gap-3 rounded-2xl bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-medium">{playerName}</p>
-            <Badge variant="outline">{handCount} left</Badge>
-          </div>
-          <div className="flex max-h-56 flex-wrap gap-2 overflow-auto">
-            {hand.map((card, index) => (
-              <GameCard key={`${cardName(card)}-${index}`} card={card} size="compact" />
-            ))}
-          </div>
-        </TooltipContent>
-      ) : null}
+      <TooltipContent
+        align="end"
+        sideOffset={8}
+        className="max-w-80 flex-col items-stretch gap-3 rounded-2xl bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium">{playerName}</p>
+          <Badge variant="outline">{handCount} left</Badge>
+        </div>
+        <div className="flex max-h-56 flex-wrap gap-2 overflow-auto">
+          {hand.map((card, index) => (
+            <GameCard key={`${cardName(card)}-${index}`} card={card} size="compact" />
+          ))}
+        </div>
+      </TooltipContent>
     </Tooltip>
   );
 }
@@ -205,11 +203,13 @@ export function GameResultsView({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <LeftoverHandTooltip
-                          handCount={playerState.handCount}
-                          hand={playerState.hand}
-                          playerName={playerName}
-                        />
+                        {playerState.hand && (
+                          <LeftoverHandTooltip
+                            handCount={playerState.handCount}
+                            hand={playerState.hand}
+                            playerName={playerName}
+                          />
+                        )}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums">
                         {playerState.totalPoints}
