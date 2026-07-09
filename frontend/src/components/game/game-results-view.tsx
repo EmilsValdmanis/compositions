@@ -86,7 +86,7 @@ function LeftoverHandTooltip({
             type="button"
             variant="ghost"
             size="sm"
-            className="ml-auto w-fit px-2 tabular-nums"
+            className="ml-auto w-fit tabular-nums"
             disabled={!hasRevealedHand}
             title={handTitle}
             aria-label={
@@ -98,13 +98,9 @@ function LeftoverHandTooltip({
         }
       >
         <span>{handCount}</span>
-        <HugeiconsIcon icon={Cards01Icon} strokeWidth={2} data-icon="inline-end" />
+        <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
-      <TooltipContent
-        align="end"
-        sideOffset={8}
-        className="max-w-80 flex-col items-stretch gap-3 rounded-2xl bg-popover p-3 text-popover-foreground shadow-lg ring-1 ring-foreground/5 dark:ring-foreground/10"
-      >
+      <TooltipContent>
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium">{playerName}</p>
           <Badge variant="outline">{handCount} left</Badge>
