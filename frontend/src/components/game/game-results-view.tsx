@@ -100,7 +100,7 @@ function LeftoverHandTooltip({
         <span>{handCount}</span>
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
-      <TooltipContent>
+      <TooltipContent className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium">{playerName}</p>
           <Badge variant="outline">{handCount} left</Badge>
