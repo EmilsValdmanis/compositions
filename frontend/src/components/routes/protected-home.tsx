@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ClientOnly, getRouteApi } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
+import { EndGameProposalAlert } from "#/components/game/end-game-proposal-alert";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
@@ -41,8 +42,9 @@ export function ProtectedHome() {
   const [roomCode, setRoomCode] = useState(search.room ?? "");
   const [dismissedCompletedGameKey, setDismissedCompletedGameKey] = useState<string | null>(null);
   const players = state.room?.players ?? [];
+  const activePlayers = players.filter((player) => !player.forfeited);
   const currentPlayer = players.find((player) => player.playerId === state.playerId) ?? null;
-  const connectedPlayers = players.filter((player) => player.connected).length;
+  const connectedPlayers = activePlayers.filter((player) => player.connected).length;
   const phase = state.room?.phase ?? "lobby";
   const isLobbyPhase = !state.room || phase === "lobby";
   const isGameInProgress = phase === "in_progress";
@@ -51,7 +53,8 @@ export function ProtectedHome() {
   const dealChooser =
     players.find((player) => player.playerId === pendingDealChoice?.chooserPlayerId) ?? null;
   const isDealChooser = pendingDealChoice?.chooserPlayerId === state.playerId;
-  const allPlayersConnected = players.length > 0 && players.every((player) => player.connected);
+  const allPlayersConnected =
+    activePlayers.length > 0 && activePlayers.every((player) => player.connected);
   const canCreateRoom = state.connectionStatus === "connected" && !state.room;
   const canJoinRoom =
     state.connectionStatus === "connected" && !state.room && roomCode.trim() !== "";
@@ -193,12 +196,13 @@ export function ProtectedHome() {
   return (
     <ClientOnly fallback={<GameRouteLoadingScreen />}>
       <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
+        <EndGameProposalAlert />
         {roundResults ? (
           <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
               room={roundResults.room}
               game={roundResults.game}
-              players={players}
+              players={roundResults.room?.players ?? players}
               playerId={state.playerId}
               connectedPlayers={connectedPlayers}
               dealChoice={{

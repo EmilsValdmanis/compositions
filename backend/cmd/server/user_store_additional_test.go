@@ -139,7 +139,40 @@ func TestPostgresUserStoreDefaultDatabaseWrappers(t *testing.T) {
 	if _, err := loadStoredLobbyState(context.Background(), store); err == nil || err.Error() != "user store is not configured" {
 		t.Fatalf("loadStoredLobbyState(default) error = %v; want user store is not configured", err)
 	}
+	if _, err := createStoredGameBugReport(context.Background(), store, database.GameBugReportRecord{}); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("createStoredGameBugReport(default) error = %v; want user store is not configured", err)
+	}
 	closeStoredUserStore(store)
+}
+
+func TestPostgresUserStoreGameBugReports(t *testing.T) {
+	originalCreateStoredGameBugReport := createStoredGameBugReport
+	defer func() { createStoredGameBugReport = originalCreateStoredGameBugReport }()
+
+	t.Run("requires configured store", func(t *testing.T) {
+		var store *postgresUserStore
+		if _, err := store.CreateGameBugReport(context.Background(), database.GameBugReportRecord{}); err == nil || err.Error() != "user store is not configured" {
+			t.Fatalf("CreateGameBugReport(nil) error = %v", err)
+		}
+	})
+
+	t.Run("delegates to database store", func(t *testing.T) {
+		want := database.GameBugReportRecord{ID: "report-1", Description: "Broken turn"}
+		createStoredGameBugReport = func(_ context.Context, store *database.UserStore, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+			if store == nil || report.ID != want.ID || report.Description != want.Description {
+				t.Fatalf("CreateGameBugReport arguments store=%v report=%#v", store, report)
+			}
+			return report, nil
+		}
+		store := &postgresUserStore{store: &database.UserStore{}}
+		got, err := store.CreateGameBugReport(context.Background(), want)
+		if err != nil {
+			t.Fatalf("CreateGameBugReport() error = %v", err)
+		}
+		if got.ID != want.ID {
+			t.Fatalf("CreateGameBugReport() = %#v; want %#v", got, want)
+		}
+	})
 }
 
 func TestPostgresUserStoreLobbyState(t *testing.T) {

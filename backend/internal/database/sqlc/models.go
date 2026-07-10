@@ -17,6 +17,26 @@ type Account struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type GameBugReport struct {
+	ID               pgtype.UUID        `json:"id"`
+	RoomCode         string             `json:"room_code"`
+	ReporterPlayerID string             `json:"reporter_player_id"`
+	ReporterUserID   pgtype.UUID        `json:"reporter_user_id"`
+	Description      string             `json:"description"`
+	GameState        []byte             `json:"game_state"`
+	Round            int32              `json:"round"`
+	Turn             int32              `json:"turn"`
+	RequestedAbort   bool               `json:"requested_abort"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type LobbyState struct {
+	ID        bool               `json:"id"`
+	State     []byte             `json:"state"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Session struct {
 	TokenHash string             `json:"token_hash"`
 	UserID    pgtype.UUID        `json:"user_id"`

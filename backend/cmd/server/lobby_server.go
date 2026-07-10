@@ -2,25 +2,32 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"maps"
 	"math/rand"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/EmilsValdmanis/compositions/internal/database"
 	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
 const (
-	minPlayersToStart = 2
-	maxPlayersPerRoom = 4
-	roomCodeLength    = 6
-	playerEmoteTTL    = 4 * time.Second
+	minPlayersToStart   = 2
+	maxPlayersPerRoom   = 4
+	roomCodeLength      = 6
+	playerEmoteTTL      = 4 * time.Second
+	endProposalTTL      = 90 * time.Second
+	endProposalCooldown = 30 * time.Second
+	maxIssueLength      = 500
 )
 
 var allowedPlayerEmotes = map[string]struct{}{
@@ -58,6 +65,7 @@ type roomPlayer struct {
 	seat        int
 	host        bool
 	activeEmote *playerEmote
+	forfeited   bool
 }
 
 type playerEmote struct {
@@ -67,13 +75,34 @@ type playerEmote struct {
 }
 
 type room struct {
-	code              string
-	gameState         *game.GameState
-	players           []*roomPlayer
-	hostID            string
-	pendingDealChoice *pendingDealChoice
-	turnBaseline      *game.GameSnapshot
-	turnActivity      *game.TurnActivitySnapshot
+	code                     string
+	gameState                *game.GameState
+	players                  []*roomPlayer
+	hostID                   string
+	pendingDealChoice        *pendingDealChoice
+	turnBaseline             *game.GameSnapshot
+	turnActivity             *game.TurnActivitySnapshot
+	endProposal              *endGameProposal
+	conclusion               *gameConclusion
+	endProposalCooldownUntil time.Time
+}
+
+type endGameProposal struct {
+	id                string
+	kind              string
+	proposerPlayerID  string
+	description       string
+	reportID          string
+	eligiblePlayerIDs []string
+	agreedPlayerIDs   map[string]bool
+	createdAt         time.Time
+	expiresAt         time.Time
+}
+
+type gameConclusion struct {
+	kind           string
+	winnerPlayerID string
+	reportID       string
 }
 
 type pendingDealChoice struct {
@@ -105,13 +134,16 @@ type persistedPlayerSession struct {
 }
 
 type persistedRoom struct {
-	Code              string                      `json:"code"`
-	GameState         game.PersistenceSnapshot    `json:"gameState"`
-	Players           []persistedRoomPlayer       `json:"players"`
-	HostID            string                      `json:"hostId"`
-	PendingDealChoice *persistedPendingDealChoice `json:"pendingDealChoice,omitempty"`
-	TurnBaseline      *game.GameSnapshot          `json:"turnBaseline,omitempty"`
-	TurnActivity      *game.TurnActivitySnapshot  `json:"turnActivity,omitempty"`
+	Code                     string                      `json:"code"`
+	GameState                game.PersistenceSnapshot    `json:"gameState"`
+	Players                  []persistedRoomPlayer       `json:"players"`
+	HostID                   string                      `json:"hostId"`
+	PendingDealChoice        *persistedPendingDealChoice `json:"pendingDealChoice,omitempty"`
+	TurnBaseline             *game.GameSnapshot          `json:"turnBaseline,omitempty"`
+	TurnActivity             *game.TurnActivitySnapshot  `json:"turnActivity,omitempty"`
+	EndProposal              *persistedEndGameProposal   `json:"endProposal,omitempty"`
+	Conclusion               *persistedGameConclusion    `json:"conclusion,omitempty"`
+	EndProposalCooldownUntil time.Time                   `json:"endProposalCooldownUntil,omitempty"`
 }
 
 type persistedPendingDealChoice struct {
@@ -127,6 +159,25 @@ type persistedRoomPlayer struct {
 	Connected bool   `json:"connected"`
 	Seat      int    `json:"seat"`
 	Host      bool   `json:"host"`
+	Forfeited bool   `json:"forfeited,omitempty"`
+}
+
+type persistedEndGameProposal struct {
+	ID                string    `json:"id"`
+	Kind              string    `json:"kind"`
+	ProposerPlayerID  string    `json:"proposerPlayerId"`
+	Description       string    `json:"description,omitempty"`
+	ReportID          string    `json:"reportId,omitempty"`
+	EligiblePlayerIDs []string  `json:"eligiblePlayerIds"`
+	AgreedPlayerIDs   []string  `json:"agreedPlayerIds"`
+	CreatedAt         time.Time `json:"createdAt"`
+	ExpiresAt         time.Time `json:"expiresAt"`
+}
+
+type persistedGameConclusion struct {
+	Kind           string `json:"kind"`
+	WinnerPlayerID string `json:"winnerPlayerId,omitempty"`
+	ReportID       string `json:"reportId,omitempty"`
 }
 
 type gameStateRecipient struct {
@@ -497,8 +548,10 @@ func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []*websock
 		return roomSnapshot{}, nil, game.ErrCannotStartNextRound
 	}
 
-	dealerIndex := (room.gameStateDealerIndex() + 1) % len(room.players)
-	chooserIndex := (dealerIndex - 1 + len(room.players)) % len(room.players)
+	dealerIndex, chooserIndex, err := room.gameState.NextRoundDealerAndChooser()
+	if err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex}
 
 	roomState := room.snapshot()
@@ -576,6 +629,222 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 	snapshot := room.snapshot()
 	l.persistLocked("player left room")
 	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
+}
+
+func (l *lobbyServer) forfeitGame(sessionID string) (roomSnapshot, []gameStateRecipient, actionResultEvent, string, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", errors.New("join a room first")
+	}
+	player := room.playerByID(session.playerID)
+	if player == nil || player.forfeited {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", errors.New("player is not active")
+	}
+	if room.gameState == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", errors.New("game state not initialized")
+	}
+
+	winnerPlayerID, err := room.gameState.ForfeitPlayer(session.playerID)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", err
+	}
+	player.forfeited = true
+	player.connected = false
+	player.activeEmote = nil
+	session.roomCode = ""
+	room.pendingDealChoice = nil
+	room.clearTurnTracking()
+
+	if room.hostID == session.playerID {
+		room.transferHostToFirstActive()
+	}
+	room.removePlayerFromProposal(session.playerID)
+	if winnerPlayerID != "" {
+		room.conclusion = &gameConclusion{kind: "forfeit", winnerPlayerID: winnerPlayerID}
+		room.endProposal = nil
+	} else if room.endProposal != nil && room.endProposal.unanimouslyApproved() {
+		proposal := room.endProposal
+		if err := room.gameState.EndWithoutWinner(); err != nil {
+			return roomSnapshot{}, nil, actionResultEvent{}, "", err
+		}
+		room.conclusion = &gameConclusion{kind: proposal.kind, reportID: proposal.reportID}
+		room.endProposal = nil
+	}
+
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", err
+	}
+	result := actionResultEvent{Action: "forfeit_game", PlayerID: session.playerID, OK: true}
+	l.persistLocked("player forfeited game")
+	return roomState, recipients, result, room.code, nil
+}
+
+func (l *lobbyServer) requestEndGame(sessionID, kind string) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.createEndProposal(sessionID, kind, "", "")
+}
+
+func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bool) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("join a room first")
+	}
+	if room.gameState == nil || (room.gameStatePhase() != game.PhaseInProgress && room.gameStatePhase() != game.PhaseRoundOver) {
+		return roomSnapshot{}, nil, actionResultEvent{}, game.ErrGameNotInProgress
+	}
+	if player := room.playerByID(session.playerID); player == nil || player.forfeited {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("player is not active")
+	}
+	if requestAbort {
+		if room.activeEndProposal(time.Now()) != nil {
+			return roomSnapshot{}, nil, actionResultEvent{}, errors.New("an end-game request is already active")
+		}
+		if time.Now().Before(room.endProposalCooldownUntil) {
+			return roomSnapshot{}, nil, actionResultEvent{}, errors.New("wait before starting another end-game request")
+		}
+	}
+
+	cleanDescription, err := normalizeIssueDescription(description)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	gameStateJSON, err := json.Marshal(room.gameState.PersistenceSnapshot())
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, fmt.Errorf("encode bug report game state: %w", err)
+	}
+	reportID := uuid.NewString()
+	reportCreatedAt := time.Now().UTC()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+	savedReport, err := l.store.CreateGameBugReport(ctx, database.GameBugReportRecord{
+		ID:               reportID,
+		RoomCode:         room.code,
+		ReporterPlayerID: session.playerID,
+		ReporterUserID:   session.authUserID,
+		Description:      cleanDescription,
+		GameState:        gameStateJSON,
+		Round:            room.gameState.RoundNumber(),
+		Turn:             room.gameState.TurnNumber(),
+		RequestedAbort:   requestAbort,
+		CreatedAt:        reportCreatedAt,
+	})
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, fmt.Errorf("save bug report: %w", err)
+	}
+	slog.Warn("game issue reported", "roomCode", room.code, "reportID", savedReport.ID, "playerID", session.playerID, "description", cleanDescription)
+
+	if requestAbort {
+		room.endProposal = room.newEndProposal("technical_abort", session.playerID, cleanDescription, savedReport.ID)
+	}
+
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	result := actionResultEvent{Action: "report_issue", PlayerID: session.playerID, OK: true}
+	l.persistLocked("game issue reported")
+	return roomState, recipients, result, nil
+}
+
+func (l *lobbyServer) createEndProposal(sessionID, kind, description, reportID string) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("join a room first")
+	}
+	if room.gameState == nil || (room.gameStatePhase() != game.PhaseInProgress && room.gameStatePhase() != game.PhaseRoundOver) {
+		return roomSnapshot{}, nil, actionResultEvent{}, game.ErrGameNotInProgress
+	}
+	if kind != "mutual_end" {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("unknown end-game request type")
+	}
+	if player := room.playerByID(session.playerID); player == nil || player.forfeited {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("player is not active")
+	}
+	if room.activeEndProposal(time.Now()) != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("an end-game request is already active")
+	}
+	if time.Now().Before(room.endProposalCooldownUntil) {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("wait before starting another end-game request")
+	}
+
+	room.endProposal = room.newEndProposal(kind, session.playerID, description, reportID)
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	result := actionResultEvent{Action: "request_end_game", PlayerID: session.playerID, OK: true}
+	l.persistLocked("end game requested")
+	return roomState, recipients, result, nil
+}
+
+func (l *lobbyServer) voteEndGame(sessionID, proposalID string, approve bool) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("join a room first")
+	}
+	proposal := room.activeEndProposal(time.Now())
+	if proposal == nil || proposal.id != strings.TrimSpace(proposalID) {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("end-game request not found or expired")
+	}
+	if !slices.Contains(proposal.eligiblePlayerIDs, session.playerID) {
+		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("player is not eligible to vote")
+	}
+
+	if !approve {
+		room.endProposal = nil
+		room.endProposalCooldownUntil = time.Now().Add(endProposalCooldown)
+	} else {
+		proposal.agreedPlayerIDs[session.playerID] = true
+		if proposal.unanimouslyApproved() {
+			if err := room.gameState.EndWithoutWinner(); err != nil {
+				return roomSnapshot{}, nil, actionResultEvent{}, err
+			}
+			room.conclusion = &gameConclusion{kind: proposal.kind, reportID: proposal.reportID}
+			room.endProposal = nil
+			room.pendingDealChoice = nil
+			room.clearTurnTracking()
+		}
+	}
+
+	roomState := room.snapshot()
+	recipients, err := room.gameStateRecipients(l.sessions, roomState)
+	if err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
+	result := actionResultEvent{Action: "vote_end_game", PlayerID: session.playerID, OK: true}
+	l.persistLocked("end game vote recorded")
+	return roomState, recipients, result, nil
 }
 
 func (l *lobbyServer) sendEmote(sessionID, emoji string) (roomSnapshot, []*websocket.Conn, error) {
@@ -834,12 +1103,37 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 			return err
 		}
 		restoredRoom := &room{
-			code:         roomCode,
-			gameState:    gameState,
-			players:      make([]*roomPlayer, 0, len(persistedRoom.Players)),
-			hostID:       persistedRoom.HostID,
-			turnBaseline: persistedRoom.TurnBaseline,
-			turnActivity: persistedRoom.TurnActivity,
+			code:                     roomCode,
+			gameState:                gameState,
+			players:                  make([]*roomPlayer, 0, len(persistedRoom.Players)),
+			hostID:                   persistedRoom.HostID,
+			turnBaseline:             persistedRoom.TurnBaseline,
+			turnActivity:             persistedRoom.TurnActivity,
+			endProposalCooldownUntil: persistedRoom.EndProposalCooldownUntil,
+		}
+		if persistedRoom.Conclusion != nil {
+			restoredRoom.conclusion = &gameConclusion{
+				kind:           persistedRoom.Conclusion.Kind,
+				winnerPlayerID: persistedRoom.Conclusion.WinnerPlayerID,
+				reportID:       persistedRoom.Conclusion.ReportID,
+			}
+		}
+		if persistedRoom.EndProposal != nil {
+			agreedPlayerIDs := make(map[string]bool, len(persistedRoom.EndProposal.AgreedPlayerIDs))
+			for _, playerID := range persistedRoom.EndProposal.AgreedPlayerIDs {
+				agreedPlayerIDs[playerID] = true
+			}
+			restoredRoom.endProposal = &endGameProposal{
+				id:                persistedRoom.EndProposal.ID,
+				kind:              persistedRoom.EndProposal.Kind,
+				proposerPlayerID:  persistedRoom.EndProposal.ProposerPlayerID,
+				description:       persistedRoom.EndProposal.Description,
+				reportID:          persistedRoom.EndProposal.ReportID,
+				eligiblePlayerIDs: append([]string(nil), persistedRoom.EndProposal.EligiblePlayerIDs...),
+				agreedPlayerIDs:   agreedPlayerIDs,
+				createdAt:         persistedRoom.EndProposal.CreatedAt,
+				expiresAt:         persistedRoom.EndProposal.ExpiresAt,
+			}
 		}
 		if persistedRoom.PendingDealChoice != nil {
 			restoredRoom.pendingDealChoice = &pendingDealChoice{
@@ -862,8 +1156,11 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 				connected: false,
 				seat:      persistedPlayer.Seat,
 				host:      persistedPlayer.Host,
+				forfeited: persistedPlayer.Forfeited,
 			})
-			sessions[persistedPlayer.SessionID].roomCode = roomCode
+			if !persistedPlayer.Forfeited {
+				sessions[persistedPlayer.SessionID].roomCode = roomCode
+			}
 		}
 		if restoredRoom.hostID == "" && len(restoredRoom.players) > 0 {
 			restoredRoom.hostID = restoredRoom.players[0].player.ID
@@ -931,12 +1228,39 @@ func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
 			continue
 		}
 		persistedRoom := persistedRoom{
-			Code:         room.code,
-			GameState:    room.gameState.PersistenceSnapshot(),
-			Players:      make([]persistedRoomPlayer, 0, len(room.players)),
-			HostID:       room.hostID,
-			TurnBaseline: cloneGameSnapshot(room.turnBaseline),
-			TurnActivity: cloneTurnActivitySnapshot(room.turnActivity),
+			Code:                     room.code,
+			GameState:                room.gameState.PersistenceSnapshot(),
+			Players:                  make([]persistedRoomPlayer, 0, len(room.players)),
+			HostID:                   room.hostID,
+			TurnBaseline:             cloneGameSnapshot(room.turnBaseline),
+			TurnActivity:             cloneTurnActivitySnapshot(room.turnActivity),
+			EndProposalCooldownUntil: room.endProposalCooldownUntil,
+		}
+		if room.endProposal != nil {
+			agreedPlayerIDs := make([]string, 0, len(room.endProposal.agreedPlayerIDs))
+			for _, playerID := range room.endProposal.eligiblePlayerIDs {
+				if room.endProposal.agreedPlayerIDs[playerID] {
+					agreedPlayerIDs = append(agreedPlayerIDs, playerID)
+				}
+			}
+			persistedRoom.EndProposal = &persistedEndGameProposal{
+				ID:                room.endProposal.id,
+				Kind:              room.endProposal.kind,
+				ProposerPlayerID:  room.endProposal.proposerPlayerID,
+				Description:       room.endProposal.description,
+				ReportID:          room.endProposal.reportID,
+				EligiblePlayerIDs: append([]string(nil), room.endProposal.eligiblePlayerIDs...),
+				AgreedPlayerIDs:   agreedPlayerIDs,
+				CreatedAt:         room.endProposal.createdAt,
+				ExpiresAt:         room.endProposal.expiresAt,
+			}
+		}
+		if room.conclusion != nil {
+			persistedRoom.Conclusion = &persistedGameConclusion{
+				Kind:           room.conclusion.kind,
+				WinnerPlayerID: room.conclusion.winnerPlayerID,
+				ReportID:       room.conclusion.reportID,
+			}
 		}
 		if room.pendingDealChoice != nil {
 			persistedRoom.PendingDealChoice = &persistedPendingDealChoice{
@@ -956,6 +1280,7 @@ func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
 				Connected: player.connected,
 				Seat:      player.seat,
 				Host:      player.host,
+				Forfeited: player.forfeited,
 			})
 		}
 		sort.Slice(persistedRoom.Players, func(i, j int) bool {
@@ -1076,6 +1401,97 @@ func normalizeDealType(dealType string) string {
 	return strings.ToLower(strings.TrimSpace(dealType))
 }
 
+func normalizeIssueDescription(description string) (string, error) {
+	cleanDescription := strings.TrimSpace(description)
+	if cleanDescription == "" {
+		return "", errors.New("problem description is required")
+	}
+	if len([]rune(cleanDescription)) > maxIssueLength {
+		return "", fmt.Errorf("problem description must be %d characters or fewer", maxIssueLength)
+	}
+	return cleanDescription, nil
+}
+
+func (r *room) activeEndProposal(now time.Time) *endGameProposal {
+	if r == nil || r.endProposal == nil {
+		return nil
+	}
+	if !r.endProposal.expiresAt.After(now) {
+		r.endProposal = nil
+		r.endProposalCooldownUntil = now.Add(endProposalCooldown)
+		return nil
+	}
+	return r.endProposal
+}
+
+func (r *room) newEndProposal(kind, proposerPlayerID, description, reportID string) *endGameProposal {
+	eligiblePlayerIDs := make([]string, 0, len(r.players))
+	for _, player := range r.players {
+		if player != nil && !player.forfeited {
+			eligiblePlayerIDs = append(eligiblePlayerIDs, player.player.ID)
+		}
+	}
+	now := time.Now()
+	return &endGameProposal{
+		id:                uuid.NewString(),
+		kind:              kind,
+		proposerPlayerID:  proposerPlayerID,
+		description:       description,
+		reportID:          reportID,
+		eligiblePlayerIDs: eligiblePlayerIDs,
+		agreedPlayerIDs:   map[string]bool{proposerPlayerID: true},
+		createdAt:         now,
+		expiresAt:         now.Add(endProposalTTL),
+	}
+}
+
+func (p *endGameProposal) unanimouslyApproved() bool {
+	if p == nil || len(p.eligiblePlayerIDs) == 0 {
+		return false
+	}
+	for _, playerID := range p.eligiblePlayerIDs {
+		if !p.agreedPlayerIDs[playerID] {
+			return false
+		}
+	}
+	return true
+}
+
+func (r *room) removePlayerFromProposal(playerID string) {
+	if r == nil || r.endProposal == nil {
+		return
+	}
+	nextEligible := make([]string, 0, len(r.endProposal.eligiblePlayerIDs))
+	for _, eligiblePlayerID := range r.endProposal.eligiblePlayerIDs {
+		if eligiblePlayerID != playerID {
+			nextEligible = append(nextEligible, eligiblePlayerID)
+		}
+	}
+	r.endProposal.eligiblePlayerIDs = nextEligible
+	delete(r.endProposal.agreedPlayerIDs, playerID)
+	if r.endProposal.proposerPlayerID == playerID || len(nextEligible) < 2 {
+		r.endProposal = nil
+	}
+}
+
+func (r *room) transferHostToFirstActive() {
+	if r == nil {
+		return
+	}
+	r.hostID = ""
+	for _, player := range r.players {
+		if player != nil && !player.forfeited {
+			r.hostID = player.player.ID
+			break
+		}
+	}
+	for _, player := range r.players {
+		if player != nil {
+			player.host = player.player.ID == r.hostID
+		}
+	}
+}
+
 func (r *room) snapshot() roomSnapshot {
 	players := make([]playerSnapshot, 0, len(r.players))
 	now := time.Now()
@@ -1091,6 +1507,11 @@ func (r *room) snapshot() roomSnapshot {
 			Seat:         player.seat,
 			IsHost:       player.host,
 			CanReconnect: true,
+			Forfeited:    player.forfeited,
+		}
+		if player.forfeited {
+			snapshot.Connected = false
+			snapshot.CanReconnect = false
 		}
 		if player.activeEmote != nil {
 			if player.activeEmote.expiresAt.After(now) {
@@ -1115,6 +1536,30 @@ func (r *room) snapshot() roomSnapshot {
 		Phase:        phaseName(phase),
 		HostPlayerID: r.hostID,
 		Players:      players,
+	}
+	if proposal := r.activeEndProposal(now); proposal != nil {
+		agreedPlayerIDs := make([]string, 0, len(proposal.agreedPlayerIDs))
+		for _, playerID := range proposal.eligiblePlayerIDs {
+			if proposal.agreedPlayerIDs[playerID] {
+				agreedPlayerIDs = append(agreedPlayerIDs, playerID)
+			}
+		}
+		snapshot.EndProposal = &endGameProposalSnapshot{
+			ID:                proposal.id,
+			Kind:              proposal.kind,
+			ProposerPlayerID:  proposal.proposerPlayerID,
+			Description:       proposal.description,
+			EligiblePlayerIDs: append([]string(nil), proposal.eligiblePlayerIDs...),
+			AgreedPlayerIDs:   agreedPlayerIDs,
+			ExpiresAt:         proposal.expiresAt,
+		}
+	}
+	if r.conclusion != nil {
+		snapshot.Conclusion = &gameConclusionSnapshot{
+			Kind:           r.conclusion.kind,
+			WinnerPlayerID: r.conclusion.winnerPlayerID,
+			ReportID:       r.conclusion.reportID,
+		}
 	}
 	if r.pendingDealChoice != nil {
 		snapshot.PendingDealChoice = &pendingDealChoiceSnapshot{
@@ -1150,19 +1595,33 @@ func (r *room) resetForLobby() error {
 		return errors.New("game state not initialized")
 	}
 
+	activePlayers := make([]*roomPlayer, 0, len(r.players))
 	for _, player := range r.players {
-		if player == nil {
+		if player == nil || player.forfeited {
 			continue
 		}
 
 		player.player = newPlayerWithID(player.player.ID)
+		player.seat = len(activePlayers)
+		player.forfeited = false
 		if err := addPlayerToGameState(nextGameState, player.player); err != nil {
 			return err
 		}
+		activePlayers = append(activePlayers, player)
 	}
 
+	r.players = activePlayers
+	if r.playerByID(r.hostID) == nil && len(activePlayers) > 0 {
+		r.hostID = activePlayers[0].player.ID
+	}
+	for _, player := range activePlayers {
+		player.host = player.player.ID == r.hostID
+	}
 	r.gameState = nextGameState
 	r.pendingDealChoice = nil
+	r.endProposal = nil
+	r.endProposalCooldownUntil = time.Time{}
+	r.conclusion = nil
 	r.clearTurnTracking()
 	return nil
 }
@@ -1170,7 +1629,7 @@ func (r *room) resetForLobby() error {
 func (r *room) gameStateRecipients(sessions map[string]*playerSession, roomState roomSnapshot) ([]gameStateRecipient, error) {
 	recipients := make([]gameStateRecipient, 0, len(r.players))
 	for _, player := range r.players {
-		if player == nil || !player.connected {
+		if player == nil || player.forfeited || !player.connected {
 			continue
 		}
 		session := sessions[player.sessionID]
@@ -1463,7 +1922,13 @@ func (r *room) playerByID(playerID string) *roomPlayer {
 
 func (r *room) allPlayersConnected() bool {
 	for _, player := range r.players {
-		if player == nil || !player.connected {
+		if player == nil {
+			return false
+		}
+		if player.forfeited {
+			continue
+		}
+		if !player.connected {
 			return false
 		}
 	}

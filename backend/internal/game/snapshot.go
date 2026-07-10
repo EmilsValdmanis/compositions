@@ -50,6 +50,7 @@ type PlayerStateSnapshot struct {
 	TotalPoints  int            `json:"totalPoints"`
 	PointsGained int            `json:"pointsGained"`
 	HasOpened    bool           `json:"hasOpened"`
+	Forfeited    bool           `json:"forfeited,omitempty"`
 }
 
 type TurnSnapshot struct {
@@ -160,6 +161,7 @@ func playerStateSnapshots(players []*Player, revealHands bool) []PlayerStateSnap
 			TotalPoints:  player.totalPoints,
 			PointsGained: player.pointsGained,
 			HasOpened:    player.hasOpened,
+			Forfeited:    player.forfeited,
 		}
 		if revealHands {
 			snapshot.Hand = cardSnapshots(player.hand.cards)

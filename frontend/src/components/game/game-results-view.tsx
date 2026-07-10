@@ -122,10 +122,37 @@ export function GameResultsView({
   onSendEmote,
 }: GameResultsViewProps) {
   const winner = players.find(
-    (player) => player.playerId === game.players[game.roundWinnerIndex]?.playerId,
+    (player) =>
+      player.playerId ===
+      (room?.conclusion?.winnerPlayerId ?? game.players[game.roundWinnerIndex]?.playerId),
   );
   const isGameOver = room?.phase === "game_over";
   const isHost = room?.hostPlayerId === playerId;
+  const conclusion = room?.conclusion;
+  const resultTitle =
+    conclusion?.kind === "technical_abort"
+      ? "Game aborted"
+      : conclusion?.kind === "mutual_end"
+        ? "Game ended"
+        : isGameOver
+          ? "Game finished"
+          : "Round complete";
+  const resultDescription =
+    conclusion?.kind === "technical_abort"
+      ? "Ended after a reported game problem"
+      : conclusion?.kind === "mutual_end"
+        ? "Every active player agreed to end without a winner"
+        : conclusion?.kind === "forfeit"
+          ? `${winner?.name ?? "A player"} wins by forfeit`
+          : `${winner?.name ?? "A player"} ${isGameOver ? "wins the game" : "won the round"}`;
+  const resultBadge =
+    conclusion?.kind === "technical_abort"
+      ? "Aborted"
+      : conclusion?.kind === "mutual_end"
+        ? "No winner"
+        : isGameOver
+          ? "Final"
+          : "Complete";
 
   return (
     <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -133,14 +160,10 @@ export function GameResultsView({
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>{isGameOver ? "Game finished" : "Round complete"}</CardTitle>
-              <CardDescription>
-                {winner?.name ?? "A player"} {isGameOver ? "wins the game" : "won the round"}
-              </CardDescription>
+              <CardTitle>{resultTitle}</CardTitle>
+              <CardDescription>{resultDescription}</CardDescription>
             </div>
-            <Badge variant={isGameOver ? "default" : "secondary"}>
-              {isGameOver ? "Final" : "Complete"}
-            </Badge>
+            <Badge variant={isGameOver ? "default" : "secondary"}>{resultBadge}</Badge>
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">

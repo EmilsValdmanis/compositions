@@ -1,4 +1,4 @@
-import { Cards02Icon } from "@hugeicons/core-free-icons";
+import { Cards02Icon, SkullIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { PlayerEmoteBubble } from "#/components/game/player-emotes";
@@ -24,7 +24,7 @@ export function PlayerStrip({
       {players.map((player) => {
         const gamePlayer = playerStates.find((item) => item.playerId === player.playerId);
         const isTurn = game?.turn.playerId === player.playerId;
-        const showActiveTurn = showTurnIndicator && isTurn;
+        const showActiveTurn = showTurnIndicator && isTurn && !player.forfeited;
         return (
           <div
             key={player.playerId}
@@ -48,7 +48,13 @@ export function PlayerStrip({
               {player.name}
             </p>
             <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-1.5">
-              {showActiveTurn ? (
+              {player.forfeited ? (
+                <HugeiconsIcon
+                  icon={SkullIcon}
+                  className="size-5 shrink-0 text-destructive"
+                  aria-label={`${player.name} forfeited`}
+                />
+              ) : showActiveTurn ? (
                 <Spinner
                   className="size-5 shrink-0 text-primary"
                   aria-label={`${player.name}'s turn`}

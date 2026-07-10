@@ -40,6 +40,10 @@ func (s *closingUserStore) LoadLobbyState(context.Context) (persistedLobbyState,
 	return persistedLobbyState{}, nil
 }
 
+func (s *closingUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	return report, nil
+}
+
 func (s *closingUserStore) Close() error {
 	s.closed = true
 	return s.err

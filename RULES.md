@@ -233,6 +233,16 @@ All other players:
 - The game continues across multiple rounds.
 - Players accumulate points.
 
+### Leaving and Ending Early
+
+- A player may permanently forfeit an active game.
+- Their remaining hand is shuffled back into the draw pile so those cards stay available.
+- A forfeited player is skipped for turns, dealing, scoring, and dealer rotation.
+- If only one active player remains, that player wins by forfeit. Otherwise, play continues.
+- Players may ask to end the game without a winner. Every active player must agree.
+- A player may report a game-breaking problem and ask for a technical abort. The report is saved,
+  but the game is aborted only if every active player agrees.
+
 ### Elimination / Adjustment Rule
 
 - When a player exceeds **100 points**, they are at risk.

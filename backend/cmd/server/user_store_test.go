@@ -40,6 +40,10 @@ func (s *recordingUserStore) LoadLobbyState(context.Context) (persistedLobbyStat
 	return persistedLobbyState{}, nil
 }
 
+func (s *recordingUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	return report, nil
+}
+
 type recordingSessionStore struct {
 	user authenticatedUser
 }
@@ -67,6 +71,10 @@ func (s *recordingSessionStore) SaveLobbyState(context.Context, persistedLobbySt
 
 func (s *recordingSessionStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
 	return persistedLobbyState{}, nil
+}
+
+func (s *recordingSessionStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	return report, nil
 }
 
 func (s *recordingSessionStore) Close() error { return nil }

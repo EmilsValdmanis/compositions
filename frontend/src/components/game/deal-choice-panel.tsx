@@ -57,7 +57,14 @@ type DealChoicePanelProps = {
 };
 
 function defaultTapOrder(players: PlayerSnapshot[], pendingDealChoice: PendingDealChoiceSnapshot) {
-  return players.map((_, offset) => (pendingDealChoice.dealerIndex + offset + 1) % players.length);
+  const activeIndexes = players.flatMap((player, index) => (player.forfeited ? [] : [index]));
+  const dealerPosition = activeIndexes.indexOf(pendingDealChoice.dealerIndex);
+  if (dealerPosition < 0) {
+    return activeIndexes;
+  }
+  return activeIndexes.map(
+    (_, offset) => activeIndexes[(dealerPosition + offset + 1) % activeIndexes.length]!,
+  );
 }
 
 function dealPlayerId(playerIndex: number) {
@@ -247,9 +254,10 @@ export function DealChoicePanel({
   const dealChoiceKey = [
     pendingDealChoice.dealerIndex,
     pendingDealChoice.chooserIndex,
-    players.map((player) => player.playerId).join(","),
+    players.map((player) => `${player.playerId}:${Boolean(player.forfeited)}`).join(","),
   ].join(":");
-  const maxCutSize = Math.max(0, GAME_DECK_CARD_COUNT - players.length * 12);
+  const activePlayerCount = players.filter((player) => !player.forfeited).length;
+  const maxCutSize = Math.max(0, GAME_DECK_CARD_COUNT - activePlayerCount * 12);
   const clampedCutSize = clampCutSize(cutSize, maxCutSize);
   const dealerName = players[pendingDealChoice.dealerIndex]?.name ?? null;
   const tapOrderIds = tapOrder.map(dealPlayerId);

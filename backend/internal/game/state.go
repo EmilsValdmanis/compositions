@@ -116,6 +116,8 @@ var (
 	ErrInvalidDealer               = errors.New("invalid dealer")
 	ErrInvalidDealChooser          = errors.New("invalid deal chooser")
 	ErrInvalidCutSize              = errors.New("invalid cut size")
+	ErrPlayerNotFound              = errors.New("player not found")
+	ErrPlayerAlreadyForfeited      = errors.New("player already forfeited")
 )
 
 var newShuffledGameDeck = func() *CardPile {
@@ -298,7 +300,7 @@ func (gs *GameState) finishRound(winnerIndex int) {
 	gs.resetDiscardDrawState()
 
 	for i, player := range gs.players {
-		if i == winnerIndex || player == nil {
+		if i == winnerIndex || player == nil || player.forfeited {
 			if player != nil {
 				player.pointsGained = 0
 			}
@@ -320,7 +322,7 @@ func (gs *GameState) finishRound(winnerIndex int) {
 
 func (gs *GameState) allOtherPlayersOverHundred(winnerIndex int) bool {
 	for i, player := range gs.players {
-		if i == winnerIndex || player == nil {
+		if i == winnerIndex || player == nil || player.forfeited {
 			continue
 		}
 		if player.totalPoints <= 100 {
@@ -334,7 +336,7 @@ func (gs *GameState) allOtherPlayersOverHundred(winnerIndex int) bool {
 func (gs *GameState) applyOverHundredAdjustment() {
 	highestRemaining := -1
 	for _, player := range gs.players {
-		if player == nil || player.totalPoints > 100 {
+		if player == nil || player.forfeited || player.totalPoints > 100 {
 			continue
 		}
 		if player.totalPoints > highestRemaining {
@@ -347,7 +349,7 @@ func (gs *GameState) applyOverHundredAdjustment() {
 	}
 
 	for _, player := range gs.players {
-		if player == nil || player.totalPoints <= 100 {
+		if player == nil || player.forfeited || player.totalPoints <= 100 {
 			continue
 		}
 		player.totalPoints = highestRemaining
@@ -440,8 +442,8 @@ func (gs *GameState) StartNextRound(dt DealTypes, order []int, cutSize int) erro
 
 	deck := newShuffledGameDeck()
 	gs.resetRoundState(deck)
-	dealerIndex := nextPlayerIndex(gs.dealerIndex, len(gs.players))
-	chooserIndex := dealChooserIndex(dealerIndex, len(gs.players))
+	dealerIndex := gs.nextActivePlayerIndex(gs.dealerIndex)
+	chooserIndex := gs.previousActivePlayerIndex(dealerIndex)
 
 	if err := gs.startRound(dealerIndex, chooserIndex, dt, order, cutSize); err != nil {
 		return err
@@ -452,20 +454,21 @@ func (gs *GameState) StartNextRound(dt DealTypes, order []int, cutSize int) erro
 }
 
 func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int) error {
-	if len(gs.players) < 2 {
+	activeIndexes := gs.activePlayerIndexes()
+	if len(activeIndexes) < 2 {
 		return ErrNotEnoughPlayers
 	}
-	if !isValidPlayerIndex(dealerIndex, len(gs.players)) {
+	if !gs.isActivePlayerIndex(dealerIndex) {
 		return ErrInvalidDealer
 	}
-	if chooserIndex != dealChooserIndex(dealerIndex, len(gs.players)) {
+	if chooserIndex != gs.previousActivePlayerIndex(dealerIndex) {
 		return ErrInvalidDealChooser
 	}
 
 	if dt == DealInBlocks && order == nil {
 		return ErrInvalidDealingOrder
 	}
-	if len(gs.drawPile.cards) < InitialHandSize*len(gs.players)+1 {
+	if len(gs.drawPile.cards) < InitialHandSize*len(activeIndexes)+1 {
 		return ErrNotEnoughCardsInDrawPile
 	}
 	gs.dealerIndex = dealerIndex
@@ -475,12 +478,12 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	card, _ := gs.drawPile.DrawOne()
 	gs.discardPile.AddToTop(card)
 	for i, player := range gs.players {
-		if hasSpecialWinningHand(player.hand.cards) {
+		if player != nil && !player.forfeited && hasSpecialWinningHand(player.hand.cards) {
 			gs.finishRound(i)
 			return nil
 		}
 	}
-	gs.turn.playerIndex = nextPlayerIndex(gs.dealerIndex, len(gs.players))
+	gs.turn.playerIndex = gs.nextActivePlayerIndex(gs.dealerIndex)
 	gs.phase = PhaseInProgress
 	return nil
 }
@@ -516,7 +519,11 @@ func (gs *GameState) CurrentPlayer() (*Player, error) {
 		return nil, ErrNoPlayers
 	}
 
-	return gs.players[gs.turn.playerIndex], nil
+	player := gs.players[gs.turn.playerIndex]
+	if player != nil && player.forfeited {
+		return nil, ErrPlayerNotFound
+	}
+	return player, nil
 }
 
 func (gs *GameState) AddPlayer(p *Player) error {
@@ -554,10 +561,130 @@ func (gs *GameState) DealerIndex() int {
 
 func (gs *GameState) advanceTurn() {
 	gs.turn.number++
-	gs.turn.playerIndex = (gs.turn.playerIndex + 1) % len(gs.players)
+	gs.turn.playerIndex = gs.nextActivePlayerIndex(gs.turn.playerIndex)
 	gs.turn.hasDrawn = false
 	gs.resetDiscardDrawState()
 	gs.recycleDiscardIntoDrawPileIfNeeded()
+}
+
+// ForfeitPlayer permanently removes a player from active play while preserving
+// their seat and score history. Their remaining hand is shuffled back into the
+// draw pile so cards needed by the remaining players stay available.
+func (gs *GameState) ForfeitPlayer(playerID string) (string, error) {
+	if gs == nil || (gs.phase != PhaseInProgress && gs.phase != PhaseRoundOver) {
+		return "", ErrGameNotInProgress
+	}
+
+	playerIndex := -1
+	for index, player := range gs.players {
+		if player != nil && player.ID == playerID {
+			playerIndex = index
+			break
+		}
+	}
+	if playerIndex < 0 {
+		return "", ErrPlayerNotFound
+	}
+
+	player := gs.players[playerIndex]
+	if player.forfeited {
+		return "", ErrPlayerAlreadyForfeited
+	}
+
+	if player.hand != nil && len(player.hand.cards) > 0 {
+		gs.drawPile.cards = append(gs.drawPile.cards, player.hand.cards...)
+		gs.drawPile.Shuffle()
+	}
+	player.hand = NewHand()
+	player.pointsGained = 0
+	player.forfeited = true
+
+	activeIndexes := gs.activePlayerIndexes()
+	if len(activeIndexes) == 1 {
+		winnerIndex := activeIndexes[0]
+		gs.roundWinnerIndex = winnerIndex
+		gs.phase = PhaseGameOver
+		gs.turn.hasDrawn = false
+		gs.resetDiscardDrawState()
+		return gs.players[winnerIndex].ID, nil
+	}
+
+	if gs.phase == PhaseInProgress && gs.turn.playerIndex == playerIndex {
+		gs.advanceTurn()
+	}
+	return "", nil
+}
+
+func (gs *GameState) EndWithoutWinner() error {
+	if gs == nil || (gs.phase != PhaseInProgress && gs.phase != PhaseRoundOver) {
+		return ErrGameNotInProgress
+	}
+	gs.phase = PhaseGameOver
+	gs.roundWinnerIndex = -1
+	gs.turn.hasDrawn = false
+	gs.resetDiscardDrawState()
+	return nil
+}
+
+func (gs *GameState) IsPlayerForfeited(playerID string) bool {
+	for _, player := range gs.players {
+		if player != nil && player.ID == playerID {
+			return player.forfeited
+		}
+	}
+	return false
+}
+
+func (gs *GameState) ActivePlayerIndexes() []int {
+	return append([]int(nil), gs.activePlayerIndexes()...)
+}
+
+func (gs *GameState) NextRoundDealerAndChooser() (int, int, error) {
+	if gs == nil || len(gs.activePlayerIndexes()) < 2 {
+		return 0, 0, ErrNotEnoughPlayers
+	}
+	dealerIndex := gs.nextActivePlayerIndex(gs.dealerIndex)
+	return dealerIndex, gs.previousActivePlayerIndex(dealerIndex), nil
+}
+
+func (gs *GameState) activePlayerIndexes() []int {
+	indexes := make([]int, 0, len(gs.players))
+	for index, player := range gs.players {
+		if player != nil && !player.forfeited {
+			indexes = append(indexes, index)
+		}
+	}
+	return indexes
+}
+
+func (gs *GameState) isActivePlayerIndex(index int) bool {
+	return isValidPlayerIndex(index, len(gs.players)) && gs.players[index] != nil && !gs.players[index].forfeited
+}
+
+func (gs *GameState) nextActivePlayerIndex(index int) int {
+	if len(gs.players) == 0 {
+		return 0
+	}
+	for offset := 1; offset <= len(gs.players); offset++ {
+		candidate := (index + offset) % len(gs.players)
+		if gs.isActivePlayerIndex(candidate) {
+			return candidate
+		}
+	}
+	return index
+}
+
+func (gs *GameState) previousActivePlayerIndex(index int) int {
+	if len(gs.players) == 0 {
+		return 0
+	}
+	for offset := 1; offset <= len(gs.players); offset++ {
+		candidate := (index - offset + len(gs.players)) % len(gs.players)
+		if gs.isActivePlayerIndex(candidate) {
+			return candidate
+		}
+	}
+	return index
 }
 
 func (gs *GameState) resetDiscardDrawState() {
@@ -1070,11 +1197,12 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 }
 
 func (gs *GameState) dealInitialHands(dt DealTypes, order []int, cutSize int) error {
+	activeIndexes := gs.activePlayerIndexes()
 	switch dt {
 	case DealRoundRobin:
-		return dealRoundRobin(gs.players, gs.drawPile, gs.dealerIndex, cutSize)
+		return dealRoundRobinActive(gs.players, activeIndexes, gs.drawPile, gs.dealerIndex, cutSize)
 	case DealInBlocks:
-		return dealInBlocks(gs.players, gs.drawPile, order, cutSize)
+		return dealInBlocksActive(gs.players, activeIndexes, gs.drawPile, order, cutSize)
 	default:
 		return ErrInvalidDealingType
 	}
@@ -1094,8 +1222,23 @@ func cutMainPile(drawPile *CardPile, required, cutSize int) (*CardPile, []Card, 
 }
 
 func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize int) error {
-	required := InitialHandSize * len(players)
-	if !isValidPlayerIndex(dealerIndex, len(players)) {
+	activeIndexes := make([]int, len(players))
+	for index := range players {
+		activeIndexes[index] = index
+	}
+	return dealRoundRobinActive(players, activeIndexes, drawPile, dealerIndex, cutSize)
+}
+
+func dealRoundRobinActive(players []*Player, activeIndexes []int, drawPile *CardPile, dealerIndex, cutSize int) error {
+	required := InitialHandSize * len(activeIndexes)
+	dealerPosition := -1
+	for position, index := range activeIndexes {
+		if index == dealerIndex {
+			dealerPosition = position
+			break
+		}
+	}
+	if dealerPosition < 0 {
 		return ErrInvalidDealer
 	}
 	mainPile, setAside, err := cutMainPile(drawPile, required, cutSize)
@@ -1104,8 +1247,9 @@ func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize 
 	}
 
 	for range InitialHandSize {
-		for offset := 1; offset <= len(players); offset++ {
-			player := players[(dealerIndex+offset)%len(players)]
+		for offset := 1; offset <= len(activeIndexes); offset++ {
+			playerIndex := activeIndexes[(dealerPosition+offset)%len(activeIndexes)]
+			player := players[playerIndex]
 			card, _ := mainPile.DrawOne()
 			player.hand.cards = append(player.hand.cards, card)
 		}
@@ -1116,8 +1260,16 @@ func dealRoundRobin(players []*Player, drawPile *CardPile, dealerIndex, cutSize 
 }
 
 func dealInBlocks(players []*Player, drawPile *CardPile, order []int, cutSize int) error {
-	required := InitialHandSize * len(players)
-	if !validateOrder(order, len(players)) {
+	activeIndexes := make([]int, len(players))
+	for index := range players {
+		activeIndexes[index] = index
+	}
+	return dealInBlocksActive(players, activeIndexes, drawPile, order, cutSize)
+}
+
+func dealInBlocksActive(players []*Player, activeIndexes []int, drawPile *CardPile, order []int, cutSize int) error {
+	required := InitialHandSize * len(activeIndexes)
+	if !validateActiveOrder(order, activeIndexes, len(players)) {
 		return ErrInvalidDealingOrder
 	}
 	mainPile, setAside, err := cutMainPile(drawPile, required, cutSize)
@@ -1136,6 +1288,27 @@ func dealInBlocks(players []*Player, drawPile *CardPile, order []int, cutSize in
 
 	drawPile.cards = append(mainPile.cards, setAside...)
 	return nil
+}
+
+func validateActiveOrder(order, activeIndexes []int, playerCount int) bool {
+	if len(order) != len(activeIndexes) {
+		return false
+	}
+	active := make(map[int]bool, len(activeIndexes))
+	for _, index := range activeIndexes {
+		if !isValidPlayerIndex(index, playerCount) {
+			return false
+		}
+		active[index] = true
+	}
+	seen := make(map[int]bool, len(order))
+	for _, index := range order {
+		if !active[index] || seen[index] {
+			return false
+		}
+		seen[index] = true
+	}
+	return true
 }
 
 func validateOrder(order []int, playerCount int) bool {

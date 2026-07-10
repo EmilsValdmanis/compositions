@@ -3408,6 +3408,88 @@ func TestCurrentPlayerCanReturnNilPlayer(t *testing.T) {
 	}
 }
 
+func TestForfeitPlayerShufflesHandIntoDrawPileAndAdvancesTurn(t *testing.T) {
+	state := NewGameStateWithDeck([]Card{NewCard(Ace, Hearts)})
+	first := NewPlayer()
+	first.ID = "first"
+	first.hand.cards = []Card{NewCard(Two, Clubs), NewCard(Three, Clubs)}
+	second := NewPlayer()
+	second.ID = "second"
+	third := NewPlayer()
+	third.ID = "third"
+	state.players = []*Player{first, second, third}
+	state.phase = PhaseInProgress
+	state.turn.playerIndex = 0
+
+	winnerID, err := state.ForfeitPlayer("first")
+	if err != nil {
+		t.Fatalf("ForfeitPlayer() error = %v", err)
+	}
+	if winnerID != "" {
+		t.Fatalf("ForfeitPlayer() winnerID = %q; want empty", winnerID)
+	}
+	if !first.forfeited || len(first.hand.cards) != 0 {
+		t.Fatalf("forfeited player = %#v; want forfeited with empty hand", first)
+	}
+	if len(state.drawPile.cards) != 3 {
+		t.Fatalf("draw pile size = %d; want 3", len(state.drawPile.cards))
+	}
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("turn player index = %d; want 1", state.turn.playerIndex)
+	}
+
+	state.turn.playerIndex = 2
+	state.advanceTurn()
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("advanceTurn after forfeiture player index = %d; want 1", state.turn.playerIndex)
+	}
+}
+
+func TestForfeitPlayerEndsGameWhenOneActivePlayerRemains(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	first.ID = "first"
+	second := NewPlayer()
+	second.ID = "second"
+	state.players = []*Player{first, second}
+	state.phase = PhaseInProgress
+
+	winnerID, err := state.ForfeitPlayer("first")
+	if err != nil {
+		t.Fatalf("ForfeitPlayer() error = %v", err)
+	}
+	if winnerID != "second" {
+		t.Fatalf("ForfeitPlayer() winnerID = %q; want second", winnerID)
+	}
+	if state.phase != PhaseGameOver || state.roundWinnerIndex != 1 {
+		t.Fatalf("game result phase=%v winner=%d; want game over winner 1", state.phase, state.roundWinnerIndex)
+	}
+}
+
+func TestStartNextRoundSkipsForfeitedPlayers(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	third := NewPlayer()
+	second.forfeited = true
+	state.players = []*Player{first, second, third}
+	state.phase = PhaseRoundOver
+	state.dealerIndex = 0
+
+	if err := state.StartNextRound(DealRoundRobin, nil, 0); err != nil {
+		t.Fatalf("StartNextRound() error = %v", err)
+	}
+	if state.dealerIndex != 2 {
+		t.Fatalf("dealer index = %d; want 2", state.dealerIndex)
+	}
+	if len(first.hand.cards) != InitialHandSize || len(third.hand.cards) != InitialHandSize {
+		t.Fatalf("active hand sizes = %d, %d; want %d", len(first.hand.cards), len(third.hand.cards), InitialHandSize)
+	}
+	if len(second.hand.cards) != 0 {
+		t.Fatalf("forfeited hand size = %d; want 0", len(second.hand.cards))
+	}
+}
+
 func TestDealRoundRobinRejectsShortPileAndInvalidDealer(t *testing.T) {
 	players := []*Player{NewPlayer(), NewPlayer()}
 
