@@ -16,6 +16,7 @@ import {
 } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
+import { draftCompositionPreviewPointTotal } from "#/components/game/game-card-utils";
 import {
   ActivityLabel,
   NewActivityLabel,
@@ -220,6 +221,17 @@ export function CompositionRow({
   const reclaimByJokerIndex = new Map(reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim]));
   const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
   const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
+  const hasPointPreview = additionEntries.length > 0 || reclaims.length > 0;
+  const previewPoints = hasPointPreview
+    ? draftCompositionPreviewPointTotal(
+        composition,
+        additionEntries.map((entry) => entry.card),
+        reclaims.map((reclaim) => ({
+          jokerIndex: reclaim.jokerIndex,
+          replacementCard: reclaim.replacementEntry.card,
+        })),
+      )
+    : composition.points;
   const cardActivities = activity?.cardActivities ?? {};
   const isNewComposition = activity?.kind === "new_composition";
   const isHighlightedComposition = isNewComposition;
@@ -275,7 +287,12 @@ export function CompositionRow({
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>
-            <AnimatedNumber value={composition.points} /> pts
+            {previewPoints === null ? (
+              <span title="Add a natural card to resolve this joker's composition value">?</span>
+            ) : (
+              <AnimatedNumber value={previewPoints} />
+            )}{" "}
+            pts
           </span>
         </div>
       </div>

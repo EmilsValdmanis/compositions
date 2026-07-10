@@ -19,7 +19,10 @@ import {
 import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { draftCompositionPointTotal } from "#/components/game/game-card-utils";
+import {
+  draftCompositionPointTotal,
+  draftCompositionPreviewPointTotal,
+} from "#/components/game/game-card-utils";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
@@ -157,16 +160,6 @@ export function GameBoardTable({
   const stagedNewDrafts = stagedDrafts.filter(
     (composition) => composition.tableIndex === undefined,
   );
-  const visibleDraftPointTotals = [
-    ...stagedNewDrafts.map((composition) => draftCompositionPointTotal(composition.cards)),
-    ...newCompositions.map((composition) =>
-      draftCompositionPointTotal(composition.entries.map((entry) => entry.card)),
-    ),
-  ];
-  const visibleDraftPointsTotal = visibleDraftPointTotals.reduce(
-    (total, points) => total + points,
-    0,
-  );
   const isDraggingHandCard =
     active !== null &&
     active.data.current?.drawSource === undefined &&
@@ -186,6 +179,47 @@ export function GameBoardTable({
       playerId: turnActivity?.playerId,
     });
   }
+
+  const additionPointTotals = tableCompositions.flatMap((composition) => {
+    const spectatorDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
+    const stagedEntries =
+      composition.stagedEntries.length > 0
+        ? composition.stagedEntries
+        : (spectatorDraft?.stagedEntries ?? []);
+    const reclaims =
+      composition.reclaims.length > 0 ? composition.reclaims : (spectatorDraft?.reclaims ?? []);
+    const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
+    const additions = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
+
+    if (additions.length === 0) {
+      return [];
+    }
+
+    const previewPoints = draftCompositionPreviewPointTotal(
+      composition.snapshot,
+      additions.map((entry) => entry.card),
+      reclaims.map((reclaim) => ({
+        jokerIndex: reclaim.jokerIndex,
+        replacementCard: reclaim.replacementEntry.card,
+      })),
+    );
+
+    return [
+      previewPoints === null ? null : Math.max(0, previewPoints - composition.snapshot.points),
+    ];
+  });
+  const visibleDraftPointTotals = [
+    ...stagedNewDrafts.map((composition) => draftCompositionPointTotal(composition.cards)),
+    ...newCompositions.map((composition) =>
+      draftCompositionPointTotal(composition.entries.map((entry) => entry.card)),
+    ),
+    ...additionPointTotals,
+  ];
+  const visibleDraftPointsTotal = visibleDraftPointTotals.every(
+    (points): points is number => points !== null,
+  )
+    ? visibleDraftPointTotals.reduce((total, points) => total + points, 0)
+    : null;
 
   return (
     <Card className="min-h-0 overflow-hiddden overflow-y-auto xl:flex-1">
@@ -258,7 +292,15 @@ export function GameBoardTable({
             {visibleDraftPointTotals.length > 0 ? (
               <div className="flex min-h-5 basis-full items-center justify-center">
                 <Badge variant="outline">
-                  Draft total <AnimatedNumber value={visibleDraftPointsTotal} /> pts
+                  Draft total{" "}
+                  {visibleDraftPointsTotal === null ? (
+                    <span title="Add a natural card to resolve the joker's composition value">
+                      ?
+                    </span>
+                  ) : (
+                    <AnimatedNumber value={visibleDraftPointsTotal} />
+                  )}{" "}
+                  pts
                 </Badge>
               </div>
             ) : null}
@@ -271,7 +313,14 @@ export function GameBoardTable({
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                   <Badge variant="outline">
-                    <AnimatedNumber value={draftCompositionPointTotal(composition.cards)} /> pts
+                    {draftCompositionPointTotal(composition.cards) === null ? (
+                      <span title="Add a natural card to resolve the joker's composition value">
+                        ?
+                      </span>
+                    ) : (
+                      <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
+                    )}{" "}
+                    pts
                   </Badge>
                 </div>
                 <div className="flex items-start gap-2">
@@ -295,11 +344,20 @@ export function GameBoardTable({
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
                   <Badge variant="outline">
-                    <AnimatedNumber
-                      value={draftCompositionPointTotal(
-                        composition.entries.map((entry) => entry.card),
-                      )}
-                    />{" "}
+                    {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
+                    null ? (
+                      <span title="Add a natural card to resolve the joker's composition value">
+                        ?
+                      </span>
+                    ) : (
+                      <AnimatedNumber
+                        value={
+                          draftCompositionPointTotal(
+                            composition.entries.map((entry) => entry.card),
+                          ) ?? 0
+                        }
+                      />
+                    )}{" "}
                     pts
                   </Badge>
                 </div>
