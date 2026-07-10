@@ -22,6 +22,7 @@ import { GameCard } from "#/components/game/game-card";
 import { draftCompositionPointTotal } from "#/components/game/game-card-utils";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
@@ -256,7 +257,9 @@ export function GameBoardTable({
           <div className="flex flex-wrap items-center justify-center gap-3">
             {visibleDraftPointTotals.length > 0 ? (
               <div className="flex min-h-5 basis-full items-center justify-center">
-                <Badge variant="outline">Draft total {visibleDraftPointsTotal} pts</Badge>
+                <Badge variant="outline">
+                  Draft total <AnimatedNumber value={visibleDraftPointsTotal} /> pts
+                </Badge>
               </div>
             ) : null}
 
@@ -268,7 +271,7 @@ export function GameBoardTable({
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                   <Badge variant="outline">
-                    {draftCompositionPointTotal(composition.cards)} pts
+                    <AnimatedNumber value={draftCompositionPointTotal(composition.cards)} /> pts
                   </Badge>
                 </div>
                 <div className="flex items-start gap-2">
@@ -292,7 +295,12 @@ export function GameBoardTable({
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
                   <Badge variant="outline">
-                    {draftCompositionPointTotal(composition.entries.map((entry) => entry.card))} pts
+                    <AnimatedNumber
+                      value={draftCompositionPointTotal(
+                        composition.entries.map((entry) => entry.card),
+                      )}
+                    />{" "}
+                    pts
                   </Badge>
                 </div>
                 <SortableContext

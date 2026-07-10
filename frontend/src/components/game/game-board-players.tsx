@@ -4,6 +4,7 @@ import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websoc
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { Button } from "#/components/ui/button";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { Badge } from "../ui/badge";
 
@@ -33,7 +34,8 @@ export function GameBoardPlayers({
           <div className="flex items-center gap-2">
             <PlayerEmotePicker onSendEmote={onSendEmote} />
             <Badge variant="outline">
-              {connectedPlayers}/{activePlayerCount} online
+              <AnimatedNumber value={connectedPlayers} />/
+              <AnimatedNumber value={activePlayerCount} /> online
             </Badge>
           </div>
         </CardAction>

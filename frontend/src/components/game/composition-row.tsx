@@ -23,6 +23,7 @@ import {
 } from "#/components/game/game-view-utils";
 import { cn } from "#/lib/utils";
 import { Badge } from "../ui/badge";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
 const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
@@ -273,7 +274,9 @@ export function CompositionRow({
           ) : null}
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{composition.points} pts</span>
+          <span>
+            <AnimatedNumber value={composition.points} /> pts
+          </span>
         </div>
       </div>
 

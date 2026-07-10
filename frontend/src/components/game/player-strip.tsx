@@ -4,6 +4,7 @@ import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websoc
 import { PlayerEmoteBubble } from "#/components/game/player-emotes";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Spinner } from "#/components/ui/spinner";
 import { cn, getUserInitials } from "#/lib/utils";
 
@@ -63,7 +64,7 @@ export function PlayerStrip({
               {showHostBadges && player.isHost ? <Badge variant="secondary">Host</Badge> : null}
               {gamePlayer ? (
                 <Badge variant="outline" aria-label={`${gamePlayer.handCount} cards`}>
-                  {gamePlayer.handCount}
+                  <AnimatedNumber value={gamePlayer.handCount} />
                   <HugeiconsIcon icon={Cards02Icon} aria-hidden="true" />
                 </Badge>
               ) : null}
