@@ -4,6 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Button } from "#/components/ui/button";
 
 export function EndGameProposalAlert() {
@@ -62,7 +63,8 @@ export function EndGameProposalAlert() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="outline">
-              {proposal.agreedPlayerIds.length}/{proposal.eligiblePlayerIds.length} agreed
+              <AnimatedNumber value={proposal.agreedPlayerIds.length} />/
+              <AnimatedNumber value={proposal.eligiblePlayerIds.length} /> agreed
             </Badge>
             {hasAgreed ? (
               <Badge variant="secondary">Waiting for others</Badge>

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Cards01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -12,6 +13,7 @@ import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameCard } from "#/components/game/game-card";
 import { cardName } from "#/components/game/game-card-utils";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
@@ -58,11 +60,46 @@ function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
     }));
 }
 
-function pointsGainedLabel(pointsGained: number) {
-  return pointsGained > 0 ? `+${pointsGained}` : "0";
-}
-
 function noopResetDraftCompositions() {}
+
+function ResultPoints({
+  totalPoints,
+  pointsGained,
+}: {
+  totalPoints: number;
+  pointsGained: number;
+}) {
+  const [displayedPoints, setDisplayedPoints] = useState(() => ({
+    total: Math.max(0, totalPoints - pointsGained),
+    gained: 0,
+  }));
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setDisplayedPoints({ total: totalPoints, gained: pointsGained });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [pointsGained, totalPoints]);
+
+  return (
+    <>
+      <TableCell className="text-right font-medium tabular-nums">
+        <AnimatedNumber value={displayedPoints.total} />
+      </TableCell>
+      <TableCell className="text-right tabular-nums">
+        <AnimatedNumber
+          className={cn(
+            "text-xs",
+            displayedPoints.gained > 0 ? "font-medium text-primary" : "text-muted-foreground",
+          )}
+          value={displayedPoints.gained}
+          prefix={displayedPoints.gained > 0 ? "+" : undefined}
+        />
+      </TableCell>
+    </>
+  );
+}
 
 function LeftoverHandTooltip({
   handCount,
@@ -97,7 +134,7 @@ function LeftoverHandTooltip({
           />
         }
       >
-        <span>{handCount}</span>
+        <AnimatedNumber value={handCount} />
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
       <TooltipContent className="flex flex-wrap justify-center gap-1 py-2.5 max-w-53">
@@ -222,18 +259,10 @@ export function GameResultsView({
                           playerName={playerName}
                         />
                       </TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {playerState.totalPoints}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {playerState.pointsGained > 0 ? (
-                          <span className="text-xs font-medium text-primary">
-                            {pointsGainedLabel(playerState.pointsGained)}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">0</span>
-                        )}
-                      </TableCell>
+                      <ResultPoints
+                        totalPoints={playerState.totalPoints}
+                        pointsGained={playerState.pointsGained}
+                      />
                     </TableRow>
                   );
                 })}

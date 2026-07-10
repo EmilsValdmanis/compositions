@@ -3,6 +3,7 @@ import { DiscardDropZone } from "#/components/game/discard-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
 import { Card, CardContent } from "#/components/ui/card";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 
 export function GameBoardPiles({
   drawPileCount,
@@ -23,7 +24,9 @@ export function GameBoardPiles({
         <div className="rounded-3xl border flex flex-col border-border/70 bg-muted/20 p-3">
           <div className="mb-2 flex items-center justify-between gap-3 text-xs uppercase text-muted-foreground">
             <span>Draw</span>
-            <span>{drawPileCount} cards</span>
+            <span>
+              <AnimatedNumber value={drawPileCount} /> cards
+            </span>
           </div>
           <div className="flex items-center justify-center grow flex-col">
             <GameCard

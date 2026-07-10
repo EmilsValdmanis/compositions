@@ -12,6 +12,7 @@ import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { Badge } from "#/components/ui/badge";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import {
@@ -91,7 +92,14 @@ export function GameLobbyView({
               <CardDescription>{room ? "Ready room" : "Create or join"}</CardDescription>
             </div>
             <Badge variant={room ? "secondary" : "outline"}>
-              {room ? `${connectedCount}/${players.length} online` : "Offline"}
+              {room ? (
+                <>
+                  <AnimatedNumber value={connectedCount} />/
+                  <AnimatedNumber value={players.length} /> online
+                </>
+              ) : (
+                "Offline"
+              )}
             </Badge>
           </div>
         </CardHeader>
@@ -202,7 +210,9 @@ export function GameLobbyView({
             {players.length ? (
               <div className="flex items-center gap-2">
                 <PlayerEmotePicker onSendEmote={onSendEmote} />
-                <Badge variant="outline">{players.length} seated</Badge>
+                <Badge variant="outline">
+                  <AnimatedNumber value={players.length} /> seated
+                </Badge>
               </div>
             ) : null}
           </div>

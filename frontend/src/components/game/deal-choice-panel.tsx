@@ -21,6 +21,7 @@ import {
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
 import { Badge } from "#/components/ui/badge";
+import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Button } from "#/components/ui/button";
 import { Label } from "#/components/ui/label";
 import { Slider } from "#/components/ui/slider";
@@ -139,8 +140,12 @@ function CutDeckControl({
             Cut size
           </Label>
           <div className="flex items-center gap-2">
-            <Badge variant="secondary">{clampedCutSize} cut</Badge>
-            <Badge variant="outline">{remainingCards} deck</Badge>
+            <Badge variant="secondary">
+              <AnimatedNumber value={clampedCutSize} /> cut
+            </Badge>
+            <Badge variant="outline">
+              <AnimatedNumber value={remainingCards} /> deck
+            </Badge>
           </div>
         </div>
 
