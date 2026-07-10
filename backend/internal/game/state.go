@@ -110,7 +110,7 @@ var (
 	ErrInitialPointsNotMet         = errors.New("initial compositions must total at least 40 points")
 	ErrInitialPlayRequiresOwnComp  = errors.New("initial play requires at least one new composition")
 	ErrMustKeepDiscardCard         = errors.New("player must keep one card for the final discard")
-	ErrMustUseDrawnDiscardCard     = errors.New("player must use the drawn discard card before discarding")
+	ErrMustUseDrawnDiscardCard     = errors.New("player must use the drawn discard card before playing other cards or discarding")
 	ErrInvalidDealingType          = errors.New("invalid dealing type")
 	ErrInvalidDealingOrder         = errors.New("invalid dealing order")
 	ErrInvalidDealer               = errors.New("invalid dealer")
@@ -235,11 +235,17 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 	if err != nil {
 		return err
 	}
+	// Table plays are committed per request, so the discard obligation must be
+	// satisfied before any supporting cards can be committed elsewhere.
+	usesDiscardDraw := gs.turn.mustUseDiscardDraw && tablePlayUsesCard(comps, additions, reclaims, gs.turn.discardDrawCard)
+	if gs.turn.mustUseDiscardDraw && !usesDiscardDraw {
+		return ErrMustUseDrawnDiscardCard
+	}
 
 	cp.hand.cards = nextState.handCards
 	gs.activeCompositions = nextState.activeCompositions
 	cp.hasOpened = nextState.hasOpened
-	if gs.turn.mustUseDiscardDraw && tablePlayUsesCard(comps, additions, reclaims, gs.turn.discardDrawCard) {
+	if gs.turn.mustUseDiscardDraw && usesDiscardDraw {
 		gs.turn.mustUseDiscardDraw = false
 	}
 

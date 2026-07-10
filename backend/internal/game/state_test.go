@@ -3029,34 +3029,74 @@ func TestGameStatePlayTableRejectsEmptyActionSet(t *testing.T) {
 	}
 }
 
-func TestGameStateDiscardFromHandRejectsEndingTurnBeforeUsingTakenDiscardCard(t *testing.T) {
+func TestGameStatePlayTableRejectsOpeningThatStrandsTakenDiscardCard(t *testing.T) {
 	state := newTurnTestState()
-	state.players[0].hasOpened = true
 	state.players[0].hand.cards = []Card{
-		card(King, Hearts),
-		card(King, Diamonds),
-		card(King, Clubs),
-		card(Two, Clubs),
+		card(Eight, Diamonds),
+		card(Nine, Diamonds),
+		card(Ten, Diamonds),
+		card(Eight, Clubs),
+		card(Nine, Clubs),
+		card(Ten, Clubs),
+		card(Four, Hearts),
+		card(Four, Diamonds),
+		card(Four, Clubs),
+		card(Two, Spades),
 	}
 	state.discardPile = &CardPile{cards: []Card{card(Ten, Hearts)}}
-	state.activeCompositions = []*Composition{mustRun(t,
-		card(Seven, Hearts),
-		card(Eight, Hearts),
-		card(Nine, Hearts),
-	)}
 
 	if err := state.DrawFromDiscard(); err != nil {
 		t.Fatalf("DrawFromDiscard() error = %v", err)
 	}
-	if err := state.PlayCompositions([]*Composition{mustSet(t,
-		card(King, Hearts),
-		card(King, Diamonds),
-		card(King, Clubs),
-	)}); err != nil {
-		t.Fatalf("PlayCompositions() error = %v", err)
+
+	err := state.PlayCompositions([]*Composition{
+		mustRun(t, card(Eight, Diamonds), card(Nine, Diamonds), card(Ten, Diamonds)),
+		mustRun(t, card(Eight, Clubs), card(Nine, Clubs), card(Ten, Clubs)),
+	})
+
+	if !errors.Is(err, ErrMustUseDrawnDiscardCard) {
+		t.Fatalf("PlayCompositions() error = %v; want %v", err, ErrMustUseDrawnDiscardCard)
+	}
+	if state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = true; want false")
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 11 {
+		t.Fatalf("len(player.hand.cards) = %d; want 11", len(state.players[0].hand.cards))
+	}
+	if !state.turn.mustUseDiscardDraw {
+		t.Fatal("state.turn.mustUseDiscardDraw = false; want true")
 	}
 
-	err := state.DiscardFromHand(indexOfCard(state.players[0].hand.cards, card(Ace, Clubs)))
+	err = state.PlayCompositions([]*Composition{
+		mustSet(t, card(Ten, Hearts), card(Ten, Diamonds), card(Ten, Clubs)),
+		mustSet(t, card(Four, Hearts), card(Four, Diamonds), card(Four, Clubs)),
+	})
+	if err != nil {
+		t.Fatalf("corrected PlayCompositions() error = %v", err)
+	}
+	if !state.players[0].hasOpened {
+		t.Fatal("player.hasOpened = false; want true")
+	}
+	if state.turn.mustUseDiscardDraw {
+		t.Fatal("state.turn.mustUseDiscardDraw = true; want false")
+	}
+}
+
+func TestGameStateDiscardFromHandRejectsEndingTurnBeforeUsingTakenDiscardCard(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Two, Clubs),
+		card(Ten, Hearts),
+	}
+	state.turn.hasDrawn = true
+	state.turn.mustUseDiscardDraw = true
+	state.turn.discardDrawCard = card(Ten, Hearts)
+
+	err := state.DiscardFromHand(0)
 
 	if !errors.Is(err, ErrMustUseDrawnDiscardCard) {
 		t.Fatalf("DiscardFromHand() error = %v; want %v", err, ErrMustUseDrawnDiscardCard)
