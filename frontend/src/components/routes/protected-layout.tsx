@@ -1,60 +1,25 @@
-import { Link, Outlet, getRouteApi } from "@tanstack/react-router";
-import { useGameWebSocket } from "#/components/game-websocket-provider";
-import { GameRulesDialog } from "#/components/game/game-rules-dialog";
+import { Outlet, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
-import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { CodeXmlIcon } from "@hugeicons/core-free-icons";
 
 const rootRouteApi = getRouteApi("__root__");
 
-function BrandTitle({ roomCode }: { roomCode?: string }) {
+function BrandTitle() {
   return (
     <span className="inline-flex min-w-0 items-center justify-center gap-2">
       <img src="/favicon.svg" alt="" className="size-5 shrink-0" aria-hidden="true" />
       <span className="truncate">Compositions</span>
-      {roomCode ? (
-        <span className="hidden font-normal normal-case tracking-normal text-muted-foreground sm:inline">
-          {` · Room ${roomCode}`}
-        </span>
-      ) : null}
     </span>
   );
 }
 
-function ProtectedLayoutStatus() {
-  const { state } = useGameWebSocket();
-  const roomCode = state.room?.code;
-  const isLobbyPhase = !state.room || state.room.phase === "lobby";
-  const turnPlayerId = state.game?.turn.playerId;
-  const turnPlayerName = state.room?.players.find(
-    (player) => player.playerId === turnPlayerId,
-  )?.name;
-
-  if (!roomCode) {
-    return (
-      <div className="min-w-0 text-center">
-        <p className="truncate text-sm font-semibold tracking-[0.16em] uppercase text-foreground/90 md:text-base">
-          <BrandTitle />
-        </p>
-      </div>
-    );
-  }
-
-  const detail = isLobbyPhase
-    ? "Waiting in lobby"
-    : state.game
-      ? `${turnPlayerName ? `${turnPlayerName}'s turn` : "In game"} · Round ${state.game.round} Turn ${state.game.turn.number}`
-      : "In game";
-
+function ProtectedLayoutTitle() {
   return (
     <div className="min-w-0 text-center">
       <p className="truncate text-sm font-semibold tracking-[0.16em] uppercase text-foreground/90 md:text-base">
-        <BrandTitle roomCode={roomCode} />
+        <BrandTitle />
       </p>
-      <p className="truncate text-[0.72rem] text-muted-foreground">{detail}</p>
     </div>
   );
 }
@@ -70,22 +35,10 @@ export function ProtectedLayout() {
             <ServerStatusBadge />
           </div>
 
-          <ProtectedLayoutStatus />
+          <ProtectedLayoutTitle />
 
           <div className="flex items-center justify-end gap-1 justify-self-end">
             <GameControlsMenu />
-            <GameRulesDialog />
-            {import.meta.env.DEV ? (
-              <Button
-                render={<Link to="/dev-ui" />}
-                nativeButton={false}
-                variant="outline"
-                className="hidden md:inline-flex"
-              >
-                <HugeiconsIcon icon={CodeXmlIcon} data-icon="inline-start" />
-                Dev UI
-              </Button>
-            ) : null}
             {session ? <UserDropdown /> : null}
           </div>
         </div>

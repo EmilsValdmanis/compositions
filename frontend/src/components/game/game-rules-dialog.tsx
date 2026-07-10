@@ -1,23 +1,20 @@
-import { BookOpen01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import { GameRulesGuide } from "#/components/game/game-rules-guide";
-import { Button } from "#/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "#/components/ui/dialog";
 
-export function GameRulesDialog() {
+type GameRulesDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+export function GameRulesDialog({ open, onOpenChange }: GameRulesDialogProps) {
   return (
-    <Dialog>
-      <DialogTrigger render={<Button type="button" variant="outline" />}>
-        <HugeiconsIcon icon={BookOpen01Icon} data-icon="inline-start" />
-        Rules
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[min(58rem,calc(100vw-2rem))] max-w-none gap-0 overflow-hidden p-0 sm:max-w-none">
         <DialogHeader className="border-b border-border/70 px-6 py-5 pr-14">
           <DialogTitle>Rules</DialogTitle>
