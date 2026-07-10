@@ -1,4 +1,4 @@
-import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { type CardSnapshot, type CompositionSnapshot } from "#/components/game-websocket-provider";
 
 const rankLabels: Record<number, string> = {
   1: "A",
@@ -144,5 +144,27 @@ export function draftCompositionPointTotal(cards: CardSnapshot[]) {
     (total): total is number => typeof total === "number",
   );
 
-  return validTotals.length > 0 ? Math.max(...validTotals) : cardPointTotal(cards);
+  if (validTotals.length > 0) {
+    return Math.max(...validTotals);
+  }
+
+  // A joker's 20-point value only applies while it is left in a player's hand.
+  // Until a natural card gives an unfinished draft some composition context,
+  // its table value cannot be known.
+  return cards.length > 0 && cards.every((card) => card.isJoker) ? null : cardPointTotal(cards);
+}
+
+export function draftCompositionPreviewPointTotal(
+  composition: CompositionSnapshot,
+  additions: CardSnapshot[],
+  replacements: Array<{ jokerIndex: number; replacementCard: CardSnapshot }> = [],
+) {
+  const replacementByJokerIndex = new Map(
+    replacements.map((replacement) => [replacement.jokerIndex, replacement.replacementCard]),
+  );
+  const previewCards = composition.cards.map(
+    (card, index) => replacementByJokerIndex.get(index) ?? card,
+  );
+
+  return draftCompositionPointTotal([...previewCards, ...additions]);
 }

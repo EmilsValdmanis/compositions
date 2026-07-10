@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-import { draftCompositionPointTotal } from "#/components/game/game-card-utils";
+import {
+  draftCompositionPointTotal,
+  draftCompositionPreviewPointTotal,
+} from "#/components/game/game-card-utils";
 
 describe("draftCompositionPointTotal", () => {
   it("scores set jokers as the represented rank", () => {
@@ -60,5 +63,42 @@ describe("draftCompositionPointTotal", () => {
         { isJoker: true },
       ]),
     ).toBe(95);
+  });
+
+  it("leaves an all-joker draft unresolved instead of using the round-end value", () => {
+    expect(draftCompositionPointTotal([{ isJoker: true }])).toBeNull();
+  });
+
+  it("includes additions in an existing composition preview", () => {
+    expect(
+      draftCompositionPreviewPointTotal(
+        {
+          type: "run",
+          cards: [
+            { rank: 5, suit: 0 },
+            { rank: 6, suit: 0 },
+            { rank: 7, suit: 0 },
+          ],
+          points: 18,
+          complete: false,
+        },
+        [{ rank: 8, suit: 0 }],
+      ),
+    ).toBe(26);
+  });
+
+  it("uses a reclaimed joker's replacement when previewing additions", () => {
+    expect(
+      draftCompositionPreviewPointTotal(
+        {
+          type: "run",
+          cards: [{ rank: 5, suit: 2 }, { isJoker: true }, { rank: 7, suit: 2 }],
+          points: 18,
+          complete: false,
+        },
+        [{ rank: 8, suit: 2 }],
+        [{ jokerIndex: 1, replacementCard: { rank: 6, suit: 2 } }],
+      ),
+    ).toBe(26);
   });
 });
