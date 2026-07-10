@@ -8,6 +8,7 @@ type Player struct {
 	totalPoints  int
 	pointsGained int
 	hasOpened    bool
+	forfeited    bool
 }
 
 func NewPlayer() *Player {

@@ -1,6 +1,7 @@
 import { Link, Outlet, getRouteApi } from "@tanstack/react-router";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRulesDialog } from "#/components/game/game-rules-dialog";
+import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
@@ -72,6 +73,7 @@ export function ProtectedLayout() {
           <ProtectedLayoutStatus />
 
           <div className="flex items-center justify-end gap-1 justify-self-end">
+            <GameControlsMenu />
             <GameRulesDialog />
             {import.meta.env.DEV ? (
               <Button

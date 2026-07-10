@@ -24,6 +24,7 @@ export function GameBoardPlayers({
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
 }) {
+  const activePlayerCount = players.filter((player) => !player.forfeited).length;
   return (
     <Card size="sm" className="min-w-0 grow overflow-y-auto">
       <CardHeader>
@@ -32,7 +33,7 @@ export function GameBoardPlayers({
           <div className="flex items-center gap-2">
             <PlayerEmotePicker onSendEmote={onSendEmote} />
             <Badge variant="outline">
-              {connectedPlayers}/{players.length || 0} online
+              {connectedPlayers}/{activePlayerCount} online
             </Badge>
           </div>
         </CardAction>

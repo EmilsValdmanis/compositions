@@ -80,6 +80,22 @@ type startNextRoundRequest struct{}
 
 type leaveRoomRequest struct{}
 
+type forfeitGameRequest struct{}
+
+type requestEndGameRequest struct {
+	Kind string `json:"kind"`
+}
+
+type voteEndGameRequest struct {
+	ProposalID string `json:"proposalId"`
+	Approve    bool   `json:"approve"`
+}
+
+type reportIssueRequest struct {
+	Description  string `json:"description"`
+	RequestAbort bool   `json:"requestAbort"`
+}
+
 type sendEmoteRequest struct {
 	Emoji string `json:"emoji"`
 }
@@ -171,6 +187,8 @@ type roomSnapshot struct {
 	DealerIndex       int                        `json:"dealerIndex,omitempty"`
 	PendingDealChoice *pendingDealChoiceSnapshot `json:"pendingDealChoice,omitempty"`
 	Players           []playerSnapshot           `json:"players"`
+	EndProposal       *endGameProposalSnapshot   `json:"endProposal,omitempty"`
+	Conclusion        *gameConclusionSnapshot    `json:"conclusion,omitempty"`
 }
 
 type pendingDealChoiceSnapshot struct {
@@ -189,6 +207,23 @@ type playerSnapshot struct {
 	IsHost       bool                 `json:"isHost"`
 	CanReconnect bool                 `json:"canReconnect"`
 	ActiveEmote  *playerEmoteSnapshot `json:"activeEmote,omitempty"`
+	Forfeited    bool                 `json:"forfeited,omitempty"`
+}
+
+type endGameProposalSnapshot struct {
+	ID                string    `json:"id"`
+	Kind              string    `json:"kind"`
+	ProposerPlayerID  string    `json:"proposerPlayerId"`
+	Description       string    `json:"description,omitempty"`
+	EligiblePlayerIDs []string  `json:"eligiblePlayerIds"`
+	AgreedPlayerIDs   []string  `json:"agreedPlayerIds"`
+	ExpiresAt         time.Time `json:"expiresAt"`
+}
+
+type gameConclusionSnapshot struct {
+	Kind           string `json:"kind"`
+	WinnerPlayerID string `json:"winnerPlayerId,omitempty"`
+	ReportID       string `json:"reportId,omitempty"`
 }
 
 type playerEmoteSnapshot struct {
@@ -397,6 +432,14 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			if s.handleLeaveRoom(conn, sessionID, envelope) {
 				return
 			}
+		case "forfeit_game":
+			s.handleForfeitGame(conn, sessionID, envelope)
+		case "request_end_game":
+			s.handleRequestEndGame(conn, sessionID, envelope)
+		case "vote_end_game":
+			s.handleVoteEndGame(conn, sessionID, envelope)
+		case "report_issue":
+			s.handleReportIssue(conn, sessionID, envelope)
 		case "send_emote":
 			s.handleSendEmote(conn, sessionID, envelope)
 		case "draw":
@@ -596,6 +639,64 @@ func (s *wsServer) handleLeaveRoom(conn *websocket.Conn, sessionID string, envel
 		s.broadcastRoomState(*roomState, recipients)
 	}
 	return false
+}
+
+func (s *wsServer) handleForfeitGame(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	if _, ok := decodeSessionRequest[forfeitGameRequest](s, conn, sessionID, envelope); !ok {
+		return
+	}
+
+	roomState, recipients, result, roomCode, err := s.lobby.forfeitGame(sessionID)
+	if err != nil {
+		slog.Warn("forfeit game failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	logEmitFailure(conn, "action_result", result, "write forfeit result failed", "sessionID", sessionID)
+	s.broadcastActionSuccess(result, roomState, recipients)
+	logEmitFailure(conn, "left_room", leftRoomEvent{RoomCode: roomCode}, "write forfeit left-room event failed", "sessionID", sessionID)
+}
+
+func (s *wsServer) handleRequestEndGame(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[requestEndGameRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+	roomState, recipients, result, err := s.lobby.requestEndGame(sessionID, req.Kind)
+	if err != nil {
+		slog.Warn("request end game failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handleVoteEndGame(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[voteEndGameRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+	roomState, recipients, result, err := s.lobby.voteEndGame(sessionID, req.ProposalID, req.Approve)
+	if err != nil {
+		slog.Warn("vote end game failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handleReportIssue(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[reportIssueRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+	roomState, recipients, result, err := s.lobby.reportIssue(sessionID, req.Description, req.RequestAbort)
+	if err != nil {
+		slog.Warn("report issue failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
 }
 
 func (s *wsServer) handleSendEmote(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {

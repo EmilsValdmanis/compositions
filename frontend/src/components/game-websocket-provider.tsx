@@ -87,6 +87,7 @@ export type PlayerStateSnapshot = {
   totalPoints: number;
   pointsGained: number;
   hasOpened: boolean;
+  forfeited?: boolean;
 };
 
 export type TurnSnapshot = {
@@ -120,11 +121,28 @@ export type PlayerSnapshot = {
   seat: number;
   isHost: boolean;
   canReconnect: boolean;
+  forfeited?: boolean;
   activeEmote?: {
     id: string;
     emoji: string;
     expiresAt: string;
   };
+};
+
+export type EndGameProposalSnapshot = {
+  id: string;
+  kind: "mutual_end" | "technical_abort";
+  proposerPlayerId: string;
+  description?: string;
+  eligiblePlayerIds: string[];
+  agreedPlayerIds: string[];
+  expiresAt: string;
+};
+
+export type GameConclusionSnapshot = {
+  kind: "forfeit" | "mutual_end" | "technical_abort";
+  winnerPlayerId?: string;
+  reportId?: string;
 };
 
 export type PendingDealChoiceSnapshot = {
@@ -139,6 +157,8 @@ export type RoomSnapshot = {
   hostPlayerId: string;
   dealerIndex?: number;
   pendingDealChoice?: PendingDealChoiceSnapshot;
+  endProposal?: EndGameProposalSnapshot;
+  conclusion?: GameConclusionSnapshot;
   players: PlayerSnapshot[];
 };
 
@@ -193,6 +213,10 @@ type GameWebSocketContextValue = {
   startNextRound: () => void;
   chooseDealing: (choice: DealingChoiceRequest | string) => void;
   leaveRoom: () => void;
+  forfeitGame: () => Promise<ActionResult>;
+  requestEndGame: () => Promise<ActionResult>;
+  voteEndGame: (proposalId: string, approve: boolean) => Promise<ActionResult>;
+  reportIssue: (description: string, requestAbort: boolean) => Promise<ActionResult>;
   sendEmote: (emoji: string) => void;
   drawFromDeck: () => void;
   drawFromDiscard: () => void;
@@ -669,6 +693,12 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     chooseDealing: (choice) =>
       send("choose_dealing", typeof choice === "string" ? { dealType: choice } : choice),
     leaveRoom: () => send("leave_room", {}),
+    forfeitGame: () => send("forfeit_game", {}, { awaitResult: true }),
+    requestEndGame: () => send("request_end_game", { kind: "mutual_end" }, { awaitResult: true }),
+    voteEndGame: (proposalId, approve) =>
+      send("vote_end_game", { proposalId, approve }, { awaitResult: true }),
+    reportIssue: (description, requestAbort) =>
+      send("report_issue", { description, requestAbort }, { awaitResult: true }),
     sendEmote: (emoji) => send("send_emote", { emoji }),
     drawFromDeck: () => send("draw", { source: "deck" }),
     drawFromDiscard: () => send("draw", { source: "discard" }),

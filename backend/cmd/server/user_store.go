@@ -27,6 +27,9 @@ var saveStoredLobbyState = func(ctx context.Context, store *database.UserStore, 
 var loadStoredLobbyState = func(ctx context.Context, store *database.UserStore) ([]byte, error) {
 	return store.LoadLobbyState(ctx)
 }
+var createStoredGameBugReport = func(ctx context.Context, store *database.UserStore, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	return store.CreateGameBugReport(ctx, report)
+}
 
 type userStore interface {
 	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
@@ -35,6 +38,7 @@ type userStore interface {
 	DeleteSession(ctx context.Context, sessionToken string) error
 	SaveLobbyState(ctx context.Context, state persistedLobbyState) error
 	LoadLobbyState(ctx context.Context) (persistedLobbyState, error)
+	CreateGameBugReport(ctx context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error)
 	Close() error
 }
 
@@ -56,6 +60,10 @@ func (noopUserStore) SaveLobbyState(context.Context, persistedLobbyState) error 
 
 func (noopUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
 	return persistedLobbyState{}, nil
+}
+
+func (noopUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	return report, nil
 }
 
 func (noopUserStore) Close() error { return nil }
@@ -173,4 +181,11 @@ func (s *postgresUserStore) LoadLobbyState(ctx context.Context) (persistedLobbyS
 	}
 
 	return state, nil
+}
+
+func (s *postgresUserStore) CreateGameBugReport(ctx context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	if s == nil || s.store == nil {
+		return database.GameBugReportRecord{}, errors.New("user store is not configured")
+	}
+	return createStoredGameBugReport(ctx, s.store, report)
 }

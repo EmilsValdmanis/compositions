@@ -88,6 +88,29 @@ To run the integration tests locally you need Docker running.
 - websocket connections are handled at `/ws`
 - the module root for the Go project is this directory
 
+## Reviewing Bug Reports
+
+Game problem reports are stored independently in `game_bug_reports`, even after the original room
+is deleted. To review the newest reports:
+
+```sql
+SELECT
+    id,
+    created_at,
+    room_code,
+    reporter_player_id,
+    description,
+    round,
+    turn,
+    requested_abort,
+    game_state
+FROM game_bug_reports
+ORDER BY created_at DESC;
+```
+
+`game_state` is the authoritative server persistence snapshot captured when the player submitted
+the report.
+
 ## Purpose
 
 The backend is responsible for enforcing the game rules and managing multiplayer session state. The intent is to keep the rule logic testable and separate from frontend concerns.

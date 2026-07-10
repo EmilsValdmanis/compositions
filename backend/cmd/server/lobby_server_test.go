@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,10 +17,12 @@ import (
 )
 
 type jsonLobbyStateStore struct {
-	data    []byte
-	saves   int
-	saveErr error
-	loadErr error
+	data         []byte
+	saves        int
+	saveErr      error
+	loadErr      error
+	bugReports   []database.GameBugReportRecord
+	bugReportErr error
 }
 
 func (s *jsonLobbyStateStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
@@ -63,6 +66,14 @@ func (s *jsonLobbyStateStore) LoadLobbyState(context.Context) (persistedLobbySta
 	return state, nil
 }
 
+func (s *jsonLobbyStateStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	if s.bugReportErr != nil {
+		return database.GameBugReportRecord{}, s.bugReportErr
+	}
+	s.bugReports = append(s.bugReports, report)
+	return report, nil
+}
+
 func (s *jsonLobbyStateStore) Close() error { return nil }
 
 func setGameStatePhaseForTest(t *testing.T, state *game.GameState, phase game.GamePhase) {
@@ -70,6 +81,150 @@ func setGameStatePhaseForTest(t *testing.T, state *game.GameState, phase game.Ga
 
 	field := reflect.ValueOf(state).Elem().FieldByName("phase")
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().SetInt(int64(phase))
+}
+
+func newActiveLobbyForExitTests(t *testing.T, playerCount int) (*lobbyServer, []connectedEvent, string) {
+	t.Helper()
+	lobby := newLobbyServer()
+	events := make([]connectedEvent, 0, playerCount)
+	for index := range playerCount {
+		event, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			t.Fatalf("connect player %d error = %v", index, err)
+		}
+		events = append(events, event)
+	}
+	roomState, _, err := lobby.createRoom(events[0].SessionID, "Player 1")
+	if err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+	for index := 1; index < playerCount; index++ {
+		if _, _, err := lobby.joinRoom(events[index].SessionID, roomState.Code, fmt.Sprintf("Player %d", index+1)); err != nil {
+			t.Fatalf("joinRoom(player %d) error = %v", index, err)
+		}
+	}
+	if _, _, err := lobby.startGame(events[0].SessionID, 0); err != nil {
+		t.Fatalf("startGame() error = %v", err)
+	}
+	cutSize := 0
+	if _, _, err := lobby.chooseDealing(events[playerCount-1].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cutSize}); err != nil {
+		t.Fatalf("chooseDealing() error = %v", err)
+	}
+	return lobby, events, roomState.Code
+}
+
+func TestLobbyForfeitGameKeepsCardsAvailableAndTransfersHost(t *testing.T) {
+	lobby, events, roomCode := newActiveLobbyForExitTests(t, 3)
+	room := lobby.rooms[roomCode]
+	before := room.gameState.PersistenceSnapshot()
+	hostHandCount := len(before.Players[0].Hand)
+	beforeDrawCount := len(before.DrawPile)
+
+	roomState, _, result, _, err := lobby.forfeitGame(events[0].SessionID)
+	if err != nil {
+		t.Fatalf("forfeitGame() error = %v", err)
+	}
+	if !result.OK || result.Action != "forfeit_game" {
+		t.Fatalf("forfeit result = %#v", result)
+	}
+	if roomState.Players[0].Forfeited != true || roomState.Players[0].CanReconnect {
+		t.Fatalf("forfeited player snapshot = %#v", roomState.Players[0])
+	}
+	if roomState.HostPlayerID != events[1].PlayerID {
+		t.Fatalf("new host = %q; want %q", roomState.HostPlayerID, events[1].PlayerID)
+	}
+	if lobby.sessions[events[0].SessionID].roomCode != "" {
+		t.Fatal("forfeited session remained attached to room")
+	}
+	after := room.gameState.PersistenceSnapshot()
+	if len(after.DrawPile) != beforeDrawCount+hostHandCount {
+		t.Fatalf("draw pile count = %d; want %d", len(after.DrawPile), beforeDrawCount+hostHandCount)
+	}
+	if !after.Players[0].Forfeited || len(after.Players[0].Hand) != 0 {
+		t.Fatalf("persisted forfeited player = %#v", after.Players[0])
+	}
+}
+
+func TestLobbyEndGameRequiresUnanimousApproval(t *testing.T) {
+	lobby, events, _ := newActiveLobbyForExitTests(t, 3)
+	roomState, _, _, err := lobby.requestEndGame(events[0].SessionID, "mutual_end")
+	if err != nil {
+		t.Fatalf("requestEndGame() error = %v", err)
+	}
+	if roomState.EndProposal == nil || len(roomState.EndProposal.AgreedPlayerIDs) != 1 {
+		t.Fatalf("end proposal = %#v", roomState.EndProposal)
+	}
+
+	proposalID := roomState.EndProposal.ID
+	roomState, _, _, err = lobby.voteEndGame(events[1].SessionID, proposalID, true)
+	if err != nil {
+		t.Fatalf("first voteEndGame() error = %v", err)
+	}
+	if roomState.Phase != "in_progress" {
+		t.Fatalf("phase after partial vote = %q; want in_progress", roomState.Phase)
+	}
+
+	roomState, _, _, err = lobby.voteEndGame(events[2].SessionID, proposalID, true)
+	if err != nil {
+		t.Fatalf("second voteEndGame() error = %v", err)
+	}
+	if roomState.Phase != "game_over" || roomState.Conclusion == nil || roomState.Conclusion.Kind != "mutual_end" {
+		t.Fatalf("unanimous result = %#v", roomState)
+	}
+}
+
+func TestLobbyRejectedEndGameVoteStartsCooldown(t *testing.T) {
+	lobby, events, _ := newActiveLobbyForExitTests(t, 2)
+	roomState, _, _, err := lobby.requestEndGame(events[0].SessionID, "mutual_end")
+	if err != nil {
+		t.Fatalf("requestEndGame() error = %v", err)
+	}
+	if _, _, _, err := lobby.voteEndGame(events[1].SessionID, roomState.EndProposal.ID, false); err != nil {
+		t.Fatalf("voteEndGame(reject) error = %v", err)
+	}
+	if _, _, _, err := lobby.requestEndGame(events[0].SessionID, "mutual_end"); err == nil || !strings.Contains(err.Error(), "wait before") {
+		t.Fatalf("requestEndGame during cooldown error = %v", err)
+	}
+}
+
+func TestLobbyTechnicalAbortRetainsIssueReport(t *testing.T) {
+	lobby, events, roomCode := newActiveLobbyForExitTests(t, 2)
+	store := &jsonLobbyStateStore{}
+	lobby.store = store
+	roomState, _, _, err := lobby.reportIssue(events[0].SessionID, "Discard pile became stuck", true)
+	if err != nil {
+		t.Fatalf("reportIssue() error = %v", err)
+	}
+	if roomState.EndProposal == nil || roomState.EndProposal.Kind != "technical_abort" {
+		t.Fatalf("technical abort proposal = %#v", roomState.EndProposal)
+	}
+	if len(store.bugReports) != 1 {
+		t.Fatalf("saved bug report count = %d; want 1", len(store.bugReports))
+	}
+	savedReport := store.bugReports[0]
+	if savedReport.RoomCode != roomCode || savedReport.Description != "Discard pile became stuck" || !json.Valid(savedReport.GameState) || !savedReport.RequestedAbort {
+		t.Fatalf("saved bug report = %#v", savedReport)
+	}
+
+	roomState, _, _, err = lobby.voteEndGame(events[1].SessionID, roomState.EndProposal.ID, true)
+	if err != nil {
+		t.Fatalf("voteEndGame() error = %v", err)
+	}
+	if roomState.Conclusion == nil || roomState.Conclusion.Kind != "technical_abort" || roomState.Conclusion.ReportID == "" {
+		t.Fatalf("technical abort conclusion = %#v", roomState.Conclusion)
+	}
+}
+
+func TestLobbyReportIssueDoesNotCreateProposalWhenDatabaseSaveFails(t *testing.T) {
+	lobby, events, roomCode := newActiveLobbyForExitTests(t, 2)
+	lobby.store = &jsonLobbyStateStore{bugReportErr: errors.New("database unavailable")}
+
+	if _, _, _, err := lobby.reportIssue(events[0].SessionID, "Broken game", true); err == nil || !strings.Contains(err.Error(), "save bug report: database unavailable") {
+		t.Fatalf("reportIssue() error = %v", err)
+	}
+	if lobby.rooms[roomCode].endProposal != nil {
+		t.Fatal("end proposal created after bug report save failed")
+	}
 }
 
 func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {

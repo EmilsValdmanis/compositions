@@ -254,6 +254,54 @@ func TestUserStoreLobbyState(t *testing.T) {
 	}
 }
 
+func TestUserStoreGameBugReports(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+	if err := RunMigrations(ctx, databaseURL, MigrationUp); err != nil {
+		t.Fatalf("RunMigrations(up) error = %v", err)
+	}
+	store, err := NewUserStore(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("NewUserStore() error = %v", err)
+	}
+	defer store.Close()
+
+	createdAt := time.Date(2026, 7, 10, 8, 30, 0, 0, time.UTC)
+	report := GameBugReportRecord{
+		ID:               uuid.NewString(),
+		RoomCode:         "abc123",
+		ReporterPlayerID: uuid.NewString(),
+		Description:      "The discard pile stopped responding",
+		GameState:        json.RawMessage(`{"version":1,"phase":1,"round":2}`),
+		Round:            2,
+		Turn:             9,
+		RequestedAbort:   true,
+		CreatedAt:        createdAt,
+	}
+	created, err := store.CreateGameBugReport(ctx, report)
+	if err != nil {
+		t.Fatalf("CreateGameBugReport() error = %v", err)
+	}
+	if created.ID != report.ID || created.RoomCode != "ABC123" || !json.Valid(created.GameState) {
+		t.Fatalf("created bug report = %#v", created)
+	}
+
+	loaded, err := store.GetGameBugReport(ctx, report.ID)
+	if err != nil {
+		t.Fatalf("GetGameBugReport() error = %v", err)
+	}
+	if loaded.Description != report.Description || loaded.Round != 2 || loaded.Turn != 9 || !loaded.RequestedAbort {
+		t.Fatalf("loaded bug report = %#v", loaded)
+	}
+	reports, err := store.ListGameBugReports(ctx, 20)
+	if err != nil {
+		t.Fatalf("ListGameBugReports() error = %v", err)
+	}
+	if len(reports) != 1 || reports[0].ID != report.ID {
+		t.Fatalf("listed bug reports = %#v", reports)
+	}
+}
+
 func TestUserEmailUniquenessMigrationDeduplicatesExistingRows(t *testing.T) {
 	ctx := context.Background()
 	databaseURL := startPostgresContainer(t, ctx)
