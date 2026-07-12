@@ -317,6 +317,9 @@ function GameBoardLayout({
               : undefined
           }
           canCompose={turnState.canDiscard}
+          showDraftTotal={
+            !game?.players.find((player) => player.playerId === game.turn.playerId)?.hasOpened
+          }
         />
 
         <div className="flex flex-col min-h-0 gap-4">
@@ -939,6 +942,7 @@ export function GameBoardView({
   const collisionDetection = createBoardCollisionDetection(
     new Set(controller.availableHandEntries.map((entry) => entry.key)),
   );
+  const currentPlayer = players.find((player) => player.playerId === playerId);
 
   return (
     <DndContext
@@ -949,7 +953,12 @@ export function GameBoardView({
       onDragCancel={controller.handleDragCancel}
     >
       {turnState.isMyTurn && game ? (
-        <TurnStartCue round={game.round} turnNumber={game.turn.number} />
+        <TurnStartCue
+          round={game.round}
+          turnNumber={game.turn.number}
+          playerName={currentPlayer?.name ?? turnState.turnPlayerName}
+          playerImageUrl={currentPlayer?.imageUrl}
+        />
       ) : null}
       <GameBoardLayout
         game={game}

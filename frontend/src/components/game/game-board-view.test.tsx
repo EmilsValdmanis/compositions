@@ -145,6 +145,7 @@ const players: PlayerSnapshot[] = [
   {
     playerId: "player-1",
     name: "Avery",
+    imageUrl: "https://cdn.example.com/avery.png",
     connected: true,
     seat: 0,
     isHost: true,
@@ -226,8 +227,9 @@ describe("GameBoardView discard drops", () => {
       />,
     );
 
-    const cue = view.getByText("Your turn").parentElement;
+    const cue = view.getByRole("status", { name: "Your turn, Avery" });
     expect(cue?.getAttribute("data-turn-number")).toBe("1");
+    expect(cue.querySelector('[data-slot="avatar"]')).not.toBeNull();
   });
 
   it("commits a staged table play and discard as one action", async () => {

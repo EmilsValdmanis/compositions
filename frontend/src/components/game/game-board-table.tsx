@@ -138,12 +138,14 @@ export function GameBoardTable({
   players,
   turnActivity,
   canCompose,
+  showDraftTotal,
 }: {
   tableCompositions: TableCompositionView[];
   newCompositions: DraftedCompositionView[];
   players: PlayerSnapshot[];
   turnActivity?: TurnActivitySnapshot;
   canCompose: boolean;
+  showDraftTotal: boolean;
 }) {
   const { active } = useDndContext();
   const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
@@ -303,7 +305,7 @@ export function GameBoardTable({
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {visibleDraftPointTotals.length > 0 ? (
+            {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
               <div className="flex min-h-5 basis-full items-center justify-center">
                 <Badge variant="outline">
                   Draft total{" "}
