@@ -336,6 +336,16 @@ export function DevGameUi() {
     } satisfies ActionResult;
   }
 
+  async function handlePlayTableAndDiscard(play: TablePlayRequest, cardIndex: number) {
+    updateGame((current) => discardFromHand(applyTablePlay(current, play), cardIndex));
+
+    return {
+      action: "play_and_discard",
+      playerId: resolvedPerspectiveId,
+      ok: true,
+    } satisfies ActionResult;
+  }
+
   function handleStartNextRound() {
     setGameOverride(null);
     setViewMode("board");
@@ -397,6 +407,7 @@ export function DevGameUi() {
             onDrawFromDeck={() => updateGame(drawFromDeck)}
             onDrawFromDiscard={() => updateGame(drawFromDiscard)}
             onPlayTable={handlePlayTable}
+            onPlayTableAndDiscard={handlePlayTableAndDiscard}
             onSendEmote={() => {}}
             disableDraftSync
           />

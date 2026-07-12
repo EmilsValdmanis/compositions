@@ -222,6 +222,7 @@ type GameWebSocketContextValue = {
   drawFromDiscard: () => void;
   updateTurnDrafts: (draft: TurnDraftUpdateRequest) => void;
   playTable: (play: TablePlayRequest) => Promise<ActionResult>;
+  playTableAndDiscard: (play: TablePlayRequest, cardIndex: number) => Promise<ActionResult>;
   discardCard: (cardIndex: number) => Promise<ActionResult>;
 };
 
@@ -704,6 +705,8 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     drawFromDiscard: () => send("draw", { source: "discard" }),
     updateTurnDrafts: (draft) => send("draft_update", draft),
     playTable: (play) => send("play", play, { awaitResult: true }),
+    playTableAndDiscard: (play, cardIndex) =>
+      send("play_and_discard", { ...play, cardIndex }, { awaitResult: true }),
     discardCard: (cardIndex) => send("discard", { cardIndex }, { awaitResult: true }),
   };
 

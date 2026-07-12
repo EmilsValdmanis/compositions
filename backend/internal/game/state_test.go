@@ -1673,6 +1673,69 @@ func TestGameStatePlayTableAllowsOpeningWithCompositionAndAddition(t *testing.T)
 	}
 }
 
+func TestGameStatePlayTableAndDiscardCommitsTurnAtomically(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+		{rank: Two, suit: Spades},
+		{rank: Three, suit: Clubs},
+	}
+	setComp, ok := NewSet(state.players[0].hand.cards[:3])
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	if err := state.PlayTableAndDiscard(0, []*Composition{setComp}, nil); err != nil {
+		t.Fatalf("PlayTableAndDiscard() error = %v", err)
+	}
+
+	if len(state.activeCompositions) != 1 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 1", len(state.activeCompositions))
+	}
+	if top := state.discardPile.cards[0]; !sameCard(top, card(Two, Spades)) {
+		t.Fatalf("discardPile.cards[0] = %+v; want Two of Spades", top)
+	}
+	if state.turn.playerIndex != 1 {
+		t.Fatalf("state.turn.playerIndex = %d; want 1", state.turn.playerIndex)
+	}
+}
+
+func TestGameStatePlayTableAndDiscardRollsBackInvalidDiscard(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+		{rank: Two, suit: Spades},
+		{rank: Three, suit: Clubs},
+	}
+	setComp, ok := NewSet(state.players[0].hand.cards[:3])
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+
+	err := state.PlayTableAndDiscard(2, []*Composition{setComp}, nil)
+
+	if !errors.Is(err, ErrRemovingCard) {
+		t.Fatalf("PlayTableAndDiscard() error = %v; want %v", err, ErrRemovingCard)
+	}
+	if len(state.activeCompositions) != 0 {
+		t.Fatalf("len(state.activeCompositions) = %d; want 0", len(state.activeCompositions))
+	}
+	if len(state.players[0].hand.cards) != 5 {
+		t.Fatalf("len(state.players[0].hand.cards) = %d; want 5", len(state.players[0].hand.cards))
+	}
+	if state.turn.playerIndex != 0 || !state.turn.hasDrawn {
+		t.Fatalf("state.turn = %+v; want original turn", state.turn)
+	}
+}
+
 func TestGameStateAddToCompositionsRejectsUnopenedPlayerWithoutOwnComposition(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true

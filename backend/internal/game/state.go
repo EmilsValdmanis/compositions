@@ -252,6 +252,25 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 	return nil
 }
 
+// PlayTableAndDiscard commits the visible parts of a turn as one operation.
+// Work on a restored copy so an invalid discard cannot leave a valid table
+// play applied without ending the turn.
+func (gs *GameState) PlayTableAndDiscard(cardIndex int, comps []*Composition, additions []CompositionAddition, reclaims ...JokerReclaim) error {
+	next, err := RestoreGameState(gs.PersistenceSnapshot())
+	if err != nil {
+		return err
+	}
+	if err := next.PlayTable(comps, additions, reclaims...); err != nil {
+		return err
+	}
+	if err := next.DiscardFromHand(cardIndex); err != nil {
+		return err
+	}
+
+	*gs = *next
+	return nil
+}
+
 func (gs *GameState) DiscardFromHand(cardIndex int) error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress

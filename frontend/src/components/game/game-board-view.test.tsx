@@ -5,6 +5,7 @@ import {
   type ActionResult,
   type GameSnapshot,
   type PlayerSnapshot,
+  type TablePlayRequest,
 } from "#/components/game-websocket-provider";
 
 if (typeof globalThis.document === "undefined") {
@@ -181,7 +182,7 @@ function dragEnd(handKey: string, overId: string, cardIndex: number) {
 }
 
 describe("GameBoardView discard drops", () => {
-  it("does not discard with a post-submit hand index when the staged table play fails", async () => {
+  it("commits a staged table play and discard as one action", async () => {
     const onDiscardCard = vi.fn<() => Promise<ActionResult>>().mockResolvedValue({
       action: "discard_card",
       playerId: "player-1",
@@ -192,6 +193,13 @@ describe("GameBoardView discard drops", () => {
       playerId: "player-1",
       ok: false,
     });
+    const onPlayTableAndDiscard = vi
+      .fn<(play: TablePlayRequest, cardIndex: number) => Promise<ActionResult>>()
+      .mockResolvedValue({
+        action: "play_and_discard",
+        playerId: "player-1",
+        ok: true,
+      });
 
     const view = render(
       <GameBoardView
@@ -217,6 +225,7 @@ describe("GameBoardView discard drops", () => {
         onDrawFromDeck={vi.fn()}
         onDrawFromDiscard={vi.fn()}
         onPlayTable={onPlayTable}
+        onPlayTableAndDiscard={onPlayTableAndDiscard}
         onSendEmote={vi.fn()}
         disableDraftSync
       />,
@@ -237,7 +246,9 @@ describe("GameBoardView discard drops", () => {
       dragEnd("12-2-1", "discard-pile", 2);
     });
 
-    await waitFor(() => expect(onPlayTable).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onPlayTableAndDiscard).toHaveBeenCalledTimes(1));
+    expect(onPlayTableAndDiscard.mock.calls[0]?.[1]).toBe(1);
+    expect(onPlayTable).not.toHaveBeenCalled();
     expect(onDiscardCard).not.toHaveBeenCalled();
   });
 
@@ -299,6 +310,7 @@ describe("GameBoardView discard drops", () => {
         onDrawFromDeck={vi.fn()}
         onDrawFromDiscard={vi.fn()}
         onPlayTable={onPlayTable}
+        onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
         disableDraftSync
       />,
@@ -410,6 +422,7 @@ describe("GameBoardView spectator turn drafts", () => {
         onDrawFromDeck={vi.fn()}
         onDrawFromDiscard={vi.fn()}
         onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
         disableDraftSync
       />,

@@ -36,6 +36,7 @@ export function ProtectedHome() {
     drawFromDeck,
     drawFromDiscard,
     playTable,
+    playTableAndDiscard,
     discardCard,
   } = useGameWebSocket();
   const autoJoinAttemptedRoomCodeRef = useRef<string | null>(null);
@@ -261,6 +262,7 @@ export function ProtectedHome() {
               onDrawFromDeck={drawFromDeck}
               onDrawFromDiscard={drawFromDiscard}
               onPlayTable={handlePlayTable}
+              onPlayTableAndDiscard={playTableAndDiscard}
               onSendEmote={sendEmote}
             />
           </div>
