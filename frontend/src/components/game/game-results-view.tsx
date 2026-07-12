@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cards01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { Cards01Icon, Crown03Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type CompletedGameSnapshot,
@@ -28,10 +28,6 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { fireCelebrationConfetti } from "#/lib/confetti";
 import { cn, getUserInitials } from "#/lib/utils";
-
-const emojiFont = {
-  fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
-};
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -262,10 +258,13 @@ export function GameResultsView({
                             {isRoundWinner ? (
                               <span
                                 aria-hidden="true"
-                                className="absolute -top-3 -right-2 z-20 rotate-12 text-lg leading-none drop-shadow-sm"
-                                style={emojiFont}
+                                className="absolute -top-1.5 -right-1.5 z-20 grid size-4 place-items-center rounded-full bg-amber-400 text-amber-950 shadow-sm ring-2 ring-background"
                               >
-                                👑
+                                <HugeiconsIcon
+                                  icon={Crown03Icon}
+                                  className="size-2.5"
+                                  strokeWidth={2.25}
+                                />
                               </span>
                             ) : null}
                           </Avatar>

@@ -25,14 +25,15 @@ import (
 var readRandom = rand.Read
 
 const (
-	authCookieName         = "compositions_session"
-	oauthStateCookieName   = "compositions_oauth_state"
-	oauthPKCECookieName    = "compositions_oauth_pkce"
-	oauthStateCookieMaxAge = 10 * time.Minute
-	defaultSessionLifetime = 30 * 24 * time.Hour
-	authCookieSameSite     = http.SameSiteLaxMode
-	googleUserInfoEndpoint = "https://www.googleapis.com/oauth2/v3/userinfo"
-	googleProvider         = "google"
+	authCookieName          = "compositions_session"
+	oauthStateCookieName    = "compositions_oauth_state"
+	oauthPKCECookieName     = "compositions_oauth_pkce"
+	oauthReturnToCookieName = "compositions_oauth_return_to"
+	oauthStateCookieMaxAge  = 10 * time.Minute
+	defaultSessionLifetime  = 30 * 24 * time.Hour
+	authCookieSameSite      = http.SameSiteLaxMode
+	googleUserInfoEndpoint  = "https://www.googleapis.com/oauth2/v3/userinfo"
+	googleProvider          = "google"
 )
 
 type authSession struct {
@@ -245,6 +246,32 @@ func stateDigest(state string) string {
 	return hex.EncodeToString(hash[:])
 }
 
+func validReturnPath(raw string) (string, bool) {
+	value := strings.TrimSpace(raw)
+	parsed, err := url.Parse(value)
+	if err != nil || value == "" || parsed.IsAbs() || parsed.Host != "" || !strings.HasPrefix(parsed.Path, "/") || strings.HasPrefix(parsed.Path, "//") {
+		return "", false
+	}
+	return parsed.String(), true
+}
+
+func frontendRedirectURL(frontendURL, encodedReturnPath string) string {
+	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(encodedReturnPath))
+	if err != nil {
+		return frontendURL
+	}
+	returnPath, ok := validReturnPath(string(decoded))
+	if !ok {
+		return frontendURL
+	}
+	base, err := url.Parse(frontendURL)
+	if err != nil {
+		return frontendURL
+	}
+	reference, _ := url.Parse(returnPath)
+	return base.ResolveReference(reference).String()
+}
+
 func (h *authHandler) handleGoogleSignIn(w http.ResponseWriter, r *http.Request) {
 	state, err := h.state()
 	if err != nil {
@@ -261,6 +288,11 @@ func (h *authHandler) handleGoogleSignIn(w http.ResponseWriter, r *http.Request)
 
 	setCookie(w, h.cookie(oauthStateCookieName, stateDigest(state), h.now().Add(oauthStateCookieMaxAge)))
 	setCookie(w, h.cookie(oauthPKCECookieName, verifier, h.now().Add(oauthStateCookieMaxAge)))
+	if returnPath, ok := validReturnPath(r.URL.Query().Get("returnTo")); ok {
+		setCookie(w, h.cookie(oauthReturnToCookieName, base64.RawURLEncoding.EncodeToString([]byte(returnPath)), h.now().Add(oauthStateCookieMaxAge)))
+	} else {
+		clearCookie(w, h.cookie(oauthReturnToCookieName, "", time.Unix(0, 0)))
+	}
 	http.Redirect(w, r, h.config.oauthConfig.AuthCodeURL(
 		state,
 		oauth2.S256ChallengeOption(verifier),
@@ -294,6 +326,8 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	}
 	clearCookie(w, h.cookie(oauthStateCookieName, "", time.Unix(0, 0)))
 	clearCookie(w, h.cookie(oauthPKCECookieName, "", time.Unix(0, 0)))
+	returnToCookie, _ := r.Cookie(oauthReturnToCookieName)
+	clearCookie(w, h.cookie(oauthReturnToCookieName, "", time.Unix(0, 0)))
 
 	token, err := h.config.oauthConfig.Exchange(r.Context(), code, oauth2.VerifierOption(pkceCookie.Value))
 	if err != nil {
@@ -328,7 +362,11 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	setCookie(w, h.cookie(authCookieName, sessionToken, expiresAt))
-	http.Redirect(w, r, h.config.frontendURL, http.StatusFound)
+	redirectURL := h.config.frontendURL
+	if returnToCookie != nil {
+		redirectURL = frontendRedirectURL(h.config.frontendURL, returnToCookie.Value)
+	}
+	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
 func (h *authHandler) sessionTokenForUser(r *http.Request, user authenticatedUser, expiresAt time.Time) (string, error) {
@@ -393,6 +431,7 @@ func (h *authHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	clearCookie(w, h.cookie(authCookieName, "", time.Unix(0, 0)))
 	clearCookie(w, h.cookie(oauthStateCookieName, "", time.Unix(0, 0)))
 	clearCookie(w, h.cookie(oauthPKCECookieName, "", time.Unix(0, 0)))
+	clearCookie(w, h.cookie(oauthReturnToCookieName, "", time.Unix(0, 0)))
 	w.WriteHeader(http.StatusNoContent)
 }
 

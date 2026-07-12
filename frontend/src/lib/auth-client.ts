@@ -26,20 +26,24 @@ async function signOut() {
   }
 }
 
-function signInWithGoogle() {
-  window.location.assign(authURL("/auth/google", import.meta.env.VITE_GAME_SERVER_URL));
+function signInWithGoogle(returnTo?: string) {
+  const url = new URL(authURL("/auth/google", import.meta.env.VITE_GAME_SERVER_URL));
+  if (returnTo) {
+    url.searchParams.set("returnTo", returnTo);
+  }
+  window.location.assign(url);
 }
 
 export const authClient = {
   getSession: readSession,
   signOut,
   signIn: {
-    social: async ({ provider }: { provider: string }) => {
+    social: async ({ provider, returnTo }: { provider: string; returnTo?: string }) => {
       if (provider !== "google") {
         throw new Error(`unsupported provider: ${provider}`);
       }
 
-      signInWithGoogle();
+      signInWithGoogle(returnTo);
     },
   },
 };

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -262,8 +263,8 @@ func TestHandleLogout(t *testing.T) {
 		t.Fatalf("handleLogout() status = %d; want 204", response.Code)
 	}
 	cookies := response.Result().Cookies()
-	if len(cookies) < 3 {
-		t.Fatalf("logout cookies = %d; want at least 3 clears", len(cookies))
+	if len(cookies) < 4 {
+		t.Fatalf("logout cookies = %d; want at least 4 clears", len(cookies))
 	}
 }
 
@@ -287,8 +288,8 @@ func TestHandleGoogleSignInSetsStateAndPKCECookies(t *testing.T) {
 		t.Fatalf("handleGoogleSignIn() status = %d; want 302", response.Code)
 	}
 	cookies := response.Result().Cookies()
-	if len(cookies) != 2 {
-		t.Fatalf("cookies = %d; want 2", len(cookies))
+	if len(cookies) != 3 {
+		t.Fatalf("cookies = %d; want 3", len(cookies))
 	}
 	redirectURL, err := url.Parse(response.Result().Header.Get("Location"))
 	if err != nil {
@@ -314,6 +315,57 @@ func TestHandleGoogleSignInSetsStateAndPKCECookies(t *testing.T) {
 		if cookie.Domain != "kompozicijas.xyz" {
 			t.Fatalf("cookie %q domain = %q; want kompozicijas.xyz", cookie.Name, cookie.Domain)
 		}
+	}
+}
+
+func TestOAuthReturnPath(t *testing.T) {
+	t.Run("accepts same-origin paths", func(t *testing.T) {
+		for _, returnPath := range []string{"/?room=ROOM42", "/game?room=ROOM42#lobby"} {
+			got, ok := validReturnPath(returnPath)
+			if !ok || got != returnPath {
+				t.Fatalf("validReturnPath(%q) = %q, %t; want same path, true", returnPath, got, ok)
+			}
+		}
+	})
+
+	t.Run("rejects external and malformed paths", func(t *testing.T) {
+		for _, returnPath := range []string{"", "https://evil.test/", "//evil.test/", "room=ROOM42"} {
+			if got, ok := validReturnPath(returnPath); ok {
+				t.Fatalf("validReturnPath(%q) = %q, true; want false", returnPath, got)
+			}
+		}
+	})
+
+	t.Run("resolves a valid encoded path against the frontend", func(t *testing.T) {
+		encoded := base64.RawURLEncoding.EncodeToString([]byte("/?room=ROOM42"))
+		if got := frontendRedirectURL("https://frontend.test/", encoded); got != "https://frontend.test/?room=ROOM42" {
+			t.Fatalf("frontendRedirectURL() = %q; want room URL", got)
+		}
+		if got := frontendRedirectURL("https://frontend.test/", "not-base64!"); got != "https://frontend.test/" {
+			t.Fatalf("frontendRedirectURL(invalid) = %q; want frontend root", got)
+		}
+	})
+}
+
+func TestHandleGoogleSignInStoresReturnPath(t *testing.T) {
+	now := time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC)
+	handler := &authHandler{
+		config: authConfig{oauthConfig: &oauth2.Config{Endpoint: oauth2.Endpoint{AuthURL: "https://oauth.test/auth"}}},
+		now:    func() time.Time { return now },
+		state:  func() (string, error) { return "state-token", nil },
+	}
+	request := httptest.NewRequest(http.MethodGet, "/auth/google?returnTo=%2F%3Froom%3DROOM42", nil)
+	response := httptest.NewRecorder()
+
+	handler.handleGoogleSignIn(response, request)
+
+	encoded := cookieValue(response.Result().Cookies(), oauthReturnToCookieName)
+	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode return path cookie: %v", err)
+	}
+	if got := string(decoded); got != "/?room=ROOM42" {
+		t.Fatalf("return path cookie = %q; want /?room=ROOM42", got)
 	}
 }
 
@@ -921,13 +973,17 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 			handler := newOAuthCallbackHandler(store, now)
 			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
 			request := newOAuthCallbackRequest("state=state-token&code=code", client)
+			request.AddCookie(&http.Cookie{
+				Name:  oauthReturnToCookieName,
+				Value: base64.RawURLEncoding.EncodeToString([]byte("/?room=ROOM42")),
+			})
 			response := httptest.NewRecorder()
 			handler.handleGoogleCallback(response, request)
 			if response.Code != http.StatusFound {
 				t.Fatalf("status = %d; want 302", response.Code)
 			}
-			if got := response.Header().Get("Location"); got != "http://frontend.test/" {
-				t.Fatalf("redirect location = %q; want http://frontend.test/", got)
+			if got := response.Header().Get("Location"); got != "http://frontend.test/?room=ROOM42" {
+				t.Fatalf("redirect location = %q; want room URL", got)
 			}
 			if len(store.upsertedUsers) != 1 || len(store.createdSessions) != 1 {
 				t.Fatalf("persisted records = users:%d sessions:%d; want 1 each", len(store.upsertedUsers), len(store.createdSessions))

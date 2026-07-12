@@ -1,7 +1,19 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { getUserInitials } from "#/lib/utils";
 
-export function TurnStartCue({ round, turnNumber }: { round: number; turnNumber: number }) {
+export function TurnStartCue({
+  round,
+  turnNumber,
+  playerName,
+  playerImageUrl,
+}: {
+  round: number;
+  turnNumber: number;
+  playerName: string;
+  playerImageUrl?: string;
+}) {
   const [visible, setVisible] = useState(true);
   const shouldReduceMotion = useReducedMotion();
   const turnKey = `${round}:${turnNumber}`;
@@ -18,40 +30,42 @@ export function TurnStartCue({ round, turnNumber }: { round: number; turnNumber:
       {visible ? (
         <motion.div
           key={turnKey}
-          className="pointer-events-none fixed top-[max(1rem,env(safe-area-inset-top))] left-1/2 z-50 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-popover/90 px-3.5 py-2 text-xs font-semibold tracking-[0.02em] text-foreground shadow-lg ring-1 ring-foreground/5 backdrop-blur-xl backdrop-saturate-150 will-change-transform"
+          className="pointer-events-none fixed top-1/2 left-1/2 z-50 flex w-[min(22rem,calc(100vw-2rem))] items-center gap-4 overflow-hidden rounded-[2rem] border border-primary/30 bg-popover/95 p-3 pr-7 text-foreground shadow-[0_1.5rem_5rem_-1.5rem_color-mix(in_oklab,var(--primary)_35%,transparent),0_0.75rem_2rem_-1rem_rgb(0_0_0/0.4)] ring-1 ring-foreground/8 backdrop-blur-2xl backdrop-saturate-150 will-change-transform before:absolute before:inset-y-0 before:left-0 before:w-28 before:bg-gradient-to-r before:from-primary/15 before:to-transparent"
           role="status"
           aria-live="polite"
           aria-atomic="true"
+          aria-label={`Your turn, ${playerName}`}
           data-turn-number={turnNumber}
           initial={{
             opacity: 0,
             transform: shouldReduceMotion
-              ? "translateX(-50%)"
-              : "translate(-50%, -0.5rem) scale(0.98)",
+              ? "translate(-50%, -50%)"
+              : "translate(-50%, -46%) scale(0.96)",
           }}
-          animate={{ opacity: 1, transform: "translate(-50%, 0) scale(1)" }}
+          animate={{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }}
           exit={{
             opacity: 0,
             transform: shouldReduceMotion
-              ? "translateX(-50%)"
-              : "translate(-50%, -0.25rem) scale(0.99)",
+              ? "translate(-50%, -50%)"
+              : "translate(-50%, -54%) scale(0.98)",
           }}
           transition={{ duration: shouldReduceMotion ? 0.15 : 0.2, ease: [0.23, 1, 0.32, 1] }}
         >
-          <motion.span
-            className="size-1.5 rounded-full bg-primary shadow-[0_0_0.625rem] shadow-primary/50"
-            aria-hidden="true"
-            animate={
-              shouldReduceMotion
-                ? undefined
-                : {
-                    opacity: [0.55, 1, 0.55],
-                    transform: ["scale(0.8)", "scale(1)", "scale(0.8)"],
-                  }
-            }
-            transition={{ duration: 0.7, delay: 0.1, times: [0, 0.45, 1] }}
-          />
-          <span>Your turn</span>
+          <Avatar className="relative size-16 border-2 border-background shadow-lg ring-2 ring-primary/40">
+            {playerImageUrl ? (
+              <AvatarImage src={playerImageUrl} alt={`${playerName}'s avatar`} />
+            ) : null}
+            <AvatarFallback className="bg-primary/12 text-lg font-semibold text-primary">
+              {getUserInitials(playerName)}
+            </AvatarFallback>
+            <AvatarBadge className="right-0.5 bottom-0.5 size-4 bg-primary ring-4 ring-popover" />
+          </Avatar>
+          <div className="relative min-w-0">
+            <p className="mb-0.5 text-[0.625rem] font-semibold tracking-[0.22em] text-primary uppercase">
+              Make your move
+            </p>
+            <p className="text-2xl font-semibold tracking-tight text-balance">Your turn</p>
+          </div>
         </motion.div>
       ) : null}
     </AnimatePresence>

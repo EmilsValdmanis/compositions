@@ -31,8 +31,8 @@ export function subscribeToGameSoundPreference(listener: () => void) {
 }
 
 tiks.init({
-  theme: "crisp",
-  volume: 0.22,
+  theme: "soft",
+  volume: 0.14,
   muted: !areGameSoundsEnabled(),
 });
 

@@ -6,12 +6,12 @@ import { Spinner } from "#/components/ui/spinner";
 import { Button } from "#/components/ui/button";
 import { authClient } from "#/lib/auth-client";
 
-export default function SignInButton() {
+export default function SignInButton({ returnTo }: { returnTo?: string }) {
   const [isPending, startTransition] = useTransition();
 
   const handleGoogleSignIn = () => {
     startTransition(() => {
-      void authClient.signIn.social({ provider: "google" }).catch((error: unknown) => {
+      void authClient.signIn.social({ provider: "google", returnTo }).catch((error: unknown) => {
         const message = error instanceof Error ? error.message : "failed to start sign in";
         toast.error(message);
       });

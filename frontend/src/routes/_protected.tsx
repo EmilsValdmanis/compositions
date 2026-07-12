@@ -6,7 +6,10 @@ export const Route = createFileRoute("/_protected")({
     const isDevUi = import.meta.env.DEV && location.pathname === "/dev-ui";
 
     if (!context.session && !isDevUi) {
-      throw redirect({ to: "/sign-in" });
+      throw redirect({
+        to: "/sign-in",
+        search: { returnTo: location.href },
+      });
     }
   },
   component: ProtectedLayout,
