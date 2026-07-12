@@ -140,6 +140,10 @@ type GameBoardViewProps = {
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
   onPlayTable: (play: TablePlayRequest) => Promise<ActionResult> | void;
+  onPlayTableAndDiscard: (
+    play: TablePlayRequest,
+    cardIndex: number,
+  ) => Promise<ActionResult> | void;
   onSendEmote: (emoji: string) => void;
   disableDraftSync?: boolean;
 };
@@ -378,6 +382,7 @@ function useGameBoardController({
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayTable,
+  onPlayTableAndDiscard,
   disableDraftSync = false,
 }: Pick<
   GameBoardViewProps,
@@ -390,6 +395,7 @@ function useGameBoardController({
   | "onDrawFromDeck"
   | "onDrawFromDiscard"
   | "onPlayTable"
+  | "onPlayTableAndDiscard"
   | "disableDraftSync"
 >): GameBoardController {
   const { updateTurnDrafts } = useGameWebSocket();
@@ -696,10 +702,11 @@ function useGameBoardController({
           }
 
           if (draftedCompositionsView.length > 0) {
-            const tablePlayResult = await submitDraftCompositions();
-            if (tablePlayResult?.ok === false) {
-              return;
-            }
+            await onPlayTableAndDiscard(
+              buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
+              discardIndex,
+            );
+            return;
           }
 
           await onDiscardCard(discardIndex);
@@ -884,6 +891,7 @@ export function GameBoardView({
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayTable,
+  onPlayTableAndDiscard,
   onSendEmote,
   disableDraftSync,
 }: GameBoardViewProps) {
@@ -897,6 +905,7 @@ export function GameBoardView({
     onDrawFromDeck,
     onDrawFromDiscard,
     onPlayTable,
+    onPlayTableAndDiscard,
     disableDraftSync,
   });
   const activeDraw = controller.activeDrag?.type === "draw" ? controller.activeDrag : null;

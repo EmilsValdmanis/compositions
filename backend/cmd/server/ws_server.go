@@ -148,6 +148,11 @@ type discardRequest struct {
 	CardIndex int `json:"cardIndex"`
 }
 
+type playAndDiscardRequest struct {
+	playRequest
+	CardIndex int `json:"cardIndex"`
+}
+
 type connectedEvent struct {
 	SessionID string `json:"sessionId"`
 	PlayerID  string `json:"playerId"`
@@ -446,6 +451,8 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			s.handleDraw(conn, sessionID, envelope)
 		case "play":
 			s.handlePlay(conn, sessionID, envelope)
+		case "play_and_discard":
+			s.handlePlayAndDiscard(conn, sessionID, envelope)
 		case "draft_update":
 			s.handleDraftUpdate(conn, sessionID, envelope)
 		case "discard":
@@ -756,6 +763,43 @@ func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope w
 	roomState, recipients, result, err := s.lobby.play(sessionID, comps, additions, reclaims)
 	if err != nil {
 		slog.Warn("play failed", "sessionID", sessionID, "error", err)
+		s.writeError(conn, err)
+		return
+	}
+	s.broadcastActionSuccess(result, roomState, recipients)
+}
+
+func (s *wsServer) handlePlayAndDiscard(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, ok := decodeSessionRequest[playAndDiscardRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+
+	comps, err := compositionsFromRequest(req.Compositions)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+	additions, err := additionsFromRequest(req.Additions)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+	reclaims, err := reclaimsFromRequest(req.Reclaims)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.playAndDiscard(
+		sessionID,
+		req.CardIndex,
+		comps,
+		additions,
+		reclaims,
+	)
+	if err != nil {
+		slog.Warn("play and discard failed", "sessionID", sessionID, "cardIndex", req.CardIndex, "error", err)
 		s.writeError(conn, err)
 		return
 	}
