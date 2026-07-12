@@ -21,6 +21,7 @@ import (
 var ErrSessionNotFound = errors.New("session not found")
 var ErrUserConflict = errors.New("user conflict")
 var ErrLobbyStateNotFound = errors.New("lobby state not found")
+var ErrPlayerProfileNotFound = errors.New("player profile not found")
 
 const postgresUniqueViolation = "23505"
 
@@ -57,6 +58,16 @@ type StoredUserRecord struct {
 	Name     string
 	Email    string
 	ImageURL string
+}
+
+type PlayerProfileRecord struct {
+	ID, Name, ImageURL                            string
+	GamesPlayed, GamesWon, TotalPlacement         int64
+	RoundsPlayed, RoundsWon, Forfeits             int64
+	CompositionsCreated, SetsCreated, RunsCreated int64
+	PointsInflicted, PenaltyPoints                int64
+	CurrentGameWinStreak, LongestGameWinStreak    int
+	CurrentRoundWinStreak, LongestRoundWinStreak  int
 }
 
 type GameBugReportRecord struct {
@@ -152,6 +163,46 @@ func (s *UserStore) UpsertUser(ctx context.Context, user UserRecord) (UserRecord
 	}
 
 	return userRecordFromRow(dbUser.ID, dbUser.Name, dbUser.Email, dbUser.ImageUrl), nil
+}
+
+func (s *UserStore) GetPlayerProfile(ctx context.Context, userID string) (PlayerProfileRecord, error) {
+	if s == nil || s.pool == nil {
+		return PlayerProfileRecord{}, errors.New("user store is not configured")
+	}
+
+	uuidID, err := parseUUID(userID)
+	if err != nil {
+		return PlayerProfileRecord{}, err
+	}
+
+	var profile PlayerProfileRecord
+	err = s.pool.QueryRow(ctx, `
+		SELECT u.id::text, u.name, u.image_url,
+			COALESCE(ps.games_played, 0), COALESCE(ps.games_won, 0), COALESCE(ps.total_placement, 0),
+			COALESCE(ps.rounds_played, 0), COALESCE(ps.rounds_won, 0), COALESCE(ps.forfeits, 0),
+			COALESCE(ps.compositions_created, 0), COALESCE(ps.sets_created, 0), COALESCE(ps.runs_created, 0),
+			COALESCE(ps.points_inflicted, 0), COALESCE(ps.penalty_points, 0),
+			COALESCE(ps.current_game_win_streak, 0), COALESCE(ps.longest_game_win_streak, 0),
+			COALESCE(ps.current_round_win_streak, 0), COALESCE(ps.longest_round_win_streak, 0)
+		FROM users u
+		LEFT JOIN player_statistics ps ON ps.user_id = u.id
+		WHERE u.id = $1
+	`, uuidID).Scan(
+		&profile.ID, &profile.Name, &profile.ImageURL,
+		&profile.GamesPlayed, &profile.GamesWon, &profile.TotalPlacement,
+		&profile.RoundsPlayed, &profile.RoundsWon, &profile.Forfeits,
+		&profile.CompositionsCreated, &profile.SetsCreated, &profile.RunsCreated,
+		&profile.PointsInflicted, &profile.PenaltyPoints,
+		&profile.CurrentGameWinStreak, &profile.LongestGameWinStreak,
+		&profile.CurrentRoundWinStreak, &profile.LongestRoundWinStreak,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PlayerProfileRecord{}, ErrPlayerProfileNotFound
+	}
+	if err != nil {
+		return PlayerProfileRecord{}, err
+	}
+	return profile, nil
 }
 
 func (s *UserStore) SaveLobbyState(ctx context.Context, state json.RawMessage) error {

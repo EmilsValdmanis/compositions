@@ -3,6 +3,7 @@ import {
   BookOpen01Icon,
   CodeXmlIcon,
   Logout02FreeIcons,
+  UserIcon,
   VolumeHighIcon,
   VolumeOffIcon,
 } from "@hugeicons/core-free-icons";
@@ -89,6 +90,14 @@ export function UserDropdown() {
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
+            {user?.id ? (
+              <DropdownMenuItem
+                render={<Link to="/players/$playerId" params={{ playerId: user.id }} />}
+              >
+                <HugeiconsIcon icon={UserIcon} />
+                Profile
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem onClick={() => setRulesOpen(true)}>
               <HugeiconsIcon icon={BookOpen01Icon} />
               Rules

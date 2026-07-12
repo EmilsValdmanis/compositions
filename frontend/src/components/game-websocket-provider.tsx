@@ -114,6 +114,7 @@ export type GameSnapshot = {
 
 export type PlayerSnapshot = {
   playerId: string;
+  userId?: string;
   sessionId?: string;
   name: string;
   imageUrl?: string;
