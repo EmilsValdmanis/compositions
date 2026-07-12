@@ -48,7 +48,7 @@ function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
   });
 }
 
-function draftPreviewForComposition(
+export function draftPreviewForComposition(
   tableComposition: TableCompositionView | undefined,
   draft: DraftCompositionSnapshot,
   cards: DraftCompositionSnapshot["cards"],
@@ -110,8 +110,22 @@ function draftPreviewForComposition(
       : [];
   });
   const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
+  const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
+  const entriesByInsertIndex = new Map<number, HandEntry[]>();
+
+  for (const entry of additionEntries) {
+    const entryInsertIndex = draft.cardInsertIndices?.[entry.key] ?? insertIndex;
+    const entries = entriesByInsertIndex.get(entryInsertIndex) ?? [];
+    entries.push(entry);
+    entriesByInsertIndex.set(entryInsertIndex, entries);
+  }
+
+  const orderedAdditionEntries = [...entriesByInsertIndex].flatMap(([entryInsertIndex, entries]) =>
+    entryInsertIndex === 0 ? [...entries].reverse() : entries,
+  );
+
   return {
-    stagedEntries: stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key)),
+    stagedEntries: orderedAdditionEntries,
     reclaims,
     insertIndex,
     cardInsertIndices: draft.cardInsertIndices,
