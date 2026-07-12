@@ -58,6 +58,7 @@ type playerSession struct {
 
 type roomPlayer struct {
 	player      *game.Player
+	authUserID  string
 	name        string
 	imageURL    string
 	sessionID   string
@@ -341,13 +342,14 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	}
 
 	player := &roomPlayer{
-		player:    newPlayerWithID(session.playerID),
-		name:      cleanName,
-		imageURL:  session.imageURL,
-		sessionID: session.sessionID,
-		connected: true,
-		seat:      0,
-		host:      true,
+		player:     newPlayerWithID(session.playerID),
+		authUserID: session.authUserID,
+		name:       cleanName,
+		imageURL:   session.imageURL,
+		sessionID:  session.sessionID,
+		connected:  true,
+		seat:       0,
+		host:       true,
 	}
 	room := &room{
 		code:      l.generateRoomCode(),
@@ -400,12 +402,13 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	}
 
 	player := &roomPlayer{
-		player:    newPlayerWithID(session.playerID),
-		name:      cleanName,
-		imageURL:  session.imageURL,
-		sessionID: session.sessionID,
-		connected: true,
-		seat:      len(room.players),
+		player:     newPlayerWithID(session.playerID),
+		authUserID: session.authUserID,
+		name:       cleanName,
+		imageURL:   session.imageURL,
+		sessionID:  session.sessionID,
+		connected:  true,
+		seat:       len(room.players),
 	}
 	if err := addPlayerToGameState(room.gameState, player.player); err != nil {
 		return roomSnapshot{}, nil, err
@@ -1192,14 +1195,15 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 				return errors.New("persisted room player references missing session")
 			}
 			restoredRoom.players = append(restoredRoom.players, &roomPlayer{
-				player:    newPlayerWithID(persistedPlayer.PlayerID),
-				name:      persistedPlayer.Name,
-				imageURL:  persistedPlayer.ImageURL,
-				sessionID: persistedPlayer.SessionID,
-				connected: false,
-				seat:      persistedPlayer.Seat,
-				host:      persistedPlayer.Host,
-				forfeited: persistedPlayer.Forfeited,
+				player:     newPlayerWithID(persistedPlayer.PlayerID),
+				authUserID: sessions[persistedPlayer.SessionID].authUserID,
+				name:       persistedPlayer.Name,
+				imageURL:   persistedPlayer.ImageURL,
+				sessionID:  persistedPlayer.SessionID,
+				connected:  false,
+				seat:       persistedPlayer.Seat,
+				host:       persistedPlayer.Host,
+				forfeited:  persistedPlayer.Forfeited,
 			})
 			if !persistedPlayer.Forfeited {
 				sessions[persistedPlayer.SessionID].roomCode = roomCode
@@ -1655,6 +1659,7 @@ func (r *room) snapshot() roomSnapshot {
 		}
 		snapshot := playerSnapshot{
 			PlayerID:     player.player.ID,
+			UserID:       player.authUserID,
 			Name:         player.name,
 			ImageURL:     player.imageURL,
 			Connected:    player.connected,

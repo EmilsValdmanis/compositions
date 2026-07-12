@@ -363,6 +363,13 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 	if !slices.Equal(got, want) {
 		t.Fatalf("lifetime statistics = %v; want %v", got, want)
 	}
+	profile, err := store.GetPlayerProfile(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetPlayerProfile() error = %v", err)
+	}
+	if profile.ID != user.ID || profile.Name != user.Name || profile.GamesPlayed != 2 || profile.GamesWon != 1 || profile.TotalPlacement != 3 || profile.RoundsPlayed != 5 || profile.LongestGameWinStreak != 1 {
+		t.Fatalf("player profile = %+v", profile)
+	}
 
 	unranked := GameCheckpointRecord{
 		ID: uuid.NewString(), RoomCode: "BUG123", RoundsPlayed: 2, PlayerCount: 2, StartedAt: started,

@@ -1,12 +1,65 @@
-import { Cards02Icon, SkullIcon } from "@hugeicons/core-free-icons";
+import { Cards02Icon, SkullIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { Link } from "@tanstack/react-router";
 import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { PlayerEmoteBubble } from "#/components/game/player-emotes";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
+import { Button } from "#/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Spinner } from "#/components/ui/spinner";
 import { cn, getUserInitials } from "#/lib/utils";
+
+function PlayerAvatar({ player }: { player: PlayerSnapshot }) {
+  const avatar = (
+    <Avatar className="shrink-0">
+      {player.imageUrl ? <AvatarImage src={player.imageUrl} alt={player.name} /> : null}
+      <AvatarFallback>{getUserInitials(player.name)}</AvatarFallback>
+      <AvatarBadge
+        className={cn("ring-border", player.connected ? "bg-primary" : "bg-destructive")}
+      />
+    </Avatar>
+  );
+
+  if (!player.userId) return avatar;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            aria-label={`Open ${player.name}'s player menu`}
+          />
+        }
+      >
+        {avatar}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>{player.name}</DropdownMenuLabel>
+          <DropdownMenuItem
+            render={<Link to="/players/$playerId" params={{ playerId: player.userId }} />}
+          >
+            <HugeiconsIcon icon={UserIcon} />
+            View profile
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function PlayerStrip({
   players,
@@ -35,13 +88,7 @@ export function PlayerStrip({
             )}
           >
             {player.activeEmote ? <PlayerEmoteBubble emote={player.activeEmote} /> : null}
-            <Avatar className="shrink-0">
-              {player.imageUrl ? <AvatarImage src={player.imageUrl} alt={player.name} /> : null}
-              <AvatarFallback>{getUserInitials(player.name)}</AvatarFallback>
-              <AvatarBadge
-                className={cn("ring-border", player.connected ? "bg-primary" : "bg-destructive")}
-              />
-            </Avatar>
+            <PlayerAvatar player={player} />
             <p
               className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium"
               title={player.name}

@@ -204,6 +204,7 @@ type pendingDealChoiceSnapshot struct {
 
 type playerSnapshot struct {
 	PlayerID     string               `json:"playerId"`
+	UserID       string               `json:"userId,omitempty"`
 	SessionID    string               `json:"sessionId,omitempty"`
 	Name         string               `json:"name"`
 	ImageURL     string               `json:"imageUrl,omitempty"`
@@ -315,6 +316,7 @@ func (s *wsServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/auth/", s.handleSessionRoutes)
+	mux.HandleFunc("/api/players/", s.handlePlayerProfile)
 	mux.HandleFunc("/ws", s.handleWS)
 	return mux
 }
