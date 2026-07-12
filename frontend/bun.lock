@@ -12,6 +12,7 @@
         "@hugeicons/core-free-icons": "4.2.2",
         "@hugeicons/react": "1.1.9",
         "@number-flow/react": "0.6.1",
+        "@rexa-developer/tiks": "0.3.0",
         "@sentry/tanstackstart-react": "10.64.0",
         "@tailwindcss/vite": "4.3.2",
         "@tanstack/react-devtools": "0.10.8",
@@ -451,6 +452,8 @@
     "@preact/signals-core": ["@preact/signals-core@1.14.3", "", {}, "sha512-m0K3vnbSLC5rHs2ZVfeAMvBtT1zIyq4mxx5OlNncSgMj5Iz6W5Rn3kPrDxAC+iIKmiVe0lSl6U37t5ZkEWoVAw=="],
 
     "@react-grab/cli": ["@react-grab/cli@0.1.48", "", { "dependencies": { "agent-install": "^0.0.6", "commander": "^14.0.3", "ignore": "^7.0.5", "ora": "^9.4.0", "package-manager-detector": "^1.6.0", "picocolors": "^1.1.1", "prompts": "^2.4.2", "tinyexec": "^1.1.2" }, "bin": { "react-grab": "bin/cli.js" } }, "sha512-KXRZFN0b78BeVa4Tq1FC9kiXPpC5lS4pQp/mvQ1azy9dZUJ3zfc7Ei84+yvGh+WoYdceMCFxXfBp6qhU/G056g=="],
+
+    "@rexa-developer/tiks": ["@rexa-developer/tiks@0.3.0", "", { "peerDependencies": { "react": ">=18.0.0", "vue": ">=3.0.0" }, "optionalPeers": ["react", "vue"] }, "sha512-7tW/lb53Nr8U0dn9ZlWOvDXtsZ7fK3dZN90Xvp/S4AkjruopuP8992+3KhFCrIQ7bXFEsaVFUZsm/+NC3ufA1w=="],
 
     "@rolldown/binding-android-arm64": ["@rolldown/binding-android-arm64@1.0.0", "", { "os": "android", "cpu": "arm64" }, "sha512-TWMZnRLMe63C2Lhyicviu7ZHaU4kxa6PS3rofvc9GmcvptzNN11BcfQ4Sl7MwTOsisQoa2keB/EBdNCAnUo8vA=="],
 

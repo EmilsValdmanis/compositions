@@ -8,6 +8,8 @@ import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
+import { useGameSoundEvents } from "#/lib/game-sound-events";
+import { playGameSound } from "#/lib/game-sounds";
 
 const protectedHomeRoute = getRouteApi("/_protected/");
 
@@ -93,6 +95,8 @@ export function ProtectedHome() {
     state.connectionStatus === "idle" ||
     (state.connectionStatus === "connecting" && state.room === null && state.game === null);
 
+  useGameSoundEvents(state);
+
   useEffect(() => {
     if (
       state.connectionStatus !== "connected" ||
@@ -174,6 +178,7 @@ export function ProtectedHome() {
   async function handleDiscardCard(cardIndex: number) {
     if (!canDiscard) {
       toast.error("Draw before discarding");
+      playGameSound("invalid-action");
       throw new Error("draw before discarding");
     }
 

@@ -55,6 +55,7 @@ import {
   tableCompositionJokerTargetFromDropId,
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
+import { playGameSound } from "#/lib/game-sounds";
 
 type GameBoardTurnState = {
   canDrawDeck: boolean;
@@ -545,6 +546,7 @@ function useGameBoardController({
     const drawSource = event.active.data.current?.drawSource;
 
     if (drawSource === "deck") {
+      playGameSound("card-pickup");
       setActiveDrag({
         type: "draw",
         source: "deck",
@@ -558,6 +560,7 @@ function useGameBoardController({
     }
 
     if (drawSource === "discard" && topDiscardCard) {
+      playGameSound("card-pickup");
       setActiveDrag({
         type: "draw",
         source: "discard",
@@ -571,6 +574,9 @@ function useGameBoardController({
     }
 
     const handKey = typeof event.active.id === "string" ? event.active.id : null;
+    if (handKey) {
+      playGameSound("card-pickup");
+    }
     setActiveDrag(
       handKey
         ? {
@@ -684,6 +690,7 @@ function useGameBoardController({
       const cardIndex = event.active.data.current?.cardIndex;
       const isVirtual = event.active.data.current?.isVirtual === true;
       if (isVirtual) {
+        playGameSound("invalid-action");
         return;
       }
       if (typeof cardIndex === "number") {
@@ -718,11 +725,13 @@ function useGameBoardController({
     if (!canCompose) {
       if (droppedOnHandCard && draggedHandKey !== overId) {
         updateHandOrder(handEntryOrder(moveHandEntry(handEntries, draggedHandKey, overId)));
+        playGameSound("card-place");
       }
       return;
     }
 
     if (droppedOnTableEdgeTarget !== null && draggedEntry) {
+      playGameSound("card-place");
       updateDraftCompositions((current) => {
         const existing = current.find(
           (composition) => composition.tableIndex === droppedOnTableEdgeTarget.compositionIndex,
@@ -760,6 +769,7 @@ function useGameBoardController({
     }
 
     if (droppedOnTableJokerTarget !== null && draggedEntry) {
+      playGameSound("card-place");
       updateDraftCompositions((current) => {
         const existing = current.find(
           (composition) => composition.tableIndex === droppedOnTableJokerTarget.compositionIndex,
@@ -794,6 +804,7 @@ function useGameBoardController({
     }
 
     if (overId === NEW_COMPOSITION_DROP_ID) {
+      playGameSound("card-place");
       const compositionId = `draft-${nextDraftIdRef.current}`;
       nextDraftIdRef.current += 1;
 
@@ -805,6 +816,7 @@ function useGameBoardController({
     }
 
     if (droppedOnDraftCard) {
+      playGameSound("card-place");
       updateDraftCompositions((current) =>
         insertHandKeyIntoDraft(current, draggedHandKey, droppedOnDraftCard.id, overId ?? undefined),
       );
@@ -812,6 +824,7 @@ function useGameBoardController({
     }
 
     if (droppedOnDraftContainer) {
+      playGameSound("card-place");
       updateDraftCompositions((current) => {
         const target = current.find((composition) => composition.id === droppedOnDraftContainer);
         const next = insertHandKeyIntoDraft(current, draggedHandKey, droppedOnDraftContainer);
@@ -830,11 +843,13 @@ function useGameBoardController({
     }
 
     if (overId === HAND_DROP_ID) {
+      playGameSound("card-place");
       updateDraftCompositions((current) => removeHandKeyFromDrafts(current, draggedHandKey));
       return;
     }
 
     if (droppedOnHandCard) {
+      playGameSound("card-place");
       updateDraftCompositions((current) => removeHandKeyFromDrafts(current, draggedHandKey));
 
       if (draggedHandKey !== overId) {
