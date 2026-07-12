@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cards01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -26,7 +26,12 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+import { fireCelebrationConfetti } from "#/lib/confetti";
 import { cn, getUserInitials } from "#/lib/utils";
+
+const emojiFont = {
+  fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif',
+};
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -190,6 +195,15 @@ export function GameResultsView({
         : isGameOver
           ? "Final"
           : "Complete";
+  const hasCelebrated = useRef(false);
+  const isWinner = winner?.playerId === playerId;
+
+  useEffect(() => {
+    if (!isWinner || hasCelebrated.current) return;
+
+    hasCelebrated.current = true;
+    void fireCelebrationConfetti({ delayMs: 250 });
+  }, [isWinner]);
 
   return (
     <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
@@ -231,7 +245,10 @@ export function GameResultsView({
                       </TableCell>
                       <TableCell>
                         <div className="flex min-w-40 flex-wrap items-center gap-2">
-                          <Avatar size="sm">
+                          <Avatar
+                            size="sm"
+                            aria-label={isRoundWinner ? `${playerName}, winner` : playerName}
+                          >
                             {player?.imageUrl ? (
                               <AvatarImage src={player.imageUrl} alt={playerName} />
                             ) : null}
@@ -242,11 +259,19 @@ export function GameResultsView({
                                 getUserInitials(playerName)
                               )}
                             </AvatarFallback>
+                            {isRoundWinner ? (
+                              <span
+                                aria-hidden="true"
+                                className="absolute -top-3 -right-2 z-20 rotate-12 text-lg leading-none drop-shadow-sm"
+                                style={emojiFont}
+                              >
+                                👑
+                              </span>
+                            ) : null}
                           </Avatar>
                           <span className={cn("font-medium", isRoundWinner && "text-primary")}>
                             {playerName}
                           </span>
-                          {isRoundWinner ? <Badge>Winner</Badge> : null}
                           {playerState.playerId === playerId ? (
                             <Badge variant="outline">You</Badge>
                           ) : null}
