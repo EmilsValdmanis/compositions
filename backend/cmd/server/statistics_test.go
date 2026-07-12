@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -23,6 +24,16 @@ type statisticsRecordingStore struct {
 	unranked         []database.GameCheckpointRecord
 	unrankedStatuses []string
 	gameErr          error
+	lobbySaveCalls   int
+	lobbySaveErrors  map[int]error
+}
+
+func (s *statisticsRecordingStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+	s.lobbySaveCalls++
+	if err := s.lobbySaveErrors[s.lobbySaveCalls]; err != nil {
+		return err
+	}
+	return s.jsonLobbyStateStore.SaveLobbyState(ctx, state)
 }
 
 func (s *statisticsRecordingStore) SaveCompletedGame(_ context.Context, completed database.CompletedGameRecord) error {
@@ -48,6 +59,77 @@ func (s *statisticsRecordingStore) SaveUnrankedGame(_ context.Context, checkpoin
 	s.unranked = append(s.unranked, checkpoint)
 	s.unrankedStatuses = append(s.unrankedStatuses, status)
 	return nil
+}
+
+func TestStatisticsPersistenceIsCrashConsistent(t *testing.T) {
+	newLobby := func(t *testing.T, store *statisticsRecordingStore) (*lobbyServer, *room) {
+		t.Helper()
+		lobby, events, roomCode := newActiveLobbyForExitTests(t, 2)
+		lobby.store = store
+		gameRoom := lobby.rooms[roomCode]
+		gameRoom.statisticsGameID = "00000000-0000-0000-0000-000000000001"
+		gameRoom.statisticsStartedAt = time.Now().UTC()
+		gameRoom.statisticsDirty = true
+		for i, event := range events {
+			session := lobby.sessions[event.SessionID]
+			session.authenticated = true
+			session.authUserID = fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1)
+		}
+		return lobby, gameRoom
+	}
+
+	t.Run("authoritative state failure prevents checkpoint", func(t *testing.T) {
+		store := &statisticsRecordingStore{lobbySaveErrors: map[int]error{1: errors.New("state unavailable")}}
+		lobby, gameRoom := newLobby(t, store)
+
+		lobby.persistLocked("test")
+
+		if len(store.checkpoints) != 0 {
+			t.Fatalf("saved %d checkpoints after state failure; want 0", len(store.checkpoints))
+		}
+		if !gameRoom.statisticsDirty {
+			t.Fatal("state failure cleared the dirty marker")
+		}
+	})
+
+	t.Run("successful checkpoint clears persisted marker", func(t *testing.T) {
+		store := &statisticsRecordingStore{}
+		lobby, gameRoom := newLobby(t, store)
+
+		lobby.persistLocked("test")
+
+		if store.lobbySaveCalls != 2 || len(store.checkpoints) != 1 {
+			t.Fatalf("lobby saves/checkpoints = %d/%d; want 2/1", store.lobbySaveCalls, len(store.checkpoints))
+		}
+		if gameRoom.statisticsDirty {
+			t.Fatal("successful checkpoint left dirty marker set")
+		}
+		var persisted persistedLobbyState
+		if err := json.Unmarshal(store.data, &persisted); err != nil {
+			t.Fatal(err)
+		}
+		if len(persisted.Rooms) != 1 || persisted.Rooms[0].StatisticsDirty {
+			t.Fatalf("persisted marker = %+v; want clean", persisted.Rooms)
+		}
+	})
+
+	t.Run("marker failure leaves safe retry on disk", func(t *testing.T) {
+		store := &statisticsRecordingStore{lobbySaveErrors: map[int]error{2: errors.New("marker unavailable")}}
+		lobby, _ := newLobby(t, store)
+
+		lobby.persistLocked("test")
+
+		if len(store.checkpoints) != 1 {
+			t.Fatalf("saved %d checkpoints; want 1", len(store.checkpoints))
+		}
+		var persisted persistedLobbyState
+		if err := json.Unmarshal(store.data, &persisted); err != nil {
+			t.Fatal(err)
+		}
+		if len(persisted.Rooms) != 1 || !persisted.Rooms[0].StatisticsDirty {
+			t.Fatalf("persisted marker = %+v; want dirty retry marker", persisted.Rooms)
+		}
+	})
 }
 
 func TestStatisticsCheckpointLifecycle(t *testing.T) {

@@ -10,6 +10,12 @@ Statistics use counters rather than an event row for every card action:
 4. The same cumulative player row is replaced after every completed round and immediately after a forfeit. There is no row per action or per round.
 5. Ranked completion finalizes those rows and updates each player's cached `player_statistics` row in the same transaction. The transition away from `in_progress` makes retries idempotent.
 
+The lobby snapshot is written before each derived statistics checkpoint. After
+the checkpoint succeeds, the server writes the snapshot again with its dirty
+marker cleared. A failure before the checkpoint therefore cannot put
+statistics ahead of recoverable game state; a failure after it leaves a dirty
+marker that safely retries the idempotent checkpoint after restart.
+
 Mutual endings, technical aborts, and abandoned games retain their latest per-game activity with null outcomes, but do not affect ranked lifetime statistics. Guests still affect player count and placement, but only authenticated users receive profile statistics.
 
 `game_player_statistics` is the auditable per-game source. `player_statistics` is a ranked lifetime cache for inexpensive profiles and leaderboards. If an aggregation rule ever changes, the cache can be rebuilt from per-game rows filtered to `games.status IN ('completed', 'forfeit')`.
@@ -116,3 +122,17 @@ For a new counter:
 5. Test the action counter, restart persistence, idempotent completion, and lifetime aggregation.
 
 Prefer counters, sums, maxima, and streak boundaries. Add detailed event or per-round tables only when a concrete feature cannot be reconstructed from per-game rows; this keeps storage proportional to players per game rather than turns, rounds, or cards played.
+
+Do not add leaderboard indexes speculatively. The cached lifetime table is one
+row per user and is cheap to scan while the project is small. Add a targeted
+index only after a real leaderboard query and `EXPLAIN ANALYZE` show that it is
+needed; dynamic ratios generally will not benefit from a simple single-column
+index anyway.
+
+## Operational constraint
+
+The current lobby is a single in-memory writer backed by one persisted lobby
+snapshot. Run one active game-server replica against a database. Supporting
+multiple replicas later requires room ownership (or advisory locking) and
+routing each room's WebSocket connections to its owner; statistics writes are
+already transactional and idempotent, but the lobby itself is not distributed.

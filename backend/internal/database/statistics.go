@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const maxStoredStatistic = int64(1<<31 - 1)
+
 type GameCheckpointRecord struct {
 	ID, RoomCode              string
 	RoundsPlayed, PlayerCount int
@@ -80,6 +82,9 @@ func (s *UserStore) SaveUnrankedGame(ctx context.Context, checkpoint GameCheckpo
 	if status != "mutual_end" && status != "technical_abort" && status != "abandoned" {
 		return errors.New("invalid unranked game status")
 	}
+	if completedAt.IsZero() || completedAt.Before(checkpoint.StartedAt) {
+		return errors.New("invalid unranked completion time")
+	}
 	gameID, err := validateCheckpoint(checkpoint)
 	if err != nil {
 		return err
@@ -121,6 +126,9 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	if status != "completed" && status != "forfeit" {
 		return errors.New("invalid game completion kind")
 	}
+	if completed.CompletedAt.IsZero() || completed.CompletedAt.Before(completed.StartedAt) {
+		return errors.New("invalid game completion time")
+	}
 	checkpoint := GameCheckpointRecord{
 		ID: completed.ID, RoomCode: completed.RoomCode, RoundsPlayed: completed.RoundsPlayed,
 		PlayerCount: completed.PlayerCount, StartedAt: completed.StartedAt, Players: completed.Players,
@@ -128,6 +136,24 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	gameID, err := validateCheckpoint(checkpoint)
 	if err != nil {
 		return fmt.Errorf("completed game statistics are incomplete: %w", err)
+	}
+	winners := 0
+	for _, player := range completed.Players {
+		if player.Placement <= 0 || player.Placement > completed.PlayerCount {
+			return errors.New("completed game placement is invalid")
+		}
+		if player.Won != (player.Placement == 1) {
+			return errors.New("completed game winner and placement disagree")
+		}
+		if player.Won {
+			winners++
+			if player.Forfeited {
+				return errors.New("completed game winner cannot be forfeited")
+			}
+		}
+	}
+	if winners > 1 {
+		return errors.New("completed game has multiple winners")
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -166,11 +192,64 @@ func validateCheckpoint(checkpoint GameCheckpointRecord) (pgtype.UUID, error) {
 	if checkpoint.RoundsPlayed <= 0 || checkpoint.PlayerCount < 2 || len(checkpoint.Players) == 0 {
 		return pgtype.UUID{}, errors.New("game checkpoint statistics are incomplete")
 	}
+	if checkpoint.PlayerCount > 4 || len(checkpoint.Players) > checkpoint.PlayerCount || checkpoint.StartedAt.IsZero() {
+		return pgtype.UUID{}, errors.New("game checkpoint metadata is invalid")
+	}
 	var gameID pgtype.UUID
 	if err := gameID.Scan(checkpoint.ID); err != nil {
 		return pgtype.UUID{}, fmt.Errorf("invalid game id: %w", err)
 	}
+	seenUsers := make(map[string]bool, len(checkpoint.Players))
+	for _, player := range checkpoint.Players {
+		userID := strings.TrimSpace(player.UserID)
+		var parsed pgtype.UUID
+		if err := parsed.Scan(userID); err != nil {
+			return pgtype.UUID{}, fmt.Errorf("invalid statistics user id: %w", err)
+		}
+		if seenUsers[userID] {
+			return pgtype.UUID{}, errors.New("duplicate statistics user id")
+		}
+		seenUsers[userID] = true
+		if err := validatePlayerStatistics(player); err != nil {
+			return pgtype.UUID{}, err
+		}
+		if player.RoundsPlayed > checkpoint.RoundsPlayed {
+			return pgtype.UUID{}, errors.New("player rounds exceed game rounds")
+		}
+	}
 	return gameID, nil
+}
+
+func validatePlayerStatistics(player CompletedGamePlayerRecord) error {
+	values := []int{
+		player.TotalPoints, player.RoundsPlayed, player.RoundsWon, player.SameSuitWins, player.SixPairsWins,
+		player.TurnsTaken, player.CardsDrawnFromDeck, player.CardsDrawnFromDiscard, player.CardsDiscarded,
+		player.CardsPlayed, player.CompositionsCreated, player.SetsCreated, player.RunsCreated,
+		player.AdditionsDone, player.CompositionsCompleted, player.SetsCompleted, player.RunsCompleted,
+		player.JokersPlayed, player.JokersReclaimed, player.CardsRemaining, player.HandPoints,
+		player.PenaltyPoints, player.PointsInflicted, player.LargestRoundPenalty,
+		player.LargestRoundPointsInflicted, player.MostCardsRemaining, player.RoundsOpened,
+		player.FastestOpeningTurn, player.StartingRoundWinStreak, player.EndingRoundWinStreak,
+		player.LongestRoundWinStreak,
+	}
+	for _, value := range values {
+		if value < 0 || int64(value) > maxStoredStatistic {
+			return errors.New("player statistics are outside the supported range")
+		}
+	}
+	if player.RoundsWon > player.RoundsPlayed || player.RoundsOpened > player.RoundsPlayed {
+		return errors.New("player round statistics are inconsistent")
+	}
+	if player.SameSuitWins > player.RoundsWon || player.SixPairsWins > player.RoundsWon {
+		return errors.New("player special wins are inconsistent")
+	}
+	if player.StartingRoundWinStreak > player.RoundsWon || player.EndingRoundWinStreak > player.RoundsWon || player.LongestRoundWinStreak > player.RoundsWon {
+		return errors.New("player round streak is inconsistent")
+	}
+	if (player.RoundsOpened == 0) != (player.FastestOpeningTurn == 0) {
+		return errors.New("player opening statistics are inconsistent")
+	}
+	return nil
 }
 
 func saveCheckpointHeader(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, checkpoint GameCheckpointRecord) (bool, error) {

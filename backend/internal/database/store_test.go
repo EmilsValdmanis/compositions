@@ -278,9 +278,24 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 		PlayerCount: 2, StartedAt: started, CompletedAt: started.Add(30 * time.Minute),
 		Players: []CompletedGamePlayerRecord{{
 			UserID: user.ID, Placement: 1, Won: true, RoundsPlayed: 2, RoundsWon: 2,
-			TurnsTaken: 8, CardsPlayed: 20, PointsInflicted: 80, FastestOpeningTurn: 2,
+			TurnsTaken: 8, CardsPlayed: 20, PointsInflicted: 80, RoundsOpened: 2, FastestOpeningTurn: 2,
 			StartingRoundWinStreak: 2, EndingRoundWinStreak: 2, LongestRoundWinStreak: 2,
 		}},
+	}
+	forfeitedWinner := first
+	forfeitedWinner.ID = uuid.NewString()
+	forfeitedWinner.Players = append([]CompletedGamePlayerRecord(nil), first.Players...)
+	forfeitedWinner.Players[0].Forfeited = true
+	if err := store.SaveCompletedGame(ctx, forfeitedWinner); err == nil {
+		t.Fatal("SaveCompletedGame() accepted a forfeited winner")
+	}
+	multipleWinners := first
+	multipleWinners.ID = uuid.NewString()
+	multipleWinners.Players = append(append([]CompletedGamePlayerRecord(nil), first.Players...), CompletedGamePlayerRecord{
+		UserID: uuid.NewString(), Placement: 1, Won: true, RoundsPlayed: 2, RoundsWon: 1,
+	})
+	if err := store.SaveCompletedGame(ctx, multipleWinners); err == nil {
+		t.Fatal("SaveCompletedGame() accepted multiple winners")
 	}
 	checkpoint := GameCheckpointRecord{
 		ID: first.ID, RoomCode: first.RoomCode, RoundsPlayed: 1, PlayerCount: 2, StartedAt: started,
@@ -320,7 +335,7 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 		PlayerCount: 2, StartedAt: started.Add(time.Hour), CompletedAt: started.Add(2 * time.Hour),
 		Players: []CompletedGamePlayerRecord{{
 			UserID: user.ID, Placement: 2, RoundsPlayed: 3, RoundsWon: 1, Forfeited: true,
-			TurnsTaken: 5, CardsPlayed: 10, FastestOpeningTurn: 3,
+			TurnsTaken: 5, CardsPlayed: 10, RoundsOpened: 1, FastestOpeningTurn: 3,
 			StartingRoundWinStreak: 1, EndingRoundWinStreak: 0, LongestRoundWinStreak: 1,
 		}},
 	}

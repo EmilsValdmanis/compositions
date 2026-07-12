@@ -2,6 +2,9 @@ package game
 
 import "testing"
 
+// These end-to-end game flows use deterministic decks to exercise complete
+// turns and rounds without depending on random shuffle order.
+
 func cardsOf(suit Suit, ranks ...Rank) []Card {
 	cards := make([]Card, 0, len(ranks))
 	for _, rank := range ranks {

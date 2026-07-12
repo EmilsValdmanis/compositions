@@ -278,38 +278,6 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 	return server
 }
 
-func newConfiguredWSServer() (*wsServer, error) {
-	if _, err := baseURLFromEnv(); err != nil {
-		return nil, err
-	}
-
-	_, frontendOrigin, err := frontendConfigFromEnv()
-	if err != nil {
-		return nil, err
-	}
-
-	store, err := openConfiguredUserStore()
-	if err != nil {
-		return nil, err
-	}
-
-	auth, err := newConfiguredAuthHandler(store)
-	if err != nil {
-		_ = store.Close()
-		return nil, err
-	}
-	server := newWSServerWithDependencies(auth, store, frontendOrigin)
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
-	defer cancel()
-	if err := server.lobby.restorePersistedState(ctx); err != nil {
-		_ = store.Close()
-		return nil, fmt.Errorf("restore lobby state: %w", err)
-	}
-
-	return server, nil
-}
-
 func (s *wsServer) Close() error {
 	if s == nil || s.userStore == nil {
 		return nil
@@ -378,6 +346,7 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request) {
+	connectionEmitter := emitEvent
 	defer wsDataWriteLocks.Delete(conn)
 	defer conn.Close()
 	conn.SetReadLimit(defaultWSReadLimit)
@@ -387,9 +356,15 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 	})
 
 	pingDone := make(chan struct{})
-	defer close(pingDone)
+	pingExited := make(chan struct{})
+	pingInterval := defaultWSPingInterval
+	defer func() {
+		close(pingDone)
+		<-pingExited
+	}()
 	go func() {
-		ticker := time.NewTicker(defaultWSPingInterval)
+		defer close(pingExited)
+		ticker := time.NewTicker(pingInterval)
 		defer ticker.Stop()
 		runHeartbeatPingLoop(conn, pingDone, ticker.C)
 	}()
@@ -400,7 +375,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 		var envelope wsEnvelope
 		if err := conn.ReadJSON(&envelope); err != nil {
 			if sessionID != "" {
-				s.lobby.disconnect(sessionID, conn)
+				s.lobby.disconnectWithEmitter(sessionID, conn, connectionEmitter)
 			}
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				slog.Debug("websocket read error", "sessionID", sessionID, "error", err)

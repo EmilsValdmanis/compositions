@@ -1037,6 +1037,10 @@ func (l *lobbyServer) resetRoomAfterGameOver(roomCode string) (*roomSnapshot, []
 }
 
 func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
+	l.disconnectWithEmitter(sessionID, conn, emitEvent)
+}
+
+func (l *lobbyServer) disconnectWithEmitter(sessionID string, conn *websocket.Conn, emitter eventEmitter) {
 	var roomState roomSnapshot
 	var recipients []*websocket.Conn
 	shouldBroadcast := false
@@ -1073,16 +1077,22 @@ func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 
 	slog.Info("client disconnected from room", "sessionID", sessionID, "roomCode", room.code)
 	if shouldBroadcast {
-		l.broadcastDisconnect(roomState, recipients)
+		l.broadcastDisconnectWithEmitter(roomState, recipients, emitter)
 	}
 }
 
 func (l *lobbyServer) broadcastDisconnect(roomState roomSnapshot, recipients []*websocket.Conn) {
+	l.broadcastDisconnectWithEmitter(roomState, recipients, emitEvent)
+}
+
+type eventEmitter func(conn *websocket.Conn, messageType string, data any) error
+
+func (l *lobbyServer) broadcastDisconnectWithEmitter(roomState roomSnapshot, recipients []*websocket.Conn, emitter eventEmitter) {
 	for _, conn := range recipients {
 		if conn == nil {
 			continue
 		}
-		_ = emitEvent(conn, "room_state", roomStateEvent{Room: roomState})
+		_ = emitter(conn, "room_state", roomStateEvent{Room: roomState})
 	}
 }
 
@@ -1226,17 +1236,29 @@ func (l *lobbyServer) persistLocked(reason string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
-	l.saveStatisticsLocked(ctx)
+	// Persist the authoritative game state with its dirty checkpoint marker
+	// before writing derived statistics. If this write fails, a statistics row
+	// must not get ahead of the state we would restore after a restart.
 	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
 		slog.Error("persist lobby state failed", "reason", reason, "error", err)
+		return
+	}
+	if !l.saveStatisticsLocked(ctx) {
+		return
+	}
+	// Statistics are idempotent. Saving the cleared dirty/finalized marker in a
+	// second write means a failure here merely causes a safe retry on restart.
+	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
+		slog.Error("persist statistics marker failed", "reason", reason, "error", err)
 	}
 }
 
-func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) {
+func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 	store, ok := l.store.(gameStatisticsStore)
 	if !ok {
-		return
+		return false
 	}
+	changed := false
 	for _, room := range l.rooms {
 		if room == nil || room.statisticsSaved || room.statisticsGameID == "" {
 			continue
@@ -1279,6 +1301,7 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) {
 			if phase == game.PhaseGameOver {
 				room.statisticsSaved = true
 			}
+			changed = true
 			continue
 		}
 		startedAt := room.statisticsStartedAt
@@ -1320,7 +1343,9 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) {
 		if phase == game.PhaseGameOver {
 			room.statisticsSaved = true
 		}
+		changed = true
 	}
+	return changed
 }
 
 func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
