@@ -23,6 +23,7 @@ import { GameBoardPiles } from "#/components/game/game-board-piles";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameBoardTable } from "#/components/game/game-board-table";
 import { GameCard } from "#/components/game/game-card";
+import { TurnStartCue } from "#/components/game/turn-start-cue";
 import {
   setPersistedHandOrder,
   usePersistedHandOrder,
@@ -947,6 +948,9 @@ export function GameBoardView({
       onDragEnd={controller.handleDragEnd}
       onDragCancel={controller.handleDragCancel}
     >
+      {turnState.isMyTurn && game ? (
+        <TurnStartCue round={game.round} turnNumber={game.turn.number} />
+      ) : null}
       <GameBoardLayout
         game={game}
         tableCompositions={controller.tableCompositions}

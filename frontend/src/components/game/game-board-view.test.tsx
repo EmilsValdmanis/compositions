@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import { type ReactNode } from "react";
+import { type ComponentProps, type ReactNode } from "react";
 import {
   type ActionResult,
   type GameSnapshot,
@@ -182,6 +182,54 @@ function dragEnd(handKey: string, overId: string, cardIndex: number) {
 }
 
 describe("GameBoardView discard drops", () => {
+  it("shows the turn-start cue only for the active player", () => {
+    const sharedProps = {
+      game: makeGame([]),
+      roomCode: "ROOM",
+      playerId: "player-1",
+      players,
+      connectedPlayers: 1,
+      topDiscardCard: { rank: 2, suit: 0 },
+      onDiscardCard: vi.fn(),
+      onDrawFromDeck: vi.fn(),
+      onDrawFromDiscard: vi.fn(),
+      onPlayTable: vi.fn(),
+      onPlayTableAndDiscard: vi.fn(),
+      onSendEmote: vi.fn(),
+      disableDraftSync: true,
+    } satisfies Omit<ComponentProps<typeof GameBoardView>, "turnState">;
+    const view = render(
+      <GameBoardView
+        {...sharedProps}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: false,
+          turnPlayerName: "Avery",
+        }}
+      />,
+    );
+
+    expect(view.queryByText("Your turn")).toBeNull();
+
+    view.rerender(
+      <GameBoardView
+        {...sharedProps}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+      />,
+    );
+
+    const cue = view.getByText("Your turn").parentElement;
+    expect(cue?.getAttribute("data-turn-number")).toBe("1");
+  });
+
   it("commits a staged table play and discard as one action", async () => {
     const onDiscardCard = vi.fn<() => Promise<ActionResult>>().mockResolvedValue({
       action: "discard_card",
