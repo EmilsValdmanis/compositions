@@ -317,6 +317,9 @@ function GameBoardLayout({
               : undefined
           }
           canCompose={turnState.canDiscard}
+          showDraftTotal={
+            !game?.players.find((player) => player.playerId === game.turn.playerId)?.hasOpened
+          }
         />
 
         <div className="flex flex-col min-h-0 gap-4">
