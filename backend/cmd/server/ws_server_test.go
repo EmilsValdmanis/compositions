@@ -830,8 +830,8 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 		t.Fatalf("hostConn.Close() error = %v", err)
 	}
 
-	server.lobby = newLobbyServer()
-	httpServer2 := httptest.NewServer(server.routes())
+	server2 := newWSServer()
+	httpServer2 := httptest.NewServer(server2.routes())
 	defer httpServer2.Close()
 	soloConn := mustDialWS(t, httpServer2.URL)
 	soloConnected := mustConnectSession(t, soloConn, "")
@@ -839,8 +839,8 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	soloRoom := mustReadRoomState(t, soloConn)
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "need at least 2 players to start")
-	soloHostSession := server.lobby.sessions[soloConnected.SessionID]
-	delete(server.lobby.rooms, soloRoom.Code)
+	soloHostSession := server2.lobby.sessions[soloConnected.SessionID]
+	delete(server2.lobby.rooms, soloRoom.Code)
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "join a room first")
 	if soloHostSession.roomCode != "" {
@@ -849,6 +849,7 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	soloHostSession.roomCode = ""
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "join a room first")
+	_ = soloConn.Close()
 }
 
 func TestRoomStateOmitsPlayerSessionIDs(t *testing.T) {

@@ -17,6 +17,17 @@ type Account struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Game struct {
+	ID           pgtype.UUID        `json:"id"`
+	RoomCode     string             `json:"room_code"`
+	Status       string             `json:"status"`
+	RoundsPlayed int32              `json:"rounds_played"`
+	PlayerCount  int32              `json:"player_count"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+
 type GameBugReport struct {
 	ID               pgtype.UUID        `json:"id"`
 	RoomCode         string             `json:"room_code"`
@@ -30,11 +41,90 @@ type GameBugReport struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 }
 
+type GamePlayerStatistic struct {
+	GameID                      pgtype.UUID `json:"game_id"`
+	UserID                      pgtype.UUID `json:"user_id"`
+	Placement                   pgtype.Int4 `json:"placement"`
+	Won                         pgtype.Bool `json:"won"`
+	Forfeited                   bool        `json:"forfeited"`
+	TotalPoints                 int32       `json:"total_points"`
+	RoundsPlayed                int32       `json:"rounds_played"`
+	RoundsWon                   int32       `json:"rounds_won"`
+	SameSuitWins                int32       `json:"same_suit_wins"`
+	SixPairsWins                int32       `json:"six_pairs_wins"`
+	TurnsTaken                  int32       `json:"turns_taken"`
+	CardsDrawnFromDeck          int32       `json:"cards_drawn_from_deck"`
+	CardsDrawnFromDiscard       int32       `json:"cards_drawn_from_discard"`
+	CardsDiscarded              int32       `json:"cards_discarded"`
+	CardsPlayed                 int32       `json:"cards_played"`
+	CompositionsCreated         int32       `json:"compositions_created"`
+	SetsCreated                 int32       `json:"sets_created"`
+	RunsCreated                 int32       `json:"runs_created"`
+	AdditionsDone               int32       `json:"additions_done"`
+	CompositionsCompleted       int32       `json:"compositions_completed"`
+	SetsCompleted               int32       `json:"sets_completed"`
+	RunsCompleted               int32       `json:"runs_completed"`
+	JokersPlayed                int32       `json:"jokers_played"`
+	JokersReclaimed             int32       `json:"jokers_reclaimed"`
+	CardsRemaining              int32       `json:"cards_remaining"`
+	HandPoints                  int32       `json:"hand_points"`
+	PenaltyPoints               int32       `json:"penalty_points"`
+	PointsInflicted             int32       `json:"points_inflicted"`
+	LargestRoundPenalty         int32       `json:"largest_round_penalty"`
+	LargestRoundPointsInflicted int32       `json:"largest_round_points_inflicted"`
+	MostCardsRemaining          int32       `json:"most_cards_remaining"`
+	RoundsOpened                int32       `json:"rounds_opened"`
+	FastestOpeningTurn          int32       `json:"fastest_opening_turn"`
+	StartingRoundWinStreak      int32       `json:"starting_round_win_streak"`
+	EndingRoundWinStreak        int32       `json:"ending_round_win_streak"`
+	LongestRoundWinStreak       int32       `json:"longest_round_win_streak"`
+}
+
 type LobbyState struct {
 	ID        bool               `json:"id"`
 	State     []byte             `json:"state"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PlayerStatistic struct {
+	UserID                      pgtype.UUID        `json:"user_id"`
+	GamesPlayed                 int64              `json:"games_played"`
+	GamesWon                    int64              `json:"games_won"`
+	TotalPlacement              int64              `json:"total_placement"`
+	RoundsPlayed                int64              `json:"rounds_played"`
+	RoundsWon                   int64              `json:"rounds_won"`
+	SameSuitWins                int64              `json:"same_suit_wins"`
+	SixPairsWins                int64              `json:"six_pairs_wins"`
+	Forfeits                    int64              `json:"forfeits"`
+	TurnsTaken                  int64              `json:"turns_taken"`
+	CardsDrawnFromDeck          int64              `json:"cards_drawn_from_deck"`
+	CardsDrawnFromDiscard       int64              `json:"cards_drawn_from_discard"`
+	CardsDiscarded              int64              `json:"cards_discarded"`
+	CardsPlayed                 int64              `json:"cards_played"`
+	CompositionsCreated         int64              `json:"compositions_created"`
+	SetsCreated                 int64              `json:"sets_created"`
+	RunsCreated                 int64              `json:"runs_created"`
+	AdditionsDone               int64              `json:"additions_done"`
+	CompositionsCompleted       int64              `json:"compositions_completed"`
+	SetsCompleted               int64              `json:"sets_completed"`
+	RunsCompleted               int64              `json:"runs_completed"`
+	JokersPlayed                int64              `json:"jokers_played"`
+	JokersReclaimed             int64              `json:"jokers_reclaimed"`
+	CardsRemaining              int64              `json:"cards_remaining"`
+	HandPoints                  int64              `json:"hand_points"`
+	PenaltyPoints               int64              `json:"penalty_points"`
+	PointsInflicted             int64              `json:"points_inflicted"`
+	LargestRoundPenalty         int32              `json:"largest_round_penalty"`
+	LargestRoundPointsInflicted int32              `json:"largest_round_points_inflicted"`
+	MostCardsRemaining          int32              `json:"most_cards_remaining"`
+	RoundsOpened                int64              `json:"rounds_opened"`
+	FastestOpeningTurn          int32              `json:"fastest_opening_turn"`
+	CurrentGameWinStreak        int32              `json:"current_game_win_streak"`
+	LongestGameWinStreak        int32              `json:"longest_game_win_streak"`
+	CurrentRoundWinStreak       int32              `json:"current_round_win_streak"`
+	LongestRoundWinStreak       int32              `json:"longest_round_win_streak"`
+	UpdatedAt                   pgtype.Timestamptz `json:"updated_at"`
 }
 
 type Session struct {

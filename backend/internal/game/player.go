@@ -9,6 +9,7 @@ type Player struct {
 	pointsGained int
 	hasOpened    bool
 	forfeited    bool
+	statistics   PlayerGameStatistics
 }
 
 func NewPlayer() *Player {

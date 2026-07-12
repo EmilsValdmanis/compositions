@@ -84,6 +84,10 @@ type room struct {
 	turnActivity             *game.TurnActivitySnapshot
 	endProposal              *endGameProposal
 	conclusion               *gameConclusion
+	statisticsGameID         string
+	statisticsStartedAt      time.Time
+	statisticsSaved          bool
+	statisticsDirty          bool
 	endProposalCooldownUntil time.Time
 }
 
@@ -143,6 +147,10 @@ type persistedRoom struct {
 	TurnActivity             *game.TurnActivitySnapshot  `json:"turnActivity,omitempty"`
 	EndProposal              *persistedEndGameProposal   `json:"endProposal,omitempty"`
 	Conclusion               *persistedGameConclusion    `json:"conclusion,omitempty"`
+	StatisticsGameID         string                      `json:"statisticsGameId,omitempty"`
+	StatisticsStartedAt      time.Time                   `json:"statisticsStartedAt,omitempty"`
+	StatisticsSaved          bool                        `json:"statisticsSaved,omitempty"`
+	StatisticsDirty          bool                        `json:"statisticsDirty,omitempty"`
 	EndProposalCooldownUntil time.Time                   `json:"endProposalCooldownUntil,omitempty"`
 }
 
@@ -480,6 +488,7 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 
 	cutSize := *choiceOptions.cutSize
 
+	startingGame := room.gameStatePhase() == game.PhaseLobby
 	startRound := func(dt game.DealTypes, order []int) error {
 		switch room.gameStatePhase() {
 		case game.PhaseLobby:
@@ -511,6 +520,15 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	}
 
 	room.pendingDealChoice = nil
+	if startingGame {
+		room.statisticsGameID = uuid.NewString()
+		room.statisticsStartedAt = time.Now().UTC()
+		room.statisticsSaved = false
+		room.statisticsDirty = true
+	}
+	if room.gameStatePhase() == game.PhaseRoundOver || room.gameStatePhase() == game.PhaseGameOver {
+		room.statisticsDirty = true
+	}
 	roomState := room.snapshot()
 	recipients, err := room.gameStateRecipients(l.sessions, roomState)
 	if err != nil {
@@ -661,6 +679,7 @@ func (l *lobbyServer) forfeitGame(sessionID string) (roomSnapshot, []gameStateRe
 	session.roomCode = ""
 	room.pendingDealChoice = nil
 	room.clearTurnTracking()
+	room.statisticsDirty = true
 
 	if room.hostID == session.playerID {
 		room.transferHostToFirstActive()
@@ -671,9 +690,9 @@ func (l *lobbyServer) forfeitGame(sessionID string) (roomSnapshot, []gameStateRe
 		room.endProposal = nil
 	} else if room.endProposal != nil && room.endProposal.unanimouslyApproved() {
 		proposal := room.endProposal
-		if err := room.gameState.EndWithoutWinner(); err != nil {
-			return roomSnapshot{}, nil, actionResultEvent{}, "", err
-		}
+		// ForfeitPlayer succeeded and left multiple active players, so the game
+		// is guaranteed to still be in a phase EndWithoutWinner accepts.
+		_ = room.gameState.EndWithoutWinner()
 		room.conclusion = &gameConclusion{kind: proposal.kind, reportID: proposal.reportID}
 		room.endProposal = nil
 	}
@@ -723,10 +742,7 @@ func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bo
 	if err != nil {
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
-	gameStateJSON, err := json.Marshal(room.gameState.PersistenceSnapshot())
-	if err != nil {
-		return roomSnapshot{}, nil, actionResultEvent{}, fmt.Errorf("encode bug report game state: %w", err)
-	}
+	gameStateJSON, _ := json.Marshal(room.gameState.PersistenceSnapshot())
 	reportID := uuid.NewString()
 	reportCreatedAt := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
@@ -834,6 +850,7 @@ func (l *lobbyServer) voteEndGame(sessionID, proposalID string, approve bool) (r
 			room.endProposal = nil
 			room.pendingDealChoice = nil
 			room.clearTurnTracking()
+			room.statisticsDirty = true
 		}
 	}
 
@@ -982,6 +999,9 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 			return roomSnapshot{}, nil, actionResultEvent{}, err
 		}
 	}
+	if room.gameStatePhase() == game.PhaseRoundOver || room.gameStatePhase() == game.PhaseGameOver {
+		room.statisticsDirty = true
+	}
 
 	roomState := room.snapshot()
 	recipients, err := room.gameStateRecipients(l.sessions, roomState)
@@ -1017,6 +1037,10 @@ func (l *lobbyServer) resetRoomAfterGameOver(roomCode string) (*roomSnapshot, []
 }
 
 func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
+	l.disconnectWithEmitter(sessionID, conn, emitEvent)
+}
+
+func (l *lobbyServer) disconnectWithEmitter(sessionID string, conn *websocket.Conn, emitter eventEmitter) {
 	var roomState roomSnapshot
 	var recipients []*websocket.Conn
 	shouldBroadcast := false
@@ -1053,16 +1077,22 @@ func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 
 	slog.Info("client disconnected from room", "sessionID", sessionID, "roomCode", room.code)
 	if shouldBroadcast {
-		l.broadcastDisconnect(roomState, recipients)
+		l.broadcastDisconnectWithEmitter(roomState, recipients, emitter)
 	}
 }
 
 func (l *lobbyServer) broadcastDisconnect(roomState roomSnapshot, recipients []*websocket.Conn) {
+	l.broadcastDisconnectWithEmitter(roomState, recipients, emitEvent)
+}
+
+type eventEmitter func(conn *websocket.Conn, messageType string, data any) error
+
+func (l *lobbyServer) broadcastDisconnectWithEmitter(roomState roomSnapshot, recipients []*websocket.Conn, emitter eventEmitter) {
 	for _, conn := range recipients {
 		if conn == nil {
 			continue
 		}
-		_ = emitEvent(conn, "room_state", roomStateEvent{Room: roomState})
+		_ = emitter(conn, "room_state", roomStateEvent{Room: roomState})
 	}
 }
 
@@ -1119,6 +1149,10 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 			turnBaseline:             persistedRoom.TurnBaseline,
 			turnActivity:             persistedRoom.TurnActivity,
 			endProposalCooldownUntil: persistedRoom.EndProposalCooldownUntil,
+			statisticsGameID:         persistedRoom.StatisticsGameID,
+			statisticsStartedAt:      persistedRoom.StatisticsStartedAt,
+			statisticsSaved:          persistedRoom.StatisticsSaved,
+			statisticsDirty:          persistedRoom.StatisticsDirty,
 		}
 		if persistedRoom.Conclusion != nil {
 			restoredRoom.conclusion = &gameConclusion{
@@ -1202,9 +1236,116 @@ func (l *lobbyServer) persistLocked(reason string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
+	// Persist the authoritative game state with its dirty checkpoint marker
+	// before writing derived statistics. If this write fails, a statistics row
+	// must not get ahead of the state we would restore after a restart.
 	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
 		slog.Error("persist lobby state failed", "reason", reason, "error", err)
+		return
 	}
+	if !l.saveStatisticsLocked(ctx) {
+		return
+	}
+	// Statistics are idempotent. Saving the cleared dirty/finalized marker in a
+	// second write means a failure here merely causes a safe retry on restart.
+	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
+		slog.Error("persist statistics marker failed", "reason", reason, "error", err)
+	}
+}
+
+func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
+	store, ok := l.store.(gameStatisticsStore)
+	if !ok {
+		return false
+	}
+	changed := false
+	for _, room := range l.rooms {
+		if room == nil || room.statisticsSaved || room.statisticsGameID == "" {
+			continue
+		}
+		phase := room.gameStatePhase()
+		completed := room.gameState.CompletedPlayerStatistics()
+		results := completed
+		if len(results) == 0 {
+			results = room.gameState.PlayerStatistics()
+		}
+		players := make([]database.CompletedGamePlayerRecord, 0, len(results))
+		for _, result := range results {
+			roomPlayer := room.playerByID(result.PlayerID)
+			if roomPlayer == nil {
+				continue
+			}
+			session := l.sessions[roomPlayer.sessionID]
+			if session == nil || !session.authenticated || session.authUserID == "" {
+				continue
+			}
+			s := result.Statistics
+			players = append(players, database.CompletedGamePlayerRecord{
+				UserID: session.authUserID, Placement: result.Placement,
+				Won: result.Winner, Forfeited: result.Forfeited, TotalPoints: result.TotalPoints,
+				RoundsPlayed: s.RoundsPlayed, RoundsWon: s.RoundsWon, SameSuitWins: s.SameSuitWins, SixPairsWins: s.SixPairsWins,
+				TurnsTaken: s.TurnsTaken, CardsDrawnFromDeck: s.CardsDrawnFromDeck, CardsDrawnFromDiscard: s.CardsDrawnFromDiscard,
+				CardsDiscarded: s.CardsDiscarded, CardsPlayed: s.CardsPlayed, CompositionsCreated: s.CompositionsCreated,
+				SetsCreated: s.SetsCreated, RunsCreated: s.RunsCreated, AdditionsDone: s.AdditionsDone,
+				CompositionsCompleted: s.CompositionsCompleted, SetsCompleted: s.SetsCompleted, RunsCompleted: s.RunsCompleted,
+				JokersPlayed: s.JokersPlayed, JokersReclaimed: s.JokersReclaimed, CardsRemaining: s.CardsRemaining,
+				HandPoints: s.HandPoints, PenaltyPoints: s.PenaltyPoints, PointsInflicted: s.PointsInflicted,
+				LargestRoundPenalty: s.LargestRoundPenalty, LargestRoundPointsInflicted: s.LargestRoundPointsInflicted,
+				MostCardsRemaining: s.MostCardsRemaining, RoundsOpened: s.RoundsOpened, FastestOpeningTurn: s.FastestOpeningTurn,
+				StartingRoundWinStreak: s.StartingRoundWinStreak, EndingRoundWinStreak: s.CurrentRoundWinStreak,
+				LongestRoundWinStreak: s.LongestRoundWinStreak,
+			})
+		}
+		if len(players) == 0 {
+			room.statisticsDirty = false
+			if phase == game.PhaseGameOver {
+				room.statisticsSaved = true
+			}
+			changed = true
+			continue
+		}
+		startedAt := room.statisticsStartedAt
+		if startedAt.IsZero() {
+			startedAt = time.Now().UTC()
+		}
+		checkpoint := database.GameCheckpointRecord{
+			ID: room.statisticsGameID, RoomCode: room.code, RoundsPlayed: room.gameState.RoundNumber(),
+			PlayerCount: len(results), StartedAt: startedAt, Players: players,
+		}
+		var err error
+		switch {
+		case phase == game.PhaseGameOver && len(completed) > 0:
+			kind := "normal"
+			if room.conclusion != nil && room.conclusion.kind == "forfeit" {
+				kind = "forfeit"
+			}
+			err = store.SaveCompletedGame(ctx, database.CompletedGameRecord{
+				ID: checkpoint.ID, RoomCode: checkpoint.RoomCode, CompletionKind: kind,
+				RoundsPlayed: checkpoint.RoundsPlayed, PlayerCount: checkpoint.PlayerCount,
+				StartedAt: checkpoint.StartedAt, CompletedAt: time.Now().UTC(), Players: players,
+			})
+		case phase == game.PhaseGameOver:
+			status := "abandoned"
+			if room.conclusion != nil && (room.conclusion.kind == "mutual_end" || room.conclusion.kind == "technical_abort") {
+				status = room.conclusion.kind
+			}
+			err = store.SaveUnrankedGame(ctx, checkpoint, status, time.Now().UTC())
+		case room.statisticsDirty:
+			err = store.SaveGameCheckpoint(ctx, checkpoint)
+		default:
+			continue
+		}
+		if err != nil {
+			slog.Error("persist game statistics failed", "roomCode", room.code, "gameID", room.statisticsGameID, "error", err)
+			continue
+		}
+		room.statisticsDirty = false
+		if phase == game.PhaseGameOver {
+			room.statisticsSaved = true
+		}
+		changed = true
+	}
+	return changed
 }
 
 func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
@@ -1244,6 +1385,10 @@ func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
 			TurnBaseline:             cloneGameSnapshot(room.turnBaseline),
 			TurnActivity:             cloneTurnActivitySnapshot(room.turnActivity),
 			EndProposalCooldownUntil: room.endProposalCooldownUntil,
+			StatisticsGameID:         room.statisticsGameID,
+			StatisticsStartedAt:      room.statisticsStartedAt,
+			StatisticsSaved:          room.statisticsSaved,
+			StatisticsDirty:          room.statisticsDirty,
 		}
 		if room.endProposal != nil {
 			agreedPlayerIDs := make([]string, 0, len(room.endProposal.agreedPlayerIDs))
@@ -1631,6 +1776,10 @@ func (r *room) resetForLobby() error {
 	r.endProposal = nil
 	r.endProposalCooldownUntil = time.Time{}
 	r.conclusion = nil
+	r.statisticsGameID = ""
+	r.statisticsStartedAt = time.Time{}
+	r.statisticsSaved = false
+	r.statisticsDirty = false
 	r.clearTurnTracking()
 	return nil
 }

@@ -111,6 +111,11 @@ ORDER BY created_at DESC;
 `game_state` is the authoritative server persistence snapshot captured when the player submitted
 the report.
 
+## Player Statistics
+
+Completed-game statistics, lifetime aggregates, derived metrics, badge ideas, and extension guidance
+are documented in [STATISTICS.md](STATISTICS.md).
+
 ## Purpose
 
 The backend is responsible for enforcing the game rules and managing multiplayer session state. The intent is to keep the rule logic testable and separate from frontend concerns.

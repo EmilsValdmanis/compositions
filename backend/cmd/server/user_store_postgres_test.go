@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/EmilsValdmanis/compositions/internal/database"
 )
@@ -304,5 +305,24 @@ func TestPostgresUserStoreClose(t *testing.T) {
 	}
 	if !closed {
 		t.Fatal("closeStoredUserStore was not called")
+	}
+}
+
+func TestPostgresUserStoreStatisticsMethods(t *testing.T) {
+	ctx := context.Background()
+	var nilStore *postgresUserStore
+	if err := nilStore.SaveGameCheckpoint(ctx, database.GameCheckpointRecord{}); err == nil {
+		t.Fatal("nil SaveGameCheckpoint() error = nil")
+	}
+	if err := nilStore.SaveUnrankedGame(ctx, database.GameCheckpointRecord{}, "mutual_end", time.Now()); err == nil {
+		t.Fatal("nil SaveUnrankedGame() error = nil")
+	}
+
+	store := &postgresUserStore{store: &database.UserStore{}}
+	if err := store.SaveGameCheckpoint(ctx, database.GameCheckpointRecord{}); err == nil {
+		t.Fatal("unconfigured SaveGameCheckpoint() error = nil")
+	}
+	if err := store.SaveUnrankedGame(ctx, database.GameCheckpointRecord{}, "mutual_end", time.Now()); err == nil {
+		t.Fatal("unconfigured SaveUnrankedGame() error = nil")
 	}
 }

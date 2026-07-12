@@ -23,12 +23,13 @@ type PersistenceSnapshot struct {
 }
 
 type PersistencePlayerSnapshot struct {
-	ID           string         `json:"id"`
-	Hand         []CardSnapshot `json:"hand"`
-	TotalPoints  int            `json:"totalPoints"`
-	PointsGained int            `json:"pointsGained"`
-	HasOpened    bool           `json:"hasOpened"`
-	Forfeited    bool           `json:"forfeited,omitempty"`
+	ID           string               `json:"id"`
+	Hand         []CardSnapshot       `json:"hand"`
+	TotalPoints  int                  `json:"totalPoints"`
+	PointsGained int                  `json:"pointsGained"`
+	HasOpened    bool                 `json:"hasOpened"`
+	Forfeited    bool                 `json:"forfeited,omitempty"`
+	Statistics   PlayerGameStatistics `json:"statistics,omitempty"`
 }
 
 type PersistenceCompositionSnapshot struct {
@@ -65,6 +66,7 @@ func (gs *GameState) PersistenceSnapshot() PersistenceSnapshot {
 			PointsGained: player.pointsGained,
 			HasOpened:    player.hasOpened,
 			Forfeited:    player.forfeited,
+			Statistics:   player.statistics,
 		})
 	}
 
@@ -150,6 +152,7 @@ func RestoreGameState(snapshot PersistenceSnapshot) (*GameState, error) {
 			pointsGained: playerSnapshot.PointsGained,
 			hasOpened:    playerSnapshot.HasOpened,
 			forfeited:    playerSnapshot.Forfeited,
+			statistics:   playerSnapshot.Statistics,
 		})
 	}
 	if len(players) > snapshot.MaxPlayers {
