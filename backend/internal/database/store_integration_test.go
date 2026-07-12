@@ -18,6 +18,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -281,8 +282,34 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 			StartingRoundWinStreak: 2, EndingRoundWinStreak: 2, LongestRoundWinStreak: 2,
 		}},
 	}
+	checkpoint := GameCheckpointRecord{
+		ID: first.ID, RoomCode: first.RoomCode, RoundsPlayed: 1, PlayerCount: 2, StartedAt: started,
+		Players: []CompletedGamePlayerRecord{{UserID: user.ID, TurnsTaken: 2, CardsPlayed: 5}},
+	}
+	if err := store.SaveGameCheckpoint(ctx, checkpoint); err != nil {
+		t.Fatalf("SaveGameCheckpoint(first) error = %v", err)
+	}
+	if err := store.SaveGameCheckpoint(ctx, checkpoint); err != nil {
+		t.Fatalf("SaveGameCheckpoint(retry) error = %v", err)
+	}
+	var checkpointStatus string
+	var checkpointTurns int
+	var checkpointPlacement pgtype.Int4
+	var checkpointWon pgtype.Bool
+	err = store.pool.QueryRow(ctx, `
+		SELECT g.status, gps.turns_taken, gps.placement, gps.won
+		FROM games g JOIN game_player_statistics gps ON gps.game_id = g.id
+		WHERE g.id = $1 AND gps.user_id = $2
+	`, first.ID, user.ID).Scan(&checkpointStatus, &checkpointTurns, &checkpointPlacement, &checkpointWon)
+	if err != nil || checkpointStatus != "in_progress" || checkpointTurns != 2 || checkpointPlacement.Valid || checkpointWon.Valid {
+		t.Fatalf("checkpoint = status:%q turns:%d placement:%+v won:%+v error:%v", checkpointStatus, checkpointTurns, checkpointPlacement, checkpointWon, err)
+	}
 	if err := store.SaveCompletedGame(ctx, first); err != nil {
 		t.Fatalf("SaveCompletedGame(first) error = %v", err)
+	}
+	var finalizedStatus string
+	if err := store.pool.QueryRow(ctx, `SELECT status FROM games WHERE id = $1`, first.ID).Scan(&finalizedStatus); err != nil || finalizedStatus != "completed" {
+		t.Fatalf("finalized status = %q, error = %v", finalizedStatus, err)
 	}
 	if err := store.SaveCompletedGame(ctx, first); err != nil {
 		t.Fatalf("SaveCompletedGame(retry) error = %v", err)
@@ -320,6 +347,92 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 	want := []int{2, 1, 3, 5, 3, 1, 13, 30, 80, 2, 0, 1, 0, 3}
 	if !slices.Equal(got, want) {
 		t.Fatalf("lifetime statistics = %v; want %v", got, want)
+	}
+
+	unranked := GameCheckpointRecord{
+		ID: uuid.NewString(), RoomCode: "BUG123", RoundsPlayed: 2, PlayerCount: 2, StartedAt: started,
+		Players: []CompletedGamePlayerRecord{{UserID: user.ID, Forfeited: true, TurnsTaken: 7, CardsPlayed: 14}},
+	}
+	if err := store.SaveGameCheckpoint(ctx, unranked); err != nil {
+		t.Fatalf("SaveGameCheckpoint(unranked) error = %v", err)
+	}
+	if err := store.SaveUnrankedGame(ctx, unranked, "technical_abort", started.Add(3*time.Hour)); err != nil {
+		t.Fatalf("SaveUnrankedGame() error = %v", err)
+	}
+	if err := store.SaveUnrankedGame(ctx, unranked, "technical_abort", started.Add(3*time.Hour)); err != nil {
+		t.Fatalf("SaveUnrankedGame(retry) error = %v", err)
+	}
+	stale := unranked
+	stale.Players = []CompletedGamePlayerRecord{{UserID: user.ID, TurnsTaken: 1}}
+	if err := store.SaveGameCheckpoint(ctx, stale); err != nil {
+		t.Fatalf("SaveGameCheckpoint(after finalization) error = %v", err)
+	}
+	var unrankedStatus string
+	var unrankedForfeited bool
+	var unrankedTurns int
+	var unrankedPlacement pgtype.Int4
+	err = store.pool.QueryRow(ctx, `
+		SELECT g.status, gps.forfeited, gps.turns_taken, gps.placement
+		FROM games g JOIN game_player_statistics gps ON gps.game_id = g.id
+		WHERE g.id = $1 AND gps.user_id = $2
+	`, unranked.ID, user.ID).Scan(&unrankedStatus, &unrankedForfeited, &unrankedTurns, &unrankedPlacement)
+	if err != nil || unrankedStatus != "technical_abort" || !unrankedForfeited || unrankedTurns != 7 || unrankedPlacement.Valid {
+		t.Fatalf("unranked checkpoint = status:%q forfeited:%v turns:%d placement:%+v error:%v", unrankedStatus, unrankedForfeited, unrankedTurns, unrankedPlacement, err)
+	}
+	var lifetimeGames int
+	if err := store.pool.QueryRow(ctx, `SELECT games_played FROM player_statistics WHERE user_id = $1`, user.ID).Scan(&lifetimeGames); err != nil || lifetimeGames != 2 {
+		t.Fatalf("lifetime games after unranked finalization = %d, error = %v", lifetimeGames, err)
+	}
+}
+
+func TestStatisticsCheckpointMigrationUpgradesCompletedGames(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+	migrationDB, err := OpenMigrationDB(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenMigrationDB() error = %v", err)
+	}
+	defer migrationDB.Close()
+	migrator := newTestMigrator(t, migrationDB)
+	if err := migrator.Steps(7); err != nil {
+		t.Fatalf("migrator.Steps(7) error = %v", err)
+	}
+	pool, err := OpenPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPool() error = %v", err)
+	}
+	defer pool.Close()
+	gameID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO games (id, room_code, completion_kind, rounds_played, player_count, started_at, completed_at)
+		VALUES ($1, 'OLD123', 'normal', 2, 2, NOW() - INTERVAL '1 hour', NOW())
+	`, gameID); err != nil {
+		t.Fatalf("seed migration-7 game error = %v", err)
+	}
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(checkpoints) error = %v", err)
+	}
+	var status string
+	if err := pool.QueryRow(ctx, `SELECT status FROM games WHERE id = $1`, gameID).Scan(&status); err != nil || status != "completed" {
+		t.Fatalf("upgraded game status = %q, error = %v", status, err)
+	}
+	checkpointID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at)
+		VALUES ($1, 'NEW123', 'in_progress', 1, 2, NOW())
+	`, checkpointID); err != nil {
+		t.Fatalf("insert checkpoint game error = %v", err)
+	}
+	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("migrator.Steps(-1 checkpoints) error = %v", err)
+	}
+	var completionKind string
+	if err := pool.QueryRow(ctx, `SELECT completion_kind FROM games WHERE id = $1`, gameID).Scan(&completionKind); err != nil || completionKind != "normal" {
+		t.Fatalf("downgraded completion kind = %q, error = %v", completionKind, err)
+	}
+	var checkpointCount int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM games WHERE id = $1`, checkpointID).Scan(&checkpointCount); err != nil || checkpointCount != 0 {
+		t.Fatalf("checkpoint rows after downgrade = %d, error = %v", checkpointCount, err)
 	}
 }
 

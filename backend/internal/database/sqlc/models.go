@@ -18,13 +18,14 @@ type Account struct {
 }
 
 type Game struct {
-	ID             pgtype.UUID        `json:"id"`
-	RoomCode       string             `json:"room_code"`
-	CompletionKind string             `json:"completion_kind"`
-	RoundsPlayed   int32              `json:"rounds_played"`
-	PlayerCount    int32              `json:"player_count"`
-	StartedAt      pgtype.Timestamptz `json:"started_at"`
-	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
+	ID           pgtype.UUID        `json:"id"`
+	RoomCode     string             `json:"room_code"`
+	Status       string             `json:"status"`
+	RoundsPlayed int32              `json:"rounds_played"`
+	PlayerCount  int32              `json:"player_count"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type GameBugReport struct {
@@ -43,8 +44,8 @@ type GameBugReport struct {
 type GamePlayerStatistic struct {
 	GameID                      pgtype.UUID `json:"game_id"`
 	UserID                      pgtype.UUID `json:"user_id"`
-	Placement                   int32       `json:"placement"`
-	Won                         bool        `json:"won"`
+	Placement                   pgtype.Int4 `json:"placement"`
+	Won                         pgtype.Bool `json:"won"`
 	Forfeited                   bool        `json:"forfeited"`
 	TotalPoints                 int32       `json:"total_points"`
 	RoundsPlayed                int32       `json:"rounds_played"`

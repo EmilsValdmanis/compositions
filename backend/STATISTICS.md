@@ -6,12 +6,24 @@ Statistics use counters rather than an event row for every card action:
 
 1. The game engine updates `PlayerGameStatistics` only after a game action succeeds.
 2. Those counters are included in the persisted lobby snapshot, so a server restart does not lose an active game's progress.
-3. Each started game receives a stable UUID. When it ends normally or by forfeit, the server writes one `games` row and at most one `game_player_statistics` row per authenticated player.
-4. The same transaction updates each player's cached `player_statistics` row. The game UUID makes completion retries idempotent, so a retry cannot double-count totals.
+3. Each started game receives a stable UUID and creates an `in_progress` checkpoint.
+4. The same cumulative player row is replaced after every completed round and immediately after a forfeit. There is no row per action or per round.
+5. Ranked completion finalizes those rows and updates each player's cached `player_statistics` row in the same transaction. The transition away from `in_progress` makes retries idempotent.
 
-Mutual endings and technical aborts do not affect ranked statistics. Guests still affect player count and placement, but only authenticated users receive profile statistics.
+Mutual endings, technical aborts, and abandoned games retain their latest per-game activity with null outcomes, but do not affect ranked lifetime statistics. Guests still affect player count and placement, but only authenticated users receive profile statistics.
 
-`game_player_statistics` is the auditable per-game source. `player_statistics` is a small lifetime cache for inexpensive profiles and leaderboards. If an aggregation rule ever changes, the cache can be rebuilt from the per-game rows.
+`game_player_statistics` is the auditable per-game source. `player_statistics` is a ranked lifetime cache for inexpensive profiles and leaderboards. If an aggregation rule ever changes, the cache can be rebuilt from per-game rows filtered to `games.status IN ('completed', 'forfeit')`.
+
+Checkpoint writes happen only at meaningful boundaries:
+
+- game start
+- completed round
+- player forfeit
+- final ranked or unranked ending
+
+This means a long turn does not generate extra database rows or writes, while completed-round and reliability information survives a later abort.
+
+Game statuses are `in_progress`, `completed`, `forfeit`, `mutual_end`, `technical_abort`, and `abandoned`. Placement and win fields remain null for every unranked status. Ranked profile statistics come from the lifetime cache; reliability or diagnostic views that intentionally include aborted games can query the retained per-game rows directly.
 
 ## Short examples
 
@@ -103,4 +115,4 @@ For a new counter:
 4. Add it to the transactional insert/upsert and regenerate sqlc models.
 5. Test the action counter, restart persistence, idempotent completion, and lifetime aggregation.
 
-Prefer counters, sums, maxima, and streak boundaries. Add detailed event or per-round tables only when a concrete feature cannot be reconstructed from per-game rows; this keeps storage proportional to players per completed game rather than turns or cards played.
+Prefer counters, sums, maxima, and streak boundaries. Add detailed event or per-round tables only when a concrete feature cannot be reconstructed from per-game rows; this keeps storage proportional to players per game rather than turns, rounds, or cards played.

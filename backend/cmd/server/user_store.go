@@ -43,6 +43,8 @@ type userStore interface {
 }
 
 type gameStatisticsStore interface {
+	SaveGameCheckpoint(ctx context.Context, checkpoint database.GameCheckpointRecord) error
+	SaveUnrankedGame(ctx context.Context, checkpoint database.GameCheckpointRecord, status string, completedAt time.Time) error
 	SaveCompletedGame(ctx context.Context, game database.CompletedGameRecord) error
 }
 
@@ -199,4 +201,18 @@ func (s *postgresUserStore) SaveCompletedGame(ctx context.Context, game database
 		return errors.New("user store is not configured")
 	}
 	return s.store.SaveCompletedGame(ctx, game)
+}
+
+func (s *postgresUserStore) SaveGameCheckpoint(ctx context.Context, checkpoint database.GameCheckpointRecord) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.SaveGameCheckpoint(ctx, checkpoint)
+}
+
+func (s *postgresUserStore) SaveUnrankedGame(ctx context.Context, checkpoint database.GameCheckpointRecord, status string, completedAt time.Time) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.SaveUnrankedGame(ctx, checkpoint, status, completedAt)
 }

@@ -2,6 +2,20 @@ package game
 
 import "testing"
 
+func TestPlayerStatisticsSupportsInProgressCheckpoints(t *testing.T) {
+	if (*GameState)(nil).PlayerStatistics() != nil {
+		t.Fatal("nil state returned checkpoint statistics")
+	}
+	player := NewPlayer()
+	player.totalPoints = 12
+	player.statistics.TurnsTaken = 3
+	state := &GameState{players: []*Player{nil, player}}
+	statistics := state.PlayerStatistics()
+	if len(statistics) != 1 || statistics[0].PlayerID != player.ID || statistics[0].TotalPoints != 12 || statistics[0].Statistics.TurnsTaken != 3 {
+		t.Fatalf("PlayerStatistics() = %+v", statistics)
+	}
+}
+
 func TestGameStatisticsTrackTablePlayAndOpening(t *testing.T) {
 	state := newTurnTestState()
 	player := state.players[0]

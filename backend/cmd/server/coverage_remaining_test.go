@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -17,8 +18,11 @@ import (
 
 type statisticsRecordingStore struct {
 	jsonLobbyStateStore
-	games   []database.CompletedGameRecord
-	gameErr error
+	games            []database.CompletedGameRecord
+	checkpoints      []database.GameCheckpointRecord
+	unranked         []database.GameCheckpointRecord
+	unrankedStatuses []string
+	gameErr          error
 }
 
 func (s *statisticsRecordingStore) SaveCompletedGame(_ context.Context, completed database.CompletedGameRecord) error {
@@ -27,6 +31,204 @@ func (s *statisticsRecordingStore) SaveCompletedGame(_ context.Context, complete
 	}
 	s.games = append(s.games, completed)
 	return nil
+}
+
+func (s *statisticsRecordingStore) SaveGameCheckpoint(_ context.Context, checkpoint database.GameCheckpointRecord) error {
+	if s.gameErr != nil {
+		return s.gameErr
+	}
+	s.checkpoints = append(s.checkpoints, checkpoint)
+	return nil
+}
+
+func (s *statisticsRecordingStore) SaveUnrankedGame(_ context.Context, checkpoint database.GameCheckpointRecord, status string, _ time.Time) error {
+	if s.gameErr != nil {
+		return s.gameErr
+	}
+	s.unranked = append(s.unranked, checkpoint)
+	s.unrankedStatuses = append(s.unrankedStatuses, status)
+	return nil
+}
+
+func TestStatisticsCheckpointLifecycle(t *testing.T) {
+	store := &statisticsRecordingStore{}
+	lobby := newLobbyServerWithStore(store)
+	events := make([]connectedEvent, 3)
+	for i := range events {
+		event, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: fmt.Sprintf("user-%d", i), Name: fmt.Sprintf("Player %d", i+1)}, nil)
+		if err != nil {
+			t.Fatalf("connectWithUser(%d) error = %v", i, err)
+		}
+		events[i] = event
+	}
+	roomState, _, err := lobby.createRoom(events[0].SessionID, "ignored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i < len(events); i++ {
+		if _, _, err := lobby.joinRoom(events[i].SessionID, roomState.Code, "ignored"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := lobby.startGame(events[0].SessionID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cutSize := 0
+	if _, _, err := lobby.chooseDealing(events[2].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cutSize}); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.checkpoints) != 1 || store.checkpoints[0].RoundsPlayed != 1 {
+		t.Fatalf("initial checkpoints = %+v", store.checkpoints)
+	}
+
+	room := lobby.rooms[roomState.Code]
+	snapshot := room.gameState.PersistenceSnapshot()
+	currentIndex := snapshot.Turn.PlayerIndex
+	currentPlayerID := snapshot.Players[currentIndex].ID
+	snapshot.Turn.HasDrawn = true
+	snapshot.Players[currentIndex].Hand = []game.CardSnapshot{{Rank: game.Two, Suit: game.Clubs}}
+	restored, err := game.RestoreGameState(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room.gameState = restored
+	currentSessionID := ""
+	for _, event := range events {
+		if event.PlayerID == currentPlayerID {
+			currentSessionID = event.SessionID
+			break
+		}
+	}
+	if _, _, _, err := lobby.discard(currentSessionID, 0); err != nil {
+		t.Fatalf("discard() error = %v", err)
+	}
+	if len(store.checkpoints) != 2 || store.checkpoints[1].Players[currentIndex].RoundsWon != 1 {
+		t.Fatalf("round checkpoint = %+v", store.checkpoints)
+	}
+
+	forfeitIndex := 0
+	if events[forfeitIndex].PlayerID == currentPlayerID {
+		forfeitIndex = 1
+	}
+	if _, _, _, _, err := lobby.forfeitGame(events[forfeitIndex].SessionID); err != nil {
+		t.Fatalf("forfeitGame() error = %v", err)
+	}
+	if len(store.checkpoints) != 3 {
+		t.Fatalf("checkpoint count after forfeit = %d; want 3", len(store.checkpoints))
+	}
+	foundForfeit := false
+	for _, player := range store.checkpoints[2].Players {
+		foundForfeit = foundForfeit || player.Forfeited
+	}
+	if !foundForfeit {
+		t.Fatal("forfeit was not retained in immediate checkpoint")
+	}
+
+	active := make([]connectedEvent, 0, 2)
+	for i, event := range events {
+		if i != forfeitIndex {
+			active = append(active, event)
+		}
+	}
+	proposal, _, _, err := lobby.reportIssue(active[0].SessionID, "technical problem", true)
+	if err != nil {
+		t.Fatalf("reportIssue() error = %v", err)
+	}
+	if _, _, _, err := lobby.voteEndGame(active[1].SessionID, proposal.EndProposal.ID, true); err != nil {
+		t.Fatalf("voteEndGame() error = %v", err)
+	}
+	if len(store.unranked) != 1 || store.unrankedStatuses[0] != "technical_abort" || len(store.games) != 0 {
+		t.Fatalf("unranked saves = %+v statuses=%v ranked=%+v", store.unranked, store.unrankedStatuses, store.games)
+	}
+	foundForfeit = false
+	for _, player := range store.unranked[0].Players {
+		foundForfeit = foundForfeit || player.Forfeited
+	}
+	if !foundForfeit {
+		t.Fatal("technical abort lost the earlier forfeit checkpoint")
+	}
+}
+
+func TestMutualEndRetainsUnrankedCheckpoint(t *testing.T) {
+	store := &statisticsRecordingStore{}
+	lobby := newLobbyServerWithStore(store)
+	host, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "host-user", Name: "Host"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "guest-user", Name: "Guest"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _, err := lobby.createRoom(host.SessionID, "ignored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.joinRoom(guest.SessionID, state.Code, "ignored"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.startGame(host.SessionID, 0); err != nil {
+		t.Fatal(err)
+	}
+	cut := 0
+	if _, _, err := lobby.chooseDealing(guest.SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut}); err != nil {
+		t.Fatal(err)
+	}
+	proposal, _, _, err := lobby.requestEndGame(host.SessionID, "mutual_end")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := lobby.voteEndGame(guest.SessionID, proposal.EndProposal.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.unranked) != 1 || store.unrankedStatuses[0] != "mutual_end" || len(store.unranked[0].Players) != 2 || len(store.games) != 0 {
+		t.Fatalf("mutual-end persistence = checkpoints:%+v statuses:%v ranked:%+v", store.unranked, store.unrankedStatuses, store.games)
+	}
+}
+
+func TestInitialSpecialWinCreatesCheckpoint(t *testing.T) {
+	store := &statisticsRecordingStore{}
+	lobby := newLobbyServerWithStore(store)
+	host, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "special-host", Name: "Host"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, _, _, err := lobby.connectWithUser("", authenticatedUser{ID: "special-guest", Name: "Guest"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state, _, err := lobby.createRoom(host.SessionID, "ignored")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.joinRoom(guest.SessionID, state.Code, "ignored"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.startGame(host.SessionID, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	cards := make([]game.Card, 0, game.InitialHandSize*2+1)
+	for rank := game.Ace; rank <= game.Queen; rank++ {
+		cards = append(cards, game.NewCard(rank, game.Hearts), game.NewCard(rank, game.Diamonds))
+	}
+	cards = append(cards, game.NewCard(game.King, game.Spades))
+	prepared := game.NewGameStateWithDeck(cards)
+	room := lobby.rooms[state.Code]
+	for _, player := range room.players {
+		if err := prepared.AddPlayer(newPlayerWithID(player.player.ID)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	room.gameState = prepared
+	cut := 0
+	result, _, err := lobby.chooseDealing(guest.SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Phase != "round_over" || len(store.checkpoints) != 1 {
+		t.Fatalf("special opening result = phase:%q checkpoints:%+v", result.Phase, store.checkpoints)
+	}
 }
 
 func TestRemainingSmallServerBranches(t *testing.T) {
@@ -130,7 +332,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 	lobby.rooms["nil"] = nil
 	lobby.rooms["lobby"] = &room{gameState: game.NewGameState(), statisticsGameID: "pending"}
 	lobby.rooms["no-id"] = &room{gameState: completedRoom.gameState}
-	lobby.saveCompletedStatisticsLocked(context.Background())
+	lobby.saveStatisticsLocked(context.Background())
 	if len(store.games) != 1 {
 		t.Fatalf("retry saved %d games; want 1", len(store.games))
 	}
@@ -148,7 +350,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 		noUsers.players = append(noUsers.players, &roomPlayer{player: newPlayerWithID(result.PlayerID), sessionID: "missing"})
 	}
 	lobby.rooms["no-users"] = noUsers
-	lobby.saveCompletedStatisticsLocked(context.Background())
+	lobby.saveStatisticsLocked(context.Background())
 	if !lobby.rooms["abort"].statisticsSaved || !noUsers.statisticsSaved {
 		t.Fatal("unranked/no-user rooms were not finalized")
 	}
@@ -157,7 +359,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 	partial.players = []*roomPlayer{{player: newPlayerWithID(firstResult.PlayerID), sessionID: "partial-session"}}
 	lobby.sessions["partial-session"] = &playerSession{sessionID: "partial-session", authenticated: true, authUserID: "partial-user"}
 	lobby.rooms["partial"] = partial
-	lobby.saveCompletedStatisticsLocked(context.Background())
+	lobby.saveStatisticsLocked(context.Background())
 	if !partial.statisticsSaved {
 		t.Fatal("partial authenticated result was not saved")
 	}
@@ -171,7 +373,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 		lobby.sessions[sid] = &playerSession{sessionID: sid, authenticated: true, authUserID: "user-" + result.PlayerID}
 	}
 	lobby.rooms["failure"] = failing
-	lobby.saveCompletedStatisticsLocked(context.Background())
+	lobby.saveStatisticsLocked(context.Background())
 	if failing.statisticsSaved {
 		t.Fatal("failed statistics save was marked complete")
 	}

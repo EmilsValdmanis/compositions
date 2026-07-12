@@ -11,15 +11,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type GameCheckpointRecord struct {
+	ID, RoomCode              string
+	RoundsPlayed, PlayerCount int
+	StartedAt                 time.Time
+	Players                   []CompletedGamePlayerRecord
+}
+
 type CompletedGameRecord struct {
-	ID             string
-	RoomCode       string
-	CompletionKind string
-	RoundsPlayed   int
-	PlayerCount    int
-	StartedAt      time.Time
-	CompletedAt    time.Time
-	Players        []CompletedGamePlayerRecord
+	ID, RoomCode              string
+	CompletionKind            string
+	RoundsPlayed, PlayerCount int
+	StartedAt, CompletedAt    time.Time
+	Players                   []CompletedGamePlayerRecord
 }
 
 type CompletedGamePlayerRecord struct {
@@ -38,58 +42,163 @@ type CompletedGamePlayerRecord struct {
 	StartingRoundWinStreak, EndingRoundWinStreak, LongestRoundWinStreak                int
 }
 
-// SaveCompletedGame stores the per-game source rows and updates lifetime totals
-// in one transaction. The games primary key makes retries safe after restarts.
-func (s *UserStore) SaveCompletedGame(ctx context.Context, game CompletedGameRecord) error {
+// SaveGameCheckpoint replaces the cumulative per-game counters without
+// touching lifetime competitive statistics.
+func (s *UserStore) SaveGameCheckpoint(ctx context.Context, checkpoint GameCheckpointRecord) error {
 	if s == nil || s.pool == nil {
 		return errors.New("user store is not configured")
 	}
-	if strings.TrimSpace(game.ID) == "" || strings.TrimSpace(game.RoomCode) == "" {
-		return errors.New("game id and room code are required")
-	}
-	if game.CompletionKind != "normal" && game.CompletionKind != "forfeit" {
-		return errors.New("invalid game completion kind")
-	}
-	if game.RoundsPlayed <= 0 || game.PlayerCount < 2 || len(game.Players) == 0 {
-		return errors.New("completed game statistics are incomplete")
-	}
-
-	var gameID pgtype.UUID
-	if err := gameID.Scan(game.ID); err != nil {
-		return fmt.Errorf("invalid game id: %w", err)
+	gameID, err := validateCheckpoint(checkpoint)
+	if err != nil {
+		return err
 	}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	active, err := saveCheckpointHeader(ctx, tx, gameID, checkpoint)
+	if err != nil {
+		return err
+	}
+	if active {
+		for _, player := range checkpoint.Players {
+			if err := saveGamePlayer(ctx, tx, gameID, player, false); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit(ctx)
+}
 
-	tag, err := tx.Exec(ctx, `
-		INSERT INTO games (id, room_code, completion_kind, rounds_played, player_count, started_at, completed_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (id) DO NOTHING
-	`, gameID, strings.TrimSpace(game.RoomCode), game.CompletionKind, game.RoundsPlayed, game.PlayerCount, game.StartedAt, game.CompletedAt)
+// SaveUnrankedGame preserves the latest checkpoint but deliberately does not
+// update lifetime totals, placements, wins, losses, or streaks.
+func (s *UserStore) SaveUnrankedGame(ctx context.Context, checkpoint GameCheckpointRecord, status string, completedAt time.Time) error {
+	if s == nil || s.pool == nil {
+		return errors.New("user store is not configured")
+	}
+	if status != "mutual_end" && status != "technical_abort" && status != "abandoned" {
+		return errors.New("invalid unranked game status")
+	}
+	gameID, err := validateCheckpoint(checkpoint)
+	if err != nil {
+		return err
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	active, err := saveCheckpointHeader(ctx, tx, gameID, checkpoint)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return tx.Commit(ctx)
+	}
+	for _, player := range checkpoint.Players {
+		if err := saveGamePlayer(ctx, tx, gameID, player, false); err != nil {
+			return err
+		}
+	}
+	_, err = tx.Exec(ctx, `UPDATE games SET status = $2, completed_at = $3, updated_at = NOW() WHERE id = $1 AND status = 'in_progress'`, gameID, status, completedAt)
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// SaveCompletedGame finalizes checkpoint rows and updates lifetime totals in
+// one transaction. Transitioning from in_progress makes retries idempotent.
+func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGameRecord) error {
+	if s == nil || s.pool == nil {
+		return errors.New("user store is not configured")
+	}
+	status := completed.CompletionKind
+	if status == "normal" {
+		status = "completed"
+	}
+	if status != "completed" && status != "forfeit" {
+		return errors.New("invalid game completion kind")
+	}
+	checkpoint := GameCheckpointRecord{
+		ID: completed.ID, RoomCode: completed.RoomCode, RoundsPlayed: completed.RoundsPlayed,
+		PlayerCount: completed.PlayerCount, StartedAt: completed.StartedAt, Players: completed.Players,
+	}
+	gameID, err := validateCheckpoint(checkpoint)
+	if err != nil {
+		return fmt.Errorf("completed game statistics are incomplete: %w", err)
+	}
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	active, err := saveCheckpointHeader(ctx, tx, gameID, checkpoint)
+	if err != nil {
+		return err
+	}
+	if !active {
+		return tx.Commit(ctx)
+	}
+	tag, err := tx.Exec(ctx, `UPDATE games SET status = $2, completed_at = $3, updated_at = NOW() WHERE id = $1 AND status = 'in_progress'`, gameID, status, completed.CompletedAt)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return tx.Commit(ctx)
 	}
-
-	for _, player := range game.Players {
-		if err := saveCompletedGamePlayer(ctx, tx, gameID, player); err != nil {
+	for _, player := range completed.Players {
+		if err := saveGamePlayer(ctx, tx, gameID, player, true); err != nil {
+			return err
+		}
+		if err := addLifetimeStatistics(ctx, tx, player); err != nil {
 			return err
 		}
 	}
 	return tx.Commit(ctx)
 }
 
-func saveCompletedGamePlayer(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, p CompletedGamePlayerRecord) error {
+func validateCheckpoint(checkpoint GameCheckpointRecord) (pgtype.UUID, error) {
+	if strings.TrimSpace(checkpoint.ID) == "" || strings.TrimSpace(checkpoint.RoomCode) == "" {
+		return pgtype.UUID{}, errors.New("game id and room code are required")
+	}
+	if checkpoint.RoundsPlayed <= 0 || checkpoint.PlayerCount < 2 || len(checkpoint.Players) == 0 {
+		return pgtype.UUID{}, errors.New("game checkpoint statistics are incomplete")
+	}
+	var gameID pgtype.UUID
+	if err := gameID.Scan(checkpoint.ID); err != nil {
+		return pgtype.UUID{}, fmt.Errorf("invalid game id: %w", err)
+	}
+	return gameID, nil
+}
+
+func saveCheckpointHeader(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, checkpoint GameCheckpointRecord) (bool, error) {
+	tag, err := tx.Exec(ctx, `
+		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at)
+		VALUES ($1, $2, 'in_progress', $3, $4, $5)
+		ON CONFLICT (id) DO UPDATE SET
+			room_code = EXCLUDED.room_code,
+			rounds_played = EXCLUDED.rounds_played,
+			player_count = EXCLUDED.player_count,
+			updated_at = NOW()
+		WHERE games.status = 'in_progress'
+	`, gameID, strings.TrimSpace(checkpoint.RoomCode), checkpoint.RoundsPlayed, checkpoint.PlayerCount, checkpoint.StartedAt)
+	return tag.RowsAffected() > 0, err
+}
+
+func saveGamePlayer(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, p CompletedGamePlayerRecord, finalized bool) error {
 	var userID pgtype.UUID
 	if err := userID.Scan(p.UserID); err != nil {
 		return fmt.Errorf("invalid statistics user id: %w", err)
 	}
-	values := []any{gameID, userID, p.Placement, p.Won, p.Forfeited, p.TotalPoints,
+	var placement any
+	var won any
+	if finalized {
+		placement = p.Placement
+		won = p.Won
+	}
+	values := []any{gameID, userID, placement, won, p.Forfeited, p.TotalPoints,
 		p.RoundsPlayed, p.RoundsWon, p.SameSuitWins, p.SixPairsWins, p.TurnsTaken,
 		p.CardsDrawnFromDeck, p.CardsDrawnFromDiscard, p.CardsDiscarded, p.CardsPlayed,
 		p.CompositionsCreated, p.SetsCreated, p.RunsCreated, p.AdditionsDone,
@@ -107,12 +216,38 @@ func saveCompletedGamePlayer(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID,
 			largest_round_points_inflicted, most_cards_remaining, rounds_opened, fastest_opening_turn,
 			starting_round_win_streak, ending_round_win_streak, longest_round_win_streak
 		) VALUES (`+placeholders(len(values))+`)
+		ON CONFLICT (game_id, user_id) DO UPDATE SET
+			placement = COALESCE(EXCLUDED.placement, game_player_statistics.placement),
+			won = COALESCE(EXCLUDED.won, game_player_statistics.won),
+			forfeited = EXCLUDED.forfeited, total_points = EXCLUDED.total_points,
+			rounds_played = EXCLUDED.rounds_played, rounds_won = EXCLUDED.rounds_won,
+			same_suit_wins = EXCLUDED.same_suit_wins, six_pairs_wins = EXCLUDED.six_pairs_wins,
+			turns_taken = EXCLUDED.turns_taken, cards_drawn_from_deck = EXCLUDED.cards_drawn_from_deck,
+			cards_drawn_from_discard = EXCLUDED.cards_drawn_from_discard, cards_discarded = EXCLUDED.cards_discarded,
+			cards_played = EXCLUDED.cards_played, compositions_created = EXCLUDED.compositions_created,
+			sets_created = EXCLUDED.sets_created, runs_created = EXCLUDED.runs_created,
+			additions_done = EXCLUDED.additions_done, compositions_completed = EXCLUDED.compositions_completed,
+			sets_completed = EXCLUDED.sets_completed, runs_completed = EXCLUDED.runs_completed,
+			jokers_played = EXCLUDED.jokers_played, jokers_reclaimed = EXCLUDED.jokers_reclaimed,
+			cards_remaining = EXCLUDED.cards_remaining, hand_points = EXCLUDED.hand_points,
+			penalty_points = EXCLUDED.penalty_points, points_inflicted = EXCLUDED.points_inflicted,
+			largest_round_penalty = EXCLUDED.largest_round_penalty,
+			largest_round_points_inflicted = EXCLUDED.largest_round_points_inflicted,
+			most_cards_remaining = EXCLUDED.most_cards_remaining, rounds_opened = EXCLUDED.rounds_opened,
+			fastest_opening_turn = EXCLUDED.fastest_opening_turn,
+			starting_round_win_streak = EXCLUDED.starting_round_win_streak,
+			ending_round_win_streak = EXCLUDED.ending_round_win_streak,
+			longest_round_win_streak = EXCLUDED.longest_round_win_streak
 	`, values...)
-	if err != nil {
-		return err
-	}
+	return err
+}
 
-	_, err = tx.Exec(ctx, `
+func addLifetimeStatistics(ctx context.Context, tx pgx.Tx, p CompletedGamePlayerRecord) error {
+	var userID pgtype.UUID
+	if err := userID.Scan(p.UserID); err != nil {
+		return fmt.Errorf("invalid statistics user id: %w", err)
+	}
+	_, err := tx.Exec(ctx, `
 		INSERT INTO player_statistics (
 			user_id, games_played, games_won, total_placement, rounds_played, rounds_won, same_suit_wins,
 			six_pairs_wins, forfeits, turns_taken, cards_drawn_from_deck, cards_drawn_from_discard,

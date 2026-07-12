@@ -66,18 +66,19 @@ CREATE INDEX game_bug_reports_room_code_idx ON game_bug_reports (room_code, crea
 CREATE TABLE games (
     id UUID PRIMARY KEY,
     room_code TEXT NOT NULL,
-    completion_kind TEXT NOT NULL,
+    status TEXT NOT NULL,
     rounds_played INTEGER NOT NULL,
     player_count INTEGER NOT NULL,
     started_at TIMESTAMPTZ NOT NULL,
-    completed_at TIMESTAMPTZ NOT NULL
+    completed_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE game_player_statistics (
     game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    placement INTEGER NOT NULL,
-    won BOOLEAN NOT NULL,
+    placement INTEGER,
+    won BOOLEAN,
     forfeited BOOLEAN NOT NULL,
     total_points INTEGER NOT NULL,
     rounds_played INTEGER NOT NULL,

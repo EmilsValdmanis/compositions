@@ -72,6 +72,25 @@ type CompletedPlayerStatistics struct {
 	Statistics  PlayerGameStatistics
 }
 
+// PlayerStatistics returns the current cumulative counters without requiring
+// the game to have ended. It is used for compact, restart-safe checkpoints.
+func (gs *GameState) PlayerStatistics() []CompletedPlayerStatistics {
+	if gs == nil {
+		return nil
+	}
+	result := make([]CompletedPlayerStatistics, 0, len(gs.players))
+	for _, player := range gs.players {
+		if player == nil {
+			continue
+		}
+		result = append(result, CompletedPlayerStatistics{
+			PlayerID: player.ID, Forfeited: player.forfeited,
+			TotalPoints: player.totalPoints, Statistics: player.statistics,
+		})
+	}
+	return result
+}
+
 func (gs *GameState) CompletedPlayerStatistics() []CompletedPlayerStatistics {
 	if gs == nil || gs.phase != PhaseGameOver || gs.roundWinnerIndex < 0 {
 		return nil
