@@ -171,6 +171,7 @@ func (gs *GameState) DrawFromDeck() error {
 	if !cp.hand.Draw(gs.drawPile) {
 		return ErrNotEnoughCardsInDrawPile
 	}
+	cp.statistics.CardsDrawnFromDeck++
 	gs.turn.hasDrawn = true
 	gs.resetDiscardDrawState()
 	return nil
@@ -196,6 +197,7 @@ func (gs *GameState) DrawFromDiscard() error {
 	discardCard := gs.discardPile.cards[0]
 	gs.discardPile.cards = gs.discardPile.cards[1:]
 	cp.hand.cards = append(cp.hand.cards, discardCard)
+	cp.statistics.CardsDrawnFromDiscard++
 
 	gs.turn.hasDrawn = true
 	gs.turn.mustUseDiscardDraw = true
@@ -242,9 +244,35 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 		return ErrMustUseDrawnDiscardCard
 	}
 
+	wasOpened := cp.hasOpened
 	cp.hand.cards = nextState.handCards
 	gs.activeCompositions = nextState.activeCompositions
 	cp.hasOpened = nextState.hasOpened
+	cp.statistics.CompositionsCreated += len(comps)
+	cp.statistics.AdditionsDone += len(additions)
+	cp.statistics.JokersReclaimed += len(reclaims)
+	for _, comp := range comps {
+		cp.statistics.CardsPlayed += len(comp.cards)
+		cp.statistics.JokersPlayed += countJokers(comp.cards)
+		switch comp.variant {
+		case set:
+			cp.statistics.SetsCreated++
+		case run:
+			cp.statistics.RunsCreated++
+		}
+	}
+	for _, addition := range additions {
+		cp.statistics.CardsPlayed += len(addition.Cards)
+		cp.statistics.JokersPlayed += countJokers(addition.Cards)
+	}
+	// Each reclaim replaces the table joker with a card from the player's hand.
+	cp.statistics.CardsPlayed += len(reclaims)
+	if !wasOpened && cp.hasOpened {
+		cp.statistics.RoundsOpened++
+		if cp.statistics.FastestOpeningTurn == 0 || gs.turn.number < cp.statistics.FastestOpeningTurn {
+			cp.statistics.FastestOpeningTurn = gs.turn.number
+		}
+	}
 	if gs.turn.mustUseDiscardDraw && usesDiscardDraw {
 		gs.turn.mustUseDiscardDraw = false
 	}
@@ -294,6 +322,8 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 
 	gs.removeCompletedCompositionsToDiscard()
 	gs.discardPile.AddToTop(card)
+	cp.statistics.TurnsTaken++
+	cp.statistics.CardsDiscarded++
 	if len(cp.hand.cards) == 0 {
 		gs.finishRound(gs.turn.playerIndex)
 		return nil
@@ -324,7 +354,11 @@ func (gs *GameState) finishRound(winnerIndex int) {
 	gs.turn.hasDrawn = false
 	gs.resetDiscardDrawState()
 
+	pointsInflicted := 0
 	for i, player := range gs.players {
+		if player != nil && player.statistics.RoundsPlayed >= gs.round {
+			player.statistics.recordRoundResult(gs.round, i == winnerIndex)
+		}
 		if i == winnerIndex || player == nil || player.forfeited {
 			if player != nil {
 				player.pointsGained = 0
@@ -334,6 +368,24 @@ func (gs *GameState) finishRound(winnerIndex int) {
 		roundPoints := player.hand.Points()
 		player.pointsGained = roundPoints
 		player.totalPoints += roundPoints
+		player.statistics.PenaltyPoints += roundPoints
+		player.statistics.LargestRoundPenalty = max(player.statistics.LargestRoundPenalty, roundPoints)
+		pointsInflicted += roundPoints
+	}
+
+	for _, player := range gs.players {
+		if player == nil || player.statistics.RoundsPlayed < gs.round {
+			continue
+		}
+		player.statistics.recordRoundHand(gs.round, len(player.hand.cards), player.hand.Points())
+	}
+	winner := gs.players[winnerIndex]
+	winner.statistics.PointsInflicted += pointsInflicted
+	winner.statistics.LargestRoundPointsInflicted = max(winner.statistics.LargestRoundPointsInflicted, pointsInflicted)
+	if hasSameSuitCollection(winner.hand.cards) {
+		winner.statistics.SameSuitWins++
+	} else if hasSixIdenticalPairs(winner.hand.cards) {
+		winner.statistics.SixPairsWins++
 	}
 
 	if gs.allOtherPlayersOverHundred(winnerIndex) {
@@ -436,6 +488,10 @@ func hasSixIdenticalPairs(cards []Card) bool {
 
 func (gs *GameState) removeCompletedCompositionsToDiscard() {
 	remaining := make([]*Composition, 0, len(gs.activeCompositions))
+	var current *Player
+	if isValidPlayerIndex(gs.turn.playerIndex, len(gs.players)) {
+		current = gs.players[gs.turn.playerIndex]
+	}
 	for _, comp := range gs.activeCompositions {
 		if comp == nil || !comp.isComplete() {
 			remaining = append(remaining, comp)
@@ -444,6 +500,15 @@ func (gs *GameState) removeCompletedCompositionsToDiscard() {
 
 		for i := len(comp.cards) - 1; i >= 0; i-- {
 			gs.discardPile.AddToTop(comp.cards[i])
+		}
+		if current != nil {
+			current.statistics.CompositionsCompleted++
+			switch comp.variant {
+			case set:
+				current.statistics.SetsCompleted++
+			case run:
+				current.statistics.RunsCompleted++
+			}
 		}
 	}
 
@@ -499,6 +564,9 @@ func (gs *GameState) startRound(dealerIndex, chooserIndex int, dt DealTypes, ord
 	gs.dealerIndex = dealerIndex
 	if err := gs.dealInitialHands(dt, order, cutSize); err != nil {
 		return err
+	}
+	for _, index := range activeIndexes {
+		gs.players[index].statistics.RoundsPlayed++
 	}
 	card, _ := gs.drawPile.DrawOne()
 	gs.discardPile.AddToTop(card)
@@ -615,6 +683,16 @@ func (gs *GameState) ForfeitPlayer(playerID string) (string, error) {
 	if player.forfeited {
 		return "", ErrPlayerAlreadyForfeited
 	}
+	nextForfeitOrder := 1
+	for _, candidate := range gs.players {
+		if candidate != nil && candidate != player && candidate.statistics.ForfeitOrder >= nextForfeitOrder {
+			nextForfeitOrder = candidate.statistics.ForfeitOrder + 1
+		}
+	}
+	player.statistics.ForfeitOrder = nextForfeitOrder
+	if player.statistics.RoundsPlayed >= gs.round && player.hand != nil {
+		player.statistics.recordRoundHand(gs.round, len(player.hand.cards), player.hand.Points())
+	}
 
 	if player.hand != nil && len(player.hand.cards) > 0 {
 		gs.drawPile.cards = append(gs.drawPile.cards, player.hand.cards...)
@@ -627,6 +705,11 @@ func (gs *GameState) ForfeitPlayer(playerID string) (string, error) {
 	activeIndexes := gs.activePlayerIndexes()
 	if len(activeIndexes) == 1 {
 		winnerIndex := activeIndexes[0]
+		for i, candidate := range gs.players {
+			if candidate != nil && candidate.statistics.RoundsPlayed >= gs.round {
+				candidate.statistics.recordRoundResult(gs.round, i == winnerIndex)
+			}
+		}
 		gs.roundWinnerIndex = winnerIndex
 		gs.phase = PhaseGameOver
 		gs.turn.hasDrawn = false

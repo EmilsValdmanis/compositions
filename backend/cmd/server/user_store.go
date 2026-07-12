@@ -42,6 +42,10 @@ type userStore interface {
 	Close() error
 }
 
+type gameStatisticsStore interface {
+	SaveCompletedGame(ctx context.Context, game database.CompletedGameRecord) error
+}
+
 type noopUserStore struct{}
 
 func (noopUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
@@ -188,4 +192,11 @@ func (s *postgresUserStore) CreateGameBugReport(ctx context.Context, report data
 		return database.GameBugReportRecord{}, errors.New("user store is not configured")
 	}
 	return createStoredGameBugReport(ctx, s.store, report)
+}
+
+func (s *postgresUserStore) SaveCompletedGame(ctx context.Context, game database.CompletedGameRecord) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.SaveCompletedGame(ctx, game)
 }

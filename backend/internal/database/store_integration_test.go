@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -251,6 +252,74 @@ func TestUserStoreLobbyState(t *testing.T) {
 	}
 	if loadedUpdated.Version != 1 || len(loadedUpdated.Rooms) != 0 {
 		t.Fatalf("loaded updated state = %#v; want empty room list", loadedUpdated)
+	}
+}
+
+func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+	if err := RunMigrations(ctx, databaseURL, MigrationUp); err != nil {
+		t.Fatalf("RunMigrations(up) error = %v", err)
+	}
+	store, err := NewUserStore(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("NewUserStore() error = %v", err)
+	}
+	defer store.Close()
+	user, err := store.UpsertUser(ctx, UserRecord{ID: uuid.NewString(), Name: "Stats Player"})
+	if err != nil {
+		t.Fatalf("UpsertUser() error = %v", err)
+	}
+
+	started := time.Now().UTC().Add(-time.Hour)
+	first := CompletedGameRecord{
+		ID: uuid.NewString(), RoomCode: "ABC123", CompletionKind: "normal", RoundsPlayed: 2,
+		PlayerCount: 2, StartedAt: started, CompletedAt: started.Add(30 * time.Minute),
+		Players: []CompletedGamePlayerRecord{{
+			UserID: user.ID, Placement: 1, Won: true, RoundsPlayed: 2, RoundsWon: 2,
+			TurnsTaken: 8, CardsPlayed: 20, PointsInflicted: 80, FastestOpeningTurn: 2,
+			StartingRoundWinStreak: 2, EndingRoundWinStreak: 2, LongestRoundWinStreak: 2,
+		}},
+	}
+	if err := store.SaveCompletedGame(ctx, first); err != nil {
+		t.Fatalf("SaveCompletedGame(first) error = %v", err)
+	}
+	if err := store.SaveCompletedGame(ctx, first); err != nil {
+		t.Fatalf("SaveCompletedGame(retry) error = %v", err)
+	}
+
+	second := CompletedGameRecord{
+		ID: uuid.NewString(), RoomCode: "XYZ789", CompletionKind: "normal", RoundsPlayed: 3,
+		PlayerCount: 2, StartedAt: started.Add(time.Hour), CompletedAt: started.Add(2 * time.Hour),
+		Players: []CompletedGamePlayerRecord{{
+			UserID: user.ID, Placement: 2, RoundsPlayed: 3, RoundsWon: 1, Forfeited: true,
+			TurnsTaken: 5, CardsPlayed: 10, FastestOpeningTurn: 3,
+			StartingRoundWinStreak: 1, EndingRoundWinStreak: 0, LongestRoundWinStreak: 1,
+		}},
+	}
+	if err := store.SaveCompletedGame(ctx, second); err != nil {
+		t.Fatalf("SaveCompletedGame(second) error = %v", err)
+	}
+
+	var gamesPlayed, gamesWon, totalPlacement, roundsPlayed, roundsWon, forfeits int
+	var turnsTaken, cardsPlayed, pointsInflicted int
+	var fastestOpening, currentGameStreak, longestGameStreak, currentRoundStreak, longestRoundStreak int
+	err = store.pool.QueryRow(ctx, `
+		SELECT games_played, games_won, total_placement, rounds_played, rounds_won, forfeits,
+		       turns_taken, cards_played, points_inflicted, fastest_opening_turn,
+		       current_game_win_streak, longest_game_win_streak, current_round_win_streak, longest_round_win_streak
+		FROM player_statistics WHERE user_id = $1
+	`, user.ID).Scan(&gamesPlayed, &gamesWon, &totalPlacement, &roundsPlayed, &roundsWon, &forfeits,
+		&turnsTaken, &cardsPlayed, &pointsInflicted, &fastestOpening,
+		&currentGameStreak, &longestGameStreak, &currentRoundStreak, &longestRoundStreak)
+	if err != nil {
+		t.Fatalf("query player_statistics error = %v", err)
+	}
+	got := []int{gamesPlayed, gamesWon, totalPlacement, roundsPlayed, roundsWon, forfeits, turnsTaken,
+		cardsPlayed, pointsInflicted, fastestOpening, currentGameStreak, longestGameStreak, currentRoundStreak, longestRoundStreak}
+	want := []int{2, 1, 3, 5, 3, 1, 13, 30, 80, 2, 0, 1, 0, 3}
+	if !slices.Equal(got, want) {
+		t.Fatalf("lifetime statistics = %v; want %v", got, want)
 	}
 }
 
