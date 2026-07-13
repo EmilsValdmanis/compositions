@@ -60,22 +60,22 @@ export function TurnStartCue({
             ease: [0.23, 1, 0.32, 1],
           }}
         >
-          <div className="relative flex h-[4.5rem] items-stretch bg-foreground text-background shadow-[5px_5px_0_color-mix(in_oklab,var(--primary)_72%,var(--foreground))] [clip-path:polygon(0_0,calc(100%-12px)_0,100%_12px,100%_100%,12px_100%,0_calc(100%-12px))]">
-            <div className="relative flex w-[4.5rem] shrink-0 items-center justify-center border-r border-background/20">
-              <Avatar className="relative size-10 border border-background/35 bg-foreground">
+          <div className="relative flex h-[4.5rem] items-stretch overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-lg ring-1 ring-foreground/5">
+            <div className="relative flex w-[4.5rem] shrink-0 items-center justify-center border-r border-border/70 bg-muted/30">
+              <Avatar className="relative size-10 border border-border bg-card">
                 {playerImageUrl ? (
                   <AvatarImage src={playerImageUrl} alt={`${playerName}'s avatar`} />
                 ) : null}
-                <AvatarFallback className="bg-background text-xs font-bold tracking-tight text-foreground">
+                <AvatarFallback className="bg-primary/10 text-xs font-bold tracking-tight text-primary">
                   {getUserInitials(playerName)}
                 </AvatarFallback>
-                <AvatarBadge className="right-0 bottom-0 size-2.5 border border-foreground bg-primary ring-0" />
+                <AvatarBadge className="right-0 bottom-0 size-2.5 border border-card bg-primary ring-0" />
               </Avatar>
             </div>
 
-            <div className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4">
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4">
               <div className="min-w-0">
-                <p className="mb-1 flex items-center gap-2 text-[0.55rem] leading-none font-medium tracking-[0.2em] text-background/55 uppercase">
+                <p className="mb-1 flex items-center gap-2 text-[0.55rem] leading-none font-medium tracking-[0.2em] text-muted-foreground uppercase">
                   <span className="inline-block size-1.5 rotate-45 bg-primary" aria-hidden="true" />
                   Table is yours
                 </p>
@@ -83,7 +83,7 @@ export function TurnStartCue({
                   Your turn
                 </p>
               </div>
-              <p className="shrink-0 text-right text-[0.5rem] leading-[1.45] tracking-[0.16em] text-background/45 uppercase tabular-nums">
+              <p className="shrink-0 text-right text-[0.5rem] leading-[1.45] tracking-[0.16em] text-muted-foreground uppercase tabular-nums">
                 R{String(round).padStart(2, "0")}
                 <br />T{String(turnNumber).padStart(2, "0")}
               </p>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cards01Icon, Crown03Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { Cards01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type CompletedGameSnapshot,
@@ -258,13 +258,13 @@ export function GameResultsView({
                             {isRoundWinner ? (
                               <span
                                 aria-hidden="true"
-                                className="absolute -top-1.5 -right-1.5 z-20 grid size-4 place-items-center rounded-full bg-amber-400 text-amber-950 shadow-sm ring-2 ring-background"
+                                className="absolute -top-3 -right-0.5 z-20 origin-bottom-left rotate-18 text-sm leading-none drop-shadow-sm"
+                                style={{
+                                  fontFamily:
+                                    '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"',
+                                }}
                               >
-                                <HugeiconsIcon
-                                  icon={Crown03Icon}
-                                  className="size-2.5"
-                                  strokeWidth={2.25}
-                                />
+                                👑
                               </span>
                             ) : null}
                           </Avatar>
