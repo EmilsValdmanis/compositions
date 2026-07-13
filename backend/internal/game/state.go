@@ -1030,6 +1030,28 @@ func canInsertCardsIntoComposition(comp *Composition, insertIndex int, cards []C
 	return extended.isValid()
 }
 
+type deferredJokerReclaim struct {
+	reclaim    JokerReclaim
+	jokerIndex int
+}
+
+func isAmbiguousSetReclaim(comp *Composition, reclaim JokerReclaim) bool {
+	if comp == nil || comp.variant != set || reclaim.JokerIndex < 0 || reclaim.JokerIndex >= len(comp.cards) || !comp.cards[reclaim.JokerIndex].isJoker || reclaim.ReplacementCard.isJoker {
+		return false
+	}
+
+	representations, ok := comp.JokerRepresentations(reclaim.JokerIndex)
+	if !ok || len(representations) <= 1 {
+		return false
+	}
+	for _, representation := range representations {
+		if cardsEqual(representation, reclaim.ReplacementCard) {
+			return true
+		}
+	}
+	return false
+}
+
 func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariants []compositionVariant, additions []selectedAddition, reclaims []JokerReclaim, usedMask uint32, hasDiscardPlay bool, scratch searchScratch) bool {
 	if !hasDiscardPlay {
 		return false
@@ -1073,6 +1095,7 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		updatedCount++
 	}
 
+	deferredReclaims := make([]deferredJokerReclaim, 0, len(reclaims))
 	for _, reclaim := range reclaims {
 		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(baseState.activeCompositions) {
 			return false
@@ -1084,6 +1107,10 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		}
 
 		if !target.canReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard) {
+			if isAmbiguousSetReclaim(target, reclaim) {
+				deferredReclaims = append(deferredReclaims, deferredJokerReclaim{reclaim: reclaim, jokerIndex: reclaim.JokerIndex})
+				continue
+			}
 			return false
 		}
 		updated, _ := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
@@ -1109,6 +1136,12 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		if addition.insertIndex != nil {
 			insertIndex = *addition.insertIndex
 		}
+		for index := range deferredReclaims {
+			pending := &deferredReclaims[index]
+			if pending.reclaim.CompositionIndex == addition.compositionIndex && insertIndex <= pending.jokerIndex {
+				pending.jokerIndex += len(cards)
+			}
+		}
 
 		extended, ok := target.WithInsertedCards(insertIndex, cards)
 		if !ok {
@@ -1116,6 +1149,15 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 		}
 		openingPoints += extended.Points() - target.Points()
 		storeComposition(addition.compositionIndex, extended)
+	}
+
+	for _, pending := range deferredReclaims {
+		target := currentComposition(pending.reclaim.CompositionIndex)
+		if target == nil || !target.canReclaimJoker(pending.jokerIndex, pending.reclaim.ReplacementCard) {
+			return false
+		}
+		updated, _ := target.ReclaimJoker(pending.jokerIndex, pending.reclaim.ReplacementCard)
+		storeComposition(pending.reclaim.CompositionIndex, updated)
 	}
 
 	if !baseState.hasOpened && len(compMasks) == 0 {
@@ -1223,6 +1265,7 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 	updatedCompositions := make([]*Composition, len(state.activeCompositions))
 	copy(updatedCompositions, state.activeCompositions)
 
+	deferredReclaims := make([]deferredJokerReclaim, 0, len(reclaims))
 	for _, reclaim := range reclaims {
 		if reclaim.CompositionIndex < 0 || reclaim.CompositionIndex >= len(updatedCompositions) {
 			return tablePlayState{}, ErrInvalidComposition
@@ -1235,6 +1278,10 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 
 		updated, ok := target.ReclaimJoker(reclaim.JokerIndex, reclaim.ReplacementCard)
 		if !ok {
+			if isAmbiguousSetReclaim(target, reclaim) {
+				deferredReclaims = append(deferredReclaims, deferredJokerReclaim{reclaim: reclaim, jokerIndex: reclaim.JokerIndex})
+				continue
+			}
 			return tablePlayState{}, ErrInvalidComposition
 		}
 
@@ -1260,6 +1307,12 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		if addition.InsertIndex != nil {
 			insertIndex = *addition.InsertIndex
 		}
+		for index := range deferredReclaims {
+			pending := &deferredReclaims[index]
+			if pending.reclaim.CompositionIndex == addition.CompositionIndex && insertIndex <= pending.jokerIndex {
+				pending.jokerIndex += len(addition.Cards)
+			}
+		}
 
 		extended, ok := target.WithInsertedCards(insertIndex, addition.Cards)
 		if !ok {
@@ -1272,6 +1325,18 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 		openingCandidates = append(openingCandidates, openingPlayCandidate{
 			cards: addition.Cards,
 		})
+	}
+
+	for _, pending := range deferredReclaims {
+		target := updatedCompositions[pending.reclaim.CompositionIndex]
+		updated, ok := target.ReclaimJoker(pending.jokerIndex, pending.reclaim.ReplacementCard)
+		if !ok {
+			return tablePlayState{}, ErrInvalidComposition
+		}
+
+		reclaimedCards = append(reclaimedCards, target.cards[pending.jokerIndex])
+		playedCards = append(playedCards, pending.reclaim.ReplacementCard)
+		updatedCompositions[pending.reclaim.CompositionIndex] = updated
 	}
 
 	if !state.hasOpened && len(comps) == 0 {

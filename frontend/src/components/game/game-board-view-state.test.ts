@@ -252,6 +252,54 @@ describe("buildTablePlayRequest", () => {
     ]);
   });
 
+  it("adds one ace before reclaiming an ambiguous set joker with the other ace", () => {
+    const entries = buildHandEntries([
+      { rank: 1, suit: 2 },
+      { rank: 1, suit: 3 },
+    ]);
+
+    const request = buildTablePlayRequest(
+      [
+        {
+          type: "set",
+          cards: [{ rank: 1, suit: 0 }, { rank: 1, suit: 1 }, { isJoker: true }],
+          jokerRepresentations: {
+            2: [
+              { rank: 1, suit: 2 },
+              { rank: 1, suit: 3 },
+            ],
+          },
+          points: 30,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "draft-1",
+          tableIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          entries,
+          reclaimTargets: { [entries[1]!.key]: 2 },
+        },
+      ],
+    );
+
+    expect(request.additions).toEqual([
+      {
+        compositionIndex: 0,
+        insertIndex: 3,
+        cards: [{ rank: 1, suit: 2 }],
+      },
+    ]);
+    expect(request.reclaims).toEqual([
+      {
+        compositionIndex: 0,
+        jokerIndex: 2,
+        replacementCard: { rank: 1, suit: 3 },
+      },
+    ]);
+  });
+
   it("allows a staged reclaimed joker to be used in a new composition", () => {
     const entries = buildHandEntries([
       { rank: 10, suit: 2 },

@@ -4124,6 +4124,13 @@ func TestValidateTablePlayBranches(t *testing.T) {
 		t.Fatal("validateTablePlay() = false; want true for combined reclaim and addition")
 	}
 	if !validateTablePlay(tablePlayState{
+		handCards:          []Card{card(Ace, Clubs), card(Ace, Spades), card(Two, Clubs)},
+		activeCompositions: []*Composition{mustSet(t, card(Ace, Hearts), card(Ace, Diamonds), joker())},
+		hasOpened:          true,
+	}, nil, nil, []selectedAddition{{compositionIndex: 0, mask: 0b001}}, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 2, ReplacementCard: card(Ace, Spades)}}, 0b011, true, scratch) {
+		t.Fatal("validateTablePlay() = false; want true when an addition narrows a set before its joker reclaim")
+	}
+	if !validateTablePlay(tablePlayState{
 		handCards:          []Card{card(Six, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts), card(Ace, Clubs)},
 		activeCompositions: []*Composition{mustRun(t, card(Five, Hearts), joker(), card(Seven, Hearts)), mustRun(t, card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))},
 		hasOpened:          true,
@@ -4284,5 +4291,50 @@ func TestApplyTablePlayStateAllowsReclaimedJokerInsertedIntoSameRun(t *testing.T
 	expectJokerRepresentation(t, next.activeCompositions[0], 0, card(Two, Hearts))
 	if !slices.EqualFunc(next.handCards, []Card{card(Nine, Clubs)}, cardsEqual) {
 		t.Fatalf("hand cards = %+v; want Nine of Clubs", next.handCards)
+	}
+}
+
+func TestApplyTablePlayStateAllowsAdditionBeforeAmbiguousSetReclaim(t *testing.T) {
+	base := tablePlayState{
+		handCards: []Card{
+			card(Ace, Clubs),
+			card(Ace, Spades),
+			card(Two, Clubs),
+		},
+		activeCompositions: []*Composition{
+			mustSet(t, card(Ace, Hearts), card(Ace, Diamonds), joker()),
+		},
+		hasOpened: true,
+	}
+
+	next, err := applyTablePlayState(
+		base,
+		nil,
+		[]CompositionAddition{{
+			CompositionIndex: 0,
+			Cards:            []Card{card(Ace, Clubs)},
+		}},
+		[]JokerReclaim{{
+			CompositionIndex: 0,
+			JokerIndex:       2,
+			ReplacementCard:  card(Ace, Spades),
+		}},
+	)
+
+	if err != nil {
+		t.Fatalf("applyTablePlayState() error = %v; want nil", err)
+	}
+	wantComposition := []Card{
+		card(Ace, Hearts),
+		card(Ace, Diamonds),
+		card(Ace, Spades),
+		card(Ace, Clubs),
+	}
+	if !slices.EqualFunc(next.activeCompositions[0].cards, wantComposition, cardsEqual) {
+		t.Fatalf("active composition cards = %+v; want %+v", next.activeCompositions[0].cards, wantComposition)
+	}
+	wantHand := []Card{card(Two, Clubs), joker()}
+	if !slices.EqualFunc(next.handCards, wantHand, cardsEqual) {
+		t.Fatalf("hand cards = %+v; want %+v", next.handCards, wantHand)
 	}
 }

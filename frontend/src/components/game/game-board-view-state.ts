@@ -715,6 +715,34 @@ function buildExplicitReclaims(
   };
 }
 
+function planTableJokerReclaims(
+  composition: CompositionSnapshot,
+  stagedEntries: HandEntry[],
+  insertIndex: number,
+  reclaimTargets?: Record<string, number>,
+) {
+  const explicit = buildExplicitReclaims(composition, stagedEntries, reclaimTargets);
+  if (explicit.reclaims.length > 0 || composition.type !== "set") {
+    return explicit;
+  }
+
+  const targetedEntryKeys = new Set(Object.keys(reclaimTargets ?? {}));
+  const entriesInPlayOrder = [
+    ...stagedEntries.filter((entry) => !targetedEntryKeys.has(entry.key)),
+    ...stagedEntries.filter((entry) => targetedEntryKeys.has(entry.key)),
+  ];
+  const inferred = inferPlannedJokerReclaimsForInsertIndex(
+    composition,
+    entriesInPlayOrder,
+    insertIndex,
+  );
+
+  return {
+    reclaims: inferred.reclaims,
+    reclaimedEntryKeys: new Set(inferred.reclaims.map((reclaim) => reclaim.replacementEntry.key)),
+  };
+}
+
 function orderAdditionEntries(
   stagedEntries: HandEntry[],
   defaultInsertIndex: number,
@@ -757,13 +785,18 @@ export function buildTablePlayRequest(
     const cardInsertIndices = composition.cardInsertIndices;
     const reclaimTargets = composition.reclaimTargets;
     const defaultInsertIndex = composition.insertIndex ?? activeComposition?.cards.length ?? 0;
-    const explicitReclaims = activeComposition
-      ? buildExplicitReclaims(activeComposition, composition.entries, reclaimTargets)
+    const plannedReclaims = activeComposition
+      ? planTableJokerReclaims(
+          activeComposition,
+          composition.entries,
+          defaultInsertIndex,
+          reclaimTargets,
+        )
       : { reclaims: [], reclaimedEntryKeys: new Set<string>() };
 
     const entriesByInsertIndex = new Map<number, HandEntry[]>();
     for (const entry of composition.entries) {
-      if (explicitReclaims.reclaimedEntryKeys.has(entry.key)) {
+      if (plannedReclaims.reclaimedEntryKeys.has(entry.key)) {
         continue;
       }
 
@@ -788,7 +821,7 @@ export function buildTablePlayRequest(
       }
     }
 
-    for (const reclaim of explicitReclaims.reclaims) {
+    for (const reclaim of plannedReclaims.reclaims) {
       reclaims.push({
         compositionIndex: composition.tableIndex,
         jokerIndex: reclaim.jokerIndex,
@@ -849,20 +882,21 @@ export function buildTableCompositionViews(
       const insertIndex = composition.insertIndex ?? existing.snapshot.cards.length;
       existing.insertIndex = insertIndex;
       existing.cardInsertIndices = composition.cardInsertIndices;
-      const explicitReclaims = buildExplicitReclaims(
+      const plannedReclaims = planTableJokerReclaims(
         existing.snapshot,
         existing.stagedEntries,
+        insertIndex,
         composition.reclaimTargets,
       );
       const additionEntries = existing.stagedEntries.filter(
-        (entry) => !explicitReclaims.reclaimedEntryKeys.has(entry.key),
+        (entry) => !plannedReclaims.reclaimedEntryKeys.has(entry.key),
       );
 
       existing.stagedEntries = [
         ...orderAdditionEntries(additionEntries, insertIndex, composition.cardInsertIndices),
-        ...explicitReclaims.reclaims.map((reclaim) => reclaim.replacementEntry),
+        ...plannedReclaims.reclaims.map((reclaim) => reclaim.replacementEntry),
       ];
-      existing.reclaims = explicitReclaims.reclaims;
+      existing.reclaims = plannedReclaims.reclaims;
     }
   }
 
