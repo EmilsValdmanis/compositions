@@ -230,6 +230,9 @@ describe("GameBoardView discard drops", () => {
     const cue = view.getByRole("status", { name: "Your turn, Avery" });
     expect(cue?.getAttribute("data-turn-number")).toBe("1");
     expect(cue.querySelector('[data-slot="avatar"]')).not.toBeNull();
+    expect(view.queryByText("Play or discard")).toBeNull();
+    expect(cue.textContent).toContain("R01");
+    expect(cue.textContent).toContain("T01");
   });
 
   it("commits a staged table play and discard as one action", async () => {
