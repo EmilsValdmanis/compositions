@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,7 +25,7 @@ func (s playerProfileTestStore) GetPlayerProfile(context.Context, string) (datab
 func TestHandlePlayerProfile(t *testing.T) {
 	profile := database.PlayerProfileRecord{
 		ID: "00000000-0000-0000-0000-000000000002", Name: "Avery", ImageURL: "https://example.com/avatar.png",
-		GamesPlayed: 8, GamesWon: 3, TotalPlacement: 14, RoundsPlayed: 22, RoundsWon: 9,
+		GamesPlayed: 8, GamesWon: 3, TotalPlacement: 14, RoundsPlayed: 22, RoundsWon: 9, Forfeits: 2,
 		CompositionsCreated: 41, SetsCreated: 17, RunsCreated: 24, PointsInflicted: 230,
 		LongestGameWinStreak: 2,
 	}
@@ -41,6 +42,9 @@ func TestHandlePlayerProfile(t *testing.T) {
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d; want %d", response.Code, http.StatusOK)
+	}
+	if strings.Contains(response.Body.String(), `"forfeits"`) {
+		t.Fatalf("public profile response exposes forfeits: %s", response.Body.String())
 	}
 	var payload playerProfileResponse
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
