@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { Separator } from "#/components/ui/separator";
 import { getUserInitials } from "#/lib/utils";
 
 export function TurnStartCue({
@@ -30,12 +32,7 @@ export function TurnStartCue({
       {visible ? (
         <motion.div
           key={turnKey}
-          className="pointer-events-none fixed top-[clamp(4.5rem,12vh,8rem)] left-1/2 z-50 w-[min(22rem,calc(100vw-2rem))] will-change-[clip-path,transform,opacity]"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          aria-label={`Your turn, ${playerName}`}
-          data-turn-number={turnNumber}
+          className="pointer-events-none fixed top-[clamp(4.5rem,12vh,8rem)] left-1/2 z-50 w-[min(22rem,calc(100vw-2rem))] will-change-[transform,opacity]"
           initial={{
             opacity: 0,
             clipPath: shouldReduceMotion ? "inset(0 0 0 0)" : "inset(0 100% 0 0)",
@@ -60,47 +57,41 @@ export function TurnStartCue({
             ease: [0.23, 1, 0.32, 1],
           }}
         >
-          <div className="relative flex h-[4.5rem] items-stretch overflow-hidden rounded-3xl border border-border/80 bg-card text-card-foreground shadow-lg ring-1 ring-foreground/5">
-            <div className="relative flex w-[4.5rem] shrink-0 items-center justify-center border-r border-border/70 bg-muted/30">
-              <Avatar className="relative size-10 border border-border bg-card">
+          <Alert
+            className="h-18 grid-cols-[4.5rem_auto_minmax(0,1fr)] grid-rows-1 gap-0 overflow-hidden rounded-3xl p-0 shadow-lg"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            aria-label={`Your turn, ${playerName}`}
+            data-turn-number={turnNumber}
+          >
+            <div className="grid place-items-center bg-muted/30">
+              <Avatar className="size-10">
                 {playerImageUrl ? (
                   <AvatarImage src={playerImageUrl} alt={`${playerName}'s avatar`} />
                 ) : null}
-                <AvatarFallback className="bg-primary/10 text-xs font-bold tracking-tight text-primary">
-                  {getUserInitials(playerName)}
-                </AvatarFallback>
-                <AvatarBadge className="right-0 bottom-0 size-2.5 border border-card bg-primary ring-0" />
+                <AvatarFallback>{getUserInitials(playerName)}</AvatarFallback>
+                <AvatarBadge />
               </Avatar>
             </div>
+            <Separator orientation="vertical" />
 
-            <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-4">
+            <div className="flex min-w-0 items-center justify-between gap-3 px-4">
               <div className="min-w-0">
-                <p className="mb-1 flex items-center gap-2 text-[0.55rem] leading-none font-medium tracking-[0.2em] text-muted-foreground uppercase">
-                  <span className="inline-block size-1.5 rotate-45 bg-primary" aria-hidden="true" />
+                <AlertDescription className="mb-1 flex items-center gap-2 text-[0.55rem] leading-none font-medium tracking-[0.2em] uppercase">
+                  <span className="size-1.5 rotate-45 bg-primary" aria-hidden="true" />
                   Table is yours
-                </p>
-                <p className="truncate text-[1.05rem] leading-none font-bold tracking-[-0.04em] uppercase">
+                </AlertDescription>
+                <AlertTitle className="truncate text-[1.05rem] leading-none font-bold tracking-[-0.04em] uppercase">
                   Your turn
-                </p>
+                </AlertTitle>
               </div>
               <p className="shrink-0 text-right text-[0.5rem] leading-[1.45] tracking-[0.16em] text-muted-foreground uppercase tabular-nums">
                 R{String(round).padStart(2, "0")}
                 <br />T{String(turnNumber).padStart(2, "0")}
               </p>
             </div>
-
-            <motion.span
-              aria-hidden="true"
-              className="absolute inset-y-0 left-0 w-px bg-primary"
-              initial={shouldReduceMotion ? false : { opacity: 0, transform: "translateX(0)" }}
-              animate={
-                shouldReduceMotion
-                  ? { opacity: 0 }
-                  : { opacity: [0, 1, 1, 0], transform: "translateX(22rem)" }
-              }
-              transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-            />
-          </div>
+          </Alert>
         </motion.div>
       ) : null}
     </AnimatePresence>

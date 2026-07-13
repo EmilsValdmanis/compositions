@@ -277,11 +277,13 @@ export function GameResultsView({
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <LeftoverHandTooltip
-                          handCount={playerState.handCount}
-                          hand={playerState.hand ?? []}
-                          playerName={playerName}
-                        />
+                        {playerState.hand && playerState.hand?.length !== 0 && (
+                          <LeftoverHandTooltip
+                            handCount={playerState.handCount}
+                            hand={playerState.hand}
+                            playerName={playerName}
+                          />
+                        )}
                       </TableCell>
                       <ResultPoints
                         totalPoints={playerState.totalPoints}
