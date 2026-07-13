@@ -99,9 +99,9 @@ export function PlayerProfilePage({ profile }: { profile: PlayerProfile }) {
           note="Lower is better"
         />
         <StatCard
-          label="Reliability"
-          value={formatPercent(hasGames ? 1 - profile.forfeits / profile.gamesPlayed : null)}
-          note={`${profile.forfeits} forfeits`}
+          label="Round win rate"
+          value={formatPercent(ratio(profile.roundsWon, profile.roundsPlayed))}
+          note={`${profile.roundsWon} round wins`}
         />
       </div>
 
