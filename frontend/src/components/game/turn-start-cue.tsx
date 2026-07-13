@@ -30,7 +30,7 @@ export function TurnStartCue({
       {visible ? (
         <motion.div
           key={turnKey}
-          className="pointer-events-none fixed top-1/2 left-1/2 z-50 flex w-[min(22rem,calc(100vw-2rem))] items-center gap-4 overflow-hidden rounded-[2rem] border border-primary/30 bg-popover/95 p-3 pr-7 text-foreground shadow-[0_1.5rem_5rem_-1.5rem_color-mix(in_oklab,var(--primary)_35%,transparent),0_0.75rem_2rem_-1rem_rgb(0_0_0/0.4)] ring-1 ring-foreground/8 backdrop-blur-2xl backdrop-saturate-150 will-change-transform before:absolute before:inset-y-0 before:left-0 before:w-28 before:bg-gradient-to-r before:from-primary/15 before:to-transparent"
+          className="pointer-events-none fixed top-[clamp(4.5rem,12vh,8rem)] left-1/2 z-50 w-[min(22rem,calc(100vw-2rem))] will-change-[clip-path,transform,opacity]"
           role="status"
           aria-live="polite"
           aria-atomic="true"
@@ -38,33 +38,68 @@ export function TurnStartCue({
           data-turn-number={turnNumber}
           initial={{
             opacity: 0,
+            clipPath: shouldReduceMotion ? "inset(0 0 0 0)" : "inset(0 100% 0 0)",
             transform: shouldReduceMotion
-              ? "translate(-50%, -50%)"
-              : "translate(-50%, -46%) scale(0.96)",
+              ? "translateX(-50%)"
+              : "translateX(calc(-50% - 10px)) rotate(-0.8deg)",
           }}
-          animate={{ opacity: 1, transform: "translate(-50%, -50%) scale(1)" }}
+          animate={{
+            opacity: 1,
+            clipPath: "inset(0 0 0 0)",
+            transform: "translateX(-50%) rotate(0deg)",
+          }}
           exit={{
             opacity: 0,
+            clipPath: shouldReduceMotion ? "inset(0 0 0 0)" : "inset(0 0 0 100%)",
             transform: shouldReduceMotion
-              ? "translate(-50%, -50%)"
-              : "translate(-50%, -54%) scale(0.98)",
+              ? "translateX(-50%)"
+              : "translateX(calc(-50% + 8px)) rotate(0.5deg)",
           }}
-          transition={{ duration: shouldReduceMotion ? 0.15 : 0.2, ease: [0.23, 1, 0.32, 1] }}
+          transition={{
+            duration: shouldReduceMotion ? 0.15 : 0.28,
+            ease: [0.23, 1, 0.32, 1],
+          }}
         >
-          <Avatar className="relative size-16 border-2 border-background shadow-lg ring-2 ring-primary/40">
-            {playerImageUrl ? (
-              <AvatarImage src={playerImageUrl} alt={`${playerName}'s avatar`} />
-            ) : null}
-            <AvatarFallback className="bg-primary/12 text-lg font-semibold text-primary">
-              {getUserInitials(playerName)}
-            </AvatarFallback>
-            <AvatarBadge className="right-0.5 bottom-0.5 size-4 bg-primary ring-4 ring-popover" />
-          </Avatar>
-          <div className="relative min-w-0">
-            <p className="mb-0.5 text-[0.625rem] font-semibold tracking-[0.22em] text-primary uppercase">
-              Make your move
-            </p>
-            <p className="text-2xl font-semibold tracking-tight text-balance">Your turn</p>
+          <div className="relative flex h-[4.5rem] items-stretch bg-foreground text-background shadow-[5px_5px_0_color-mix(in_oklab,var(--primary)_72%,var(--foreground))] [clip-path:polygon(0_0,calc(100%-12px)_0,100%_12px,100%_100%,12px_100%,0_calc(100%-12px))]">
+            <div className="relative flex w-[4.5rem] shrink-0 items-center justify-center border-r border-background/20">
+              <Avatar className="relative size-10 border border-background/35 bg-foreground">
+                {playerImageUrl ? (
+                  <AvatarImage src={playerImageUrl} alt={`${playerName}'s avatar`} />
+                ) : null}
+                <AvatarFallback className="bg-background text-xs font-bold tracking-tight text-foreground">
+                  {getUserInitials(playerName)}
+                </AvatarFallback>
+                <AvatarBadge className="right-0 bottom-0 size-2.5 border border-foreground bg-primary ring-0" />
+              </Avatar>
+            </div>
+
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-4 px-4">
+              <div className="min-w-0">
+                <p className="mb-1 flex items-center gap-2 text-[0.55rem] leading-none font-medium tracking-[0.2em] text-background/55 uppercase">
+                  <span className="inline-block size-1.5 rotate-45 bg-primary" aria-hidden="true" />
+                  Table is yours
+                </p>
+                <p className="truncate text-[1.05rem] leading-none font-bold tracking-[-0.04em] uppercase">
+                  Your turn
+                </p>
+              </div>
+              <p className="shrink-0 text-right text-[0.5rem] leading-[1.45] tracking-[0.16em] text-background/45 uppercase tabular-nums">
+                R{String(round).padStart(2, "0")}
+                <br />T{String(turnNumber).padStart(2, "0")}
+              </p>
+            </div>
+
+            <motion.span
+              aria-hidden="true"
+              className="absolute inset-y-0 left-0 w-px bg-primary"
+              initial={shouldReduceMotion ? false : { opacity: 0, transform: "translateX(0)" }}
+              animate={
+                shouldReduceMotion
+                  ? { opacity: 0 }
+                  : { opacity: [0, 1, 1, 0], transform: "translateX(22rem)" }
+              }
+              transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+            />
           </div>
         </motion.div>
       ) : null}
