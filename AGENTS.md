@@ -13,3 +13,31 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 - [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
 
 <!--VITE PLUS END-->
+
+
+## Running the application
+
+Browser verification requires both backend and frontend.
+
+Run from /backend root:
+
+```bash
+make db-up
+```
+
+Start the backend and frontend in separate terminals:
+
+```bash
+make run
+```
+
+```bash
+vp dev
+```
+
+Before browser testing:
+
+* Reuse already running services.
+* Confirm both services have started.
+* Use the development-only `dev-ui` route instead of Google login. If UI is missing add it for testing.
+* Check console errors and failed network requests.
