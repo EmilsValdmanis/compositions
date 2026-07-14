@@ -823,7 +823,7 @@ function useGameBoardController({
             id: compositionId,
             handKeys: [draggedHandKey],
             tableIndex: droppedOnTableEdgeTarget.compositionIndex,
-            insertIndex: targetComposition?.cards.length ?? 0,
+            insertIndex,
             cardInsertIndices: { [draggedHandKey]: insertIndex },
           },
         ];

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
+import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
@@ -15,7 +16,7 @@ import {
 } from "#/components/game-websocket-provider";
 
 const scenarios = mockScenarios;
-type DevViewMode = "board" | "results";
+type DevViewMode = "board" | "deal" | "results";
 
 function cloneCards(cards: CardSnapshot[]) {
   return cards.map((card) => ({ ...card }));
@@ -382,13 +383,28 @@ export function DevGameUi() {
         >
           <TabsList aria-label="Dev preview mode">
             <TabsTrigger value="board">Board</TabsTrigger>
+            <TabsTrigger value="deal">Deal</TabsTrigger>
             <TabsTrigger value="results">Results</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-visible">
-        {viewMode === "results" && resultsGame ? (
+        {viewMode === "deal" ? (
+          <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-2 py-6">
+            <DealChoicePanel
+              players={players}
+              pendingDealChoice={{
+                dealerIndex: 3,
+                chooserIndex: 0,
+                chooserPlayerId: players[0]?.playerId ?? "player-avery",
+              }}
+              dealChooserName={players[0]?.name ?? "Avery"}
+              isDealChooser
+              onChooseDealing={handleChooseDealing}
+            />
+          </div>
+        ) : viewMode === "results" && resultsGame ? (
           <div className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
               room={resultsRoom}

@@ -249,6 +249,55 @@ describe("GameLobbyView", () => {
     expect(onSendEmote).toHaveBeenCalledWith("👍");
   });
 
+  it("keeps the chooser on the deal step when an emote updates the players", () => {
+    const pendingDealChoice = {
+      dealerIndex: 0,
+      chooserIndex: 2,
+      chooserPlayerId: "player-3",
+    };
+    const view = renderLobby({
+      room: makeRoom({ pendingDealChoice }),
+      players,
+      roomActions: {
+        canCreateRoom: false,
+        canJoinRoom: false,
+        canLeaveRoom: true,
+        canStartGame: false,
+      },
+      dealChoice: {
+        pendingDealChoice,
+        dealChooserName: "Casey",
+        isDealChooser: true,
+      },
+    });
+
+    fireEvent.click(view.getByRole("button", { name: /Continue/ }));
+    expect(view.getByRole("button", { name: "Start round" })).toBeTruthy();
+
+    const playersWithEmote = players.map((player) =>
+      player.playerId === "player-1"
+        ? {
+            ...player,
+            activeEmote: {
+              id: "emote-2",
+              emoji: "👏",
+              expiresAt: new Date(Date.now() + 4000).toISOString(),
+            },
+          }
+        : player,
+    );
+    view.rerender(
+      <GameLobbyView
+        {...view.props}
+        room={makeRoom({ players: playersWithEmote, pendingDealChoice })}
+        players={playersWithEmote}
+      />,
+    );
+
+    expect(view.getByRole("button", { name: "Start round" })).toBeTruthy();
+    expect(view.queryByRole("button", { name: /Continue/ })).toBeNull();
+  });
+
   it("submits cut size and tapped player order choices", () => {
     const onChooseDealing = vi.fn();
     const pendingDealChoice = {
@@ -330,7 +379,7 @@ describe("GameLobbyView", () => {
     fireEvent.click(view.getByRole("button", { name: "Back" }));
     fireEvent.input(view.getByLabelText("Cut size"), { target: { value: "4" } });
     fireEvent.click(view.getByRole("button", { name: /Continue/ }));
-    fireEvent.click(view.getByRole("tab", { name: "Tap order" }));
+    fireEvent.click(view.getByRole("button", { name: "Tap order" }));
     act(() => {
       dndContextProps.onDragEnd?.({
         active: { id: "deal-player-1" },
