@@ -16,6 +16,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Spinner } from "#/components/ui/spinner";
+import { Strong } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
 
 function PlayerAvatar({ player }: { player: PlayerSnapshot }) {
@@ -90,12 +91,12 @@ export function PlayerStrip({
           >
             {player.activeEmote ? <PlayerEmoteBubble emote={player.activeEmote} /> : null}
             <PlayerAvatar player={player} />
-            <p
-              className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium"
+            <Strong
+              className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap"
               title={player.name}
             >
               {player.name}
-            </p>
+            </Strong>
             <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-1.5">
               {player.forfeited ? (
                 <HugeiconsIcon

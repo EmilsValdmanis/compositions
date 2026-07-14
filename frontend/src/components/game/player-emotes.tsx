@@ -3,7 +3,7 @@ import { motion } from "motion/react";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { cn } from "#/lib/utils";
+import { Text } from "#/components/typography";
 
 export const PLAYER_EMOTES = [
   "👋",
@@ -49,10 +49,10 @@ export function PlayerEmoteBubble({
           }}
         />
       }
-      className="pointer-events-none absolute -top-6 left-8 z-20 grid size-9 place-items-center rounded-full bg-background/95 p-0 text-xl shadow-lg ring-1 ring-foreground/5"
+      className="pointer-events-none absolute -top-6 left-8 z-20 grid size-9 place-items-center rounded-full bg-background/95 p-0 shadow-lg ring-1 ring-foreground/5"
       style={emojiFont}
     >
-      {emote.emoji}
+      <Text variant="emoji-xl">{emote.emoji}</Text>
     </Badge>
   );
 }
@@ -79,14 +79,14 @@ export function PlayerEmotePicker({
             type="button"
             variant="outline"
             size="icon-sm"
-            className={cn("text-base", className)}
+            className={className}
             aria-label="Open emotes"
           />
         }
       >
-        <span aria-hidden style={emojiFont}>
+        <Text variant="emoji-base" aria-hidden style={emojiFont}>
           🙂
-        </span>
+        </Text>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-auto rounded-2xl p-2">
         <div className="grid grid-cols-4 gap-1">
@@ -96,13 +96,13 @@ export function PlayerEmotePicker({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="text-lg hover:scale-105"
+              className="hover:scale-105"
               aria-label={`Send ${emoji}`}
               onClick={() => handleSendEmote(emoji)}
             >
-              <span aria-hidden style={emojiFont}>
+              <Text variant="emoji-lg" aria-hidden style={emojiFont}>
                 {emoji}
-              </span>
+              </Text>
             </Button>
           ))}
         </div>

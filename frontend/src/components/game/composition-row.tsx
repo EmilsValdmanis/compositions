@@ -25,6 +25,7 @@ import {
 import { cn } from "#/lib/utils";
 import { Badge } from "../ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Text } from "#/components/typography";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
 const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
@@ -131,9 +132,11 @@ function CompositionEdgeDropTarget({
             active ? "bg-primary/80" : "bg-transparent",
           )}
         />
-        <div
+        <Text
+          as="div"
+          variant="symbol"
           className={cn(
-            "edge-drop-pill absolute flex size-5 items-center justify-center rounded-full text-[0.7rem] leading-none shadow-sm backdrop-blur-sm transition-[border-color,color,background-color,opacity] duration-150",
+            "edge-drop-pill absolute flex size-5 items-center justify-center rounded-full shadow-sm backdrop-blur-sm transition-[border-color,color,background-color,opacity] duration-150",
             "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
             visible ? "opacity-100" : "opacity-0",
             active
@@ -142,7 +145,7 @@ function CompositionEdgeDropTarget({
           )}
         >
           +
-        </div>
+        </Text>
       </div>
     </GameBoardDraftDropZone>
   );
@@ -285,16 +288,14 @@ export function CompositionRow({
             <NewActivityLabel players={players} playerId={activity?.playerId} />
           ) : null}
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>
-            {previewPoints === null ? (
-              <span title="Add a natural card to resolve this joker's composition value">?</span>
-            ) : (
-              <AnimatedNumber value={previewPoints} />
-            )}{" "}
-            pts
-          </span>
-        </div>
+        <Text as="div" variant="caption" className="flex items-center gap-2">
+          {previewPoints === null ? (
+            <span title="Add a natural card to resolve this joker's composition value">?</span>
+          ) : (
+            <AnimatedNumber value={previewPoints} />
+          )}{" "}
+          pts
+        </Text>
       </div>
 
       <div className="relative mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-3 overflow-visible">

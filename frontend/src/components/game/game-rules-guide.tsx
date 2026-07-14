@@ -5,15 +5,9 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
-import {
-  Item,
-  ItemContent,
-  ItemDescription,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from "#/components/ui/item";
+import { Card, CardContent, CardHeader } from "#/components/ui/card";
+import { Item, ItemContent, ItemGroup, ItemMedia } from "#/components/ui/item";
+import { H4, Text } from "#/components/typography";
 import { cn } from "#/lib/utils";
 
 type GameRulesGuideProps = {
@@ -38,11 +32,36 @@ function RuleSection({ eyebrow, title, children }: RuleSectionProps) {
   return (
     <Card size="sm" className="shadow-none">
       <CardHeader>
-        <p className="text-[0.7rem] uppercase text-muted-foreground">{eyebrow}</p>
-        <CardTitle className="text-sm leading-tight">{title}</CardTitle>
+        <Text as="p" variant="eyebrow-compact">
+          {eyebrow}
+        </Text>
+        <Text as="h3" variant="body-strong">
+          {title}
+        </Text>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">{children}</CardContent>
     </Card>
+  );
+}
+
+function RuleTitle({ children }: { children: ReactNode }) {
+  return (
+    <Text as="div" variant="label" data-slot="item-title">
+      {children}
+    </Text>
+  );
+}
+
+function RuleDescription({ children }: { children: ReactNode }) {
+  return (
+    <Text
+      as="p"
+      variant="caption"
+      data-slot="item-description"
+      className="line-clamp-none text-left"
+    >
+      {children}
+    </Text>
   );
 }
 
@@ -55,9 +74,7 @@ function RuleList({ items }: { items: string[] }) {
             <span className="size-1.5 rounded-full bg-primary" />
           </ItemMedia>
           <ItemContent>
-            <ItemDescription className="line-clamp-none text-xs leading-relaxed">
-              {item}
-            </ItemDescription>
+            <RuleDescription>{item}</RuleDescription>
           </ItemContent>
         </Item>
       ))}
@@ -76,7 +93,11 @@ function CardLine({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      {label ? <p className="text-xs font-medium text-muted-foreground">{label}</p> : null}
+      {label ? (
+        <Text as="p" variant="label" className="text-muted-foreground">
+          {label}
+        </Text>
+      ) : null}
       <div
         className={cn(
           "flex min-w-0 items-center gap-1.5 overflow-x-auto pb-1",
@@ -100,7 +121,7 @@ function CardLine({
 function FlowStep({ children }: { children: ReactNode }) {
   return (
     <Item variant="outline" size="xs" className="flex-1 justify-center">
-      <ItemTitle className="text-xs">{children}</ItemTitle>
+      <RuleTitle>{children}</RuleTitle>
     </Item>
   );
 }
@@ -139,9 +160,9 @@ function ReclaimExample() {
         <HugeiconsIcon icon={ArrowRight01Icon} className="mb-6 shrink-0" />
         <CardLine cards={[card(4, 3)]} label="Replace with exact card" />
       </div>
-      <ItemDescription className="line-clamp-none text-xs leading-relaxed">
+      <RuleDescription>
         The 4 replaces the joker, then the joker returns to your hand for this turn.
-      </ItemDescription>
+      </RuleDescription>
     </div>
   );
 }
@@ -149,9 +170,9 @@ function ReclaimExample() {
 function OpeningExample() {
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-xs font-medium text-muted-foreground">
+      <Text as="p" variant="label" className="text-muted-foreground">
         Example opening: Kings set 30 + spade run 15 = 45
-      </p>
+      </Text>
       <div className="flex flex-wrap items-center gap-4">
         <CardLine cards={[card(13, 0), card(13, 1), card(13, 2)]} />
         <Badge variant="outline">+</Badge>
@@ -178,10 +199,8 @@ function SpecialWinTile({
         </span>
       </ItemMedia>
       <ItemContent>
-        <ItemTitle className="text-xs">{title}</ItemTitle>
-        <ItemDescription className="line-clamp-none text-xs leading-relaxed">
-          {description}
-        </ItemDescription>
+        <RuleTitle>{title}</RuleTitle>
+        <RuleDescription>{description}</RuleDescription>
       </ItemContent>
     </Item>
   );
@@ -192,8 +211,10 @@ export function GameRulesGuide({ className }: GameRulesGuideProps) {
     <div className={cn("flex min-h-0 flex-col gap-4", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase text-muted-foreground">Quick rules</p>
-          <h2 className="font-heading text-lg font-semibold">Compositions</h2>
+          <Text as="p" variant="eyebrow-compact">
+            Quick rules
+          </Text>
+          <H4>Compositions</H4>
         </div>
         <Badge variant="outline">2 decks</Badge>
       </div>
@@ -225,20 +246,16 @@ export function GameRulesGuide({ className }: GameRulesGuideProps) {
           <div className="flex flex-wrap gap-3">
             <Item variant="outline" size="sm" className="w-fit min-w-52 items-start">
               <ItemContent className="gap-2">
-                <ItemTitle className="text-xs">Set: same rank</ItemTitle>
+                <RuleTitle>Set: same rank</RuleTitle>
                 <CardLine cards={[card(7, 0), card(7, 1), card(7, 2)]} />
-                <ItemDescription className="line-clamp-none text-xs">
-                  3+ cards, different suits.
-                </ItemDescription>
+                <RuleDescription>3+ cards, different suits.</RuleDescription>
               </ItemContent>
             </Item>
             <Item variant="outline" size="sm" className="w-fit min-w-60 items-start">
               <ItemContent className="gap-2">
-                <ItemTitle className="text-xs">Run</ItemTitle>
+                <RuleTitle>Run</RuleTitle>
                 <CardLine cards={[card(5, 3), card(6, 3), card(7, 3), card(8, 3)]} />
-                <ItemDescription className="line-clamp-none text-xs">
-                  3+ cards in order, same suit.
-                </ItemDescription>
+                <RuleDescription>3+ cards in order, same suit.</RuleDescription>
               </ItemContent>
             </Item>
           </div>
@@ -291,20 +308,20 @@ export function GameRulesGuide({ className }: GameRulesGuideProps) {
           <ItemGroup className="grid gap-3 sm:grid-cols-2">
             <Item variant="outline" size="sm" className="items-start">
               <ItemContent>
-                <ItemTitle className="text-xs">Opening points</ItemTitle>
-                <ItemDescription className="line-clamp-none text-xs leading-relaxed">
+                <RuleTitle>Opening points</RuleTitle>
+                <RuleDescription>
                   Count the value of cards you place in compositions. Aces and jokers use the value
                   they represent in that composition.
-                </ItemDescription>
+                </RuleDescription>
               </ItemContent>
             </Item>
             <Item variant="outline" size="sm" className="items-start">
               <ItemContent>
-                <ItemTitle className="text-xs">End-round points</ItemTitle>
-                <ItemDescription className="line-clamp-none text-xs leading-relaxed">
+                <RuleTitle>End-round points</RuleTitle>
+                <RuleDescription>
                   Only cards left in hand count. Jokers are 20. Aces are usually 10, except a final
                   lone Ace can count as 1.
-                </ItemDescription>
+                </RuleDescription>
               </ItemContent>
             </Item>
           </ItemGroup>

@@ -23,6 +23,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
+import { Eyebrow, Strong, Text } from "#/components/typography";
 
 type AsyncAction = () => Promise<void> | void;
 
@@ -109,10 +110,10 @@ export function GameLobbyView({
               <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                      Room code
-                    </p>
-                    <p className="text-4xl font-semibold tracking-tight">{room.code}</p>
+                    <Eyebrow>Room code</Eyebrow>
+                    <Text as="p" variant="metric">
+                      {room.code}
+                    </Text>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button type="button" variant="outline" />}>
@@ -161,15 +162,11 @@ export function GameLobbyView({
               ) : null}
               {completedGame ? (
                 <div className="grid gap-1 rounded-2xl border border-border/70 bg-muted/20 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Last winner
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">
-                      {victor?.name ?? "A player"}
-                    </span>{" "}
-                    in round {completedGame.game.round}
-                  </p>
+                  <Eyebrow>Last winner</Eyebrow>
+                  <Text as="p" variant="body" className="text-muted-foreground">
+                    <Strong className="text-foreground">{victor?.name ?? "A player"}</Strong> in
+                    round {completedGame.game.round}
+                  </Text>
                 </div>
               ) : null}
             </div>
@@ -221,9 +218,13 @@ export function GameLobbyView({
           {players.length ? (
             <PlayerStrip players={players} game={game} />
           ) : (
-            <div className="rounded-2xl border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
+            <Text
+              as="div"
+              variant="body"
+              className="rounded-2xl border border-dashed border-border/70 p-6 text-muted-foreground"
+            >
               Create or join a room.
-            </div>
+            </Text>
           )}
         </CardContent>
       </Card>

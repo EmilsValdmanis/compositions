@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
+import { Alert } from "#/components/ui/alert";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Separator } from "#/components/ui/separator";
+import { Text } from "#/components/typography";
 import { getUserInitials } from "#/lib/utils";
 
 export function TurnStartCue({
@@ -78,18 +79,23 @@ export function TurnStartCue({
 
             <div className="flex min-w-0 items-center justify-between gap-3 px-4">
               <div className="min-w-0">
-                <AlertDescription className="mb-1 flex items-center gap-2 text-[0.55rem] leading-none font-medium tracking-[0.2em] uppercase">
+                <Text
+                  as="div"
+                  variant="turn-eyebrow"
+                  data-slot="alert-description"
+                  className="mb-1 flex items-center gap-2"
+                >
                   <span className="size-1.5 rotate-45 bg-primary" aria-hidden="true" />
                   Table is yours
-                </AlertDescription>
-                <AlertTitle className="truncate text-[1.05rem] leading-none font-bold tracking-[-0.04em] uppercase">
+                </Text>
+                <Text as="div" variant="turn-title" data-slot="alert-title" className="truncate">
                   Your turn
-                </AlertTitle>
+                </Text>
               </div>
-              <p className="shrink-0 text-right text-[0.5rem] leading-[1.45] tracking-[0.16em] text-muted-foreground uppercase tabular-nums">
+              <Text as="p" variant="turn-meta" className="shrink-0 text-right">
                 R{String(round).padStart(2, "0")}
                 <br />T{String(turnNumber).padStart(2, "0")}
-              </p>
+              </Text>
             </div>
           </Alert>
         </motion.div>

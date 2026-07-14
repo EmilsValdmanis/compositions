@@ -1,6 +1,7 @@
 import { Outlet, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
+import { Text } from "#/components/typography";
 import { UserDropdown } from "#/components/user-dropdown";
 
 const rootRouteApi = getRouteApi("__root__");
@@ -17,9 +18,9 @@ function BrandTitle() {
 function ProtectedLayoutTitle() {
   return (
     <div className="min-w-0 text-center">
-      <p className="truncate text-sm font-semibold tracking-[0.16em] uppercase text-foreground/90 md:text-base">
+      <Text as="p" variant="brand" className="truncate">
         <BrandTitle />
-      </p>
+      </Text>
     </div>
   );
 }

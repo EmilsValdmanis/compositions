@@ -1,4 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
+import { Text } from "#/components/typography";
 
 export function AuthLayout() {
   return (
@@ -12,9 +13,13 @@ export function AuthLayout() {
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background mask-[radial-gradient(ellipse_at_center,transparent_20%,black)]"></div>
 
       <div className="flex grow flex-col items-center justify-center gap-4">
-        <p className="relative bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-4xl font-bold text-transparent sm:text-7xl">
+        <Text
+          as="h1"
+          variant="display"
+          className="relative bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-transparent"
+        >
           Compositions
-        </p>
+        </Text>
         <Outlet />
       </div>
     </>

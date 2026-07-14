@@ -27,6 +27,7 @@ import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
+import { Text } from "#/components/typography";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -298,9 +299,12 @@ export function GameBoardTable({
                 ))}
               </div>
             ) : (
-              <div className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-sm text-muted-foreground">
+              <Text
+                as="div"
+                className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-muted-foreground"
+              >
                 No compositions on the table.
-              </div>
+              </Text>
             )}
           </div>
 

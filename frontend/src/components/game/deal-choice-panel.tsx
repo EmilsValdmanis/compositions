@@ -255,7 +255,7 @@ export function DealChoicePanel({
                 <ItemFooter>
                   <div className="w-full">
                     <div
-                      className="relative mx-auto h-32 w-full max-w-sm overflow-hidden [perspective:520px]"
+                      className="relative mx-auto h-32 w-full max-w-sm overflow-hidden perspective-[520px]"
                       aria-hidden="true"
                     >
                       <motion.div

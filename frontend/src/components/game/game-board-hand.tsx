@@ -7,6 +7,7 @@ import {
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
 import { Card, CardContent } from "#/components/ui/card";
+import { Text } from "#/components/typography";
 import { cn } from "#/lib/utils";
 
 type HandStatus = {
@@ -69,18 +70,24 @@ export function GameBoardHand({
                   </div>
                 </div>
               ) : (
-                <div className="rounded-3xl border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
+                <Text
+                  as="div"
+                  className="rounded-3xl border border-dashed border-border/70 p-6 text-muted-foreground"
+                >
                   {hasDraftedCompositions
                     ? "All of your cards are staged in compositions. Drag one back here to return it to hand."
                     : "No cards in hand."}
-                </div>
+                </Text>
               )}
             </GameBoardDraftDropZone>
           </SortableContext>
         ) : (
-          <div className="rounded-3xl border border-dashed border-border/70 p-6 text-sm text-muted-foreground">
+          <Text
+            as="div"
+            className="rounded-3xl border border-dashed border-border/70 p-6 text-muted-foreground"
+          >
             Waiting for the first game snapshot.
-          </div>
+          </Text>
         )}
       </CardContent>
     </Card>

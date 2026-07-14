@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { useTheme } from "#/components/theme-provider";
+import { Strong, Text } from "#/components/typography";
 import { authClient } from "#/lib/auth-client";
 import {
   areGameSoundsEnabled,
@@ -82,10 +83,8 @@ export function UserDropdown() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <span className="font-medium text-foreground">{displayName || "Account"}</span>
-              {user?.email ? (
-                <span className="text-muted-foreground text-xs">{user.email}</span>
-              ) : null}
+              <Strong className="text-foreground">{displayName || "Account"}</Strong>
+              {user?.email ? <Text variant="caption">{user.email}</Text> : null}
             </DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
@@ -105,9 +104,9 @@ export function UserDropdown() {
             <DropdownMenuItem onClick={toggleSounds}>
               <HugeiconsIcon icon={soundsEnabled ? VolumeHighIcon : VolumeOffIcon} />
               Sound effects
-              <span className="ml-auto text-xs text-muted-foreground">
+              <Text variant="caption" className="ml-auto">
                 {soundsEnabled ? "On" : "Off"}
-              </span>
+              </Text>
             </DropdownMenuItem>
             {import.meta.env.DEV ? (
               <DropdownMenuItem render={<Link to="/dev-ui" />}>

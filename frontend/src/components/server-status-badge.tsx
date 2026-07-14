@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BadgeInfoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { checkGameServerHealth } from "#/lib/health";
+import { H6, Text } from "#/components/typography";
 import { useGameWebSocket } from "./game-websocket-provider";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -60,22 +61,26 @@ export function ServerStatusBadge() {
       </PopoverTrigger>
       <PopoverContent align="start">
         <div className="space-y-1">
-          <h4 className="text-sm font-semibold">Connection Status</h4>
-          <p className="text-muted-foreground text-xs">
+          <H6>Connection Status</H6>
+          <Text as="p" variant="caption">
             Real-time server and connection diagnostics.
-          </p>
+          </Text>
         </div>
         <Separator />
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-muted-foreground text-xs">Connection</Label>
+            <Text as={Label} variant="caption">
+              Connection
+            </Text>
             <Badge variant={connectionVariant}>{connectionLabels[state.connectionStatus]}</Badge>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-muted-foreground text-xs">Server</Label>
-            <Badge variant={serverVariants[serverStatus]} className="capitalize gap-1">
+            <Text as={Label} variant="caption">
+              Server
+            </Text>
+            <Badge variant={serverVariants[serverStatus]} className="gap-1">
               {isCheckingServer && <Spinner className="size-3" />}
-              {serverStatus}
+              <Text variant="status">{serverStatus}</Text>
             </Badge>
           </div>
         </div>
