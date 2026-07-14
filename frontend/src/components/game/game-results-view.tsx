@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
+import { P, Strong, Text } from "#/components/typography";
 import { fireCelebrationConfetti } from "#/lib/confetti";
 import { cn, getUserInitials } from "#/lib/utils";
 
@@ -85,18 +86,21 @@ function ResultPoints({
 
   return (
     <>
-      <TableCell className="text-right font-medium tabular-nums">
-        <AnimatedNumber value={displayedPoints.total} />
+      <TableCell className="text-right">
+        <Text variant="numeric">
+          <AnimatedNumber value={displayedPoints.total} />
+        </Text>
       </TableCell>
-      <TableCell className="text-right tabular-nums">
-        <AnimatedNumber
-          className={cn(
-            "text-xs",
-            displayedPoints.gained > 0 ? "font-medium text-primary" : "text-muted-foreground",
-          )}
-          value={displayedPoints.gained}
-          prefix={displayedPoints.gained > 0 ? "+" : undefined}
-        />
+      <TableCell className="text-right">
+        <Text
+          variant={displayedPoints.gained > 0 ? "caption-strong" : "caption"}
+          className={cn(displayedPoints.gained > 0 ? "text-primary" : "text-muted-foreground")}
+        >
+          <AnimatedNumber
+            value={displayedPoints.gained}
+            prefix={displayedPoints.gained > 0 ? "+" : undefined}
+          />
+        </Text>
       </TableCell>
     </>
   );
@@ -124,7 +128,7 @@ function LeftoverHandTooltip({
             type="button"
             variant="ghost"
             size="sm"
-            className="ml-auto w-fit tabular-nums"
+            className="ml-auto w-fit"
             disabled={!hasRevealedHand}
             title={handTitle}
             aria-label={
@@ -135,7 +139,9 @@ function LeftoverHandTooltip({
           />
         }
       >
-        <AnimatedNumber value={handCount} />
+        <Text variant="numeric">
+          <AnimatedNumber value={handCount} />
+        </Text>
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
       <TooltipContent className="flex flex-wrap justify-center gap-1 py-2.5 max-w-53">
@@ -236,8 +242,8 @@ export function GameResultsView({
                         isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
                       )}
                     >
-                      <TableCell className={cn("font-medium", isRoundWinner && "text-primary")}>
-                        {rank}
+                      <TableCell>
+                        <Strong className={cn(isRoundWinner && "text-primary")}>{rank}</Strong>
                       </TableCell>
                       <TableCell>
                         <div className="flex min-w-40 flex-wrap items-center gap-2">
@@ -256,21 +262,22 @@ export function GameResultsView({
                               )}
                             </AvatarFallback>
                             {isRoundWinner ? (
-                              <span
+                              <Text
+                                variant="emoji-sm"
                                 aria-hidden="true"
-                                className="absolute -top-3 -right-0.5 z-20 origin-bottom-left rotate-18 text-sm leading-none drop-shadow-sm"
+                                className="absolute -top-3 -right-0.5 z-20 origin-bottom-left rotate-18 drop-shadow-sm"
                                 style={{
                                   fontFamily:
                                     '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"',
                                 }}
                               >
                                 👑
-                              </span>
+                              </Text>
                             ) : null}
                           </Avatar>
-                          <span className={cn("font-medium", isRoundWinner && "text-primary")}>
+                          <Strong className={cn(isRoundWinner && "text-primary")}>
                             {playerName}
-                          </span>
+                          </Strong>
                           {playerState.playerId === playerId ? (
                             <Badge variant="outline">You</Badge>
                           ) : null}
@@ -313,7 +320,9 @@ export function GameResultsView({
           ) : (
             <div className="flex flex-wrap items-center justify-end gap-3">
               {!isHost ? (
-                <p className="text-sm text-muted-foreground">Waiting for the host.</p>
+                <P size="sm" className="text-muted-foreground">
+                  Waiting for the host.
+                </P>
               ) : null}
               <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
                 Start next round

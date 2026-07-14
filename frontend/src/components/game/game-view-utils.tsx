@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { playerById } from "#/components/game/game-view-helpers";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { Text } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
 
 function PlayerMarker({
@@ -44,19 +45,17 @@ export function ActivityLabel({
   offsetClassName?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex h-5 items-center gap-1 text-[0.65rem] font-medium text-muted-foreground",
-        offsetClassName,
-        className,
-      )}
+    <Text
+      as="div"
+      variant="activity"
+      className={cn("flex h-5 items-center gap-1", offsetClassName, className)}
     >
       {icon ? <HugeiconsIcon icon={icon} className="size-3.5" strokeWidth={2} /> : null}
-      <span className="uppercase tracking-wide">{label}</span>
+      <span>{label}</span>
       {playerId ? (
         <PlayerMarker players={players} playerId={playerId} className="size-4 shrink-0" />
       ) : null}
-    </div>
+    </Text>
   );
 }
 

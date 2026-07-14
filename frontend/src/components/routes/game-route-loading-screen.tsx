@@ -1,4 +1,5 @@
 import { Spinner } from "#/components/ui/spinner";
+import { H6, P } from "#/components/typography";
 
 export function GameRouteLoadingScreen() {
   return (
@@ -6,8 +7,10 @@ export function GameRouteLoadingScreen() {
       <div className="flex flex-col items-center gap-3 text-center">
         <Spinner className="size-8" />
         <div className="space-y-1">
-          <p className="text-sm font-medium">Reconnecting to your game</p>
-          <p className="text-muted-foreground text-sm">Loading the latest room state…</p>
+          <H6>Reconnecting to your game</H6>
+          <P size="sm" className="text-muted-foreground">
+            Loading the latest room state…
+          </P>
         </div>
       </div>
     </section>

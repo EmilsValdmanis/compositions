@@ -2,7 +2,8 @@ import React from "react";
 import * as Sentry from "@sentry/tanstackstart-react";
 import { Link, type ErrorComponentProps, type NotFoundRouteProps } from "@tanstack/react-router";
 import { Button } from "#/components/ui/button";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "#/components/ui/card";
+import { Card, CardDescription, CardFooter, CardHeader } from "#/components/ui/card";
+import { H2, Text } from "#/components/typography";
 
 function errorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -31,11 +32,11 @@ function RouteStatusFrame({
     <div className="flex min-h-full flex-1 items-center justify-center p-6 sm:p-8">
       <Card className="w-full max-w-lg border border-border/70 bg-card/95 shadow-xl backdrop-blur-sm">
         <CardHeader className="gap-3">
-          <div className="text-xs font-medium tracking-[0.24em] text-muted-foreground uppercase">
+          <Text as="div" variant="eyebrow-wide">
             {eyebrow}
-          </div>
+          </Text>
           <div className="space-y-1">
-            <CardTitle className="text-2xl">{title}</CardTitle>
+            <H2>{title}</H2>
             <CardDescription>{description}</CardDescription>
           </div>
         </CardHeader>

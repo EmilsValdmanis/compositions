@@ -12,6 +12,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { cardName } from "#/components/game/game-card-utils";
+import { Text, type TypographyVariant } from "#/components/typography";
 import { cn } from "#/lib/utils";
 
 const rankLabels: Record<number, string> = {
@@ -73,10 +74,10 @@ const gameCardSizeClassNames: Record<GameCardSize, string> = {
   compact: "h-16 w-11 rounded-xl p-1.5",
 };
 
-const cardCornerTextClassNames: Record<GameCardSize, string> = {
-  hand: "text-lg",
-  default: "text-sm",
-  compact: "text-[0.65rem]",
+const cardCornerTextVariants: Record<GameCardSize, TypographyVariant> = {
+  hand: "card-rank-hand",
+  default: "card-rank-default",
+  compact: "card-rank-compact",
 };
 
 const cardCornerInsetClassNames: Record<GameCardSize, string> = {
@@ -120,15 +121,12 @@ function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
 
   return (
     <>
-      <span
-        className={cn(
-          "absolute leading-none font-semibold",
-          cardCornerInsetClassNames[size],
-          cardCornerTextClassNames[size],
-        )}
+      <Text
+        variant={cardCornerTextVariants[size]}
+        className={cn("absolute", cardCornerInsetClassNames[size])}
       >
         {rank}
-      </span>
+      </Text>
       {icon ? (
         <HugeiconsIcon
           icon={icon}
@@ -136,19 +134,19 @@ function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
           aria-hidden="true"
         />
       ) : (
-        <span className={cn("pointer-events-none leading-none", cardSymbolClassNames[size])}>
+        <Text
+          variant={cardCornerTextVariants[size]}
+          className={cn("pointer-events-none", cardSymbolClassNames[size])}
+        >
           ?
-        </span>
+        </Text>
       )}
-      <span
-        className={cn(
-          "absolute leading-none font-semibold",
-          cardCornerEndInsetClassNames[size],
-          cardCornerTextClassNames[size],
-        )}
+      <Text
+        variant={cardCornerTextVariants[size]}
+        className={cn("absolute", cardCornerEndInsetClassNames[size])}
       >
         {rank}
-      </span>
+      </Text>
     </>
   );
 }
@@ -176,13 +174,7 @@ function decorationRingClassName(highlight?: GameCardDecoration["highlight"]) {
   }
 }
 
-function GameCardDecorationLayer({
-  size,
-  decoration,
-}: {
-  size: GameCardSize;
-  decoration?: GameCardDecoration;
-}) {
+function GameCardDecorationLayer({ decoration }: { decoration?: GameCardDecoration }) {
   if (!decoration?.label && !decoration?.footer) {
     return null;
   }
@@ -190,12 +182,7 @@ function GameCardDecorationLayer({
   return (
     <>
       {decoration.label ? (
-        <div
-          className={cn(
-            "absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-[calc(100%+0.16rem)] whitespace-nowrap",
-            size === "hand" ? "text-[0.7rem]" : null,
-          )}
-        >
+        <div className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-[calc(100%+0.16rem)] whitespace-nowrap">
           {decoration.label}
         </div>
       ) : null}
@@ -260,7 +247,7 @@ function SortableGameCard({
       {...attributes}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-      <GameCardDecorationLayer size={size} decoration={decoration} />
+      <GameCardDecorationLayer decoration={decoration} />
     </button>
   );
 }
@@ -316,7 +303,7 @@ function DraggableGameCard({
       {...attributes}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-      <GameCardDecorationLayer size={size} decoration={decoration} />
+      <GameCardDecorationLayer decoration={decoration} />
     </button>
   );
 }
@@ -396,7 +383,7 @@ export function GameCard({
       aria-label={accessibleName}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-      <GameCardDecorationLayer size={size} decoration={decoration} />
+      <GameCardDecorationLayer decoration={decoration} />
     </div>
   );
 }

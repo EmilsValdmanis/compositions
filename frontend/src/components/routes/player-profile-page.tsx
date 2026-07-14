@@ -7,6 +7,7 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
+import { Caption, Eyebrow, H1, Text } from "#/components/typography";
 import type { PlayerProfile } from "#/lib/player-profile";
 import { getUserInitials } from "#/lib/utils";
 
@@ -42,10 +43,12 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
     <Card size="sm">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-3xl tracking-tight tabular-nums">{value}</CardTitle>
+        <Text as="div" variant="stat" data-slot="card-title">
+          {value}
+        </Text>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">{note}</p>
+        <Caption>{note}</Caption>
       </CardContent>
     </Card>
   );
@@ -54,8 +57,8 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium tabular-nums">{value}</span>
+      <Text className="text-muted-foreground">{label}</Text>
+      <Text variant="numeric">{value}</Text>
     </div>
   );
 }
@@ -99,15 +102,13 @@ export function PlayerProfilePage({
           <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-4">
             <Avatar className="size-16 sm:size-20">
               {profile.imageUrl ? <AvatarImage src={profile.imageUrl} alt={profile.name} /> : null}
-              <AvatarFallback className="text-xl">{getUserInitials(profile.name)}</AvatarFallback>
+              <AvatarFallback>
+                <Text variant="h3">{getUserInitials(profile.name)}</Text>
+              </AvatarFallback>
             </Avatar>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <CardDescription className="uppercase tracking-[0.18em]">
-                Player profile
-              </CardDescription>
-              <CardTitle className="truncate text-3xl tracking-tight md:text-4xl">
-                {profile.name}
-              </CardTitle>
+              <Eyebrow data-slot="card-description">Player profile</Eyebrow>
+              <H1 className="truncate">{profile.name}</H1>
               <Badge className="mt-1 w-fit" variant={hasGames ? "secondary" : "outline"}>
                 {hasGames ? `${profile.gamesPlayed} ranked games` : "Unranked"}
               </Badge>

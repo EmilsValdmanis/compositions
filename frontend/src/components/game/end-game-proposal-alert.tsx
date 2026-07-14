@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Button } from "#/components/ui/button";
+import { P } from "#/components/typography";
 
 export function EndGameProposalAlert() {
   const { state, voteEndGame } = useGameWebSocket();
@@ -52,14 +53,14 @@ export function EndGameProposalAlert() {
       <AlertDescription>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
-            <p>
+            <P>
               {proposer?.name ?? "A player"}{" "}
               {isTechnicalAbort
                 ? "reported a game-breaking problem"
                 : "would like to end without a winner"}
               .
-            </p>
-            {proposal.description ? <p className="truncate">“{proposal.description}”</p> : null}
+            </P>
+            {proposal.description ? <P className="truncate">“{proposal.description}”</P> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="outline">
