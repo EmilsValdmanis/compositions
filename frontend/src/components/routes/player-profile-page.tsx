@@ -27,6 +27,17 @@ function formatDecimal(value: number | null) {
     : new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
 }
 
+function formatPlaytime(totalSeconds: number) {
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${totalMinutes}m`;
+}
+
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
     <Card size="sm">
@@ -86,8 +97,13 @@ export function PlayerProfilePage({ profile }: { profile: PlayerProfile }) {
         </CardHeader>
       </Card>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Games played" value={String(profile.gamesPlayed)} note="Ranked finishes" />
+        <StatCard
+          label="Total playtime"
+          value={formatPlaytime(profile.totalPlaytimeSeconds)}
+          note="Completed ranked games"
+        />
         <StatCard
           label="Win rate"
           value={formatPercent(ratio(profile.gamesWon, profile.gamesPlayed))}

@@ -23,6 +23,7 @@ type playerProfileResponse struct {
 	GamesPlayed           int64  `json:"gamesPlayed"`
 	GamesWon              int64  `json:"gamesWon"`
 	TotalPlacement        int64  `json:"totalPlacement"`
+	TotalPlaytimeSeconds  int64  `json:"totalPlaytimeSeconds"`
 	RoundsPlayed          int64  `json:"roundsPlayed"`
 	RoundsWon             int64  `json:"roundsWon"`
 	CompositionsCreated   int64  `json:"compositionsCreated"`
@@ -89,7 +90,8 @@ func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
 	response := playerProfileResponse{
 		ID: profile.ID, Name: profile.Name, ImageURL: profile.ImageURL,
 		GamesPlayed: profile.GamesPlayed, GamesWon: profile.GamesWon, TotalPlacement: profile.TotalPlacement,
-		RoundsPlayed: profile.RoundsPlayed, RoundsWon: profile.RoundsWon,
+		TotalPlaytimeSeconds: profile.TotalPlaytimeSeconds,
+		RoundsPlayed:         profile.RoundsPlayed, RoundsWon: profile.RoundsWon,
 		CompositionsCreated: profile.CompositionsCreated, SetsCreated: profile.SetsCreated, RunsCreated: profile.RunsCreated,
 		PointsInflicted: profile.PointsInflicted, PenaltyPoints: profile.PenaltyPoints,
 		CurrentGameWinStreak: profile.CurrentGameWinStreak, LongestGameWinStreak: profile.LongestGameWinStreak,

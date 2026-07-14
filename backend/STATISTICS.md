@@ -53,6 +53,7 @@ If that player wins while opponents receive 18 and 27 penalty points:
 Most UI values are derived rather than stored redundantly:
 
 ```text
+total playtime             = sum(games.completed_at - games.started_at)
 win rate                  = games_won / games_played
 average placement         = total_placement / games_played
 round win rate            = rounds_won / rounds_played

@@ -63,6 +63,7 @@ type StoredUserRecord struct {
 type PlayerProfileRecord struct {
 	ID, Name, ImageURL                            string
 	GamesPlayed, GamesWon, TotalPlacement         int64
+	TotalPlaytimeSeconds                          int64
 	RoundsPlayed, RoundsWon, Forfeits             int64
 	CompositionsCreated, SetsCreated, RunsCreated int64
 	PointsInflicted, PenaltyPoints                int64
@@ -179,6 +180,14 @@ func (s *UserStore) GetPlayerProfile(ctx context.Context, userID string) (Player
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id::text, u.name, u.image_url,
 			COALESCE(ps.games_played, 0), COALESCE(ps.games_won, 0), COALESCE(ps.total_placement, 0),
+			COALESCE((
+				SELECT SUM(EXTRACT(EPOCH FROM (g.completed_at - g.started_at)))::bigint
+				FROM games g
+				JOIN game_player_statistics gps ON gps.game_id = g.id
+				WHERE gps.user_id = u.id
+					AND g.status IN ('completed', 'forfeit')
+					AND g.completed_at IS NOT NULL
+			), 0),
 			COALESCE(ps.rounds_played, 0), COALESCE(ps.rounds_won, 0), COALESCE(ps.forfeits, 0),
 			COALESCE(ps.compositions_created, 0), COALESCE(ps.sets_created, 0), COALESCE(ps.runs_created, 0),
 			COALESCE(ps.points_inflicted, 0), COALESCE(ps.penalty_points, 0),
@@ -190,6 +199,7 @@ func (s *UserStore) GetPlayerProfile(ctx context.Context, userID string) (Player
 	`, uuidID).Scan(
 		&profile.ID, &profile.Name, &profile.ImageURL,
 		&profile.GamesPlayed, &profile.GamesWon, &profile.TotalPlacement,
+		&profile.TotalPlaytimeSeconds,
 		&profile.RoundsPlayed, &profile.RoundsWon, &profile.Forfeits,
 		&profile.CompositionsCreated, &profile.SetsCreated, &profile.RunsCreated,
 		&profile.PointsInflicted, &profile.PenaltyPoints,
