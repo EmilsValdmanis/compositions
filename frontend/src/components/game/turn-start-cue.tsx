@@ -60,7 +60,7 @@ export function TurnStartCue({
           }}
         >
           <Alert
-            className="h-18 grid-cols-[4.5rem_auto_minmax(0,1fr)] grid-rows-1 gap-0 overflow-hidden rounded-3xl p-0 shadow-lg"
+            className="h-18 grid-cols-[4.5rem_auto_minmax(0,1fr)] grid-rows-1 gap-0 overflow-hidden p-0 shadow-lg"
             role="status"
             aria-live="polite"
             aria-atomic="true"

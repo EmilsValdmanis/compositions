@@ -34,8 +34,10 @@ export type CompositionActivitySnapshot = {
 export type DraftCompositionSnapshot = {
   tableIndex?: number;
   insertIndex?: number;
-  cardInsertIndices?: Record<string, number>;
-  reclaimTargets?: Record<string, number>;
+  cardPlacements?: Array<{
+    insertIndex?: number;
+    reclaimJokerIndex?: number;
+  }>;
   cards: CardSnapshot[];
 };
 
@@ -249,6 +251,13 @@ const gameWebSocketStore = createStore(initialState);
 
 const GameWebSocketContext = createContext<GameWebSocketContextValue | null>(null);
 
+export function capitalizeErrorMessage(message: string) {
+  const trimmedMessage = message.trim();
+  return trimmedMessage.length > 0
+    ? `${trimmedMessage[0]!.toUpperCase()}${trimmedMessage.slice(1)}`
+    : "Unknown error";
+}
+
 function withError(
   current: LobbyState,
   message: string,
@@ -257,7 +266,7 @@ function withError(
   return {
     ...current,
     ...partial,
-    lastError: message,
+    lastError: capitalizeErrorMessage(message),
     lastErrorId: current.lastErrorId + 1,
   };
 }

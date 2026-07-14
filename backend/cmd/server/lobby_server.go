@@ -2035,11 +2035,14 @@ func cloneDraftCompositionSnapshots(source []game.DraftCompositionSnapshot) []ga
 			index := *draft.InsertIndex
 			next.InsertIndex = &index
 		}
-		if len(draft.CardInsertIndices) > 0 {
-			next.CardInsertIndices = maps.Clone(draft.CardInsertIndices)
-		}
-		if len(draft.ReclaimTargets) > 0 {
-			next.ReclaimTargets = maps.Clone(draft.ReclaimTargets)
+		if len(draft.CardPlacements) > 0 {
+			next.CardPlacements = make([]game.DraftCardPlacementSnapshot, len(draft.CardPlacements))
+			for index, placement := range draft.CardPlacements {
+				next.CardPlacements[index] = game.DraftCardPlacementSnapshot{
+					InsertIndex:       cloneIntPointer(placement.InsertIndex),
+					ReclaimJokerIndex: cloneIntPointer(placement.ReclaimJokerIndex),
+				}
+			}
 		}
 		cloned = append(cloned, next)
 	}

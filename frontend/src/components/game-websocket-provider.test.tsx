@@ -36,8 +36,14 @@ vi.mock("#/lib/game-auth", () => ({
   getGameConnectionAuth: vi.fn().mockResolvedValue({ playerId: "player-1" }),
 }));
 
-const { GameWebSocketProvider, useGameWebSocket } =
+const { capitalizeErrorMessage, GameWebSocketProvider, useGameWebSocket } =
   await import("#/components/game-websocket-provider");
+
+describe("capitalizeErrorMessage", () => {
+  it("capitalizes backend error messages", () => {
+    expect(capitalizeErrorMessage("not a valid composition")).toBe("Not a valid composition");
+  });
+});
 
 const sockets: FakeWebSocket[] = [];
 

@@ -26,12 +26,16 @@ type CompositionActivitySnapshot struct {
 	CardActivities map[int]CardActivitySnapshot `json:"cardActivities,omitempty"`
 }
 
+type DraftCardPlacementSnapshot struct {
+	InsertIndex       *int `json:"insertIndex,omitempty"`
+	ReclaimJokerIndex *int `json:"reclaimJokerIndex,omitempty"`
+}
+
 type DraftCompositionSnapshot struct {
-	TableIndex        *int           `json:"tableIndex,omitempty"`
-	InsertIndex       *int           `json:"insertIndex,omitempty"`
-	CardInsertIndices map[string]int `json:"cardInsertIndices,omitempty"`
-	ReclaimTargets    map[string]int `json:"reclaimTargets,omitempty"`
-	Cards             []CardSnapshot `json:"cards"`
+	TableIndex     *int                         `json:"tableIndex,omitempty"`
+	InsertIndex    *int                         `json:"insertIndex,omitempty"`
+	CardPlacements []DraftCardPlacementSnapshot `json:"cardPlacements,omitempty"`
+	Cards          []CardSnapshot               `json:"cards"`
 }
 
 type TurnActivitySnapshot struct {

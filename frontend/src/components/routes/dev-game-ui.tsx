@@ -25,6 +25,7 @@ function cloneCards(cards: CardSnapshot[]) {
 function cloneDrafts(drafts: DraftCompositionSnapshot[] | undefined) {
   return drafts?.map((draft) => ({
     ...draft,
+    cardPlacements: draft.cardPlacements?.map((placement) => ({ ...placement })),
     cards: cloneCards(draft.cards),
   }));
 }

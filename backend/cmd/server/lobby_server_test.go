@@ -845,12 +845,13 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 	t.Run("cloneDraftCompositionSnapshots clones insert index", func(t *testing.T) {
 		tableIndex := 2
 		insertIndex := 1
+		cardInsertIndex := 0
+		reclaimJokerIndex := 2
 		source := []game.DraftCompositionSnapshot{{
-			TableIndex:        &tableIndex,
-			InsertIndex:       &insertIndex,
-			CardInsertIndices: map[string]int{"ace-1": 0},
-			ReclaimTargets:    map[string]int{"king-1": 2},
-			Cards:             []game.CardSnapshot{{Rank: game.Ace, Suit: game.Spades}},
+			TableIndex:     &tableIndex,
+			InsertIndex:    &insertIndex,
+			CardPlacements: []game.DraftCardPlacementSnapshot{{InsertIndex: &cardInsertIndex, ReclaimJokerIndex: &reclaimJokerIndex}},
+			Cards:          []game.CardSnapshot{{Rank: game.Ace, Suit: game.Spades}},
 		}}
 		cloned := cloneDraftCompositionSnapshots(source)
 
@@ -863,19 +864,23 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 		if cloned[0].InsertIndex == nil || *cloned[0].InsertIndex != insertIndex {
 			t.Fatalf("cloned[0].InsertIndex = %#v; want %d", cloned[0].InsertIndex, insertIndex)
 		}
-		if cloned[0].CardInsertIndices["ace-1"] != 0 {
-			t.Fatalf("cloned[0].CardInsertIndices = %#v; want ace-1 preserved", cloned[0].CardInsertIndices)
-		}
-		if cloned[0].ReclaimTargets["king-1"] != 2 {
-			t.Fatalf("cloned[0].ReclaimTargets = %#v; want king-1 preserved", cloned[0].ReclaimTargets)
+		if len(cloned[0].CardPlacements) != 1 || cloned[0].CardPlacements[0].InsertIndex == nil || *cloned[0].CardPlacements[0].InsertIndex != 0 || cloned[0].CardPlacements[0].ReclaimJokerIndex == nil || *cloned[0].CardPlacements[0].ReclaimJokerIndex != 2 {
+			t.Fatalf("cloned[0].CardPlacements = %#v; want aligned metadata preserved", cloned[0].CardPlacements)
 		}
 		if &cloned[0].Cards[0] == &source[0].Cards[0] {
 			t.Fatal("cloneDraftCompositionSnapshots() reused card backing array")
 		}
-		cloned[0].CardInsertIndices["ace-1"] = 3
-		cloned[0].ReclaimTargets["king-1"] = 4
-		if source[0].CardInsertIndices["ace-1"] != 0 || source[0].ReclaimTargets["king-1"] != 2 {
-			t.Fatal("cloneDraftCompositionSnapshots() reused draft metadata maps")
+		*cloned[0].CardPlacements[0].InsertIndex = 3
+		*cloned[0].CardPlacements[0].ReclaimJokerIndex = 4
+		if *source[0].CardPlacements[0].InsertIndex != 0 || *source[0].CardPlacements[0].ReclaimJokerIndex != 2 {
+			t.Fatal("cloneDraftCompositionSnapshots() reused card placement pointers")
+		}
+	})
+
+	t.Run("play and discard delegates to matching implementation", func(t *testing.T) {
+		lobby := newLobbyServer()
+		if _, _, _, err := lobby.playAndDiscard("missing", 0, nil, nil, nil); err == nil || err.Error() != "session not found" {
+			t.Fatalf("playAndDiscard() error = %v; want session not found", err)
 		}
 	})
 

@@ -176,6 +176,18 @@ func TestPostgresUserStoreGameBugReports(t *testing.T) {
 	})
 }
 
+func TestPostgresUserStoreGetPlayerProfile(t *testing.T) {
+	var nilStore *postgresUserStore
+	if _, err := nilStore.GetPlayerProfile(context.Background(), "player-id"); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("nil GetPlayerProfile() error = %v; want configuration error", err)
+	}
+
+	store := &postgresUserStore{store: &database.UserStore{}}
+	if _, err := store.GetPlayerProfile(context.Background(), " player-id "); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("GetPlayerProfile() error = %v; want underlying store error", err)
+	}
+}
+
 func TestPostgresUserStoreLobbyState(t *testing.T) {
 	originalSaveStoredLobbyState := saveStoredLobbyState
 	defer func() { saveStoredLobbyState = originalSaveStoredLobbyState }()

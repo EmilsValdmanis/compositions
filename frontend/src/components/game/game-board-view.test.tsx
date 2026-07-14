@@ -394,6 +394,60 @@ describe("GameBoardView discard drops", () => {
     expect(onDiscardCard).not.toHaveBeenCalled();
   });
 
+  it("marks an invalid composition after the combined discard is rejected", async () => {
+    const onPlayTableAndDiscard = vi
+      .fn<
+        (play: TablePlayRequest, cardIndex: number, card: CardSnapshot) => Promise<ActionResult>
+      >()
+      .mockRejectedValue(new Error("not a valid composition"));
+    const view = render(
+      <GameBoardView
+        game={makeGame([
+          { rank: 5, suit: 0 },
+          { rank: 7, suit: 0 },
+          { rank: 8, suit: 0 },
+          { rank: 2, suit: 1 },
+        ])}
+        roomCode="ROOM"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 3, suit: 0 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={onPlayTableAndDiscard}
+        onSendEmote={vi.fn()}
+        disableDraftSync
+      />,
+    );
+
+    for (const [handKey, cardIndex, target] of [
+      ["5-0-1", 0, "new-composition-drop-zone"],
+      ["7-0-1", 1, "5-0-1"],
+      ["8-0-1", 2, "5-0-1"],
+    ] as const) {
+      await act(async () => dragStart(handKey, cardIndex));
+      await act(async () => dragEnd(handKey, target, cardIndex));
+    }
+
+    await act(async () => dragStart("2-1-1", 3));
+    await act(async () => dragEnd("2-1-1", "discard-pile", 3));
+
+    await waitFor(() => expect(onPlayTableAndDiscard).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(view.container.querySelector('[aria-invalid="true"]')).not.toBeNull(),
+    );
+  });
+
   it("does not discard an unopened player's reclaim-only draft", async () => {
     const onDiscardCard = vi.fn<() => Promise<ActionResult>>().mockResolvedValue({
       action: "discard_card",
@@ -531,9 +585,7 @@ describe("GameBoardView spectator turn drafts", () => {
               {
                 tableIndex: 0,
                 cards: [{ rank: 3, suit: 1 }],
-                reclaimTargets: {
-                  "3-1-2": 0,
-                },
+                cardPlacements: [{ reclaimJokerIndex: 0 }],
               },
             ],
           },

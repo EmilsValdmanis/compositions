@@ -4149,6 +4149,7 @@ func TestHasLegalPlayWithDiscardBacktracksInvalidOpeningComposition(t *testing.T
 
 func TestValidateTablePlayBranches(t *testing.T) {
 	scratch := searchScratch{maskCards: make([]Card, 0, 8), combinedBuf: make([]Card, 0, 14)}
+	insertAtStart := 0
 	base := tablePlayState{handCards: []Card{card(King, Hearts), card(King, Diamonds), card(King, Clubs)}, hasOpened: true}
 
 	if validateTablePlay(base, nil, nil, nil, nil, 0, false, scratch) {
@@ -4207,8 +4208,15 @@ func TestValidateTablePlayBranches(t *testing.T) {
 		handCards:          []Card{card(Ace, Clubs), card(Ace, Spades), card(Two, Clubs)},
 		activeCompositions: []*Composition{mustSet(t, card(Ace, Hearts), card(Ace, Diamonds), joker())},
 		hasOpened:          true,
-	}, nil, nil, []selectedAddition{{compositionIndex: 0, mask: 0b001}}, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 2, ReplacementCard: card(Ace, Spades)}}, 0b011, true, scratch) {
+	}, nil, nil, []selectedAddition{{compositionIndex: 0, mask: 0b001, insertIndex: &insertAtStart}}, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 2, ReplacementCard: card(Ace, Spades)}}, 0b011, true, scratch) {
 		t.Fatal("validateTablePlay() = false; want true when an addition narrows a set before its joker reclaim")
+	}
+	if validateTablePlay(tablePlayState{
+		handCards:          []Card{card(Ace, Clubs), card(Two, Clubs)},
+		activeCompositions: []*Composition{mustSet(t, card(Ace, Hearts), card(Ace, Diamonds), joker())},
+		hasOpened:          true,
+	}, nil, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 2, ReplacementCard: card(Ace, Clubs)}}, 0b01, true, scratch) {
+		t.Fatal("validateTablePlay() = true; want false while an ambiguous reclaim remains unresolved")
 	}
 	if !validateTablePlay(tablePlayState{
 		handCards:          []Card{card(Six, Hearts), card(Ten, Hearts), card(Jack, Hearts), card(Queen, Hearts), card(Ace, Clubs)},
@@ -4237,6 +4245,30 @@ func TestValidateTablePlayBranches(t *testing.T) {
 	}
 	if validateTablePlay(brokenReclaimBase, nil, nil, nil, []JokerReclaim{{CompositionIndex: 0, JokerIndex: 1, ReplacementCard: card(Ten, Hearts)}}, 1, true, scratch) {
 		t.Fatal("validateTablePlay() = true; want false when reclaim points cannot be resolved")
+	}
+}
+
+func TestIsAmbiguousSetReclaimRejectsResolvedAndMismatchedReplacements(t *testing.T) {
+	resolvedSet := mustSet(
+		t,
+		card(Ace, Hearts),
+		card(Ace, Diamonds),
+		card(Ace, Clubs),
+		joker(),
+	)
+	if isAmbiguousSetReclaim(resolvedSet, JokerReclaim{
+		JokerIndex:      3,
+		ReplacementCard: card(Ace, Spades),
+	}) {
+		t.Fatal("isAmbiguousSetReclaim() = true; want false for a single representation")
+	}
+
+	ambiguousSet := mustSet(t, card(Ace, Hearts), card(Ace, Diamonds), joker())
+	if isAmbiguousSetReclaim(ambiguousSet, JokerReclaim{
+		JokerIndex:      2,
+		ReplacementCard: card(Ace, Hearts),
+	}) {
+		t.Fatal("isAmbiguousSetReclaim() = true; want false for a mismatched replacement")
 	}
 }
 
@@ -4375,6 +4407,7 @@ func TestApplyTablePlayStateAllowsReclaimedJokerInsertedIntoSameRun(t *testing.T
 }
 
 func TestApplyTablePlayStateAllowsAdditionBeforeAmbiguousSetReclaim(t *testing.T) {
+	insertAtStart := 0
 	base := tablePlayState{
 		handCards: []Card{
 			card(Ace, Clubs),
@@ -4392,6 +4425,7 @@ func TestApplyTablePlayStateAllowsAdditionBeforeAmbiguousSetReclaim(t *testing.T
 		nil,
 		[]CompositionAddition{{
 			CompositionIndex: 0,
+			InsertIndex:      &insertAtStart,
 			Cards:            []Card{card(Ace, Clubs)},
 		}},
 		[]JokerReclaim{{
@@ -4405,10 +4439,10 @@ func TestApplyTablePlayStateAllowsAdditionBeforeAmbiguousSetReclaim(t *testing.T
 		t.Fatalf("applyTablePlayState() error = %v; want nil", err)
 	}
 	wantComposition := []Card{
+		card(Ace, Clubs),
 		card(Ace, Hearts),
 		card(Ace, Diamonds),
 		card(Ace, Spades),
-		card(Ace, Clubs),
 	}
 	if !slices.EqualFunc(next.activeCompositions[0].cards, wantComposition, cardsEqual) {
 		t.Fatalf("active composition cards = %+v; want %+v", next.activeCompositions[0].cards, wantComposition)

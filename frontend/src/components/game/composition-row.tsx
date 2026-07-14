@@ -1,7 +1,5 @@
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
-import { Tick01FreeIcons } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 import {
   canReclaimJokerWithCard,
   type HandEntry,
@@ -57,11 +55,13 @@ function CompositionEdgeDraftZone({
   interactive,
   players,
   playerId,
+  invalidEntryKeys,
 }: {
   entries: HandEntry[];
   interactive: boolean;
   players: PlayerSnapshot[];
   playerId?: string;
+  invalidEntryKeys: Set<string>;
 }) {
   return (
     <SortableContext
@@ -94,6 +94,7 @@ function CompositionEdgeDraftZone({
                 />
               ),
             }}
+            invalid={invalidEntryKeys.has(entry.key)}
           />
         ))}
       </div>
@@ -198,6 +199,7 @@ export function CompositionRow({
   stagedEntriesInteractive = true,
   dropTargetsEnabled = false,
   activity,
+  invalidEntryKeys = new Set<string>(),
 }: {
   composition: CompositionSnapshot;
   index: number;
@@ -214,6 +216,7 @@ export function CompositionRow({
     playerId?: string;
     cardActivities?: Record<number, { kind: string; playerId: string }>;
   };
+  invalidEntryKeys?: Set<string>;
 }) {
   const { active, over } = useDndContext();
   const compositionDropId = tableCompositionDropId(index);
@@ -275,12 +278,6 @@ export function CompositionRow({
         ref={setCompositionHoverRef}
         className="pointer-events-none absolute inset-0 z-0 rounded-3xl"
       />
-      {composition.complete ? (
-        <div className="absolute -top-1 -right-1 z-10 flex size-5 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-primary/70 bg-primary/5 text-primary/70 shadow-sm">
-          <HugeiconsIcon icon={Tick01FreeIcons} className="size-3" strokeWidth={2} />
-        </div>
-      ) : null}
-
       <div className="mb-2.5 flex min-h-5 flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">#{index + 1}</Badge>
@@ -290,7 +287,7 @@ export function CompositionRow({
         </div>
         <Text as="div" variant="caption" className="flex items-center gap-2">
           {previewPoints === null ? (
-            <span title="Add a natural card to resolve this joker's composition value">?</span>
+            <span title="Complete a valid composition to resolve its point value">?</span>
           ) : (
             <AnimatedNumber value={previewPoints} />
           )}{" "}
@@ -312,6 +309,7 @@ export function CompositionRow({
             interactive={stagedEntriesInteractive}
             players={players}
             playerId={stagedEntryPlayerId}
+            invalidEntryKeys={invalidEntryKeys}
           />
         ) : null}
 
@@ -386,6 +384,7 @@ export function CompositionRow({
                         }
                       : undefined
                   }
+                  invalid={Boolean(reclaim && invalidEntryKeys.has(reclaim.replacementEntry.key))}
                 />
               </div>
             </div>
@@ -398,6 +397,7 @@ export function CompositionRow({
             interactive={stagedEntriesInteractive}
             players={players}
             playerId={stagedEntryPlayerId}
+            invalidEntryKeys={invalidEntryKeys}
           />
         ) : null}
 

@@ -3,12 +3,12 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import {
   NEW_COMPOSITION_DROP_ID,
   buildHandEntries,
-  canReclaimJokerWithCard,
   type DraftedCompositionView,
   type HandEntry,
   type PlannedJokerReclaim,
   type TableCompositionView,
   draftCompositionDropId,
+  planTableJokerReclaims,
 } from "#/components/game/game-board-view-state";
 import {
   type CompositionActivitySnapshot,
@@ -28,6 +28,7 @@ import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 import { Text } from "#/components/typography";
+import { cn } from "#/lib/utils";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -49,6 +50,23 @@ function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
   });
 }
 
+function alignedEntryIndexMap(
+  entries: HandEntry[],
+  placements: DraftCompositionSnapshot["cardPlacements"],
+  field: "insertIndex" | "reclaimJokerIndex",
+) {
+  const normalized: Record<string, number> = {};
+
+  for (const [index, entry] of entries.entries()) {
+    const value = placements?.[index]?.[field];
+    if (value !== undefined) {
+      normalized[entry.key] = value;
+    }
+  }
+
+  return normalized;
+}
+
 export function draftPreviewForComposition(
   tableComposition: TableCompositionView | undefined,
   draft: DraftCompositionSnapshot,
@@ -61,75 +79,52 @@ export function draftPreviewForComposition(
       stagedEntries,
       reclaims: [] as PlannedJokerReclaim[],
       insertIndex: draft.insertIndex,
-      cardInsertIndices: draft.cardInsertIndices,
+      cardInsertIndices: undefined,
     };
   }
 
   const insertIndex = draft.insertIndex ?? tableComposition.snapshot.cards.length;
-  const reclaimTargetsByEntryKey = new Map<string, number>();
-  const usedReclaimTargetKeys = new Set<string>();
-  const usedJokerIndices = new Set<number>();
-  const reclaimTargets = Object.entries(draft.reclaimTargets ?? {});
+  const normalizedReclaimTargets = alignedEntryIndexMap(
+    stagedEntries,
+    draft.cardPlacements,
+    "reclaimJokerIndex",
+  );
+  const normalizedCardInsertIndices = alignedEntryIndexMap(
+    stagedEntries,
+    draft.cardPlacements,
+    "insertIndex",
+  );
 
-  for (const entry of stagedEntries) {
-    const directJokerIndex = draft.reclaimTargets?.[entry.key];
-    if (
-      typeof directJokerIndex === "number" &&
-      canReclaimJokerWithCard(tableComposition.snapshot, directJokerIndex, entry.card)
-    ) {
-      reclaimTargetsByEntryKey.set(entry.key, directJokerIndex);
-      usedReclaimTargetKeys.add(entry.key);
-      usedJokerIndices.add(directJokerIndex);
-    }
-  }
-
-  for (const entry of stagedEntries) {
-    if (reclaimTargetsByEntryKey.has(entry.key)) {
-      continue;
-    }
-
-    for (const [targetKey, jokerIndex] of reclaimTargets) {
-      if (usedReclaimTargetKeys.has(targetKey) || usedJokerIndices.has(jokerIndex)) {
-        continue;
-      }
-      if (!canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)) {
-        continue;
-      }
-
-      reclaimTargetsByEntryKey.set(entry.key, jokerIndex);
-      usedReclaimTargetKeys.add(targetKey);
-      usedJokerIndices.add(jokerIndex);
-      break;
-    }
-  }
-
-  const reclaims = stagedEntries.flatMap((entry) => {
-    const jokerIndex = reclaimTargetsByEntryKey.get(entry.key);
-    return typeof jokerIndex === "number" &&
-      canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)
-      ? [{ jokerIndex, replacementEntry: entry } satisfies PlannedJokerReclaim]
-      : [];
-  });
-  const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
+  const plannedReclaims = planTableJokerReclaims(
+    tableComposition.snapshot,
+    stagedEntries,
+    insertIndex,
+    normalizedReclaimTargets,
+  );
+  const reclaims = plannedReclaims.reclaims;
+  const reclaimedEntryKeys = plannedReclaims.reclaimedEntryKeys;
   const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
   const entriesByInsertIndex = new Map<number, HandEntry[]>();
 
   for (const entry of additionEntries) {
-    const entryInsertIndex = draft.cardInsertIndices?.[entry.key] ?? insertIndex;
+    const entryInsertIndex = normalizedCardInsertIndices[entry.key] ?? insertIndex;
     const entries = entriesByInsertIndex.get(entryInsertIndex) ?? [];
     entries.push(entry);
     entriesByInsertIndex.set(entryInsertIndex, entries);
   }
 
-  const orderedAdditionEntries = [...entriesByInsertIndex].flatMap(([entryInsertIndex, entries]) =>
-    entryInsertIndex === 0 ? [...entries].reverse() : entries,
-  );
+  const orderedAdditionEntries = [
+    ...[...(entriesByInsertIndex.get(0) ?? [])].reverse(),
+    ...[...entriesByInsertIndex]
+      .filter(([entryInsertIndex]) => entryInsertIndex !== 0)
+      .flatMap(([, entries]) => entries),
+  ];
 
   return {
     stagedEntries: orderedAdditionEntries,
     reclaims,
     insertIndex,
-    cardInsertIndices: draft.cardInsertIndices,
+    cardInsertIndices: normalizedCardInsertIndices,
   };
 }
 
@@ -140,6 +135,8 @@ export function GameBoardTable({
   turnActivity,
   canCompose,
   showDraftTotal,
+  invalidCompositionIds = new Set<string>(),
+  invalidEntryKeys = new Set<string>(),
 }: {
   tableCompositions: TableCompositionView[];
   newCompositions: DraftedCompositionView[];
@@ -147,6 +144,8 @@ export function GameBoardTable({
   turnActivity?: TurnActivitySnapshot;
   canCompose: boolean;
   showDraftTotal: boolean;
+  invalidCompositionIds?: Set<string>;
+  invalidEntryKeys?: Set<string>;
 }) {
   const { active } = useDndContext();
   const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
@@ -292,6 +291,7 @@ export function GameBoardTable({
                           stagedEntriesInteractive={composition.stagedEntries.length > 0}
                           dropTargetsEnabled={canCompose}
                           activity={activityByIndex.get(composition.tableIndex)}
+                          invalidEntryKeys={invalidEntryKeys}
                         />
                       );
                     })()}
@@ -314,7 +314,7 @@ export function GameBoardTable({
                 <Badge variant="outline">
                   Draft total{" "}
                   {visibleDraftPointsTotal === null ? (
-                    <span title="Add a natural card to resolve the joker's composition value">
+                    <span title="Complete every draft composition to resolve its point value">
                       ?
                     </span>
                   ) : (
@@ -334,9 +334,7 @@ export function GameBoardTable({
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                   <Badge variant="outline">
                     {draftCompositionPointTotal(composition.cards) === null ? (
-                      <span title="Add a natural card to resolve the joker's composition value">
-                        ?
-                      </span>
+                      <span title="Complete a valid composition to resolve its point value">?</span>
                     ) : (
                       <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
                     )}{" "}
@@ -359,16 +357,20 @@ export function GameBoardTable({
               <GameBoardDraftDropZone
                 key={composition.id}
                 id={draftCompositionDropId(composition.id)}
-                className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
+                className={cn(
+                  "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
+                  invalidCompositionIds.has(composition.id)
+                    ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30"
+                    : null,
+                )}
+                invalid={invalidCompositionIds.has(composition.id)}
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
                   <Badge variant="outline">
                     {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
                     null ? (
-                      <span title="Add a natural card to resolve the joker's composition value">
-                        ?
-                      </span>
+                      <span title="Complete a valid composition to resolve its point value">?</span>
                     ) : (
                       <AnimatedNumber
                         value={

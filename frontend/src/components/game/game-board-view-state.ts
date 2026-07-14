@@ -2,8 +2,10 @@ import { arrayMove } from "@dnd-kit/sortable";
 import {
   type CardSnapshot,
   type CompositionSnapshot,
+  type DraftCompositionSnapshot,
   type TablePlayRequest,
 } from "#/components/game-websocket-provider";
+import { isValidDraftComposition } from "#/components/game/game-card-utils";
 
 export type HandEntry = {
   key: string;
@@ -73,6 +75,25 @@ export type OpeningTablePlayValidation = {
   canSubmit: boolean;
   reason?: "missing-own-composition";
 };
+
+export function buildDraftCompositionSnapshot(
+  composition: DraftedCompositionView,
+): DraftCompositionSnapshot {
+  const cardPlacements = composition.entries.map((entry) => ({
+    insertIndex: composition.cardInsertIndices?.[entry.key],
+    reclaimJokerIndex: composition.reclaimTargets?.[entry.key],
+  }));
+  const hasCardPlacements = cardPlacements.some(
+    (placement) => placement.insertIndex !== undefined || placement.reclaimJokerIndex !== undefined,
+  );
+
+  return {
+    tableIndex: composition.tableIndex ?? undefined,
+    insertIndex: composition.insertIndex,
+    cardPlacements: hasCardPlacements ? cardPlacements : undefined,
+    cards: composition.entries.map((entry) => entry.card),
+  };
+}
 
 export const FACE_DOWN_CARD: CardSnapshot = {};
 export const HAND_DROP_ID = "hand-drop-zone";
@@ -715,7 +736,7 @@ function buildExplicitReclaims(
   };
 }
 
-function planTableJokerReclaims(
+export function planTableJokerReclaims(
   composition: CompositionSnapshot,
   stagedEntries: HandEntry[],
   insertIndex: number,
@@ -741,6 +762,91 @@ function planTableJokerReclaims(
     reclaims: inferred.reclaims,
     reclaimedEntryKeys: new Set(inferred.reclaims.map((reclaim) => reclaim.replacementEntry.key)),
   };
+}
+
+export type DraftValidationResult = {
+  invalidCompositionIds: Set<string>;
+  invalidEntryKeys: Set<string>;
+};
+
+function cardsAfterTableDraft(
+  composition: CompositionSnapshot,
+  draft: DraftedCompositionView,
+  excludedEntryKey?: string,
+) {
+  const entries = draft.entries.filter((entry) => entry.key !== excludedEntryKey);
+  const defaultInsertIndex = draft.insertIndex ?? composition.cards.length;
+  const plannedReclaims = planTableJokerReclaims(
+    composition,
+    entries,
+    defaultInsertIndex,
+    draft.reclaimTargets,
+  );
+  const replacementByJokerIndex = new Map(
+    plannedReclaims.reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim.replacementEntry.card]),
+  );
+  const cards = composition.cards.map((card, index) => replacementByJokerIndex.get(index) ?? card);
+  const additionsByInsertIndex = new Map<number, HandEntry[]>();
+
+  for (const entry of entries) {
+    if (plannedReclaims.reclaimedEntryKeys.has(entry.key)) {
+      continue;
+    }
+
+    const insertIndex = draft.cardInsertIndices?.[entry.key] ?? defaultInsertIndex;
+    const additions = additionsByInsertIndex.get(insertIndex) ?? [];
+    additions.push(entry);
+    additionsByInsertIndex.set(insertIndex, additions);
+  }
+
+  for (const [insertIndex, additions] of [...additionsByInsertIndex].sort(
+    ([left], [right]) => right - left,
+  )) {
+    const orderedAdditions = insertIndex === 0 ? [...additions].reverse() : additions;
+    cards.splice(insertIndex, 0, ...orderedAdditions.map((entry) => entry.card));
+  }
+
+  return cards;
+}
+
+export function validateDraftedCompositions(
+  activeCompositions: CompositionSnapshot[],
+  drafts: DraftedCompositionView[],
+): DraftValidationResult {
+  const invalidCompositionIds = new Set<string>();
+  const invalidEntryKeys = new Set<string>();
+
+  for (const draft of drafts) {
+    if (draft.tableIndex === null) {
+      if (!isValidDraftComposition(draft.entries.map((entry) => entry.card))) {
+        invalidCompositionIds.add(draft.id);
+      }
+      continue;
+    }
+
+    const composition = activeCompositions[draft.tableIndex];
+    if (!composition) {
+      draft.entries.forEach((entry) => invalidEntryKeys.add(entry.key));
+      continue;
+    }
+
+    const finalCards = cardsAfterTableDraft(composition, draft);
+    if (isValidDraftComposition(finalCards, composition.type)) {
+      continue;
+    }
+
+    const individuallyResponsibleEntries = draft.entries.filter((entry) =>
+      isValidDraftComposition(
+        cardsAfterTableDraft(composition, draft, entry.key),
+        composition.type,
+      ),
+    );
+    const entriesToMark =
+      individuallyResponsibleEntries.length > 0 ? individuallyResponsibleEntries : draft.entries;
+    entriesToMark.forEach((entry) => invalidEntryKeys.add(entry.key));
+  }
+
+  return { invalidCompositionIds, invalidEntryKeys };
 }
 
 function orderAdditionEntries(
