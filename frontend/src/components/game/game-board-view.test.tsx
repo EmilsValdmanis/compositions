@@ -36,13 +36,15 @@ if (typeof globalThis.document === "undefined") {
   });
 }
 
-const { act, cleanup, render, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
 
 let dndContextProps: {
   onDragStart?: (event: any) => void;
+  onDragOver?: (event: any) => void;
   onDragEnd?: (event: any) => void;
 } = {};
+let sortableContextItems: string[][] = [];
 
 vi.mock("#/components/game-websocket-provider", () => ({
   useGameWebSocket: () => ({
@@ -73,7 +75,12 @@ vi.mock("@dnd-kit/core", () => ({
 }));
 
 vi.mock("@dnd-kit/sortable", () => ({
-  SortableContext: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SortableContext: ({ children, items }: { children: ReactNode; items?: string[] }) => {
+    if (items) {
+      sortableContextItems.push(items);
+    }
+    return <>{children}</>;
+  },
   horizontalListSortingStrategy: vi.fn(),
   arrayMove: <T,>(items: T[], from: number, to: number) => {
     const next = [...items];
@@ -98,11 +105,13 @@ const { GameBoardView } = await import("#/components/game/game-board-view");
 beforeEach(() => {
   cleanup();
   dndContextProps = {};
+  sortableContextItems = [];
 });
 
 afterEach(() => {
   cleanup();
   dndContextProps = {};
+  sortableContextItems = [];
 });
 
 function makeGame(
@@ -181,6 +190,82 @@ function dragEnd(handKey: string, overId: string, cardIndex: number) {
     },
   });
 }
+
+function dragOver(handKey: string, overId: string) {
+  dndContextProps.onDragOver?.({
+    active: {
+      id: handKey,
+    },
+    over: {
+      id: overId,
+    },
+  });
+}
+
+describe("GameBoardView draft returns", () => {
+  it("opens a sortable hand gap while returning a draft card and restores order on reset", async () => {
+    const view = render(
+      <GameBoardView
+        game={makeGame([
+          { rank: 1, suit: 0 },
+          { rank: 2, suit: 0 },
+          { rank: 3, suit: 0 },
+        ])}
+        roomCode="RESET-ROOM"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 4, suit: 0 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        disableDraftSync
+      />,
+    );
+
+    await act(async () => {
+      dragStart("2-0-1", 1);
+    });
+    await act(async () => {
+      dragEnd("2-0-1", "new-composition-drop-zone", 1);
+    });
+    await act(async () => {
+      dragStart("3-0-1", 2);
+    });
+    await act(async () => {
+      dragEnd("3-0-1", "2-0-1", 2);
+    });
+
+    sortableContextItems = [];
+    await act(async () => {
+      dragStart("2-0-1", 1);
+    });
+    await act(async () => {
+      dragOver("2-0-1", "1-0-1");
+    });
+
+    expect(sortableContextItems.at(-1)).toEqual(["2-0-1", "1-0-1"]);
+
+    await act(async () => {
+      dragEnd("2-0-1", "1-0-1", 1);
+    });
+    expect(sortableContextItems.at(-1)).toEqual(["2-0-1", "1-0-1"]);
+
+    fireEvent.click(view.getByRole("button", { name: "Reset" }));
+
+    expect(sortableContextItems.at(-1)).toEqual(["1-0-1", "2-0-1", "3-0-1"]);
+  });
+});
 
 describe("GameBoardView discard drops", () => {
   it("shows the turn-start cue only for the active player", () => {
