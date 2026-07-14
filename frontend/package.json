@@ -6,6 +6,8 @@
     "#/*": "./src/*"
   },
   "scripts": {
+    "postinstall": "bun run paraglide:compile",
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --output-structure message-modules --emit-ts-declarations",
     "dev": "vp dev --port 3000",
     "build": "vp build",
     "preview": "vp preview",
