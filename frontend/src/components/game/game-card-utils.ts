@@ -70,8 +70,24 @@ function rankPointValue(rank: number, aceLow = false) {
   return 0;
 }
 
+function hasValidNaturalIdentity(card: CardSnapshot) {
+  return (
+    card.isJoker === true ||
+    (Number.isInteger(card.rank) &&
+      (card.rank ?? 0) >= 1 &&
+      (card.rank ?? 0) <= 13 &&
+      Number.isInteger(card.suit) &&
+      (card.suit ?? -1) >= 0 &&
+      (card.suit ?? -1) <= 3)
+  );
+}
+
 function draftSetPointTotal(cards: CardSnapshot[]) {
-  if (cards.length < 3 || cards.length > 4) {
+  if (
+    cards.length < 3 ||
+    cards.length > 4 ||
+    cards.some((card) => !hasValidNaturalIdentity(card))
+  ) {
     return null;
   }
 
@@ -90,7 +106,11 @@ function draftSetPointTotal(cards: CardSnapshot[]) {
 }
 
 function draftRunPointTotal(cards: CardSnapshot[]) {
-  if (cards.length < 3 || cards.length > 14) {
+  if (
+    cards.length < 3 ||
+    cards.length > 14 ||
+    cards.some((card) => !hasValidNaturalIdentity(card))
+  ) {
     return null;
   }
 
@@ -139,19 +159,27 @@ function draftRunPointTotal(cards: CardSnapshot[]) {
   return best;
 }
 
-export function draftCompositionPointTotal(cards: CardSnapshot[]) {
-  const validTotals = [draftSetPointTotal(cards), draftRunPointTotal(cards)].filter(
-    (total): total is number => typeof total === "number",
-  );
-
-  if (validTotals.length > 0) {
-    return Math.max(...validTotals);
+export function draftCompositionPointTotal(
+  cards: CardSnapshot[],
+  type?: CompositionSnapshot["type"],
+) {
+  // A joker is worth 20 only while it remains in a player's hand. Drafts need
+  // a valid composition and at least one natural card to establish table value.
+  if (cards.every((card) => card.isJoker)) {
+    return null;
   }
 
-  // A joker's 20-point value only applies while it is left in a player's hand.
-  // Until a natural card gives an unfinished draft some composition context,
-  // its table value cannot be known.
-  return cards.length > 0 && cards.every((card) => card.isJoker) ? null : cardPointTotal(cards);
+  if (type === "set") {
+    return draftSetPointTotal(cards);
+  }
+
+  if (type === "run") {
+    return draftRunPointTotal(cards);
+  }
+
+  // Match the backend's composition inference order: a valid set wins before
+  // the same cards are considered as an unordered run.
+  return draftSetPointTotal(cards) ?? draftRunPointTotal(cards);
 }
 
 export function isValidDraftComposition(cards: CardSnapshot[], type?: CompositionSnapshot["type"]) {
@@ -178,5 +206,5 @@ export function draftCompositionPreviewPointTotal(
     (card, index) => replacementByJokerIndex.get(index) ?? card,
   );
 
-  return draftCompositionPointTotal([...previewCards, ...additions]);
+  return draftCompositionPointTotal([...previewCards, ...additions], composition.type);
 }

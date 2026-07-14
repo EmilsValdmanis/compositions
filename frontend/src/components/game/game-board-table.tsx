@@ -299,7 +299,7 @@ export function GameBoardTable({
                 <Badge variant="outline">
                   Draft total{" "}
                   {visibleDraftPointsTotal === null ? (
-                    <span title="Add a natural card to resolve the joker's composition value">
+                    <span title="Complete every draft composition to resolve its point value">
                       ?
                     </span>
                   ) : (
@@ -319,9 +319,7 @@ export function GameBoardTable({
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                   <Badge variant="outline">
                     {draftCompositionPointTotal(composition.cards) === null ? (
-                      <span title="Add a natural card to resolve the joker's composition value">
-                        ?
-                      </span>
+                      <span title="Complete a valid composition to resolve its point value">?</span>
                     ) : (
                       <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
                     )}{" "}
@@ -357,9 +355,7 @@ export function GameBoardTable({
                   <Badge variant="outline">
                     {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
                     null ? (
-                      <span title="Add a natural card to resolve the joker's composition value">
-                        ?
-                      </span>
+                      <span title="Complete a valid composition to resolve its point value">?</span>
                     ) : (
                       <AnimatedNumber
                         value={

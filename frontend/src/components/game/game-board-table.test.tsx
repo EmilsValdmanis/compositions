@@ -4,10 +4,18 @@ import { DndContext } from "@dnd-kit/core";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { GameBoardTable, draftPreviewForComposition } from "#/components/game/game-board-table";
+import { type CardSnapshot } from "#/components/game-websocket-provider";
 
 afterEach(cleanup);
 
-function renderDraftTable(showDraftTotal: boolean) {
+function renderDraftTable(
+  showDraftTotal: boolean,
+  cards: CardSnapshot[] = [
+    { rank: 3, suit: 0 },
+    { rank: 4, suit: 0 },
+    { rank: 5, suit: 0 },
+  ],
+) {
   return render(
     <DndContext>
       <GameBoardTable
@@ -20,11 +28,7 @@ function renderDraftTable(showDraftTotal: boolean) {
           turnNumber: 1,
           draftCompositions: [
             {
-              cards: [
-                { rank: 3, suit: 0 },
-                { rank: 4, suit: 0 },
-                { rank: 5, suit: 0 },
-              ],
+              cards,
             },
           ],
         }}
@@ -126,5 +130,15 @@ describe("GameBoardTable draft total", () => {
     const view = renderDraftTable(false);
 
     expect(view.queryByText(/Draft total/)).toBeNull();
+  });
+
+  it("renders question-mark points for an unresolved natural-card and joker draft", () => {
+    const view = renderDraftTable(false, [{ rank: 6, suit: 0 }, { isJoker: true }]);
+    const unresolvedScore = view.getByTitle(
+      "Complete a valid composition to resolve its point value",
+    );
+
+    expect(unresolvedScore.textContent).toBe("?");
+    expect(unresolvedScore.parentElement?.textContent).toContain("? pts");
   });
 });
