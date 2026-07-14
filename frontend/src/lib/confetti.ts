@@ -33,7 +33,7 @@ export async function fireCelebrationConfetti({
   };
 
   const fire = (particleRatio: number, options: confetti.Options) => {
-    fireConfetti({
+    void fireConfetti({
       ...defaults,
       ...options,
       particleCount: Math.floor(count * particleRatio),

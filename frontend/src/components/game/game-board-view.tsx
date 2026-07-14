@@ -74,6 +74,7 @@ type HandOrderState = {
 type DraftCompositionState = {
   scopeKey: string | null;
   compositions: DraftComposition[];
+  baselineHandOrder: string[] | null;
 };
 
 function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetection {
@@ -414,6 +415,7 @@ function useGameBoardController({
   const [draftCompositionState, setDraftCompositionState] = useState<DraftCompositionState>({
     scopeKey: null,
     compositions: [],
+    baselineHandOrder: null,
   });
   const nextDraftIdRef = useRef(0);
   const skipNextDraftSyncRef = useRef(false);
@@ -443,12 +445,32 @@ function useGameBoardController({
 
   function updateDraftCompositions(updater: (current: DraftComposition[]) => DraftComposition[]) {
     setDraftCompositionState((current) => {
-      const scopedCompositions =
-        current.scopeKey === currentDraftScopeKey ? current.compositions : [];
+      const isCurrentScope = current.scopeKey === currentDraftScopeKey;
+      const scopedCompositions = isCurrentScope ? current.compositions : [];
+      const nextCompositions = updater(scopedCompositions);
 
       return {
         scopeKey: currentDraftScopeKey,
-        compositions: updater(scopedCompositions),
+        compositions: nextCompositions,
+        baselineHandOrder:
+          (isCurrentScope ? current.baselineHandOrder : null) ??
+          (scopedCompositions.length === 0 && nextCompositions.length > 0
+            ? handEntryOrder(handEntries)
+            : null),
+      };
+    });
+  }
+
+  function finishReturningHandKey(handKey: string) {
+    setDraftCompositionState((current) => {
+      const scopedCompositions =
+        current.scopeKey === currentDraftScopeKey ? current.compositions : [];
+      const nextCompositions = removeHandKeyFromDrafts(scopedCompositions, handKey);
+
+      return {
+        scopeKey: currentDraftScopeKey,
+        compositions: nextCompositions,
+        baselineHandOrder: nextCompositions.length > 0 ? current.baselineHandOrder : null,
       };
     });
   }
@@ -523,9 +545,17 @@ function useGameBoardController({
       skipNextDraftSyncRef.current = true;
     }
 
+    if (
+      draftCompositionState.scopeKey === currentDraftScopeKey &&
+      draftCompositionState.baselineHandOrder
+    ) {
+      updateHandOrder(draftCompositionState.baselineHandOrder);
+    }
+
     setDraftCompositionState({
       scopeKey: currentDraftScopeKey,
       compositions: [],
+      baselineHandOrder: null,
     });
   }
 
@@ -586,7 +616,7 @@ function useGameBoardController({
         ? {
             type: "hand",
             handKey,
-            baselineHandOrder: handEntryOrder(availableHandEntries),
+            baselineHandOrder: handEntryOrder(handEntries),
             baselineDraftCompositions: draftCompositions,
           }
         : null,
@@ -616,6 +646,19 @@ function useGameBoardController({
 
     const overId = typeof event.over?.id === "string" ? event.over.id : null;
     if (overId === null) {
+      return;
+    }
+
+    const startedInDraft = activeDrag.baselineDraftCompositions.some((composition) =>
+      composition.handKeys.includes(activeDrag.handKey),
+    );
+    const droppedOnHandCard = availableHandEntries.some((entry) => entry.key === overId);
+    if (startedInDraft && (overId === HAND_DROP_ID || droppedOnHandCard)) {
+      updateDraftCompositions((current) => removeHandKeyFromDrafts(current, activeDrag.handKey));
+
+      if (droppedOnHandCard && activeDrag.handKey !== overId) {
+        updateHandOrder(handEntryOrder(moveHandEntry(handEntries, activeDrag.handKey, overId)));
+      }
       return;
     }
 
@@ -668,9 +711,11 @@ function useGameBoardController({
     }
 
     if (overId === null) {
+      updateHandOrder(currentDrag.baselineHandOrder);
       setDraftCompositionState({
         scopeKey: currentDraftScopeKey,
         compositions: currentDrag.baselineDraftCompositions,
+        baselineHandOrder: draftCompositionState.baselineHandOrder,
       });
       return;
     }
@@ -682,6 +727,12 @@ function useGameBoardController({
         : draftCompositions.find((composition) => composition.handKeys.includes(overId));
     const droppedOnHandCard =
       overId !== null && availableHandEntries.some((entry) => entry.key === overId);
+    const startedInDraft = currentDrag.baselineDraftCompositions.some((composition) =>
+      composition.handKeys.includes(draggedHandKey),
+    );
+    const returnedToHandDuringDrag =
+      startedInDraft &&
+      !draftCompositions.some((composition) => composition.handKeys.includes(draggedHandKey));
     const droppedOnDraftContainer = overId ? compositionIdFromDropId(overId) : null;
     const droppedOnTableEdgeTarget = overId ? tableCompositionEdgeTargetFromDropId(overId) : null;
     const droppedOnTableJokerTarget = overId ? tableCompositionJokerTargetFromDropId(overId) : null;
@@ -848,15 +899,15 @@ function useGameBoardController({
 
     if (overId === HAND_DROP_ID) {
       playGameSound("card-place");
-      updateDraftCompositions((current) => removeHandKeyFromDrafts(current, draggedHandKey));
+      finishReturningHandKey(draggedHandKey);
       return;
     }
 
     if (droppedOnHandCard) {
       playGameSound("card-place");
-      updateDraftCompositions((current) => removeHandKeyFromDrafts(current, draggedHandKey));
+      finishReturningHandKey(draggedHandKey);
 
-      if (draggedHandKey !== overId) {
+      if (draggedHandKey !== overId && !returnedToHandDuringDrag) {
         updateHandOrder(handEntryOrder(moveHandEntry(handEntries, draggedHandKey, overId)));
       }
     }
@@ -866,9 +917,11 @@ function useGameBoardController({
     if (activeDrag?.type === "draw") {
       updateHandOrder(activeDrag.baselineOrder);
     } else if (activeDrag?.type === "hand") {
+      updateHandOrder(activeDrag.baselineHandOrder);
       setDraftCompositionState({
         scopeKey: currentDraftScopeKey,
         compositions: activeDrag.baselineDraftCompositions,
+        baselineHandOrder: draftCompositionState.baselineHandOrder,
       });
     }
 
