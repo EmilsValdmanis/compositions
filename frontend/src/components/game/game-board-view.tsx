@@ -56,6 +56,7 @@ import {
   tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
   tableCompositionJokerTargetFromDropId,
+  validateDraftedCompositions,
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
 import { playGameSound } from "#/lib/game-sounds";
@@ -279,6 +280,8 @@ function GameBoardLayout({
   activeDrag,
   draftedCompositionsCount,
   spectatorDrafts,
+  invalidCompositionIds,
+  invalidEntryKeys,
   onResetDraftCompositions,
   onSendEmote,
 }: {
@@ -296,6 +299,8 @@ function GameBoardLayout({
   activeDrag: ActiveDrag | null;
   draftedCompositionsCount: number;
   spectatorDrafts: DraftCompositionSnapshot[];
+  invalidCompositionIds: Set<string>;
+  invalidEntryKeys: Set<string>;
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
 }) {
@@ -326,6 +331,8 @@ function GameBoardLayout({
           showDraftTotal={
             !game?.players.find((player) => player.playerId === game.turn.playerId)?.hasOpened
           }
+          invalidCompositionIds={invalidCompositionIds}
+          invalidEntryKeys={invalidEntryKeys}
         />
 
         <div className="flex flex-col min-h-0 gap-4">
@@ -375,6 +382,8 @@ type GameBoardController = {
   newCompositions: DraftedCompositionView[];
   draftedCompositionsCount: number;
   canSubmitTablePlay: boolean;
+  invalidCompositionIds: Set<string>;
+  invalidEntryKeys: Set<string>;
   handleDragStart: (event: DragStartEvent) => void;
   handleDragOver: (event: DragOverEvent) => void;
   handleDragEnd: (event: DragEndEvent) => void;
@@ -422,6 +431,7 @@ function useGameBoardController({
     compositions: [],
     baselineHandOrder: null,
   });
+  const [showDraftValidation, setShowDraftValidation] = useState(false);
   const nextDraftIdRef = useRef(0);
   const skipNextDraftSyncRef = useRef(false);
   const rawHandEntries = buildHandEntries(game?.hand ?? []);
@@ -449,6 +459,7 @@ function useGameBoardController({
       : null;
 
   function updateDraftCompositions(updater: (current: DraftComposition[]) => DraftComposition[]) {
+    setShowDraftValidation(false);
     setDraftCompositionState((current) => {
       const isCurrentScope = current.scopeKey === currentDraftScopeKey;
       const scopedCompositions = isCurrentScope ? current.compositions : [];
@@ -515,6 +526,9 @@ function useGameBoardController({
   );
   const canSubmitTablePlay =
     canCompose && draftedCompositionsView.length > 0 && openingTablePlayValidation.canSubmit;
+  const draftValidation = showDraftValidation
+    ? validateDraftedCompositions(game?.activeCompositions ?? [], draftedCompositionsView)
+    : { invalidCompositionIds: new Set<string>(), invalidEntryKeys: new Set<string>() };
 
   const serializedDrafts = JSON.stringify(
     draftedCompositionsView.map(
@@ -546,6 +560,7 @@ function useGameBoardController({
   }, [disableDraftSync, serializedDrafts, turnState.isMyTurn]);
 
   function resetDraftCompositions({ sync = true }: { sync?: boolean } = {}) {
+    setShowDraftValidation(false);
     if (!sync) {
       skipNextDraftSyncRef.current = true;
     }
@@ -569,11 +584,20 @@ function useGameBoardController({
       return { action: "play_table", playerId, ok: false };
     }
 
-    const result = await onPlayTable(
-      buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
-    );
+    let result: ActionResult | void;
+    try {
+      result = await onPlayTable(
+        buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
+      );
+    } catch {
+      setShowDraftValidation(true);
+      playGameSound("invalid-action");
+      return { action: "play_table", playerId, ok: false };
+    }
 
     if (result?.ok === false) {
+      setShowDraftValidation(true);
+      playGameSound("invalid-action");
       return result;
     }
 
@@ -774,11 +798,20 @@ function useGameBoardController({
           }
 
           if (draftedCompositionsView.length > 0) {
-            await onPlayTableAndDiscard(
-              buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
-              discardIndex,
-              discardCard,
-            );
+            try {
+              const result = await onPlayTableAndDiscard(
+                buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
+                discardIndex,
+                discardCard,
+              );
+              if (result?.ok === false) {
+                setShowDraftValidation(true);
+                playGameSound("invalid-action");
+              }
+            } catch {
+              setShowDraftValidation(true);
+              playGameSound("invalid-action");
+            }
             return;
           }
 
@@ -953,6 +986,8 @@ function useGameBoardController({
     newCompositions,
     draftedCompositionsCount: draftedCompositionsView.length,
     canSubmitTablePlay,
+    invalidCompositionIds: draftValidation.invalidCompositionIds,
+    invalidEntryKeys: draftValidation.invalidEntryKeys,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
@@ -1040,6 +1075,8 @@ export function GameBoardView({
         activeDrag={controller.activeDrag}
         draftedCompositionsCount={controller.draftedCompositionsCount}
         spectatorDrafts={spectatorDrafts}
+        invalidCompositionIds={controller.invalidCompositionIds}
+        invalidEntryKeys={controller.invalidEntryKeys}
         onResetDraftCompositions={controller.resetDraftCompositions}
         onSendEmote={onSendEmote}
       />

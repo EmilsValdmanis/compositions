@@ -175,6 +175,12 @@ function decorationRingClassName(highlight?: GameCardDecoration["highlight"]) {
   }
 }
 
+function invalidRingClassName(invalid?: boolean) {
+  return invalid
+    ? "border-destructive ring-2 ring-destructive ring-offset-2 ring-offset-background shadow-[0_0_0_1px_hsl(var(--destructive)/0.35)]"
+    : null;
+}
+
 function GameCardDecorationLayer({ decoration }: { decoration?: GameCardDecoration }) {
   if (!decoration?.label && !decoration?.footer) {
     return null;
@@ -205,6 +211,7 @@ function SortableGameCard({
   faceDown,
   data,
   decoration,
+  invalid,
 }: {
   card: CardSnapshot;
   id: string;
@@ -214,6 +221,7 @@ function SortableGameCard({
   faceDown?: boolean;
   data?: Record<string, unknown>;
   decoration?: GameCardDecoration;
+  invalid?: boolean;
 }) {
   const shouldReduceMotion = useShouldReduceMotion();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -241,10 +249,12 @@ function SortableGameCard({
           ? faceDownGameCardClassName(size, className)
           : gameCardClassName(card, size, className),
         decorationRingClassName(decoration?.highlight),
+        invalidRingClassName(invalid),
         "touch-none cursor-grab active:cursor-grabbing",
       )}
       title={accessibleName}
       aria-label={accessibleName}
+      aria-invalid={invalid || undefined}
       {...listeners}
       {...attributes}
     >
@@ -263,6 +273,7 @@ function DraggableGameCard({
   faceDown,
   data,
   decoration,
+  invalid,
 }: {
   card: CardSnapshot;
   id: string;
@@ -272,6 +283,7 @@ function DraggableGameCard({
   faceDown?: boolean;
   data?: Record<string, unknown>;
   decoration?: GameCardDecoration;
+  invalid?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
@@ -297,10 +309,12 @@ function DraggableGameCard({
           ? faceDownGameCardClassName(size, className)
           : gameCardClassName(card, size, className),
         decorationRingClassName(decoration?.highlight),
+        invalidRingClassName(invalid),
         disabled ? "cursor-default opacity-50" : "touch-none cursor-grab active:cursor-grabbing",
       )}
       title={accessibleName}
       aria-label={accessibleName}
+      aria-invalid={invalid || undefined}
       {...listeners}
       {...attributes}
     >
@@ -318,6 +332,7 @@ export function GameCard({
   dragSource,
   faceDown,
   decoration,
+  invalid,
 }: {
   card: CardSnapshot;
   size?: GameCardSize;
@@ -334,6 +349,7 @@ export function GameCard({
   };
   faceDown?: boolean;
   decoration?: GameCardDecoration;
+  invalid?: boolean;
 }) {
   if (draggable) {
     return (
@@ -346,6 +362,7 @@ export function GameCard({
         faceDown={faceDown}
         data={{ card, isVirtual: draggable.isVirtual }}
         decoration={decoration}
+        invalid={invalid}
       />
     );
   }
@@ -361,6 +378,7 @@ export function GameCard({
         data={dragSource.data}
         faceDown={faceDown}
         decoration={decoration}
+        invalid={invalid}
       />
     );
   }
@@ -373,16 +391,25 @@ export function GameCard({
         faceDown
           ? faceDownGameCardClassName(
               size,
-              cn(className, decorationRingClassName(decoration?.highlight)),
+              cn(
+                className,
+                decorationRingClassName(decoration?.highlight),
+                invalidRingClassName(invalid),
+              ),
             )
           : gameCardClassName(
               card,
               size,
-              cn(className, decorationRingClassName(decoration?.highlight)),
+              cn(
+                className,
+                decorationRingClassName(decoration?.highlight),
+                invalidRingClassName(invalid),
+              ),
             )
       }
       title={accessibleName}
       aria-label={accessibleName}
+      aria-invalid={invalid || undefined}
     >
       {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
       <GameCardDecorationLayer decoration={decoration} />

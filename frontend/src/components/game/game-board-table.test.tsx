@@ -73,6 +73,46 @@ describe("draftPreviewForComposition", () => {
 
     expect(preview.stagedEntries.map((entry) => entry.card.rank)).toEqual([3, 4]);
   });
+
+  it("shows an ambiguous set draft as one addition and one joker reclaim", () => {
+    const preview = draftPreviewForComposition(
+      {
+        tableIndex: 0,
+        key: "table-0",
+        snapshot: {
+          type: "set",
+          cards: [{ rank: 13, suit: 0 }, { rank: 13, suit: 1 }, { isJoker: true }],
+          jokerRepresentations: {
+            2: [
+              { rank: 13, suit: 2 },
+              { rank: 13, suit: 3 },
+            ],
+          },
+          points: 30,
+          complete: false,
+        },
+        stagedEntries: [],
+        reclaims: [],
+        insertIndex: 3,
+      },
+      {
+        tableIndex: 0,
+        reclaimTargets: { "13-3-2": 2 },
+        cards: [
+          { rank: 13, suit: 2 },
+          { rank: 13, suit: 3 },
+        ],
+      },
+      [
+        { rank: 13, suit: 2 },
+        { rank: 13, suit: 3 },
+      ],
+    );
+
+    expect(preview.stagedEntries.map((entry) => entry.card.suit)).toEqual([2]);
+    expect(preview.reclaims).toHaveLength(1);
+    expect(preview.reclaims[0]?.replacementEntry.card.suit).toBe(3);
+  });
 });
 
 describe("GameBoardTable draft total", () => {

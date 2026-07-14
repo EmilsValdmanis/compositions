@@ -14,30 +14,43 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 <!--VITE PLUS END-->
 
-
 ## Running the application
 
-Browser verification requires both backend and frontend.
+Browser verification requires both the backend and frontend.
 
-Run from /backend root:
+All commands below must be run from the `/backend` directory, **not the repository root**.
+
+### 1. Start the database
 
 ```bash
+cd backend
 make db-up
 ```
 
-Start the backend and frontend in separate terminals:
+### 2. Start both applications
+
+Open two separate terminals. In **both terminals**, change to the `/backend` directory first.
+
+Backend:
 
 ```bash
+cd backend
 make run
 ```
 
+Frontend:
+
 ```bash
+cd frontend
 vp dev
 ```
 
-Before browser testing:
+Do not run `vp dev` or other `vp` commands from the repository root.
 
-* Reuse already running services.
-* Confirm both services have started.
-* Use the development-only `dev-ui` route instead of Google login. If UI is missing add it for testing.
-* Check console errors and failed network requests.
+### Before browser testing
+
+- Reuse services that are already running.
+- Confirm that both the backend and frontend have started successfully.
+- Use the development-only `dev-ui` route instead of Google login.
+- If `dev-ui` is missing, add it for testing.
+- Check browser console errors and failed network requests.

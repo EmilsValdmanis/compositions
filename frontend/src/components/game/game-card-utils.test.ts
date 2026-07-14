@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   draftCompositionPointTotal,
   draftCompositionPreviewPointTotal,
+  isValidDraftComposition,
 } from "#/components/game/game-card-utils";
 
 describe("draftCompositionPointTotal", () => {
@@ -100,5 +101,17 @@ describe("draftCompositionPointTotal", () => {
         [{ jokerIndex: 1, replacementCard: { rank: 6, suit: 2 } }],
       ),
     ).toBe(26);
+  });
+});
+
+describe("isValidDraftComposition", () => {
+  it("rejects a gapped run such as five, seven, eight", () => {
+    expect(
+      isValidDraftComposition([
+        { rank: 5, suit: 0 },
+        { rank: 7, suit: 0 },
+        { rank: 8, suit: 0 },
+      ]),
+    ).toBe(false);
   });
 });

@@ -57,11 +57,13 @@ function CompositionEdgeDraftZone({
   interactive,
   players,
   playerId,
+  invalidEntryKeys,
 }: {
   entries: HandEntry[];
   interactive: boolean;
   players: PlayerSnapshot[];
   playerId?: string;
+  invalidEntryKeys: Set<string>;
 }) {
   return (
     <SortableContext
@@ -94,6 +96,7 @@ function CompositionEdgeDraftZone({
                 />
               ),
             }}
+            invalid={invalidEntryKeys.has(entry.key)}
           />
         ))}
       </div>
@@ -198,6 +201,7 @@ export function CompositionRow({
   stagedEntriesInteractive = true,
   dropTargetsEnabled = false,
   activity,
+  invalidEntryKeys = new Set<string>(),
 }: {
   composition: CompositionSnapshot;
   index: number;
@@ -214,6 +218,7 @@ export function CompositionRow({
     playerId?: string;
     cardActivities?: Record<number, { kind: string; playerId: string }>;
   };
+  invalidEntryKeys?: Set<string>;
 }) {
   const { active, over } = useDndContext();
   const compositionDropId = tableCompositionDropId(index);
@@ -312,6 +317,7 @@ export function CompositionRow({
             interactive={stagedEntriesInteractive}
             players={players}
             playerId={stagedEntryPlayerId}
+            invalidEntryKeys={invalidEntryKeys}
           />
         ) : null}
 
@@ -386,6 +392,7 @@ export function CompositionRow({
                         }
                       : undefined
                   }
+                  invalid={Boolean(reclaim && invalidEntryKeys.has(reclaim.replacementEntry.key))}
                 />
               </div>
             </div>
@@ -398,6 +405,7 @@ export function CompositionRow({
             interactive={stagedEntriesInteractive}
             players={players}
             playerId={stagedEntryPlayerId}
+            invalidEntryKeys={invalidEntryKeys}
           />
         ) : null}
 

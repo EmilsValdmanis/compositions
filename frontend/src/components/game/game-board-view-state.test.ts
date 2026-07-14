@@ -11,8 +11,75 @@ import {
   moveHandEntry,
   removeHandKeyFromDrafts,
   resolveDraftViews,
+  validateDraftedCompositions,
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
+
+describe("validateDraftedCompositions", () => {
+  it("identifies every invalid new composition", () => {
+    const firstEntries = buildHandEntries([
+      { rank: 5, suit: 0 },
+      { rank: 7, suit: 0 },
+      { rank: 8, suit: 0 },
+    ]);
+    const secondEntries = buildHandEntries([
+      { rank: 3, suit: 1 },
+      { rank: 6, suit: 1 },
+      { rank: 9, suit: 1 },
+    ]);
+
+    const result = validateDraftedCompositions(
+      [],
+      [
+        {
+          id: "first",
+          tableIndex: null,
+          handKeys: firstEntries.map((entry) => entry.key),
+          entries: firstEntries,
+        },
+        {
+          id: "second",
+          tableIndex: null,
+          handKeys: secondEntries.map((entry) => entry.key),
+          entries: secondEntries,
+        },
+      ],
+    );
+
+    expect([...result.invalidCompositionIds]).toEqual(["first", "second"]);
+  });
+
+  it("marks only the addition that makes an existing composition invalid", () => {
+    const entries = buildHandEntries([
+      { rank: 8, suit: 0 },
+      { rank: 10, suit: 0 },
+    ]);
+    const result = validateDraftedCompositions(
+      [
+        {
+          type: "run",
+          cards: [
+            { rank: 5, suit: 0 },
+            { rank: 6, suit: 0 },
+            { rank: 7, suit: 0 },
+          ],
+          points: 18,
+          complete: false,
+        },
+      ],
+      [
+        {
+          id: "addition",
+          tableIndex: 0,
+          handKeys: entries.map((entry) => entry.key),
+          entries,
+        },
+      ],
+    );
+
+    expect([...result.invalidEntryKeys]).toEqual([entries[1]!.key]);
+  });
+});
 
 describe("applyHandEntryOrder", () => {
   it("restores a persisted hand order and appends new cards", () => {

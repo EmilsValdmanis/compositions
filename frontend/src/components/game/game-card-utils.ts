@@ -154,6 +154,18 @@ export function draftCompositionPointTotal(cards: CardSnapshot[]) {
   return cards.length > 0 && cards.every((card) => card.isJoker) ? null : cardPointTotal(cards);
 }
 
+export function isValidDraftComposition(cards: CardSnapshot[], type?: CompositionSnapshot["type"]) {
+  if (type === "set") {
+    return draftSetPointTotal(cards) !== null;
+  }
+
+  if (type === "run") {
+    return draftRunPointTotal(cards) !== null;
+  }
+
+  return draftSetPointTotal(cards) !== null || draftRunPointTotal(cards) !== null;
+}
+
 export function draftCompositionPreviewPointTotal(
   composition: CompositionSnapshot,
   additions: CardSnapshot[],

@@ -3,12 +3,12 @@ import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortabl
 import {
   NEW_COMPOSITION_DROP_ID,
   buildHandEntries,
-  canReclaimJokerWithCard,
   type DraftedCompositionView,
   type HandEntry,
   type PlannedJokerReclaim,
   type TableCompositionView,
   draftCompositionDropId,
+  planTableJokerReclaims,
 } from "#/components/game/game-board-view-state";
 import {
   type CompositionActivitySnapshot,
@@ -28,6 +28,7 @@ import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 import { Text } from "#/components/typography";
+import { cn } from "#/lib/utils";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -66,51 +67,30 @@ export function draftPreviewForComposition(
   }
 
   const insertIndex = draft.insertIndex ?? tableComposition.snapshot.cards.length;
-  const reclaimTargetsByEntryKey = new Map<string, number>();
-  const usedReclaimTargetKeys = new Set<string>();
-  const usedJokerIndices = new Set<number>();
-  const reclaimTargets = Object.entries(draft.reclaimTargets ?? {});
+  const normalizedReclaimTargets: Record<string, number> = {};
+  const availableEntries = [...stagedEntries];
 
-  for (const entry of stagedEntries) {
-    const directJokerIndex = draft.reclaimTargets?.[entry.key];
-    if (
-      typeof directJokerIndex === "number" &&
-      canReclaimJokerWithCard(tableComposition.snapshot, directJokerIndex, entry.card)
-    ) {
-      reclaimTargetsByEntryKey.set(entry.key, directJokerIndex);
-      usedReclaimTargetKeys.add(entry.key);
-      usedJokerIndices.add(directJokerIndex);
+  for (const [targetKey, jokerIndex] of Object.entries(draft.reclaimTargets ?? {})) {
+    const targetBaseKey = targetKey.replace(/-\d+$/, "");
+    const matchingIndex = availableEntries.findIndex(
+      (entry) => entry.key === targetKey || entry.key.replace(/-\d+$/, "") === targetBaseKey,
+    );
+    const matchingEntry =
+      matchingIndex >= 0 ? availableEntries.splice(matchingIndex, 1)[0] : undefined;
+
+    if (matchingEntry) {
+      normalizedReclaimTargets[matchingEntry.key] = jokerIndex;
     }
   }
 
-  for (const entry of stagedEntries) {
-    if (reclaimTargetsByEntryKey.has(entry.key)) {
-      continue;
-    }
-
-    for (const [targetKey, jokerIndex] of reclaimTargets) {
-      if (usedReclaimTargetKeys.has(targetKey) || usedJokerIndices.has(jokerIndex)) {
-        continue;
-      }
-      if (!canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)) {
-        continue;
-      }
-
-      reclaimTargetsByEntryKey.set(entry.key, jokerIndex);
-      usedReclaimTargetKeys.add(targetKey);
-      usedJokerIndices.add(jokerIndex);
-      break;
-    }
-  }
-
-  const reclaims = stagedEntries.flatMap((entry) => {
-    const jokerIndex = reclaimTargetsByEntryKey.get(entry.key);
-    return typeof jokerIndex === "number" &&
-      canReclaimJokerWithCard(tableComposition.snapshot, jokerIndex, entry.card)
-      ? [{ jokerIndex, replacementEntry: entry } satisfies PlannedJokerReclaim]
-      : [];
-  });
-  const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
+  const plannedReclaims = planTableJokerReclaims(
+    tableComposition.snapshot,
+    stagedEntries,
+    insertIndex,
+    normalizedReclaimTargets,
+  );
+  const reclaims = plannedReclaims.reclaims;
+  const reclaimedEntryKeys = plannedReclaims.reclaimedEntryKeys;
   const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
   const entriesByInsertIndex = new Map<number, HandEntry[]>();
 
@@ -140,6 +120,8 @@ export function GameBoardTable({
   turnActivity,
   canCompose,
   showDraftTotal,
+  invalidCompositionIds = new Set<string>(),
+  invalidEntryKeys = new Set<string>(),
 }: {
   tableCompositions: TableCompositionView[];
   newCompositions: DraftedCompositionView[];
@@ -147,6 +129,8 @@ export function GameBoardTable({
   turnActivity?: TurnActivitySnapshot;
   canCompose: boolean;
   showDraftTotal: boolean;
+  invalidCompositionIds?: Set<string>;
+  invalidEntryKeys?: Set<string>;
 }) {
   const { active } = useDndContext();
   const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
@@ -292,6 +276,7 @@ export function GameBoardTable({
                           stagedEntriesInteractive={composition.stagedEntries.length > 0}
                           dropTargetsEnabled={canCompose}
                           activity={activityByIndex.get(composition.tableIndex)}
+                          invalidEntryKeys={invalidEntryKeys}
                         />
                       );
                     })()}
@@ -359,7 +344,13 @@ export function GameBoardTable({
               <GameBoardDraftDropZone
                 key={composition.id}
                 id={draftCompositionDropId(composition.id)}
-                className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
+                className={cn(
+                  "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
+                  invalidCompositionIds.has(composition.id)
+                    ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30"
+                    : null,
+                )}
+                invalid={invalidCompositionIds.has(composition.id)}
               >
                 <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
                   <NewActivityLabel players={players} />
