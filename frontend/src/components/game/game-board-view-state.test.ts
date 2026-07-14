@@ -77,6 +77,40 @@ describe("handIndexAfterSubmittedDrafts", () => {
 
     expect(discardIndex).toBeNull();
   });
+
+  it("accounts for every combination of staged cards around the selected card", () => {
+    const rawEntries = buildHandEntries([
+      { rank: 1, suit: 0 },
+      { rank: 2, suit: 0 },
+      { rank: 3, suit: 0 },
+      { rank: 4, suit: 0 },
+      { rank: 5, suit: 0 },
+    ]);
+    const selected = rawEntries[2]!;
+
+    for (let stagedMask = 0; stagedMask < 1 << rawEntries.length; stagedMask += 1) {
+      if ((stagedMask & (1 << selected.sourceIndex)) !== 0) {
+        continue;
+      }
+
+      const stagedEntries = rawEntries.filter(
+        (entry) => (stagedMask & (1 << entry.sourceIndex)) !== 0,
+      );
+      const expectedIndex = rawEntries
+        .filter((entry) => !stagedEntries.includes(entry))
+        .findIndex((entry) => entry.key === selected.key);
+      const actualIndex = handIndexAfterSubmittedDrafts(rawEntries, selected.key, [
+        {
+          id: "draft-1",
+          tableIndex: null,
+          handKeys: stagedEntries.map((entry) => entry.key),
+          entries: stagedEntries,
+        },
+      ]);
+
+      expect(actualIndex).toBe(expectedIndex);
+    }
+  });
 });
 
 describe("inferPlannedJokerReclaims", () => {

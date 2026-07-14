@@ -176,8 +176,23 @@ function drawFromDiscard(game: GameSnapshot) {
   };
 }
 
-function discardFromHand(game: GameSnapshot, cardIndex: number) {
-  if (!game.turn.hasDrawn || cardIndex < 0 || cardIndex >= game.hand.length) {
+function cardsMatch(left: CardSnapshot, right: CardSnapshot) {
+  return (
+    Boolean(left.isJoker) === Boolean(right.isJoker) &&
+    left.rank === right.rank &&
+    left.suit === right.suit
+  );
+}
+
+function discardFromHand(game: GameSnapshot, cardIndex: number, expectedCard: CardSnapshot) {
+  if (!game.turn.hasDrawn) {
+    return game;
+  }
+
+  if (!game.hand[cardIndex] || !cardsMatch(game.hand[cardIndex], expectedCard)) {
+    cardIndex = game.hand.findIndex((card) => cardsMatch(card, expectedCard));
+  }
+  if (cardIndex < 0) {
     return game;
   }
 
@@ -316,8 +331,8 @@ export function DevGameUi() {
     return null;
   }
 
-  async function handleDiscardCard(cardIndex: number) {
-    updateGame((current) => discardFromHand(current, cardIndex));
+  async function handleDiscardCard(cardIndex: number, card: CardSnapshot) {
+    updateGame((current) => discardFromHand(current, cardIndex, card));
 
     return {
       action: "discard",
@@ -336,8 +351,12 @@ export function DevGameUi() {
     } satisfies ActionResult;
   }
 
-  async function handlePlayTableAndDiscard(play: TablePlayRequest, cardIndex: number) {
-    updateGame((current) => discardFromHand(applyTablePlay(current, play), cardIndex));
+  async function handlePlayTableAndDiscard(
+    play: TablePlayRequest,
+    cardIndex: number,
+    card: CardSnapshot,
+  ) {
+    updateGame((current) => discardFromHand(applyTablePlay(current, play), cardIndex, card));
 
     return {
       action: "play_and_discard",

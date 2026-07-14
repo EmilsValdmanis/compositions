@@ -1702,10 +1702,21 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 	}
 
 	mustSendEnvelope(t, guestConn, "discard", discardRequest{CardIndex: -1})
-	mustReadError(t, guestConn, game.ErrRemovingCard.Error())
-	mustSendEnvelope(t, guestConn, "discard", discardRequest{CardIndex: 2})
+	mustReadError(t, guestConn, "discard card is required")
+	selectedDiscard := guestPlayState.Game.Hand[2]
+	selectedDiscardRequest := cardRequest{
+		Rank:    int(selectedDiscard.Rank),
+		Suit:    int(selectedDiscard.Suit),
+		IsJoker: selectedDiscard.IsJoker,
+	}
+	// Deliberately send a stale index. The selected card value must be
+	// authoritative at the WebSocket boundary.
+	mustSendEnvelope(t, guestConn, "discard", discardRequest{CardIndex: 0, Card: &selectedDiscardRequest})
 	guestDiscardState := mustReadActionBroadcast(t, guestConn, "discard", guestConnected.PlayerID)
 	hostAfterDiscardState := mustReadActionBroadcast(t, hostConn, "discard", guestConnected.PlayerID)
+	if top := guestDiscardState.Game.DiscardPile[0]; top != selectedDiscard {
+		t.Fatalf("top discard = %+v; want selected card %+v", top, selectedDiscard)
+	}
 	if guestDiscardState.Game.Turn.PlayerIndex != 0 {
 		t.Fatalf("turn player after guest discard = %d; want 0", guestDiscardState.Game.Turn.PlayerIndex)
 	}
@@ -1714,9 +1725,15 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 	}
 
 	mustSendEnvelope(t, hostConn, "draw", drawRequest{Source: "deck"})
-	_ = mustReadActionBroadcast(t, hostConn, "draw", hostDrawState.Room.HostPlayerID)
+	hostSecondDrawState := mustReadActionBroadcast(t, hostConn, "draw", hostDrawState.Room.HostPlayerID)
 	_ = mustReadActionBroadcast(t, guestConn, "draw", hostDrawState.Room.HostPlayerID)
-	mustSendEnvelope(t, hostConn, "discard", discardRequest{CardIndex: 9})
+	hostSelectedDiscard := hostSecondDrawState.Game.Hand[9]
+	hostSelectedDiscardRequest := cardRequest{
+		Rank:    int(hostSelectedDiscard.Rank),
+		Suit:    int(hostSelectedDiscard.Suit),
+		IsJoker: hostSelectedDiscard.IsJoker,
+	}
+	mustSendEnvelope(t, hostConn, "discard", discardRequest{CardIndex: 9, Card: &hostSelectedDiscardRequest})
 	_ = mustReadActionBroadcast(t, hostConn, "discard", hostDrawState.Room.HostPlayerID)
 	_ = mustReadActionBroadcast(t, guestConn, "discard", hostDrawState.Room.HostPlayerID)
 

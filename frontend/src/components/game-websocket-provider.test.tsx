@@ -79,7 +79,7 @@ class FakeWebSocket {
 }
 
 function Harness({ children }: { children?: ReactNode }) {
-  const { state, connect, disconnect } = useGameWebSocket();
+  const { state, connect, disconnect, discardCard, playTableAndDiscard } = useGameWebSocket();
 
   return (
     <div>
@@ -90,6 +90,19 @@ function Harness({ children }: { children?: ReactNode }) {
       </button>
       <button type="button" onClick={disconnect}>
         Disconnect
+      </button>
+      <button type="button" onClick={() => void discardCard(4, { rank: 12, suit: 2 })}>
+        Discard test card
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          void playTableAndDiscard({ compositions: [], additions: [], reclaims: [] }, 1, {
+            isJoker: true,
+          })
+        }
+      >
+        Play and discard test card
       </button>
       {children}
     </div>
@@ -178,6 +191,38 @@ describe("GameWebSocketProvider", () => {
     expect(connectEnvelope(sockets[2]!)).toEqual({
       type: "connect",
       data: { sessionId: "session-1" },
+    });
+  });
+
+  it("sends the selected card value with discard actions", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard test card" }));
+    fireEvent.click(screen.getByRole("button", { name: "Play and discard test card" }));
+
+    expect(JSON.parse(sockets[0]!.sent.at(-2) ?? "{}")).toEqual({
+      type: "discard",
+      data: { cardIndex: 4, card: { rank: 12, suit: 2 } },
+    });
+    expect(JSON.parse(sockets[0]!.sent.at(-1) ?? "{}")).toEqual({
+      type: "play_and_discard",
+      data: {
+        compositions: [],
+        additions: [],
+        reclaims: [],
+        cardIndex: 1,
+        card: { isJoker: true },
+      },
     });
   });
 });

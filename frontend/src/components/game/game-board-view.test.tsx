@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { type ComponentProps, type ReactNode } from "react";
 import {
   type ActionResult,
+  type CardSnapshot,
   type GameSnapshot,
   type PlayerSnapshot,
   type TablePlayRequest,
@@ -332,7 +333,9 @@ describe("GameBoardView discard drops", () => {
       ok: false,
     });
     const onPlayTableAndDiscard = vi
-      .fn<(play: TablePlayRequest, cardIndex: number) => Promise<ActionResult>>()
+      .fn<
+        (play: TablePlayRequest, cardIndex: number, card: CardSnapshot) => Promise<ActionResult>
+      >()
       .mockResolvedValue({
         action: "play_and_discard",
         playerId: "player-1",
@@ -386,6 +389,7 @@ describe("GameBoardView discard drops", () => {
 
     await waitFor(() => expect(onPlayTableAndDiscard).toHaveBeenCalledTimes(1));
     expect(onPlayTableAndDiscard.mock.calls[0]?.[1]).toBe(1);
+    expect(onPlayTableAndDiscard.mock.calls[0]?.[2]).toEqual({ rank: 12, suit: 2 });
     expect(onPlayTable).not.toHaveBeenCalled();
     expect(onDiscardCard).not.toHaveBeenCalled();
   });
