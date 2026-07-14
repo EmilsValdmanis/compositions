@@ -43,6 +43,7 @@ export type TurnActivitySnapshot = {
   playerId: string;
   round: number;
   turnNumber: number;
+  drawSource?: "deck" | "discard";
   baselineCompositions?: CompositionSnapshot[];
   draftCompositions?: DraftCompositionSnapshot[];
   compositionActivities?: CompositionActivitySnapshot[];

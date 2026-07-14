@@ -82,6 +82,7 @@ export function PlayerStrip({
         return (
           <div
             key={player.playerId}
+            data-card-motion-player={player.playerId}
             className={cn(
               "relative grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-3xl border px-3 py-2",
               showActiveTurn ? "border-primary/40 bg-primary/10" : "border-border/60 bg-muted/20",

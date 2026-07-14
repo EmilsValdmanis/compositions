@@ -28,7 +28,10 @@ export function GameBoardPiles({
               <AnimatedNumber value={drawPileCount} /> cards
             </span>
           </div>
-          <div className="flex items-center justify-center grow flex-col">
+          <div
+            className="flex items-center justify-center grow flex-col"
+            data-card-motion-source="deck"
+          >
             <GameCard
               card={FACE_DOWN_CARD}
               faceDown
@@ -45,7 +48,7 @@ export function GameBoardPiles({
             <span>Discard</span>
             <span>{canDrawDiscard ? "Can draw" : "Top card"}</span>
           </div>
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-center" data-card-motion-source="discard">
             {topDiscardCard ? (
               <GameCard
                 card={topDiscardCard}
