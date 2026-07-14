@@ -29,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip
 import { P, Strong, Text } from "#/components/typography";
 import { fireCelebrationConfetti } from "#/lib/confetti";
 import { cn, getUserInitials } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -118,7 +119,7 @@ function LeftoverHandTooltip({
   const hasRevealedHand = hand && hand.length > 0;
   const handTitle = hasRevealedHand
     ? hand.map((card) => cardName(card)).join(", ")
-    : `${handCount} cards left`;
+    : m.cards_left({ count: handCount });
 
   return (
     <Tooltip>
@@ -133,8 +134,8 @@ function LeftoverHandTooltip({
             title={handTitle}
             aria-label={
               hasRevealedHand
-                ? `${playerName}'s leftover hand`
-                : `${playerName} has ${handCount} cards left`
+                ? m.leftover_hand({ name: playerName })
+                : m.player_cards_left({ name: playerName, count: handCount })
             }
           />
         }
@@ -175,28 +176,30 @@ export function GameResultsView({
   const conclusion = room?.conclusion;
   const resultTitle =
     conclusion?.kind === "technical_abort"
-      ? "Game aborted"
+      ? m.game_aborted()
       : conclusion?.kind === "mutual_end"
-        ? "Game ended"
+        ? m.game_ended()
         : isGameOver
-          ? "Game finished"
-          : "Round complete";
+          ? m.game_finished()
+          : m.round_complete();
   const resultDescription =
     conclusion?.kind === "technical_abort"
-      ? "Ended after a reported game problem"
+      ? m.ended_reported_problem()
       : conclusion?.kind === "mutual_end"
-        ? "Every active player agreed to end without a winner"
+        ? m.ended_by_agreement_description()
         : conclusion?.kind === "forfeit"
-          ? `${winner?.name ?? "A player"} wins by forfeit`
-          : `${winner?.name ?? "A player"} ${isGameOver ? "wins the game" : "won the round"}`;
+          ? m.wins_by_forfeit({ name: winner?.name ?? m.a_player() })
+          : isGameOver
+            ? m.wins_game({ name: winner?.name ?? m.a_player() })
+            : m.won_round({ name: winner?.name ?? m.a_player() });
   const resultBadge =
     conclusion?.kind === "technical_abort"
-      ? "Aborted"
+      ? m.aborted()
       : conclusion?.kind === "mutual_end"
-        ? "No winner"
+        ? m.no_winner()
         : isGameOver
-          ? "Final"
-          : "Complete";
+          ? m.final()
+          : m.complete();
   const hasCelebrated = useRef(false);
   const isWinner = winner?.playerId === playerId;
 
@@ -225,15 +228,15 @@ export function GameResultsView({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-14">#</TableHead>
-                  <TableHead>Player</TableHead>
-                  <TableHead className="text-right">Cards</TableHead>
-                  <TableHead className="text-right">Score</TableHead>
-                  <TableHead className="w-16 text-right">Round</TableHead>
+                  <TableHead>{m.player()}</TableHead>
+                  <TableHead className="text-right">{m.cards()}</TableHead>
+                  <TableHead className="text-right">{m.score()}</TableHead>
+                  <TableHead className="w-16 text-right">{m.round()}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rankingRows(game, players).map(({ rank, player, playerState, isRoundWinner }) => {
-                  const playerName = player?.name ?? "Unknown player";
+                  const playerName = player?.name ?? m.unknown_player();
 
                   return (
                     <TableRow
@@ -249,13 +252,15 @@ export function GameResultsView({
                         <div className="flex min-w-40 flex-wrap items-center gap-2">
                           <Avatar
                             size="sm"
-                            aria-label={isRoundWinner ? `${playerName}, winner` : playerName}
+                            aria-label={
+                              isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
+                            }
                           >
                             {player?.imageUrl ? (
                               <AvatarImage src={player.imageUrl} alt={playerName} />
                             ) : null}
                             <AvatarFallback>
-                              {playerName === "Unknown player" ? (
+                              {playerName === m.unknown_player() ? (
                                 <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
                               ) : (
                                 getUserInitials(playerName)
@@ -279,7 +284,7 @@ export function GameResultsView({
                             {playerName}
                           </Strong>
                           {playerState.playerId === playerId ? (
-                            <Badge variant="outline">You</Badge>
+                            <Badge variant="outline">{m.you()}</Badge>
                           ) : null}
                         </div>
                       </TableCell>
@@ -306,7 +311,7 @@ export function GameResultsView({
           {isGameOver ? (
             <div className="flex flex-wrap items-center justify-end gap-3">
               <Button type="button" onClick={onReturnToLobby}>
-                Back to lobby
+                {m.back_to_lobby()}
               </Button>
             </div>
           ) : dealChoice.pendingDealChoice ? (
@@ -321,11 +326,11 @@ export function GameResultsView({
             <div className="flex flex-wrap items-center justify-end gap-3">
               {!isHost ? (
                 <P size="sm" className="text-muted-foreground">
-                  Waiting for the host.
+                  {m.waiting_for_host()}
                 </P>
               ) : null}
               <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
-                Start next round
+                {m.start_next_round()}
               </Button>
             </div>
           )}

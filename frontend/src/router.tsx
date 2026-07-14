@@ -3,6 +3,7 @@ import { routeTree } from "./routeTree.gen";
 import { QueryClient } from "@tanstack/react-query";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import * as Sentry from "@sentry/tanstackstart-react";
+import { deLocalizeUrl, localizeUrl } from "./paraglide/runtime.js";
 
 export function getRouter() {
   const queryClient = new QueryClient();
@@ -13,6 +14,10 @@ export function getRouter() {
     scrollRestoration: true,
     defaultPreload: "intent",
     defaultPreloadStaleTime: 0,
+    rewrite: {
+      input: ({ url }) => deLocalizeUrl(url),
+      output: ({ url }) => localizeUrl(url),
+    },
   });
   setupRouterSsrQueryIntegration({
     router,

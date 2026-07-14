@@ -80,6 +80,26 @@ func TestRunServerAndMain(t *testing.T) {
 	}
 }
 
+func TestWriteHTTPErrorIncludesCodeAndMessage(t *testing.T) {
+	recorder := httptest.NewRecorder()
+	writeHTTPError(recorder, http.StatusBadRequest, "invalid_data", "invalid data")
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d; want %d", recorder.Code, http.StatusBadRequest)
+	}
+	if got := recorder.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("Content-Type = %q; want application/json", got)
+	}
+
+	var response httpErrorResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Code != "invalid_data" || response.Message != "invalid data" {
+		t.Fatalf("response = %#v; want code and message", response)
+	}
+}
+
 func TestConfigureLoggerWritesToProvidedOutput(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
@@ -673,6 +693,10 @@ func mustReadError(t *testing.T, conn *websocket.Conn, want string) {
 	var event errorEvent
 	if err := json.Unmarshal(envelope.Data, &event); err != nil {
 		t.Fatalf("json.Unmarshal(error) error = %v", err)
+	}
+	wantCode := clientErrorCode(errors.New(want))
+	if event.Code != wantCode {
+		t.Fatalf("error code = %q; want %q", event.Code, wantCode)
 	}
 	if event.Message != want {
 		t.Fatalf("error message = %q; want %q", event.Message, want)

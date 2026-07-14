@@ -1,9 +1,12 @@
 import { Outlet } from "@tanstack/react-router";
 import { Text } from "#/components/typography";
+import { LanguageSwitcher } from "#/components/language-switcher";
+import { m } from "#/paraglide/messages.js";
 
 export function AuthLayout() {
   return (
     <>
+      <LanguageSwitcher className="absolute top-4 right-4 z-10" />
       <div
         className="absolute inset-0 -z-1 bg-size-[20px_20px]"
         style={{
@@ -18,7 +21,7 @@ export function AuthLayout() {
           variant="display"
           className="relative bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-transparent"
         >
-          Compositions
+          {m.app_name()}
         </Text>
         <Outlet />
       </div>

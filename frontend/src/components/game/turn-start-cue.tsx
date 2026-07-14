@@ -6,6 +6,7 @@ import { Separator } from "#/components/ui/separator";
 import { Text } from "#/components/typography";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { getUserInitials } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 export function TurnStartCue({
   round,
@@ -64,13 +65,13 @@ export function TurnStartCue({
             role="status"
             aria-live="polite"
             aria-atomic="true"
-            aria-label={`Your turn, ${playerName}`}
+            aria-label={m.your_turn_named({ name: playerName })}
             data-turn-number={turnNumber}
           >
             <div className="grid place-items-center bg-muted/30">
               <Avatar className="size-10">
                 {playerImageUrl ? (
-                  <AvatarImage src={playerImageUrl} alt={`${playerName}'s avatar`} />
+                  <AvatarImage src={playerImageUrl} alt={m.player_avatar({ name: playerName })} />
                 ) : null}
                 <AvatarFallback>{getUserInitials(playerName)}</AvatarFallback>
                 <AvatarBadge />
@@ -87,10 +88,10 @@ export function TurnStartCue({
                   className="mb-1 flex items-center gap-2"
                 >
                   <span className="size-1.5 rotate-45 bg-primary" aria-hidden="true" />
-                  Table is yours
+                  {m.table_is_yours()}
                 </Text>
                 <Text as="div" variant="turn-title" data-slot="alert-title" className="truncate">
-                  Your turn
+                  {m.your_turn()}
                 </Text>
               </div>
               <Text as="p" variant="turn-meta" className="shrink-0 text-right">

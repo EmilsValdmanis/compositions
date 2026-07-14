@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader } from "#/components/ui/card";
 import { Item, ItemContent, ItemGroup, ItemMedia } from "#/components/ui/item";
 import { H4, Text } from "#/components/typography";
 import { cn } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 type GameRulesGuideProps = {
   className?: string;
@@ -129,17 +130,17 @@ function FlowStep({ children }: { children: ReactNode }) {
 function TurnFlow() {
   return (
     <div className="flex items-center gap-1">
-      <FlowStep>Draw</FlowStep>
+      <FlowStep>{m.draw()}</FlowStep>
       <HugeiconsIcon icon={ArrowRight01Icon} className="shrink-0" />
-      <FlowStep>Build</FlowStep>
+      <FlowStep>{m.build()}</FlowStep>
       <HugeiconsIcon icon={ArrowRight01Icon} className="shrink-0" />
-      <FlowStep>Discard</FlowStep>
+      <FlowStep>{m.discard()}</FlowStep>
     </div>
   );
 }
 
 function ScorePills() {
-  const scores = ["2-10 = face value", "J Q K = 10", "Ace = 1 or 10", "Joker = 20"];
+  const scores = [m.score_face_value(), m.score_faces(), m.score_ace(), m.score_joker()];
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -156,13 +157,11 @@ function ReclaimExample() {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-end gap-3 overflow-x-auto pb-1">
-        <CardLine cards={[card(3, 3), joker(), card(5, 3)]} label="Run on table: joker is 4" />
+        <CardLine cards={[card(3, 3), joker(), card(5, 3)]} label={m.reclaim_run_label()} />
         <HugeiconsIcon icon={ArrowRight01Icon} className="mb-6 shrink-0" />
-        <CardLine cards={[card(4, 3)]} label="Replace with exact card" />
+        <CardLine cards={[card(4, 3)]} label={m.reclaim_exact_label()} />
       </div>
-      <RuleDescription>
-        The 4 replaces the joker, then the joker returns to your hand for this turn.
-      </RuleDescription>
+      <RuleDescription>{m.reclaim_description()}</RuleDescription>
     </div>
   );
 }
@@ -171,7 +170,7 @@ function OpeningExample() {
   return (
     <div className="flex flex-col gap-2">
       <Text as="p" variant="label" className="text-muted-foreground">
-        Example opening: Kings set 30 + spade run 15 = 45
+        {m.opening_example()}
       </Text>
       <div className="flex flex-wrap items-center gap-4">
         <CardLine cards={[card(13, 0), card(13, 1), card(13, 2)]} />
@@ -212,139 +211,96 @@ export function GameRulesGuide({ className }: GameRulesGuideProps) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Text as="p" variant="eyebrow-compact">
-            Quick rules
+            {m.quick_rules()}
           </Text>
-          <H4>Compositions</H4>
+          <H4>{m.compositions()}</H4>
         </div>
-        <Badge variant="outline">2 decks</Badge>
+        <Badge variant="outline">{m.two_decks()}</Badge>
       </div>
 
       <div className="flex flex-col gap-3">
-        <RuleSection eyebrow="Goal" title="Empty your hand by discarding your last card">
-          <RuleList
-            items={[
-              "You start each round with 12 random cards.",
-              "Win the round by playing down cards, then discarding the final card from your hand.",
-              "Keep one card for the final discard; you cannot go out by placing every card on the table.",
-              "Cards left in other players' hands become points against them.",
-            ]}
-          />
+        <RuleSection eyebrow={m.goal()} title={m.goal_title()}>
+          <RuleList items={[m.goal_rule_1(), m.goal_rule_2(), m.goal_rule_3(), m.goal_rule_4()]} />
         </RuleSection>
 
-        <RuleSection eyebrow="Turn" title="Draw, compose, discard">
+        <RuleSection eyebrow={m.turn()} title={m.turn_title()}>
           <TurnFlow />
-          <RuleList
-            items={[
-              "Draw from the deck, or take the top discard only if you can use it immediately.",
-              "Playing compositions is optional after you have drawn.",
-              "A turn ends when you discard one card.",
-            ]}
-          />
+          <RuleList items={[m.turn_rule_1(), m.turn_rule_2(), m.turn_rule_3()]} />
         </RuleSection>
 
-        <RuleSection eyebrow="Compositions" title="Two valid shapes">
+        <RuleSection eyebrow={m.compositions()} title={m.compositions_title()}>
           <div className="flex flex-wrap gap-3">
             <Item variant="outline" size="sm" className="w-fit min-w-52 items-start">
               <ItemContent className="gap-2">
-                <RuleTitle>Set: same rank</RuleTitle>
+                <RuleTitle>{m.set_same_rank()}</RuleTitle>
                 <CardLine cards={[card(7, 0), card(7, 1), card(7, 2)]} />
-                <RuleDescription>3+ cards, different suits.</RuleDescription>
+                <RuleDescription>{m.set_description()}</RuleDescription>
               </ItemContent>
             </Item>
             <Item variant="outline" size="sm" className="w-fit min-w-60 items-start">
               <ItemContent className="gap-2">
-                <RuleTitle>Run</RuleTitle>
+                <RuleTitle>{m.run()}</RuleTitle>
                 <CardLine cards={[card(5, 3), card(6, 3), card(7, 3), card(8, 3)]} />
-                <RuleDescription>3+ cards in order, same suit.</RuleDescription>
+                <RuleDescription>{m.run_description()}</RuleDescription>
               </ItemContent>
             </Item>
           </div>
         </RuleSection>
 
-        <RuleSection eyebrow="Opening" title="Your first table play must reach 40+ points">
+        <RuleSection eyebrow={m.opening()} title={m.opening_title()}>
           <div className="flex flex-col gap-3">
             <OpeningExample />
-            <RuleList
-              items={[
-                "Before opening, you cannot play random additions by themselves.",
-                "Your opening turn must include at least one new composition from your hand.",
-                "Jokers in hand can help reach 40 by taking the value they represent.",
-              ]}
-            />
+            <RuleList items={[m.opening_rule_1(), m.opening_rule_2(), m.opening_rule_3()]} />
           </div>
         </RuleSection>
 
-        <RuleSection eyebrow="Jokers" title="Replace the exact card to reclaim a joker">
+        <RuleSection eyebrow={m.jokers()} title={m.jokers_title()}>
           <div className="flex flex-col gap-3">
             <ReclaimExample />
-            <RuleList
-              items={[
-                "A joker can stand for any card in a set or run.",
-                "To take it back, place the exact card it currently represents.",
-                "In sets, the joker must be narrowed to one missing suit before it can be reclaimed.",
-              ]}
-            />
+            <RuleList items={[m.joker_rule_1(), m.joker_rule_2(), m.joker_rule_3()]} />
           </div>
         </RuleSection>
 
-        <RuleSection eyebrow="Complete" title="Finished compositions leave the table">
+        <RuleSection eyebrow={m.complete_section()} title={m.complete_title()}>
           <div className="flex flex-col gap-3">
             <CardLine
               cards={[card(1, 0), card(1, 1), card(1, 2), card(1, 3)]}
-              label="Complete Ace set: all four suits"
+              label={m.complete_ace_set()}
             />
-            <RuleList
-              items={[
-                "A complete composition is moved to the discard pile before the final discard.",
-                "A same-suit run is complete only when it covers Ace low through King plus the second Ace high.",
-                "Completed cards leave the table, then the current player discards normally.",
-              ]}
-            />
+            <RuleList items={[m.complete_rule_1(), m.complete_rule_2(), m.complete_rule_3()]} />
           </div>
         </RuleSection>
 
-        <RuleSection eyebrow="Scores" title="There are two scoring contexts">
+        <RuleSection eyebrow={m.scores()} title={m.scores_title()}>
           <ScorePills />
           <ItemGroup className="grid gap-3 sm:grid-cols-2">
             <Item variant="outline" size="sm" className="items-start">
               <ItemContent>
-                <RuleTitle>Opening points</RuleTitle>
-                <RuleDescription>
-                  Count the value of cards you place in compositions. Aces and jokers use the value
-                  they represent in that composition.
-                </RuleDescription>
+                <RuleTitle>{m.opening_points()}</RuleTitle>
+                <RuleDescription>{m.opening_points_description()}</RuleDescription>
               </ItemContent>
             </Item>
             <Item variant="outline" size="sm" className="items-start">
               <ItemContent>
-                <RuleTitle>End-round points</RuleTitle>
-                <RuleDescription>
-                  Only cards left in hand count. Jokers are 20. Aces are usually 10, except a final
-                  lone Ace can count as 1.
-                </RuleDescription>
+                <RuleTitle>{m.end_round_points()}</RuleTitle>
+                <RuleDescription>{m.end_round_points_description()}</RuleDescription>
               </ItemContent>
             </Item>
           </ItemGroup>
-          <RuleList
-            items={[
-              "Low total score is good.",
-              "Players over 100 are adjusted unless everyone else is also over 100.",
-              "You win the game by forcing all other players over 100.",
-            ]}
-          />
+          <RuleList items={[m.score_rule_1(), m.score_rule_2(), m.score_rule_3()]} />
         </RuleSection>
 
-        <RuleSection eyebrow="Special wins" title="Rare hands can end it immediately">
+        <RuleSection eyebrow={m.special_wins()} title={m.special_wins_title()}>
           <ItemGroup className="grid gap-3 sm:grid-cols-2">
             <SpecialWinTile
               icon={PaintBoardIcon}
-              title="Same suit collection"
-              description="Collect all 12 cards of one suit for an immediate win."
+              title={m.same_suit_collection()}
+              description={m.same_suit_description()}
             />
             <SpecialWinTile
               icon={Target02Icon}
-              title="Six identical pairs"
-              description="Form 6 identical pairs for a special win condition."
+              title={m.six_pairs()}
+              description={m.six_pairs_description()}
             />
           </ItemGroup>
         </RuleSection>

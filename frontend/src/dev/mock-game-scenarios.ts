@@ -3,6 +3,7 @@ import {
   type PlayerSnapshot,
   type RoomSnapshot,
 } from "#/components/game-websocket-provider";
+import { m } from "#/paraglide/messages.js";
 
 export type MockScenario = {
   id: string;
@@ -17,9 +18,8 @@ export type MockScenario = {
 export const mockScenarios: MockScenario[] = [
   {
     id: "table-activity-showcase",
-    label: "Table Activity",
-    description:
-      "A live turn where Avery is active, a joker reclaim is available to test, one new composition just landed on the table, and another new composition is still staged in draft.",
+    label: m.mock_table_activity(),
+    description: m.mock_table_activity_description(),
     controlledPlayerId: "player-avery",
     players: [
       {
@@ -285,9 +285,8 @@ export const mockScenarios: MockScenario[] = [
   },
   {
     id: "other-player-turn",
-    label: "Other Player Turn",
-    description:
-      "Casey is the active player. Use this to inspect how the board reads when you are not the player making moves, while still seeing their drafted additions and new composition previews.",
+    label: m.mock_other_player_turn(),
+    description: m.mock_other_player_turn_description(),
     controlledPlayerId: "player-avery",
     players: [
       {

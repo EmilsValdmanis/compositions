@@ -29,6 +29,7 @@ import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 import { Text } from "#/components/typography";
 import { cn } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -303,7 +304,7 @@ export function GameBoardTable({
                 as="div"
                 className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-muted-foreground"
               >
-                No compositions on the table.
+                {m.no_compositions()}
               </Text>
             )}
           </div>
@@ -312,15 +313,13 @@ export function GameBoardTable({
             {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
               <div className="flex min-h-5 basis-full items-center justify-center">
                 <Badge variant="outline">
-                  Draft total{" "}
+                  {m.draft_total()}{" "}
                   {visibleDraftPointsTotal === null ? (
-                    <span title="Complete every draft composition to resolve its point value">
-                      ?
-                    </span>
+                    <span title={m.complete_drafts_points()}>?</span>
                   ) : (
                     <AnimatedNumber value={visibleDraftPointsTotal} />
                   )}{" "}
-                  pts
+                  {m.points_unit()}
                 </Badge>
               </div>
             ) : null}
@@ -334,11 +333,11 @@ export function GameBoardTable({
                   <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                   <Badge variant="outline">
                     {draftCompositionPointTotal(composition.cards) === null ? (
-                      <span title="Complete a valid composition to resolve its point value">?</span>
+                      <span title={m.complete_composition_points()}>?</span>
                     ) : (
                       <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
                     )}{" "}
-                    pts
+                    {m.points_unit()}
                   </Badge>
                 </div>
                 <div className="flex items-start gap-2">
@@ -370,7 +369,7 @@ export function GameBoardTable({
                   <Badge variant="outline">
                     {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
                     null ? (
-                      <span title="Complete a valid composition to resolve its point value">?</span>
+                      <span title={m.complete_composition_points()}>?</span>
                     ) : (
                       <AnimatedNumber
                         value={
@@ -380,7 +379,7 @@ export function GameBoardTable({
                         }
                       />
                     )}{" "}
-                    pts
+                    {m.points_unit()}
                   </Badge>
                 </div>
                 <SortableContext

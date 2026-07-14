@@ -15,6 +15,7 @@ import { cardName } from "#/components/game/game-card-utils";
 import { Text, type TypographyVariant } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
+import { m } from "#/paraglide/messages.js";
 
 const rankLabels: Record<number, string> = {
   1: "A",
@@ -228,7 +229,7 @@ function SortableGameCard({
     id,
     data: { cardIndex, ...data },
   });
-  const accessibleName = faceDown ? "Face-down card" : cardName(card);
+  const accessibleName = faceDown ? m.face_down_card() : cardName(card);
 
   const style: CSSProperties = {
     transform: transform
@@ -290,7 +291,7 @@ function DraggableGameCard({
     disabled,
     data,
   });
-  const accessibleName = faceDown ? "Face-down card" : cardName(card);
+  const accessibleName = faceDown ? m.face_down_card() : cardName(card);
 
   const style: CSSProperties = {
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
@@ -383,7 +384,7 @@ export function GameCard({
     );
   }
 
-  const accessibleName = faceDown ? "Face-down card" : cardName(card);
+  const accessibleName = faceDown ? m.face_down_card() : cardName(card);
 
   return (
     <div

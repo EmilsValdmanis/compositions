@@ -14,6 +14,7 @@ import {
   type RoomSnapshot,
   type TablePlayRequest,
 } from "#/components/game-websocket-provider";
+import { m } from "#/paraglide/messages.js";
 
 const scenarios = mockScenarios;
 type DevViewMode = "board" | "deal" | "results";
@@ -382,10 +383,10 @@ export function DevGameUi() {
           onValueChange={(value) => setViewMode(value as DevViewMode)}
           className="flex-none"
         >
-          <TabsList aria-label="Dev preview mode">
-            <TabsTrigger value="board">Board</TabsTrigger>
-            <TabsTrigger value="deal">Deal</TabsTrigger>
-            <TabsTrigger value="results">Results</TabsTrigger>
+          <TabsList aria-label={m.dev_preview_mode()}>
+            <TabsTrigger value="board">{m.board()}</TabsTrigger>
+            <TabsTrigger value="deal">{m.deal()}</TabsTrigger>
+            <TabsTrigger value="results">{m.results()}</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

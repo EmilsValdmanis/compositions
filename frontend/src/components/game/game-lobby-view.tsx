@@ -11,8 +11,8 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
-import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import {
@@ -23,7 +23,8 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
-import { Eyebrow, Strong, Text } from "#/components/typography";
+import { Eyebrow, Text } from "#/components/typography";
+import { m } from "#/paraglide/messages.js";
 
 type AsyncAction = () => Promise<void> | void;
 
@@ -89,17 +90,17 @@ export function GameLobbyView({
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Lobby</CardTitle>
-              <CardDescription>{room ? "Ready room" : "Create or join"}</CardDescription>
+              <CardTitle>{m.lobby()}</CardTitle>
+              <CardDescription>{room ? m.ready_room() : m.create_or_join()}</CardDescription>
             </div>
             <Badge variant={room ? "secondary" : "outline"}>
               {room ? (
                 <>
                   <AnimatedNumber value={connectedCount} />/
-                  <AnimatedNumber value={players.length} /> online
+                  <AnimatedNumber value={players.length} /> {m.online()}
                 </>
               ) : (
-                "Offline"
+                m.status_offline()
               )}
             </Badge>
           </div>
@@ -110,7 +111,7 @@ export function GameLobbyView({
               <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <Eyebrow>Room code</Eyebrow>
+                    <Eyebrow>{m.room_code()}</Eyebrow>
                     <Text as="p" variant="metric">
                       {room.code}
                     </Text>
@@ -118,7 +119,7 @@ export function GameLobbyView({
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button type="button" variant="outline" />}>
                       <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
-                      Share
+                      {m.share()}
                       <HugeiconsIcon
                         icon={ChevronDownIcon}
                         strokeWidth={2}
@@ -128,11 +129,11 @@ export function GameLobbyView({
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem onClick={() => void onCopyRoomCode()}>
                         <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
-                        Copy code
+                        {m.copy_code()}
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => void onCopyRoomLink()}>
                         <HugeiconsIcon icon={CopyLinkIcon} strokeWidth={2} />
-                        Copy link
+                        {m.copy_link()}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -140,7 +141,7 @@ export function GameLobbyView({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" onClick={onStartGame} disabled={!canStartGame}>
-                  Start game
+                  {m.start_game()}
                 </Button>
                 <Button
                   type="button"
@@ -148,7 +149,7 @@ export function GameLobbyView({
                   onClick={onLeaveRoom}
                   disabled={!canLeaveRoom}
                 >
-                  Leave room
+                  {m.leave_room()}
                 </Button>
               </div>
               {pendingDealChoice ? (
@@ -162,10 +163,12 @@ export function GameLobbyView({
               ) : null}
               {completedGame ? (
                 <div className="grid gap-1 rounded-2xl border border-border/70 bg-muted/20 p-4">
-                  <Eyebrow>Last winner</Eyebrow>
+                  <Eyebrow>{m.last_winner()}</Eyebrow>
                   <Text as="p" variant="body" className="text-muted-foreground">
-                    <Strong className="text-foreground">{victor?.name ?? "A player"}</Strong> in
-                    round {completedGame.game.round}
+                    {m.winner_in_round({
+                      name: victor?.name ?? m.a_player(),
+                      round: completedGame.game.round,
+                    })}
                   </Text>
                 </div>
               ) : null}
@@ -173,14 +176,14 @@ export function GameLobbyView({
           ) : (
             <div className="grid gap-4">
               <Button type="button" onClick={onCreateRoom} disabled={!canCreateRoom}>
-                Create room
+                {m.create_room()}
               </Button>
               <div className="grid gap-2">
                 <Separator />
                 <Input
                   value={roomCode}
                   onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
-                  placeholder="Room code"
+                  placeholder={m.room_code()}
                   maxLength={6}
                 />
                 <Button
@@ -189,7 +192,7 @@ export function GameLobbyView({
                   onClick={() => onJoinRoom(roomCode.trim())}
                   disabled={!canJoinRoom}
                 >
-                  Join
+                  {m.join()}
                 </Button>
               </div>
             </div>
@@ -201,14 +204,15 @@ export function GameLobbyView({
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle>Players</CardTitle>
-              <CardDescription>{players.length ? "Seats" : "No room yet"}</CardDescription>
+              <CardTitle>{m.players()}</CardTitle>
+              <CardDescription>{players.length ? m.seats() : m.no_room_yet()}</CardDescription>
             </div>
             {players.length ? (
               <div className="flex items-center gap-2">
                 <PlayerEmotePicker onSendEmote={onSendEmote} />
                 <Badge variant="outline">
-                  <AnimatedNumber value={players.length} /> seated
+                  <AnimatedNumber value={players.length} />{" "}
+                  {m.seated_players_label({ count: players.length })}
                 </Badge>
               </div>
             ) : null}
@@ -223,7 +227,7 @@ export function GameLobbyView({
               variant="body"
               className="rounded-2xl border border-dashed border-border/70 p-6 text-muted-foreground"
             >
-              Create or join a room.
+              {m.create_or_join_room()}
             </Text>
           )}
         </CardContent>

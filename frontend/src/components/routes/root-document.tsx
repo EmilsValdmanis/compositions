@@ -11,6 +11,7 @@ import { ThemeProvider } from "#/components/theme-provider";
 import { AutoConnectWebSocket } from "#/components/routes/auto-connect-websocket";
 import { ThemeAwareToaster } from "#/components/routes/theme-aware-toaster";
 import { TooltipProvider } from "../ui/tooltip";
+import { getLocale } from "#/paraglide/runtime.js";
 
 export function RootDocument({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -21,7 +22,7 @@ export function RootDocument({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={getLocale()} suppressHydrationWarning>
       <head>
         <HeadContent />
         {import.meta.env.DEV && (

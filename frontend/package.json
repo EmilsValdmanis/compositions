@@ -51,6 +51,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "2.22.0",
     "@rolldown/plugin-babel": "0.2.3",
     "@tailwindcss/typography": "0.5.20",
     "@tanstack/devtools-vite": "0.8.1",

@@ -10,6 +10,7 @@ import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
+import { m } from "#/paraglide/messages.js";
 
 const protectedHomeRoute = getRouteApi("/_protected/");
 
@@ -139,7 +140,7 @@ export function ProtectedHome() {
       await navigator.clipboard.writeText(text);
       toast.success(successMessage);
     } catch {
-      toast.error("Could not copy to clipboard");
+      toast.error(m.clipboard_copy_failed());
     }
   }
 
@@ -148,7 +149,7 @@ export function ProtectedHome() {
       return;
     }
 
-    await copyText(state.room.code, "Room code copied");
+    await copyText(state.room.code, m.room_code_copied());
   }
 
   async function copyRoomLink() {
@@ -156,7 +157,7 @@ export function ProtectedHome() {
       return;
     }
 
-    await copyText(roomShareUrl(state.room.code), "Room link copied");
+    await copyText(roomShareUrl(state.room.code), m.room_link_copied());
   }
 
   function handleRoomCodeChange(nextRoomCode: string) {
@@ -177,7 +178,7 @@ export function ProtectedHome() {
 
   async function handleDiscardCard(cardIndex: number, card: Parameters<typeof discardCard>[1]) {
     if (!canDiscard) {
-      toast.error("Draw before discarding");
+      toast.error(m.draw_before_discarding());
       playGameSound("invalid-action");
       throw new Error("draw before discarding");
     }

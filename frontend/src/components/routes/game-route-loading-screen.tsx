@@ -1,5 +1,6 @@
 import { Spinner } from "#/components/ui/spinner";
 import { H6, P } from "#/components/typography";
+import { m } from "#/paraglide/messages.js";
 
 export function GameRouteLoadingScreen() {
   return (
@@ -7,9 +8,9 @@ export function GameRouteLoadingScreen() {
       <div className="flex flex-col items-center gap-3 text-center">
         <Spinner className="size-8" />
         <div className="space-y-1">
-          <H6>Reconnecting to your game</H6>
+          <H6>{m.reconnecting_game()}</H6>
           <P size="sm" className="text-muted-foreground">
-            Loading the latest room state…
+            {m.loading_room_state()}
           </P>
         </div>
       </div>

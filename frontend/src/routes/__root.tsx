@@ -12,6 +12,7 @@ import { auth } from "#/lib/auth";
 import { createSocialMeta, defaultSocialDescription } from "#/lib/social-meta";
 import { loadVerifiedSession } from "#/lib/verified-session";
 import appCss from "../styles.css?url";
+import { m } from "#/paraglide/messages.js";
 
 const rootHeadContentMarker = <HeadContent />;
 void rootHeadContentMarker;
@@ -44,13 +45,13 @@ export const Route = createRootRouteWithContext<{
           content: "width=device-width, initial-scale=1",
         },
         {
-          title: "Compositions",
+          title: m.app_name(),
         },
-        { name: "application-name", content: "Compositions" },
+        { name: "application-name", content: m.app_name() },
         { name: "theme-color", content: "#0069a8" },
         ...createSocialMeta({
-          title: "Compositions — Play your hand well",
-          description: defaultSocialDescription,
+          title: `${m.app_name()} — ${m.app_tagline()}`,
+          description: defaultSocialDescription(),
           origin: match.context.siteOrigin,
         }),
       ],

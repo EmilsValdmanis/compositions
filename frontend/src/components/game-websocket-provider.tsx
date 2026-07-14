@@ -2,6 +2,7 @@ import { createContext, use, useEffect, useRef } from "react";
 import { createStore } from "@tanstack/store";
 import { useSelector } from "@tanstack/react-store";
 import { getGameConnectionAuth } from "#/lib/game-auth";
+import { gameErrorMessage } from "#/lib/game-error-messages";
 
 type ConnectionStatus = "idle" | "disconnected" | "connecting" | "connected";
 
@@ -192,6 +193,8 @@ export type LobbyState = {
   game: GameSnapshot | null;
   lastActionResult: ActionResult | null;
   lastError: string | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
   lastErrorId: number;
   lastEvent: string | null;
   completedGame: CompletedGameSnapshot | null;
@@ -242,6 +245,8 @@ const initialState: LobbyState = {
   game: null,
   lastActionResult: null,
   lastError: null,
+  lastErrorCode: null,
+  lastErrorMessage: null,
   lastErrorId: 0,
   lastEvent: null,
   completedGame: null,
@@ -251,22 +256,18 @@ const gameWebSocketStore = createStore(initialState);
 
 const GameWebSocketContext = createContext<GameWebSocketContextValue | null>(null);
 
-export function capitalizeErrorMessage(message: string) {
-  const trimmedMessage = message.trim();
-  return trimmedMessage.length > 0
-    ? `${trimmedMessage[0]!.toUpperCase()}${trimmedMessage.slice(1)}`
-    : "Unknown error";
-}
-
 function withError(
   current: LobbyState,
-  message: string,
+  code: string,
   partial?: Partial<LobbyState>,
+  developerMessage = code,
 ): LobbyState {
   return {
     ...current,
     ...partial,
-    lastError: capitalizeErrorMessage(message),
+    lastError: gameErrorMessage(code),
+    lastErrorCode: code,
+    lastErrorMessage: developerMessage,
     lastErrorId: current.lastErrorId + 1,
   };
 }
@@ -276,11 +277,13 @@ function clearError(current: LobbyState, partial?: Partial<LobbyState>): LobbySt
     ...current,
     ...partial,
     lastError: null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
   };
 }
 
-function isRejectedSessionError(message: string) {
-  return message === "session not found" || message === "session belongs to a different user";
+function isRejectedSessionError(code: string) {
+  return code === "session_not_found" || code === "session_user_mismatch";
 }
 
 const incomingMessageReducers: Record<string, (current: LobbyState, data: any) => LobbyState> = {
@@ -326,19 +329,26 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
       lastEvent: "left_room",
     }),
   error: (current, data) => {
-    const message = data?.message ?? "unknown error";
-    if (current.lastEvent === "draft_update" && message === "not your turn") {
+    const code = data?.code ?? "internal_error";
+    const developerMessage =
+      typeof data?.message === "string" && data.message !== "" ? data.message : code;
+    if (current.lastEvent === "draft_update" && code === "not_your_turn") {
       return clearError(current, {
         lastEvent: "error",
       });
     }
 
-    return withError(current, message, {
-      connectionStatus:
-        current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
-      sessionId: isRejectedSessionError(message) ? "" : current.sessionId,
-      lastEvent: "error",
-    });
+    return withError(
+      current,
+      code,
+      {
+        connectionStatus:
+          current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
+        sessionId: isRejectedSessionError(code) ? "" : current.sessionId,
+        lastEvent: "error",
+      },
+      developerMessage,
+    );
   },
 };
 
@@ -401,12 +411,8 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     );
   }
 
-  function resolveConnectionAuthError(error: unknown) {
-    if (error instanceof Error && error.message.trim() !== "") {
-      return error.message;
-    }
-
-    return "failed to resolve websocket authentication";
+  function resolveConnectionAuthError(_error: unknown) {
+    return "auth_required";
   }
 
   function rejectPendingActions(message: string) {
@@ -435,7 +441,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     }
 
     if (result?.ok === false) {
-      pendingAction.reject(new Error(`${action ?? pendingAction.expectedAction} failed`));
+      pendingAction.reject(new Error("send_failed"));
       return;
     }
 
@@ -471,13 +477,15 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       rejectPendingActions(
         typeof message.data === "object" && message.data && "message" in message.data
           ? String(message.data.message)
-          : "unknown error",
+          : typeof message.data === "object" && message.data && "code" in message.data
+            ? String(message.data.code)
+            : "internal_error",
       );
     }
 
     const reducer = incomingMessageReducers[message.type];
     if (!reducer) {
-      updateState((current) => withError(current, `unknown websocket message: ${message.type}`));
+      updateState((current) => withError(current, "unknown_message_type"));
       return;
     }
 
@@ -499,10 +507,10 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     const socket = socketRef.current;
 
     if (!socket || socket.readyState !== WebSocket.OPEN) {
-      updateState((current) => withError(current, "websocket is not connected"));
+      updateState((current) => withError(current, "connection_unavailable"));
 
       if (options?.awaitResult) {
-        return Promise.reject(new Error("websocket is not connected"));
+        return Promise.reject(new Error("connection_unavailable"));
       }
 
       return;
@@ -533,11 +541,11 @@ function useGameWebSocketController(): GameWebSocketContextValue {
           pendingIndex >= 0 ? pendingIndex : 0,
           1,
         );
-        queuedAction?.reject(error instanceof Error ? error : new Error("failed to send action"));
+        queuedAction?.reject(error instanceof Error ? error : new Error("send_failed"));
         return pendingAction;
       }
 
-      updateState((current) => withError(current, "failed to send websocket action"));
+      updateState((current) => withError(current, "send_failed"));
       return;
     }
 
@@ -573,7 +581,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     const serverUrl = import.meta.env.VITE_GAME_SERVER_URL;
 
     if (!serverUrl) {
-      setConnectionError("missing VITE_GAME_SERVER_URL");
+      setConnectionError("internal_error");
       return;
     }
 
@@ -601,7 +609,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
 
       if (!connectionAuth) {
         connectInFlightRef.current = false;
-        setConnectionError("authentication required before connecting");
+        setConnectionError("auth_required");
         return;
       }
 
@@ -635,7 +643,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       socket.onmessage = (event) => {
         const message = parseEnvelope(event.data);
         if (!message) {
-          setConnectionError("received invalid websocket message");
+          setConnectionError("invalid_server_message");
           return;
         }
 
@@ -646,15 +654,15 @@ function useGameWebSocketController(): GameWebSocketContextValue {
         if (connectAttemptRef.current === connectAttempt) {
           connectInFlightRef.current = false;
         }
-        rejectPendingActions("failed to connect websocket");
-        setConnectionError("failed to connect websocket");
+        rejectPendingActions("connection_failed");
+        setConnectionError("connection_failed");
       };
 
       socket.onclose = () => {
         if (socketRef.current === socket) {
           socketRef.current = null;
           connectInFlightRef.current = false;
-          rejectPendingActions("websocket disconnected");
+          rejectPendingActions("connection_lost");
 
           updateState((current) => ({
             ...current,
@@ -688,7 +696,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     const socket = socketRef.current;
     socketRef.current = null;
     socket?.close();
-    rejectPendingActions("websocket disconnected");
+    rejectPendingActions("connection_lost");
 
     updateState((current) => ({
       ...current,

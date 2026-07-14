@@ -1,4 +1,5 @@
 import { type CardSnapshot, type CompositionSnapshot } from "#/components/game-websocket-provider";
+import { m } from "#/paraglide/messages.js";
 
 const rankLabels: Record<number, string> = {
   1: "A",
@@ -16,21 +17,21 @@ const rankLabels: Record<number, string> = {
   13: "K",
 };
 
-const suitNames: Record<number, string> = {
-  0: "Hearts",
-  1: "Diamonds",
-  2: "Clubs",
-  3: "Spades",
+const suitNames: Record<number, () => string> = {
+  0: m.card_hearts,
+  1: m.card_diamonds,
+  2: m.card_clubs,
+  3: m.card_spades,
 };
 
 export function cardName(card: CardSnapshot) {
   if (card.isJoker) {
-    return "Joker";
+    return m.joker();
   }
 
-  const rank = rankLabels[card.rank ?? 0] ?? "Unknown";
-  const suit = suitNames[card.suit ?? -1] ?? "Unknown";
-  return `${rank} of ${suit}`;
+  const rank = rankLabels[card.rank ?? 0] ?? m.unknown();
+  const suit = suitNames[card.suit ?? -1]?.() ?? m.unknown();
+  return m.card_name({ rank, suit });
 }
 
 export function cardPointValue(card: CardSnapshot) {
