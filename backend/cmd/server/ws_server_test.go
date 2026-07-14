@@ -1663,6 +1663,9 @@ func TestWebSocketActiveGameTurnFlowBroadcastsAndInvalidActions(t *testing.T) {
 	if hostDrawState.Game.TurnActivity.PlayerID != guestConnected.PlayerID {
 		t.Fatalf("host draw TurnActivity.PlayerID = %q; want %q", hostDrawState.Game.TurnActivity.PlayerID, guestConnected.PlayerID)
 	}
+	if hostDrawState.Game.TurnActivity.DrawSource != "discard" {
+		t.Fatalf("host draw TurnActivity.DrawSource = %q; want discard", hostDrawState.Game.TurnActivity.DrawSource)
+	}
 	if len(hostDrawState.Game.TurnActivity.DraftCompositions) != 0 {
 		t.Fatalf("len(host draw TurnActivity.DraftCompositions) = %d; want 0", len(hostDrawState.Game.TurnActivity.DraftCompositions))
 	}

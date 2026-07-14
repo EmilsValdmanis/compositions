@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import {
   closestCenter,
   DndContext,
@@ -24,6 +24,7 @@ import { GameBoardPiles } from "#/components/game/game-board-piles";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameBoardTable } from "#/components/game/game-board-table";
 import { GameCard } from "#/components/game/game-card";
+import { CardTransferAnimation } from "#/components/game/card-transfer-animation";
 import { TurnStartCue } from "#/components/game/turn-start-cue";
 import {
   setPersistedHandOrder,
@@ -264,6 +265,7 @@ function buildSubmittedCompositionActivityMap(
 }
 
 function GameBoardLayout({
+  boardRef,
   game,
   tableCompositions,
   newCompositions,
@@ -280,6 +282,7 @@ function GameBoardLayout({
   onResetDraftCompositions,
   onSendEmote,
 }: {
+  boardRef: RefObject<HTMLDivElement | null>;
   game: GameSnapshot | null;
   tableCompositions: ReturnType<typeof buildTableCompositionViews>;
   newCompositions: DraftedCompositionView[];
@@ -297,7 +300,7 @@ function GameBoardLayout({
   onSendEmote: (emoji: string) => void;
 }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
+    <div ref={boardRef} className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <GameBoardTable
           tableCompositions={tableCompositions}
@@ -975,6 +978,7 @@ export function GameBoardView({
   onSendEmote,
   disableDraftSync,
 }: GameBoardViewProps) {
+  const boardRef = useRef<HTMLDivElement>(null);
   const controller = useGameBoardController({
     game,
     roomCode,
@@ -1022,6 +1026,7 @@ export function GameBoardView({
         />
       ) : null}
       <GameBoardLayout
+        boardRef={boardRef}
         game={game}
         tableCompositions={controller.tableCompositions}
         newCompositions={controller.newCompositions}
@@ -1038,6 +1043,7 @@ export function GameBoardView({
         onResetDraftCompositions={controller.resetDraftCompositions}
         onSendEmote={onSendEmote}
       />
+      <CardTransferAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
       <DragOverlay dropAnimation={null}>
         {activeDraw ? (
           <GameCard

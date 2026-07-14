@@ -38,6 +38,7 @@ type TurnActivitySnapshot struct {
 	PlayerID              string                        `json:"playerId"`
 	Round                 int                           `json:"round"`
 	TurnNumber            int                           `json:"turnNumber"`
+	DrawSource            string                        `json:"drawSource,omitempty"`
 	BaselineCompositions  []CompositionSnapshot         `json:"baselineCompositions,omitempty"`
 	DraftCompositions     []DraftCompositionSnapshot    `json:"draftCompositions,omitempty"`
 	CompositionActivities []CompositionActivitySnapshot `json:"compositionActivities,omitempty"`

@@ -905,6 +905,9 @@ func (l *lobbyServer) draw(sessionID, source string) (roomSnapshot, []gameStateR
 		}
 	}, func(room *room, session *playerSession) error {
 		room.resetTurnTracking(session.playerID)
+		if room.turnActivity != nil {
+			room.turnActivity.DrawSource = source
+		}
 		return nil
 	})
 }
