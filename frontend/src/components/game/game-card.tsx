@@ -14,6 +14,7 @@ import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { cardName } from "#/components/game/game-card-utils";
 import { Text, type TypographyVariant } from "#/components/typography";
 import { cn } from "#/lib/utils";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 
 const rankLabels: Record<number, string> = {
   1: "A",
@@ -214,6 +215,7 @@ function SortableGameCard({
   data?: Record<string, unknown>;
   decoration?: GameCardDecoration;
 }) {
+  const shouldReduceMotion = useShouldReduceMotion();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
     data: { cardIndex, ...data },
@@ -224,7 +226,7 @@ function SortableGameCard({
     transform: transform
       ? `translate3d(${transform.x}px, ${transform.y}px, 0) scaleX(${transform.scaleX}) scaleY(${transform.scaleY})`
       : undefined,
-    transition,
+    transition: shouldReduceMotion ? undefined : transition,
     opacity: isDragging ? 0 : 1,
     zIndex: isDragging ? 20 : undefined,
   };

@@ -3,6 +3,7 @@ import {
   BookOpen01Icon,
   CodeXmlIcon,
   Logout02FreeIcons,
+  Motion01Icon,
   UserIcon,
   VolumeHighIcon,
   VolumeOffIcon,
@@ -34,6 +35,10 @@ import {
   setGameSoundsEnabled,
   subscribeToGameSoundPreference,
 } from "#/lib/game-sounds";
+import {
+  setReducedMotionPreferenceEnabled,
+  useReducedMotionPreference,
+} from "#/lib/reduced-motion";
 import { getUserInitials } from "#/lib/utils";
 
 const rootRouteApi = getRouteApi("__root__");
@@ -48,6 +53,7 @@ export function UserDropdown() {
     areGameSoundsEnabled,
     () => true,
   );
+  const reduceMotion = useReducedMotionPreference();
 
   const user = session?.user;
   const displayName = user?.name || "";
@@ -60,6 +66,10 @@ export function UserDropdown() {
 
   function toggleSounds() {
     setGameSoundsEnabled(!soundsEnabled);
+  }
+
+  function toggleReducedMotion() {
+    setReducedMotionPreferenceEnabled(!reduceMotion);
   }
 
   return (
@@ -106,6 +116,13 @@ export function UserDropdown() {
               Sound effects
               <Text variant="caption" className="ml-auto">
                 {soundsEnabled ? "On" : "Off"}
+              </Text>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={toggleReducedMotion}>
+              <HugeiconsIcon icon={Motion01Icon} />
+              Reduce motion
+              <Text variant="caption" className="ml-auto">
+                {reduceMotion ? "On" : "Off"}
               </Text>
             </DropdownMenuItem>
             {import.meta.env.DEV ? (

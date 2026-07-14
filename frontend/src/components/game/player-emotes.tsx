@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Text } from "#/components/typography";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 
 export const PLAYER_EMOTES = [
   "👋",
@@ -29,6 +30,8 @@ export function PlayerEmoteBubble({
 }: {
   emote: { id: string; emoji: string; expiresAt: string };
 }) {
+  const shouldReduceMotion = useShouldReduceMotion();
+
   return (
     <Badge
       key={emote.id}
@@ -36,11 +39,15 @@ export function PlayerEmoteBubble({
       aria-label="Player emote"
       render={
         <motion.span
-          initial={{ opacity: 0, y: 4, scale: 0.78 }}
+          initial={{
+            opacity: 0,
+            y: shouldReduceMotion ? 0 : 4,
+            scale: shouldReduceMotion ? 1 : 0.78,
+          }}
           animate={{
             opacity: [0, 1, 1, 0],
-            y: [4, -4, -2, -14],
-            scale: [0.78, 1.08, 1, 0.9],
+            y: shouldReduceMotion ? 0 : [4, -4, -2, -14],
+            scale: shouldReduceMotion ? 1 : [0.78, 1.08, 1, 0.9],
           }}
           transition={{
             duration: 4,

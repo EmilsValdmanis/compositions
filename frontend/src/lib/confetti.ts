@@ -1,4 +1,5 @@
 import type confetti from "canvas-confetti";
+import { shouldReduceMotion } from "#/lib/reduced-motion";
 
 type CelebrationConfettiOptions = {
   count?: number;
@@ -13,10 +14,7 @@ export async function fireCelebrationConfetti({
   originY = 0.7,
   delayMs = 0,
 }: CelebrationConfettiOptions = {}) {
-  if (
-    typeof window === "undefined" ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  ) {
+  if (typeof window === "undefined" || shouldReduceMotion()) {
     return;
   }
 

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Alert } from "#/components/ui/alert";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Separator } from "#/components/ui/separator";
 import { Text } from "#/components/typography";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { getUserInitials } from "#/lib/utils";
 
 export function TurnStartCue({
@@ -18,7 +19,7 @@ export function TurnStartCue({
   playerImageUrl?: string;
 }) {
   const [visible, setVisible] = useState(true);
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = useShouldReduceMotion();
   const turnKey = `${round}:${turnNumber}`;
 
   useEffect(() => {
