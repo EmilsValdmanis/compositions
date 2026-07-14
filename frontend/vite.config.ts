@@ -6,6 +6,7 @@ import babelPlugin from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 import { sentryTanstackStart } from "@sentry/tanstackstart-react/vite";
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 
 const config = defineConfig({
   fmt: {
@@ -14,6 +15,30 @@ const config = defineConfig({
   lint: { options: { typeAware: true, typeCheck: true } },
   resolve: { tsconfigPaths: true },
   plugins: [
+    paraglideVitePlugin({
+      project: "./project.inlang",
+      outdir: "./src/paraglide",
+      outputStructure: "message-modules",
+      emitTsDeclarations: true,
+      cookieName: "PARAGLIDE_LOCALE",
+      strategy: ["url", "cookie", "preferredLanguage", "baseLocale"],
+      urlPatterns: [
+        {
+          pattern: "/",
+          localized: [
+            ["en", "/en"],
+            ["lv", "/lv"],
+          ],
+        },
+        {
+          pattern: "/:path(.*)?",
+          localized: [
+            ["en", "/en/:path(.*)?"],
+            ["lv", "/lv/:path(.*)?"],
+          ],
+        },
+      ],
+    }),
     devtools(),
     nitro(),
     tailwindcss(),

@@ -85,37 +85,37 @@ func (s *wsServer) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s == nil || s.auth == nil {
-		http.Error(w, "auth is not configured", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "auth is not configured")
 		return
 	}
 
 	switch r.URL.Path {
 	case "/auth/google":
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
 		s.auth.handleGoogleSignIn(w, r)
 	case "/auth/google/callback":
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
 		s.auth.handleGoogleCallback(w, r)
 	case "/auth/session":
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
 		s.auth.handleSession(w, r)
 	case "/auth/logout":
 		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 			return
 		}
 		s.auth.handleLogout(w, r)
 	default:
-		http.NotFound(w, r)
+		writeHTTPError(w, http.StatusNotFound, "not_found", "not found")
 	}
 }
 

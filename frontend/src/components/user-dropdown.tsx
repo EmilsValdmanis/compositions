@@ -10,6 +10,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, getRouteApi, useRouter } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { GameRulesDialog } from "#/components/game/game-rules-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
@@ -40,6 +41,7 @@ import {
   useReducedMotionPreference,
 } from "#/lib/reduced-motion";
 import { getUserInitials } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 const rootRouteApi = getRouteApi("__root__");
 
@@ -60,8 +62,12 @@ export function UserDropdown() {
   const initials = getUserInitials(displayName);
 
   const handleSignOut = async () => {
-    await authClient.signOut();
-    await router.invalidate();
+    try {
+      await authClient.signOut();
+      await router.invalidate();
+    } catch {
+      toast.error(m.error_sign_out());
+    }
   };
 
   function toggleSounds() {
@@ -81,7 +87,7 @@ export function UserDropdown() {
               variant="ghost"
               size="icon"
               className="rounded-full"
-              aria-label="Open account menu"
+              aria-label={m.account_menu()}
             />
           }
         >
@@ -93,7 +99,7 @@ export function UserDropdown() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <Strong className="text-foreground">{displayName || "Account"}</Strong>
+              <Strong className="text-foreground">{displayName || m.account()}</Strong>
               {user?.email ? <Text variant="caption">{user.email}</Text> : null}
             </DropdownMenuLabel>
           </DropdownMenuGroup>
@@ -104,44 +110,44 @@ export function UserDropdown() {
                 render={<Link to="/players/$playerId" params={{ playerId: user.id }} />}
               >
                 <HugeiconsIcon icon={UserIcon} />
-                Profile
+                {m.profile()}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuItem onClick={() => setRulesOpen(true)}>
               <HugeiconsIcon icon={BookOpen01Icon} />
-              Rules
+              {m.rules()}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={toggleSounds}>
               <HugeiconsIcon icon={soundsEnabled ? VolumeHighIcon : VolumeOffIcon} />
-              Sound effects
+              {m.sound_effects()}
               <Text variant="caption" className="ml-auto">
-                {soundsEnabled ? "On" : "Off"}
+                {soundsEnabled ? m.on() : m.off()}
               </Text>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={toggleReducedMotion}>
               <HugeiconsIcon icon={Motion01Icon} />
-              Reduce motion
+              {m.reduce_motion()}
               <Text variant="caption" className="ml-auto">
-                {reduceMotion ? "On" : "Off"}
+                {reduceMotion ? m.on() : m.off()}
               </Text>
             </DropdownMenuItem>
             {import.meta.env.DEV ? (
               <DropdownMenuItem render={<Link to="/dev-ui" />}>
                 <HugeiconsIcon icon={CodeXmlIcon} />
-                Dev UI
+                {m.dev_ui()}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger>Theme</DropdownMenuSubTrigger>
+              <DropdownMenuSubTrigger>{m.theme()}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuGroup>
                   <DropdownMenuRadioGroup
                     value={theme}
                     onValueChange={(value) => setTheme(value as typeof theme)}
                   >
-                    <DropdownMenuRadioItem value="light">Light</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="dark">Dark</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="system">System</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="light">{m.theme_light()}</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="dark">{m.theme_dark()}</DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="system">{m.theme_system()}</DropdownMenuRadioItem>
                   </DropdownMenuRadioGroup>
                 </DropdownMenuGroup>
               </DropdownMenuSubContent>
@@ -151,7 +157,7 @@ export function UserDropdown() {
           <DropdownMenuGroup>
             <DropdownMenuItem onClick={handleSignOut}>
               <HugeiconsIcon icon={Logout02FreeIcons} />
-              Sign Out
+              {m.sign_out()}
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>

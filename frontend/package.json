@@ -6,6 +6,8 @@
     "#/*": "./src/*"
   },
   "scripts": {
+    "postinstall": "bun run paraglide:compile",
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --output-structure message-modules --emit-ts-declarations",
     "dev": "vp dev --port 3000",
     "build": "vp build",
     "preview": "vp preview",
@@ -51,6 +53,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "2.22.0",
     "@rolldown/plugin-babel": "0.2.3",
     "@tailwindcss/typography": "0.5.20",
     "@tanstack/devtools-vite": "0.8.1",

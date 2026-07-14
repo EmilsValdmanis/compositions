@@ -18,6 +18,7 @@ import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Spinner } from "#/components/ui/spinner";
 import { Strong } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 function PlayerAvatar({ player }: { player: PlayerSnapshot }) {
   const avatar = (
@@ -41,7 +42,7 @@ function PlayerAvatar({ player }: { player: PlayerSnapshot }) {
             variant="ghost"
             size="icon"
             className="rounded-full"
-            aria-label={`Open ${player.name}'s player menu`}
+            aria-label={m.open_player_menu({ name: player.name })}
           />
         }
       >
@@ -54,7 +55,7 @@ function PlayerAvatar({ player }: { player: PlayerSnapshot }) {
             render={<Link to="/players/$playerId" params={{ playerId: player.userId }} />}
           >
             <HugeiconsIcon icon={UserIcon} />
-            View profile
+            {m.view_profile()}
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>
@@ -102,17 +103,22 @@ export function PlayerStrip({
                 <HugeiconsIcon
                   icon={SkullIcon}
                   className="size-5 shrink-0 text-destructive"
-                  aria-label={`${player.name} forfeited`}
+                  aria-label={m.player_forfeited({ name: player.name })}
                 />
               ) : showActiveTurn ? (
                 <Spinner
                   className="size-5 shrink-0 text-primary"
-                  aria-label={`${player.name}'s turn`}
+                  aria-label={m.player_turn({ name: player.name })}
                 />
               ) : null}
-              {showHostBadges && player.isHost ? <Badge variant="secondary">Host</Badge> : null}
+              {showHostBadges && player.isHost ? (
+                <Badge variant="secondary">{m.host()}</Badge>
+              ) : null}
               {gamePlayer ? (
-                <Badge variant="outline" aria-label={`${gamePlayer.handCount} cards`}>
+                <Badge
+                  variant="outline"
+                  aria-label={m.cards_count({ count: gamePlayer.handCount })}
+                >
                   <AnimatedNumber value={gamePlayer.handCount} />
                   <HugeiconsIcon icon={Cards02Icon} aria-hidden="true" />
                 </Badge>

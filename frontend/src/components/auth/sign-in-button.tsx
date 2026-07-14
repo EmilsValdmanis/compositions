@@ -5,15 +5,15 @@ import { toast } from "sonner";
 import { Spinner } from "#/components/ui/spinner";
 import { Button } from "#/components/ui/button";
 import { authClient } from "#/lib/auth-client";
+import { m } from "#/paraglide/messages.js";
 
 export default function SignInButton({ returnTo }: { returnTo?: string }) {
   const [isPending, startTransition] = useTransition();
 
   const handleGoogleSignIn = () => {
     startTransition(() => {
-      void authClient.signIn.social({ provider: "google", returnTo }).catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : "failed to start sign in";
-        toast.error(message);
+      void authClient.signIn.social({ provider: "google", returnTo }).catch(() => {
+        toast.error(m.error_sign_in_start());
       });
     });
   };
@@ -22,11 +22,11 @@ export default function SignInButton({ returnTo }: { returnTo?: string }) {
     <Button onClick={handleGoogleSignIn} disabled={isPending} size="lg">
       {isPending ? (
         <>
-          <Spinner data-icon="inline-start" /> Authenticating
+          <Spinner data-icon="inline-start" /> {m.authenticating()}
         </>
       ) : (
         <>
-          Sign in <HugeiconsIcon icon={Login01Icon} />
+          {m.sign_in()} <HugeiconsIcon icon={Login01Icon} />
         </>
       )}
     </Button>

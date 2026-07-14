@@ -276,13 +276,13 @@ func (h *authHandler) handleGoogleSignIn(w http.ResponseWriter, r *http.Request)
 	state, err := h.state()
 	if err != nil {
 		slog.Error("generate oauth state failed", "error", err)
-		http.Error(w, "failed to start oauth flow", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to start oauth flow")
 		return
 	}
 	verifier, err := randomToken()
 	if err != nil {
 		slog.Error("generate oauth pkce verifier failed", "error", err)
-		http.Error(w, "failed to start oauth flow", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to start oauth flow")
 		return
 	}
 
@@ -301,27 +301,27 @@ func (h *authHandler) handleGoogleSignIn(w http.ResponseWriter, r *http.Request)
 
 func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid oauth callback", http.StatusBadRequest)
+		writeHTTPError(w, http.StatusBadRequest, "invalid_oauth_callback", "invalid oauth callback")
 		return
 	}
 	if oauthError := strings.TrimSpace(r.FormValue("error")); oauthError != "" {
-		http.Error(w, "google oauth failed", http.StatusUnauthorized)
+		writeHTTPError(w, http.StatusUnauthorized, "oauth_failed", "google oauth failed")
 		return
 	}
 	state := strings.TrimSpace(r.FormValue("state"))
 	code := strings.TrimSpace(r.FormValue("code"))
 	if state == "" || code == "" {
-		http.Error(w, "missing oauth callback parameters", http.StatusBadRequest)
+		writeHTTPError(w, http.StatusBadRequest, "missing_oauth_parameters", "missing oauth callback parameters")
 		return
 	}
 	stateCookie, err := r.Cookie(oauthStateCookieName)
 	if err != nil || !matchDigest(stateCookie.Value, stateDigest(state)) {
-		http.Error(w, "invalid oauth state", http.StatusUnauthorized)
+		writeHTTPError(w, http.StatusUnauthorized, "invalid_oauth_state", "invalid oauth state")
 		return
 	}
 	pkceCookie, err := r.Cookie(oauthPKCECookieName)
 	if err != nil || strings.TrimSpace(pkceCookie.Value) == "" {
-		http.Error(w, "missing oauth pkce verifier", http.StatusUnauthorized)
+		writeHTTPError(w, http.StatusUnauthorized, "missing_oauth_verifier", "missing oauth pkce verifier")
 		return
 	}
 	clearCookie(w, h.cookie(oauthStateCookieName, "", time.Unix(0, 0)))
@@ -332,24 +332,24 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	token, err := h.config.oauthConfig.Exchange(r.Context(), code, oauth2.VerifierOption(pkceCookie.Value))
 	if err != nil {
 		slog.Warn("oauth code exchange failed", "error", err)
-		http.Error(w, "google oauth exchange failed", http.StatusUnauthorized)
+		writeHTTPError(w, http.StatusUnauthorized, "oauth_exchange_failed", "google oauth exchange failed")
 		return
 	}
 	user, err := h.fetchGoogleUser(r.Context(), token)
 	if err != nil {
 		slog.Warn("fetch google user failed", "error", err)
-		http.Error(w, "failed to read google profile", http.StatusUnauthorized)
+		writeHTTPError(w, http.StatusUnauthorized, "oauth_profile_failed", "failed to read google profile")
 		return
 	}
 	user, err = h.store.UpsertUser(r.Context(), user)
 	if err != nil {
 		if errors.Is(err, database.ErrUserConflict) {
 			slog.Warn("save oauth user conflict", "provider", user.Provider, "providerAccountID", user.ProviderAccountID, "email", user.Email)
-			http.Error(w, "google account could not be linked", http.StatusConflict)
+			writeHTTPError(w, http.StatusConflict, "oauth_account_conflict", "google account could not be linked")
 			return
 		}
 		slog.Error("save oauth user failed", "provider", user.Provider, "providerAccountID", user.ProviderAccountID, "error", err)
-		http.Error(w, "failed to save session user", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to save session user")
 		return
 	}
 
@@ -357,7 +357,7 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	sessionToken, err := h.sessionTokenForUser(r, user, expiresAt)
 	if err != nil {
 		slog.Error("persist session failed", "userID", user.ID, "error", err)
-		http.Error(w, "failed to create session", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to create session")
 		return
 	}
 
@@ -406,7 +406,7 @@ func (h *authHandler) handleSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		slog.Error("resolve session failed", "error", err)
-		http.Error(w, "failed to load session", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to load session")
 		return
 	}
 

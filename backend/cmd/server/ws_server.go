@@ -164,6 +164,7 @@ type connectedEvent struct {
 }
 
 type errorEvent struct {
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 
@@ -337,7 +338,7 @@ func (s *wsServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	if !s.rateLimits.allowConnectionAttempt(r) {
-		http.Error(w, errRateLimitExceeded.Error(), http.StatusTooManyRequests)
+		writeHTTPError(w, http.StatusTooManyRequests, clientErrorCode(errRateLimitExceeded), errRateLimitExceeded.Error())
 		slog.Warn("websocket connection rate limited", "remote", r.RemoteAddr)
 		return
 	}
@@ -839,7 +840,7 @@ func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelop
 }
 
 func (s *wsServer) writeError(conn *websocket.Conn, err error) {
-	logEmitFailure(conn, "error", errorEvent{Message: err.Error()}, "write websocket error event failed")
+	logEmitFailure(conn, "error", errorEvent{Code: clientErrorCode(err), Message: clientErrorMessage(err)}, "write websocket error event failed")
 }
 
 func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*websocket.Conn) {

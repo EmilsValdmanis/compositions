@@ -10,6 +10,8 @@ import { Separator } from "#/components/ui/separator";
 import { Caption, Eyebrow, H1, Text } from "#/components/typography";
 import type { PlayerProfile } from "#/lib/player-profile";
 import { getUserInitials } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
+import { getLocale } from "#/paraglide/runtime.js";
 
 function ratio(numerator: number, denominator: number) {
   return denominator > 0 ? numerator / denominator : null;
@@ -18,7 +20,7 @@ function ratio(numerator: number, denominator: number) {
 function formatPercent(value: number | null) {
   return value === null
     ? "—"
-    : new Intl.NumberFormat(undefined, { style: "percent", maximumFractionDigits: 0 }).format(
+    : new Intl.NumberFormat(getLocale(), { style: "percent", maximumFractionDigits: 0 }).format(
         value,
       );
 }
@@ -26,7 +28,7 @@ function formatPercent(value: number | null) {
 function formatDecimal(value: number | null) {
   return value === null
     ? "—"
-    : new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+    : new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 1 }).format(value);
 }
 
 function formatPlaytime(totalSeconds: number) {
@@ -34,8 +36,8 @@ function formatPlaytime(totalSeconds: number) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
 
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${totalMinutes}m`;
+  if (hours > 0) return m.playtime_hours_minutes({ hours, minutes });
+  return m.playtime_minutes({ minutes: totalMinutes });
 }
 
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
@@ -76,9 +78,9 @@ export function PlayerProfilePage({
   async function shareProfile() {
     try {
       await navigator.clipboard.writeText(window.location.href);
-      toast.success("Profile link copied");
+      toast.success(m.profile_link_copied());
     } catch {
-      toast.error("Could not copy this profile link");
+      toast.error(m.profile_link_copy_failed());
     }
   }
 
@@ -87,12 +89,12 @@ export function PlayerProfilePage({
       <div className="flex items-center justify-between gap-2">
         <Button render={<Link to="/" />} nativeButton={false} variant="ghost" size="sm">
           <HugeiconsIcon icon={ArrowLeft01Icon} data-icon="inline-start" />
-          Back to game
+          {m.back_to_game()}
         </Button>
         {isOwnProfile ? (
           <Button variant="ghost" size="sm" onClick={() => void shareProfile()}>
             <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
-            Share profile
+            {m.share_profile()}
           </Button>
         ) : null}
       </div>
@@ -107,10 +109,10 @@ export function PlayerProfilePage({
               </AvatarFallback>
             </Avatar>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <Eyebrow data-slot="card-description">Player profile</Eyebrow>
+              <Eyebrow data-slot="card-description">{m.player_profile()}</Eyebrow>
               <H1 className="truncate">{profile.name}</H1>
               <Badge className="mt-1 w-fit" variant={hasGames ? "secondary" : "outline"}>
-                {hasGames ? `${profile.gamesPlayed} ranked games` : "Unranked"}
+                {hasGames ? m.ranked_games({ count: profile.gamesPlayed }) : m.unranked()}
               </Badge>
             </div>
           </div>
@@ -118,57 +120,59 @@ export function PlayerProfilePage({
       </Card>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Games played" value={String(profile.gamesPlayed)} note="Ranked finishes" />
         <StatCard
-          label="Total playtime"
+          label={m.games_played()}
+          value={String(profile.gamesPlayed)}
+          note={m.ranked_finishes()}
+        />
+        <StatCard
+          label={m.total_playtime()}
           value={formatPlaytime(profile.totalPlaytimeSeconds)}
-          note="Completed ranked games"
+          note={m.completed_ranked_games()}
         />
         <StatCard
-          label="Win rate"
+          label={m.win_rate()}
           value={formatPercent(ratio(profile.gamesWon, profile.gamesPlayed))}
-          note={`${profile.gamesWon} game wins`}
+          note={m.game_wins({ count: profile.gamesWon })}
         />
         <StatCard
-          label="Average finish"
+          label={m.average_finish()}
           value={formatDecimal(ratio(profile.totalPlacement, profile.gamesPlayed))}
-          note="Lower is better"
+          note={m.lower_better()}
         />
         <StatCard
-          label="Round win rate"
+          label={m.round_win_rate()}
           value={formatPercent(ratio(profile.roundsWon, profile.roundsPlayed))}
-          note={`${profile.roundsWon} round wins`}
+          note={m.round_wins({ count: profile.roundsWon })}
         />
       </div>
 
       {!hasGames ? (
         <Card>
           <CardHeader>
-            <CardTitle>No ranked history yet</CardTitle>
-            <CardDescription>
-              Statistics will appear here after this player completes their first ranked game.
-            </CardDescription>
+            <CardTitle>{m.no_ranked_history()}</CardTitle>
+            <CardDescription>{m.stats_after_first_game()}</CardDescription>
           </CardHeader>
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle>Round craft</CardTitle>
-              <CardDescription>How this player builds and closes rounds.</CardDescription>
+              <CardTitle>{m.round_craft()}</CardTitle>
+              <CardDescription>{m.round_craft_description()}</CardDescription>
             </CardHeader>
             <CardContent>
-              <DetailRow label="Rounds played" value={String(profile.roundsPlayed)} />
+              <DetailRow label={m.rounds_played()} value={String(profile.roundsPlayed)} />
               <Separator />
               <DetailRow
-                label="Round win rate"
+                label={m.round_win_rate()}
                 value={formatPercent(ratio(profile.roundsWon, profile.roundsPlayed))}
               />
               <Separator />
-              <DetailRow label="Compositions created" value={String(compositions)} />
+              <DetailRow label={m.compositions_created()} value={String(compositions)} />
               <Separator />
               <DetailRow
-                label="Runs / sets"
+                label={m.runs_sets()}
                 value={`${profile.runsCreated} / ${profile.setsCreated}`}
               />
             </CardContent>
@@ -176,17 +180,20 @@ export function PlayerProfilePage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Competitive record</CardTitle>
-              <CardDescription>Streaks and scoring across ranked games.</CardDescription>
+              <CardTitle>{m.competitive_record()}</CardTitle>
+              <CardDescription>{m.competitive_record_description()}</CardDescription>
             </CardHeader>
             <CardContent>
-              <DetailRow label="Current win streak" value={String(profile.currentGameWinStreak)} />
+              <DetailRow
+                label={m.current_win_streak()}
+                value={String(profile.currentGameWinStreak)}
+              />
               <Separator />
-              <DetailRow label="Best win streak" value={String(profile.longestGameWinStreak)} />
+              <DetailRow label={m.best_win_streak()} value={String(profile.longestGameWinStreak)} />
               <Separator />
-              <DetailRow label="Points inflicted" value={String(profile.pointsInflicted)} />
+              <DetailRow label={m.points_inflicted()} value={String(profile.pointsInflicted)} />
               <Separator />
-              <DetailRow label="Penalty points taken" value={String(profile.penaltyPoints)} />
+              <DetailRow label={m.penalty_points()} value={String(profile.penaltyPoints)} />
             </CardContent>
           </Card>
         </div>

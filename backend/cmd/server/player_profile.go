@@ -44,31 +44,31 @@ func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	userID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/players/"))
 	if userID == "" || strings.Contains(userID, "/") {
-		http.NotFound(w, r)
+		writeHTTPError(w, http.StatusNotFound, "not_found", "player profile not found")
 		return
 	}
 	if _, err := uuid.Parse(userID); err != nil {
-		http.NotFound(w, r)
+		writeHTTPError(w, http.StatusNotFound, "not_found", "player profile not found")
 		return
 	}
 	store, ok := s.userStore.(playerProfileStore)
 	if !ok {
-		http.Error(w, "player profiles are unavailable", http.StatusServiceUnavailable)
+		writeHTTPError(w, http.StatusServiceUnavailable, "player_profiles_unavailable", "player profiles are unavailable")
 		return
 	}
 	profile, err := store.GetPlayerProfile(r.Context(), userID)
 	if errors.Is(err, database.ErrPlayerProfileNotFound) {
-		http.NotFound(w, r)
+		writeHTTPError(w, http.StatusNotFound, "not_found", "player profile not found")
 		return
 	}
 	if err != nil {
 		slog.Error("load player profile failed", "userID", userID, "error", err)
-		http.Error(w, "failed to load player profile", http.StatusInternalServerError)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to load player profile")
 		return
 	}
 

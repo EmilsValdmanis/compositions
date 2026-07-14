@@ -9,6 +9,7 @@ import { GameCard } from "#/components/game/game-card";
 import { Card, CardContent } from "#/components/ui/card";
 import { Text } from "#/components/typography";
 import { cn } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 type HandStatus = {
   hasGame: boolean;
@@ -74,9 +75,7 @@ export function GameBoardHand({
                   as="div"
                   className="rounded-3xl border border-dashed border-border/70 p-6 text-muted-foreground"
                 >
-                  {hasDraftedCompositions
-                    ? "All of your cards are staged in compositions. Drag one back here to return it to hand."
-                    : "No cards in hand."}
+                  {hasDraftedCompositions ? m.all_cards_staged() : m.no_cards_in_hand()}
                 </Text>
               )}
             </GameBoardDraftDropZone>
@@ -86,7 +85,7 @@ export function GameBoardHand({
             as="div"
             className="rounded-3xl border border-dashed border-border/70 p-6 text-muted-foreground"
           >
-            Waiting for the first game snapshot.
+            {m.waiting_game_snapshot()}
           </Text>
         )}
       </CardContent>

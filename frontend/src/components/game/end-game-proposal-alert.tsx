@@ -3,10 +3,11 @@ import { Agreement01Icon, Bug01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
-import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { P } from "#/components/typography";
+import { m } from "#/paraglide/messages.js";
 
 export function EndGameProposalAlert() {
   const { state, voteEndGame } = useGameWebSocket();
@@ -48,27 +49,24 @@ export function EndGameProposalAlert() {
     <Alert>
       <HugeiconsIcon icon={isTechnicalAbort ? Bug01Icon : Agreement01Icon} />
       <AlertTitle>
-        {isTechnicalAbort ? "Technical abort requested" : "End game by agreement?"}
+        {isTechnicalAbort ? m.technical_abort_requested() : m.end_by_agreement()}
       </AlertTitle>
       <AlertDescription>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <P>
-              {proposer?.name ?? "A player"}{" "}
-              {isTechnicalAbort
-                ? "reported a game-breaking problem"
-                : "would like to end without a winner"}
-              .
+              {proposer?.name ?? m.a_player()}{" "}
+              {isTechnicalAbort ? m.reported_game_problem() : m.would_end_without_winner()}.
             </P>
             {proposal.description ? <P className="truncate">“{proposal.description}”</P> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="outline">
               <AnimatedNumber value={proposal.agreedPlayerIds.length} />/
-              <AnimatedNumber value={proposal.eligiblePlayerIds.length} /> agreed
+              <AnimatedNumber value={proposal.eligiblePlayerIds.length} /> {m.agreed()}
             </Badge>
             {hasAgreed ? (
-              <Badge variant="secondary">Waiting for others</Badge>
+              <Badge variant="secondary">{m.waiting_for_others()}</Badge>
             ) : (
               <>
                 <Button
@@ -78,10 +76,10 @@ export function EndGameProposalAlert() {
                   disabled={isVoting}
                   onClick={() => void vote(false)}
                 >
-                  Keep playing
+                  {m.keep_playing()}
                 </Button>
                 <Button type="button" size="sm" disabled={isVoting} onClick={() => void vote(true)}>
-                  {isTechnicalAbort ? "Abort game" : "End game"}
+                  {isTechnicalAbort ? m.abort_game() : m.end_game()}
                 </Button>
               </>
             )}

@@ -36,14 +36,8 @@ vi.mock("#/lib/game-auth", () => ({
   getGameConnectionAuth: vi.fn().mockResolvedValue({ playerId: "player-1" }),
 }));
 
-const { capitalizeErrorMessage, GameWebSocketProvider, useGameWebSocket } =
+const { GameWebSocketProvider, useGameWebSocket } =
   await import("#/components/game-websocket-provider");
-
-describe("capitalizeErrorMessage", () => {
-  it("capitalizes backend error messages", () => {
-    expect(capitalizeErrorMessage("not a valid composition")).toBe("Not a valid composition");
-  });
-});
 
 const sockets: FakeWebSocket[] = [];
 
@@ -91,6 +85,9 @@ function Harness({ children }: { children?: ReactNode }) {
     <div>
       <p data-testid="session-id">{state.sessionId}</p>
       <p data-testid="connection-status">{state.connectionStatus}</p>
+      <p data-testid="last-error">{state.lastError}</p>
+      <p data-testid="last-error-code">{state.lastErrorCode}</p>
+      <p data-testid="last-error-message">{state.lastErrorMessage}</p>
       <button type="button" onClick={() => void connect()}>
         Connect
       </button>
@@ -198,6 +195,31 @@ describe("GameWebSocketProvider", () => {
       type: "connect",
       data: { sessionId: "session-1" },
     });
+  });
+
+  it("localizes error codes while retaining the backend message for developers", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    await act(async () => {
+      sockets[0]!.message({
+        type: "error",
+        data: { code: "room_full", message: "room is full" },
+      });
+    });
+
+    expect(screen.getByTestId("last-error").textContent).toBe("The room is full.");
+    expect(screen.getByTestId("last-error-code").textContent).toBe("room_full");
+    expect(screen.getByTestId("last-error-message").textContent).toBe("room is full");
   });
 
   it("sends the selected card value with discard actions", async () => {

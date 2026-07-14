@@ -1279,6 +1279,9 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 	if err := json.Unmarshal(gotErrorEnvelope.Data, &gotError); err != nil {
 		t.Fatalf("json.Unmarshal(error event) error = %v", err)
 	}
+	if gotError.Code != clientErrorInternal {
+		t.Fatalf("gotError.Code = %q; want %q", gotError.Code, clientErrorInternal)
+	}
 	if gotError.Message != "boom" {
 		t.Fatalf("gotError.Message = %q; want boom", gotError.Message)
 	}

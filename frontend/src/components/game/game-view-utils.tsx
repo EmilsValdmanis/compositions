@@ -5,6 +5,7 @@ import { playerById } from "#/components/game/game-view-helpers";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Text } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
+import { m } from "#/paraglide/messages.js";
 
 function PlayerMarker({
   players,
@@ -32,7 +33,7 @@ function PlayerMarker({
 export function ActivityLabel({
   players,
   playerId,
-  label = "New",
+  label = m.activity_new(),
   icon,
   className,
   offsetClassName,
@@ -62,11 +63,11 @@ export function ActivityLabel({
 export function NewActivityLabel(
   props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
 ) {
-  return <ActivityLabel {...props} label="New" icon={SparklesIcon} />;
+  return <ActivityLabel {...props} label={m.activity_new()} icon={SparklesIcon} />;
 }
 
 export function ReclaimActivityLabel(
   props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
 ) {
-  return <ActivityLabel {...props} label="Reclaim" />;
+  return <ActivityLabel {...props} label={m.activity_reclaim()} />;
 }

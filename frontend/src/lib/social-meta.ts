@@ -1,5 +1,8 @@
-export const defaultSocialDescription =
-  "A tactical rummy-style card game about building runs, closing rounds, and staying under 100 points.";
+import { m } from "#/paraglide/messages.js";
+
+export function defaultSocialDescription() {
+  return m.social_description();
+}
 
 type SocialMetaDescriptor =
   | { name: string; content: string }
@@ -32,7 +35,7 @@ export function createSocialMeta({
     { property: "og:image:height", content: "630" },
     {
       property: "og:image:alt",
-      content: "Compositions — build runs, close rounds, play to 100",
+      content: m.social_image_alt(),
     },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: title },

@@ -56,6 +56,8 @@ function makeState(overrides: Partial<LobbyState> = {}): LobbyState {
     game: makeGame(),
     lastActionResult: null,
     lastError: null,
+    lastErrorCode: null,
+    lastErrorMessage: null,
     lastErrorId: 0,
     lastEvent: "game_state",
     completedGame: null,

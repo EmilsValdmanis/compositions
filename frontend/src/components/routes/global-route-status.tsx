@@ -4,17 +4,11 @@ import { Link, type ErrorComponentProps, type NotFoundRouteProps } from "@tansta
 import { Button } from "#/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader } from "#/components/ui/card";
 import { H2, Text } from "#/components/typography";
+import { m } from "#/paraglide/messages.js";
 
 function errorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.length > 0) {
-    return error;
-  }
-
-  return "An unexpected error interrupted this page.";
+  void error;
+  return m.unexpected_page_error();
 }
 
 function RouteStatusFrame({
@@ -50,15 +44,15 @@ class GlobalRouteErrorBoundary extends React.Component<ErrorComponentProps> {
   render() {
     return (
       <RouteStatusFrame
-        eyebrow="Application Error"
-        title="Something went wrong"
+        eyebrow={m.application_error()}
+        title={m.something_went_wrong()}
         description={errorMessage(this.props.error)}
       >
         <Button type="button" onClick={this.props.reset}>
-          Try again
+          {m.try_again()}
         </Button>
         <Button render={<Link to="/" />} nativeButton={false} variant="outline">
-          Go home
+          {m.go_home()}
         </Button>
       </RouteStatusFrame>
     );
@@ -68,12 +62,12 @@ class GlobalRouteErrorBoundary extends React.Component<ErrorComponentProps> {
 const SentryWrappedGlobalRouteErrorBoundary = Sentry.withErrorBoundary(GlobalRouteErrorBoundary, {
   fallback: (
     <RouteStatusFrame
-      eyebrow="Application Error"
-      title="Something went wrong"
-      description="The error view failed to render, but the problem has been captured."
+      eyebrow={m.application_error()}
+      title={m.something_went_wrong()}
+      description={m.error_view_failed()}
     >
       <Button type="button" onClick={() => window.location.assign("/")}>
-        Reload app
+        {m.reload_app()}
       </Button>
     </RouteStatusFrame>
   ),
@@ -91,11 +85,11 @@ export function GlobalNotFoundComponent(_: NotFoundRouteProps) {
   return (
     <RouteStatusFrame
       eyebrow="404"
-      title="Page not found"
-      description="The page you requested does not exist or may have moved."
+      title={m.page_not_found()}
+      description={m.page_not_found_description()}
     >
       <Button render={<Link to="/" />} nativeButton={false}>
-        Back to home
+        {m.back_home()}
       </Button>
     </RouteStatusFrame>
   );

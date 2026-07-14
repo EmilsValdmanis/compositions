@@ -3,10 +3,11 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
-import { Button } from "#/components/ui/button";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Button } from "#/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { Badge } from "../ui/badge";
+import { m } from "#/paraglide/messages.js";
 
 export function GameBoardPlayers({
   players,
@@ -29,13 +30,13 @@ export function GameBoardPlayers({
   return (
     <Card size="sm" className="min-w-0 grow overflow-y-auto">
       <CardHeader>
-        <CardTitle>Players</CardTitle>
+        <CardTitle>{m.players()}</CardTitle>
         <CardAction>
           <div className="flex items-center gap-2">
             <PlayerEmotePicker onSendEmote={onSendEmote} />
             <Badge variant="outline">
               <AnimatedNumber value={connectedPlayers} />/
-              <AnimatedNumber value={activePlayerCount} /> online
+              <AnimatedNumber value={activePlayerCount} /> {m.online()}
             </Badge>
           </div>
         </CardAction>
@@ -57,7 +58,7 @@ export function GameBoardPlayers({
             size="lg"
           >
             <HugeiconsIcon icon={UndoIcon} strokeWidth={2} data-icon="inline-start" />
-            Reset
+            {m.reset()}
           </Button>
         ) : null}
       </CardContent>

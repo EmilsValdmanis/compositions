@@ -24,6 +24,7 @@ import { cn } from "#/lib/utils";
 import { Badge } from "../ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Text } from "#/components/typography";
+import { m } from "#/paraglide/messages.js";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
 const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
@@ -89,7 +90,7 @@ function CompositionEdgeDraftZone({
                 <ActivityLabel
                   players={players}
                   playerId={playerId}
-                  label="Add"
+                  label={m.activity_add()}
                   offsetClassName="translate-y-[2px]"
                 />
               ),
@@ -287,11 +288,11 @@ export function CompositionRow({
         </div>
         <Text as="div" variant="caption" className="flex items-center gap-2">
           {previewPoints === null ? (
-            <span title="Complete a valid composition to resolve its point value">?</span>
+            <span title={m.complete_composition_points()}>?</span>
           ) : (
             <AnimatedNumber value={previewPoints} />
           )}{" "}
-          pts
+          {m.points_unit()}
         </Text>
       </div>
 
@@ -377,7 +378,7 @@ export function CompositionRow({
                               <ActivityLabel
                                 players={players}
                                 playerId={previewPlayerId}
-                                label="Add"
+                                label={m.activity_add()}
                                 offsetClassName="translate-y-[2px]"
                               />
                             ),

@@ -5,6 +5,7 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Text } from "#/components/typography";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
+import { m } from "#/paraglide/messages.js";
 
 export const PLAYER_EMOTES = [
   "👋",
@@ -36,7 +37,7 @@ export function PlayerEmoteBubble({
     <Badge
       key={emote.id}
       variant="outline"
-      aria-label="Player emote"
+      aria-label={m.player_emote()}
       render={
         <motion.span
           initial={{
@@ -87,7 +88,7 @@ export function PlayerEmotePicker({
             variant="outline"
             size="icon-sm"
             className={className}
-            aria-label="Open emotes"
+            aria-label={m.open_emotes()}
           />
         }
       >
@@ -104,7 +105,7 @@ export function PlayerEmotePicker({
               variant="ghost"
               size="icon-sm"
               className="hover:scale-105"
-              aria-label={`Send ${emoji}`}
+              aria-label={m.send_emote({ emoji })}
               onClick={() => handleSendEmote(emoji)}
             >
               <Text variant="emoji-lg" aria-hidden style={emojiFont}>

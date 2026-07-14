@@ -3,16 +3,23 @@ import { PlayerProfilePage } from "#/components/routes/player-profile-page";
 import { AppNavigation } from "#/components/routes/protected-layout";
 import { getPlayerProfile } from "#/lib/player-profile";
 import { createSocialMeta } from "#/lib/social-meta";
+import { m } from "#/paraglide/messages.js";
+import { localizeHref } from "#/paraglide/runtime.js";
 
 function profileDescription(profile: Awaited<ReturnType<typeof getPlayerProfile>> | undefined) {
   if (!profile || profile.gamesPlayed === 0) {
     return profile
-      ? `${profile.name} is getting ready for their first ranked game of Compositions.`
-      : "View player statistics and ranked history in Compositions.";
+      ? m.profile_first_game_description({ name: profile.name })
+      : m.profile_generic_description();
   }
 
   const winRate = Math.round((profile.gamesWon / profile.gamesPlayed) * 100);
-  return `${profile.gamesWon} wins from ${profile.gamesPlayed} games (${winRate}% win rate) and ${profile.compositionsCreated} compositions created.`;
+  return m.profile_stats_description({
+    winsText: m.profile_wins_count({ count: profile.gamesWon }),
+    gamesText: m.profile_games_count({ count: profile.gamesPlayed }),
+    winRate,
+    compositionsText: m.profile_compositions_count({ count: profile.compositionsCreated }),
+  });
 }
 
 export const Route = createFileRoute("/players/$playerId")({
@@ -22,10 +29,12 @@ export const Route = createFileRoute("/players/$playerId")({
     return profile;
   },
   head: ({ loaderData, match }) => {
-    const title = loaderData ? `${loaderData.name} · Compositions` : "Player · Compositions";
+    const title = loaderData ? `${loaderData.name} · ${m.app_name()}` : m.profile_title();
     const description = profileDescription(loaderData);
     const origin = match.context.siteOrigin;
-    const url = loaderData ? `${origin}/players/${loaderData.id}` : origin;
+    const url = loaderData
+      ? `${origin}${localizeHref(`/players/${loaderData.id}`)}`
+      : `${origin}${localizeHref("/")}`;
 
     return {
       meta: [{ title }, ...createSocialMeta({ title, description, origin, type: "profile", url })],

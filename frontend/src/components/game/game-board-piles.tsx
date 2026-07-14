@@ -2,9 +2,10 @@ import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { DiscardDropZone } from "#/components/game/discard-drop-zone";
 import { GameCard } from "#/components/game/game-card";
 import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
-import { Card, CardContent } from "#/components/ui/card";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Card, CardContent } from "#/components/ui/card";
 import { Text } from "#/components/typography";
+import { m } from "#/paraglide/messages.js";
 
 export function GameBoardPiles({
   drawPileCount,
@@ -28,9 +29,9 @@ export function GameBoardPiles({
             variant="eyebrow-compact"
             className="mb-2 flex items-center justify-between gap-3"
           >
-            <span>Draw</span>
+            <span>{m.draw()}</span>
             <span>
-              <AnimatedNumber value={drawPileCount} /> cards
+              <AnimatedNumber value={drawPileCount} /> {m.cards_label({ count: drawPileCount })}
             </span>
           </Text>
           <div
@@ -54,8 +55,8 @@ export function GameBoardPiles({
             variant="eyebrow-compact"
             className="mb-2 flex items-center justify-between gap-3"
           >
-            <span>Discard</span>
-            <span>{canDrawDiscard ? "Can draw" : "Top card"}</span>
+            <span>{m.discard()}</span>
+            <span>{canDrawDiscard ? m.can_draw() : m.top_card()}</span>
           </Text>
           <div className="flex items-center justify-center" data-card-motion-source="discard">
             {topDiscardCard ? (
@@ -69,7 +70,7 @@ export function GameBoardPiles({
                 className={canDrawDiscard ? "shadow-md" : undefined}
               />
             ) : (
-              <Text className="text-muted-foreground">Empty</Text>
+              <Text className="text-muted-foreground">{m.empty()}</Text>
             )}
           </div>
         </DiscardDropZone>

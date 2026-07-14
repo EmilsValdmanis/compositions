@@ -38,6 +38,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field";
 import { Textarea } from "#/components/ui/textarea";
+import { m } from "#/paraglide/messages.js";
 
 type OpenDialog = "forfeit" | "end" | "report" | null;
 
@@ -59,8 +60,8 @@ export function GameControlsMenu() {
 
   const forfeitConsequence =
     otherActivePlayers.length === 1
-      ? `${otherActivePlayers[0]?.name ?? "The other player"} will win immediately.`
-      : `The remaining ${otherActivePlayers.length} players will continue without you.`;
+      ? m.forfeit_other_wins({ name: otherActivePlayers[0]?.name ?? m.other_player() })
+      : m.forfeit_players_continue({ count: otherActivePlayers.length });
 
   async function runAction(action: () => Promise<unknown>, successMessage: string) {
     setIsSubmitting(true);
@@ -78,12 +79,12 @@ export function GameControlsMenu() {
   async function submitReport(requestAbort: boolean) {
     const cleanDescription = description.trim();
     if (!cleanDescription) {
-      toast.error("Describe what went wrong");
+      toast.error(m.describe_problem());
       return;
     }
     await runAction(
       () => reportIssue(cleanDescription, requestAbort),
-      requestAbort ? "Report sent and abort requested" : "Problem report sent",
+      requestAbort ? m.report_abort_sent() : m.report_sent(),
     );
     setDescription("");
   }
@@ -92,7 +93,9 @@ export function GameControlsMenu() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<Button type="button" variant="ghost" size="icon" aria-label="Game options" />}
+          render={
+            <Button type="button" variant="ghost" size="icon" aria-label={m.game_controls()} />
+          }
         >
           <HugeiconsIcon icon={MoreVerticalIcon} />
         </DropdownMenuTrigger>
@@ -100,18 +103,18 @@ export function GameControlsMenu() {
           <DropdownMenuGroup>
             <DropdownMenuItem disabled={hasActiveProposal} onClick={() => setOpenDialog("end")}>
               <HugeiconsIcon icon={Agreement01Icon} />
-              Ask to end game
+              {m.ask_end_game()}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setOpenDialog("report")}>
               <HugeiconsIcon icon={Bug01Icon} />
-              Report a problem
+              {m.report_problem()}
             </DropdownMenuItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>
             <DropdownMenuItem variant="destructive" onClick={() => setOpenDialog("forfeit")}>
               <HugeiconsIcon icon={Logout02Icon} />
-              Forfeit and leave
+              {m.forfeit_and_leave()}
             </DropdownMenuItem>
           </DropdownMenuGroup>
         </DropdownMenuContent>
@@ -126,20 +129,19 @@ export function GameControlsMenu() {
             <AlertDialogMedia>
               <HugeiconsIcon icon={Logout02Icon} />
             </AlertDialogMedia>
-            <AlertDialogTitle>Forfeit this game?</AlertDialogTitle>
+            <AlertDialogTitle>{m.forfeit_title()}</AlertDialogTitle>
             <AlertDialogDescription>
-              You cannot rejoin. Your remaining cards will be shuffled back into the draw pile.{" "}
-              {forfeitConsequence}
+              {m.forfeit_description({ consequence: forfeitConsequence })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isSubmitting}>{m.cancel()}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={isSubmitting}
-              onClick={() => void runAction(forfeitGame, "You forfeited the game")}
+              onClick={() => void runAction(forfeitGame, m.forfeit_success())}
             >
-              Forfeit and leave
+              {m.forfeit_and_leave()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -154,19 +156,16 @@ export function GameControlsMenu() {
             <AlertDialogMedia>
               <HugeiconsIcon icon={Agreement01Icon} />
             </AlertDialogMedia>
-            <AlertDialogTitle>Ask everyone to end the game?</AlertDialogTitle>
-            <AlertDialogDescription>
-              All active players must agree. If accepted, the game ends without a winner and no game
-              result is recorded.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{m.end_game_title()}</AlertDialogTitle>
+            <AlertDialogDescription>{m.end_game_description()}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isSubmitting}>{m.cancel()}</AlertDialogCancel>
             <AlertDialogAction
               disabled={isSubmitting}
-              onClick={() => void runAction(requestEndGame, "End-game request sent")}
+              onClick={() => void runAction(requestEndGame, m.end_request_sent())}
             >
-              Send request
+              {m.send_request()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -178,25 +177,24 @@ export function GameControlsMenu() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Report a game problem</DialogTitle>
-            <DialogDescription>
-              Describe the broken state. The current round, turn, and game snapshot are attached
-              automatically.
-            </DialogDescription>
+            <DialogTitle>{m.report_title()}</DialogTitle>
+            <DialogDescription>{m.report_description()}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="game-problem-description">What went wrong?</FieldLabel>
+              <FieldLabel htmlFor="game-problem-description">{m.what_went_wrong()}</FieldLabel>
               <Textarea
                 id="game-problem-description"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
-                placeholder="For example: the turn stayed stuck after drawing from the discard pile."
+                placeholder={m.problem_placeholder()}
                 maxLength={500}
                 rows={5}
                 disabled={isSubmitting}
               />
-              <FieldDescription>{description.length}/500 characters</FieldDescription>
+              <FieldDescription>
+                {m.characters_count({ count: description.length })}
+              </FieldDescription>
             </Field>
           </FieldGroup>
           <DialogFooter>
@@ -206,14 +204,14 @@ export function GameControlsMenu() {
               disabled={isSubmitting}
               onClick={() => void submitReport(false)}
             >
-              Send report
+              {m.send_report()}
             </Button>
             <Button
               type="button"
               disabled={isSubmitting || hasActiveProposal}
               onClick={() => void submitReport(true)}
             >
-              Report and request abort
+              {m.report_and_abort()}
             </Button>
           </DialogFooter>
         </DialogContent>

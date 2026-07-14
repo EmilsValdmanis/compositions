@@ -10,12 +10,13 @@ import { Label } from "./ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Separator } from "./ui/separator";
 import { Spinner } from "./ui/spinner";
+import { m } from "#/paraglide/messages.js";
 
 const connectionLabels = {
-  idle: "Checking",
-  connecting: "Connecting",
-  connected: "Connected",
-  disconnected: "Disconnected",
+  idle: m.status_checking,
+  connecting: m.status_connecting,
+  connected: m.status_connected,
+  disconnected: m.status_disconnected,
 } as const;
 
 const serverVariants = {
@@ -25,7 +26,7 @@ const serverVariants = {
 } as const;
 
 export function ServerStatusBadge() {
-  const { state, connect, disconnect } = useGameWebSocket();
+  const { state, connect } = useGameWebSocket();
 
   const { data, isFetching, isPending } = useQuery({
     queryKey: ["game-server-health"],
@@ -61,38 +62,44 @@ export function ServerStatusBadge() {
       </PopoverTrigger>
       <PopoverContent align="start">
         <div className="space-y-1">
-          <H6>Connection Status</H6>
+          <H6>{m.connection_status()}</H6>
           <Text as="p" variant="caption">
-            Real-time server and connection diagnostics.
+            {m.connection_diagnostics()}
           </Text>
         </div>
         <Separator />
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
             <Text as={Label} variant="caption">
-              Connection
+              {m.connection()}
             </Text>
-            <Badge variant={connectionVariant}>{connectionLabels[state.connectionStatus]}</Badge>
+            <Badge variant={connectionVariant}>{connectionLabels[state.connectionStatus]()}</Badge>
           </div>
           <div className="flex items-center justify-between gap-4">
             <Text as={Label} variant="caption">
-              Server
+              {m.server()}
             </Text>
             <Badge variant={serverVariants[serverStatus]} className="gap-1">
               {isCheckingServer && <Spinner className="size-3" />}
-              <Text variant="status">{serverStatus}</Text>
+              <Text variant="status">
+                {serverStatus === "online"
+                  ? m.status_online()
+                  : serverStatus === "offline"
+                    ? m.status_offline()
+                    : m.status_checking()}
+              </Text>
             </Badge>
           </div>
         </div>
-        {state.connectionStatus === "disconnected" ? (
-          <Button type="button" onClick={() => void connect()} disabled={isCheckingServer}>
-            Reconnect
+        {state.connectionStatus === "disconnected" && (
+          <Button
+            type="button"
+            onClick={() => void connect()}
+            disabled={isCheckingServer || serverStatus === "offline"}
+          >
+            {m.reconnect()}
           </Button>
-        ) : state.connectionStatus !== "idle" ? (
-          <Button type="button" variant="outline" onClick={disconnect}>
-            Disconnect
-          </Button>
-        ) : null}
+        )}
       </PopoverContent>
     </Popover>
   );

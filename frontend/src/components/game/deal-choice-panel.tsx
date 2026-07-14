@@ -55,6 +55,7 @@ import { Slider } from "#/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { cn } from "#/lib/utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
+import { m } from "#/paraglide/messages.js";
 
 const GAME_DECK_CARD_COUNT = 108;
 const DECK_STACK_BASE_TOP = 4;
@@ -151,7 +152,7 @@ function SortableDealOrderPlayer({
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{player.name}</ItemTitle>
-        <ItemDescription>Seat {player.seat + 1}</ItemDescription>
+        <ItemDescription>{m.seat_number({ number: player.seat + 1 })}</ItemDescription>
       </ItemContent>
       <ItemActions>
         <HugeiconsIcon icon={DragDropVerticalIcon} strokeWidth={2} />
@@ -231,13 +232,15 @@ export function DealChoicePanel({
   return (
     <Card size="sm" className="w-full">
       <CardHeader>
-        <CardTitle>Prepare the deal</CardTitle>
+        <CardTitle>{m.prepare_deal()}</CardTitle>
         <CardDescription>
-          {dealerName ? `Dealer: ${dealerName}` : "Dealer selected"}
+          {dealerName ? m.dealer_named({ name: dealerName }) : m.dealer_selected()}
         </CardDescription>
         <CardAction>
           <Badge variant={isDealChooser ? "secondary" : "outline"}>
-            {isDealChooser ? `Step ${dealStep === "cut" ? 1 : 2} of 2` : "Waiting"}
+            {isDealChooser
+              ? m.step_of_total({ step: dealStep === "cut" ? 1 : 2, total: 2 })
+              : m.waiting()}
           </Badge>
         </CardAction>
       </CardHeader>
@@ -251,8 +254,8 @@ export function DealChoicePanel({
                   <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Cut the deck</ItemTitle>
-                  <ItemDescription>Choose how many cards to lift before dealing.</ItemDescription>
+                  <ItemTitle>{m.cut_deck()}</ItemTitle>
+                  <ItemDescription>{m.cut_deck_description()}</ItemDescription>
                 </ItemContent>
                 <ItemFooter>
                   <div className="w-full">
@@ -328,11 +331,13 @@ export function DealChoicePanel({
                     </div>
                     <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-6">
                       <div className="flex justify-center">
-                        <Badge variant="secondary">Lifted · {clampedCutSize}</Badge>
+                        <Badge variant="secondary">
+                          {m.lifted_cards({ count: clampedCutSize })}
+                        </Badge>
                       </div>
                       <div className="flex justify-center">
                         <Badge variant="secondary">
-                          Deck · {GAME_DECK_CARD_COUNT - clampedCutSize}
+                          {m.deck_cards({ count: GAME_DECK_CARD_COUNT - clampedCutSize })}
                         </Badge>
                       </div>
                     </div>
@@ -342,7 +347,7 @@ export function DealChoicePanel({
 
               <Field>
                 <FieldLabel id="cut-size-label" htmlFor="cut-size" className="sr-only">
-                  Cut size
+                  {m.cut_size()}
                 </FieldLabel>
                 <Slider
                   id="cut-size"
@@ -358,14 +363,14 @@ export function DealChoicePanel({
                 />
                 <FieldDescription className="flex justify-between">
                   <span>0</span>
-                  <span>{maxCutSize} cards maximum</span>
+                  <span>{m.cards_maximum({ count: maxCutSize })}</span>
                 </FieldDescription>
               </Field>
             </FieldGroup>
           ) : (
             <FieldGroup>
               <FieldSet>
-                <FieldLegend variant="label">Dealing style</FieldLegend>
+                <FieldLegend variant="label">{m.dealing_style()}</FieldLegend>
                 <ToggleGroup
                   value={[dealMode]}
                   onValueChange={(value) => {
@@ -380,23 +385,23 @@ export function DealChoicePanel({
                 >
                   <ToggleGroupItem value="round_robin" className="min-w-0">
                     <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
-                    Round robin
+                    {m.round_robin()}
                   </ToggleGroupItem>
                   <ToggleGroupItem value="tap" className="min-w-0">
                     <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} />
-                    Tap order
+                    {m.tap_order()}
                   </ToggleGroupItem>
                 </ToggleGroup>
                 <FieldDescription>
                   {dealMode === "round_robin"
-                    ? "Deal one card to each player in turn."
-                    : "Deal each player’s full hand in the order below."}
+                    ? m.round_robin_description()
+                    : m.tap_order_description()}
                 </FieldDescription>
               </FieldSet>
 
               {dealMode === "tap" ? (
                 <FieldSet>
-                  <FieldLegend variant="label">Player order</FieldLegend>
+                  <FieldLegend variant="label">{m.player_order()}</FieldLegend>
                   <DndContext
                     autoScroll={false}
                     collisionDetection={closestCenter}
@@ -434,8 +439,12 @@ export function DealChoicePanel({
               <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
             </ItemMedia>
             <ItemContent>
-              <ItemTitle>Waiting for {dealChooserName ?? "the deal chooser"}</ItemTitle>
-              <ItemDescription>They’re cutting the deck and choosing how to deal.</ItemDescription>
+              <ItemTitle>
+                {m.waiting_for_deal_chooser({
+                  name: dealChooserName ?? m.deal_chooser_fallback(),
+                })}
+              </ItemTitle>
+              <ItemDescription>{m.choosing_deal()}</ItemDescription>
             </ItemContent>
           </Item>
         )}
@@ -446,7 +455,7 @@ export function DealChoicePanel({
           {dealStep === "deal" ? (
             <Button type="button" variant="outline" onClick={() => setDealStep("cut")}>
               <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} data-icon="inline-start" />
-              Back
+              {m.back()}
             </Button>
           ) : null}
           <Button
@@ -460,7 +469,7 @@ export function DealChoicePanel({
               handleChooseDealing();
             }}
           >
-            {dealStep === "cut" ? "Continue" : "Start round"}
+            {dealStep === "cut" ? m.continue() : m.start_round()}
             {dealStep === "cut" ? (
               <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} data-icon="inline-end" />
             ) : null}

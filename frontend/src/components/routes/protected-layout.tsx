@@ -3,6 +3,8 @@ import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { Text } from "#/components/typography";
 import { UserDropdown } from "#/components/user-dropdown";
+import { LanguageSwitcher } from "#/components/language-switcher";
+import { m } from "#/paraglide/messages.js";
 
 const rootRouteApi = getRouteApi("__root__");
 
@@ -10,7 +12,7 @@ function BrandTitle() {
   return (
     <span className="inline-flex min-w-0 items-center justify-center gap-2">
       <img src="/favicon.svg" alt="" className="size-5 shrink-0" aria-hidden="true" />
-      <span className="truncate">Compositions</span>
+      <span className="truncate">{m.app_name()}</span>
     </span>
   );
 }
@@ -50,6 +52,7 @@ export function AppNavigation() {
 
         <div className="flex items-center justify-end gap-1 justify-self-end">
           <GameControlsMenu />
+          <LanguageSwitcher />
           {session ? <UserDropdown /> : null}
         </div>
       </div>
