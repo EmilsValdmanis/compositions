@@ -10,6 +10,7 @@ export const playerProfileSchema = z.object({
   gamesPlayed: z.number(),
   gamesWon: z.number(),
   totalPlacement: z.number(),
+  totalPlaytimeSeconds: z.number(),
   roundsPlayed: z.number(),
   roundsWon: z.number(),
   compositionsCreated: z.number(),

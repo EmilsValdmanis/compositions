@@ -26,7 +26,8 @@ func TestHandlePlayerProfile(t *testing.T) {
 	profile := database.PlayerProfileRecord{
 		ID: "00000000-0000-0000-0000-000000000002", Name: "Avery", ImageURL: "https://example.com/avatar.png",
 		GamesPlayed: 8, GamesWon: 3, TotalPlacement: 14, RoundsPlayed: 22, RoundsWon: 9, Forfeits: 2,
-		CompositionsCreated: 41, SetsCreated: 17, RunsCreated: 24, PointsInflicted: 230,
+		TotalPlaytimeSeconds: 5_430,
+		CompositionsCreated:  41, SetsCreated: 17, RunsCreated: 24, PointsInflicted: 230,
 		LongestGameWinStreak: 2,
 	}
 	store := playerProfileTestStore{userStore: noopUserStore{}, profile: profile}
@@ -50,7 +51,7 @@ func TestHandlePlayerProfile(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload.ID != profile.ID || payload.Name != profile.Name || payload.GamesPlayed != 8 || payload.GamesWon != 3 {
+	if payload.ID != profile.ID || payload.Name != profile.Name || payload.GamesPlayed != 8 || payload.GamesWon != 3 || payload.TotalPlaytimeSeconds != 5_430 {
 		t.Fatalf("payload = %+v", payload)
 	}
 }

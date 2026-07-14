@@ -367,7 +367,7 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 	if err != nil {
 		t.Fatalf("GetPlayerProfile() error = %v", err)
 	}
-	if profile.ID != user.ID || profile.Name != user.Name || profile.GamesPlayed != 2 || profile.GamesWon != 1 || profile.TotalPlacement != 3 || profile.RoundsPlayed != 5 || profile.LongestGameWinStreak != 1 {
+	if profile.ID != user.ID || profile.Name != user.Name || profile.GamesPlayed != 2 || profile.GamesWon != 1 || profile.TotalPlacement != 3 || profile.TotalPlaytimeSeconds != 90*60 || profile.RoundsPlayed != 5 || profile.LongestGameWinStreak != 1 {
 		t.Fatalf("player profile = %+v", profile)
 	}
 
