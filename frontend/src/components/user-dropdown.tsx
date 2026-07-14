@@ -12,6 +12,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, getRouteApi, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameRulesDialog } from "#/components/game/game-rules-dialog";
+import { LanguageSubmenu } from "#/components/language-switcher";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import {
@@ -152,6 +153,7 @@ export function UserDropdown() {
                 </DropdownMenuGroup>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            <LanguageSubmenu />
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuGroup>

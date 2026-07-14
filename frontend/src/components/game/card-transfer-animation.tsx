@@ -13,6 +13,34 @@ type Flight = CardTransfer & {
   translateY: number;
 };
 
+export const CARD_TRANSFER_DURATION_MS = 420;
+export const CARD_TRANSFER_PLAYER_SCALE = 0.34;
+
+export function buildCardTransferKeyframes(
+  flight: Pick<Flight, "source" | "target" | "translateX" | "translateY">,
+): Keyframe[] {
+  const movingToPlayer = flight.target === "player";
+  const startScale = flight.source === "player" ? CARD_TRANSFER_PLAYER_SCALE : 1;
+  const endScale = movingToPlayer ? CARD_TRANSFER_PLAYER_SCALE : 1;
+  const nearTargetScale = movingToPlayer ? 0.46 : 0.94;
+
+  return [
+    {
+      opacity: flight.source === "player" ? 0.35 : 1,
+      transform: `translate3d(0, 0, 0) scale(${startScale}) rotate(-2deg)`,
+    },
+    {
+      offset: 0.82,
+      opacity: 1,
+      transform: `translate3d(${flight.translateX}px, ${flight.translateY}px, 0) scale(${nearTargetScale}) rotate(2deg)`,
+    },
+    {
+      opacity: movingToPlayer ? 0.15 : 1,
+      transform: `translate3d(${flight.translateX}px, ${flight.translateY}px, 0) scale(${endScale}) rotate(0deg)`,
+    },
+  ];
+}
+
 function anchorCenter(element: Element) {
   const bounds = element.getBoundingClientRect();
   return {
@@ -83,27 +111,12 @@ export function CardTransferAnimation({
     if (!element || !flight) return;
 
     const reducedMotion = shouldReduceMotion();
-    const movingToPlayer = flight.target === "player";
     const animation = element.animate(
       reducedMotion
         ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }]
-        : [
-            {
-              opacity: movingToPlayer ? 1 : 0.2,
-              transform: `translate3d(0, 0, 0) scale(${movingToPlayer ? 1 : 0.72}) rotate(-2deg)`,
-            },
-            {
-              offset: 0.82,
-              opacity: 1,
-              transform: `translate3d(${flight.translateX}px, ${flight.translateY}px, 0) scale(${movingToPlayer ? 0.76 : 0.96}) rotate(2deg)`,
-            },
-            {
-              opacity: movingToPlayer ? 0.15 : 1,
-              transform: `translate3d(${flight.translateX}px, ${flight.translateY}px, 0) scale(${movingToPlayer ? 0.72 : 1}) rotate(0deg)`,
-            },
-          ],
+        : buildCardTransferKeyframes(flight),
       {
-        duration: reducedMotion ? 160 : 280,
+        duration: reducedMotion ? 160 : CARD_TRANSFER_DURATION_MS,
         easing: reducedMotion
           ? "cubic-bezier(0.23, 1, 0.32, 1)"
           : "cubic-bezier(0.77, 0, 0.175, 1)",

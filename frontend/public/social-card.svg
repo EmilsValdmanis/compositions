@@ -3,27 +3,27 @@
   <desc id="description">Build runs, close rounds, and play to 100.</desc>
   <defs>
     <linearGradient id="sky" x1="70" y1="45" x2="1130" y2="585" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#E9F7FF"/>
-      <stop offset="1" stop-color="#B8E3FB"/>
+      <stop stop-color="#06131D"/>
+      <stop offset="1" stop-color="#0B2938"/>
     </linearGradient>
     <linearGradient id="ink" x1="150" y1="130" x2="700" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0077B6"/>
-      <stop offset="1" stop-color="#00527F"/>
+      <stop stop-color="#F4FAFC"/>
+      <stop offset="1" stop-color="#7DD3FC"/>
     </linearGradient>
     <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#003B5C" flood-opacity=".16"/>
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity=".48"/>
     </filter>
     <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
-      <circle cx="2" cy="2" r="2" fill="#0069A8" opacity=".12"/>
+      <circle cx="2" cy="2" r="2" fill="#38BDF8" opacity=".16"/>
     </pattern>
   </defs>
 
   <rect width="1200" height="630" rx="36" fill="url(#sky)"/>
-  <path d="M0 462C190 394 318 518 510 462C722 400 845 267 1200 313V630H0Z" fill="#F7FCFF" opacity=".72"/>
-  <rect x="36" y="36" width="1128" height="558" rx="26" fill="none" stroke="#0069A8" stroke-opacity=".16" stroke-width="2"/>
+  <path d="M0 462C190 394 318 518 510 462C722 400 845 267 1200 313V630H0Z" fill="#102F3D" opacity=".72"/>
+  <rect x="36" y="36" width="1128" height="558" rx="26" fill="none" stroke="#7DD3FC" stroke-opacity=".18" stroke-width="2"/>
   <rect x="756" y="54" width="380" height="520" rx="30" fill="url(#dots)"/>
 
-  <g transform="translate(86 78) scale(3.2)" fill="none" stroke="#0069A8" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
+  <g transform="translate(86 78) scale(3.2)" fill="none" stroke="#7DD3FC" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 7C5.10457 7 6 6.10457 6 5C6 3.89543 5.10457 3 4 3C2.89543 3 2 3.89543 2 5C2 6.10457 2.89543 7 4 7Z"/>
     <path d="M20 9C21.1046 9 22 8.10457 22 7C22 5.89543 21.1046 5 20 5C18.8954 5 18 5.89543 18 7C18 8.10457 18.8954 9 20 9Z"/>
     <path d="M4.96694 17C1.44331 11.5 8.98977 11 4.95922 7M6.37859 5C7.48264 5 9.99986 6 9.99986 8"/>
@@ -31,32 +31,32 @@
     <path d="M18.0289 6.04492C15.664 6.47929 10.2102 9.78535 11.0499 17.2385M18.2511 8.0892C17.0361 8.66181 15.1252 9.88778 17.5983 12.9129C18.3787 13.8676 19.2858 15.88 18.951 16.8691"/>
   </g>
 
-  <text x="180" y="135" fill="#00527F" font-family="JetBrains Mono, ui-monospace, monospace" font-size="30" font-weight="700" letter-spacing="7">COMPOSITIONS</text>
+  <text x="180" y="135" fill="#BAE6FD" font-family="JetBrains Mono, ui-monospace, monospace" font-size="30" font-weight="700" letter-spacing="7">COMPOSITIONS</text>
   <text x="86" y="284" fill="url(#ink)" font-family="Georgia, serif" font-size="76" font-weight="700">Play your hand well.</text>
-  <text x="91" y="350" fill="#184E68" font-family="JetBrains Mono, ui-monospace, monospace" font-size="25" font-weight="500">Build runs · Close rounds · Play to 100</text>
+  <text x="91" y="350" fill="#A7C7D5" font-family="JetBrains Mono, ui-monospace, monospace" font-size="25" font-weight="500">Build runs · Close rounds · Play to 100</text>
 
   <g filter="url(#shadow)" font-family="JetBrains Mono, ui-monospace, monospace" font-weight="700">
     <g transform="rotate(-8 823 340)">
-      <rect x="770" y="174" width="160" height="224" rx="18" fill="#FFFDF8" stroke="#0085C7" stroke-width="3"/>
-      <text x="790" y="214" fill="#0085C7" font-size="28">7</text>
-      <text x="850" y="304" fill="#0085C7" font-size="48" text-anchor="middle">◆</text>
+      <rect x="770" y="174" width="160" height="224" rx="18" fill="#102A38" stroke="#38BDF8" stroke-width="3"/>
+      <text x="790" y="214" fill="#7DD3FC" font-size="28">7</text>
+      <text x="850" y="304" fill="#7DD3FC" font-size="48" text-anchor="middle">◆</text>
     </g>
     <g transform="rotate(3 916 338)">
-      <rect x="836" y="154" width="160" height="224" rx="18" fill="#FFFDF8" stroke="#D44B4B" stroke-width="3"/>
-      <text x="856" y="194" fill="#D44B4B" font-size="28">8</text>
-      <text x="916" y="284" fill="#D44B4B" font-size="48" text-anchor="middle">♥</text>
+      <rect x="836" y="154" width="160" height="224" rx="18" fill="#102A38" stroke="#FB7185" stroke-width="3"/>
+      <text x="856" y="194" fill="#FDA4AF" font-size="28">8</text>
+      <text x="916" y="284" fill="#FDA4AF" font-size="48" text-anchor="middle">♥</text>
     </g>
     <g transform="rotate(12 1000 351)">
-      <rect x="920" y="174" width="160" height="224" rx="18" fill="#FFFDF8" stroke="#0085C7" stroke-width="3"/>
-      <text x="940" y="214" fill="#0085C7" font-size="28">9</text>
-      <text x="1000" y="304" fill="#0085C7" font-size="48" text-anchor="middle">♣</text>
+      <rect x="920" y="174" width="160" height="224" rx="18" fill="#102A38" stroke="#38BDF8" stroke-width="3"/>
+      <text x="940" y="214" fill="#7DD3FC" font-size="28">9</text>
+      <text x="1000" y="304" fill="#7DD3FC" font-size="48" text-anchor="middle">♣</text>
     </g>
   </g>
 
   <g transform="translate(86 468)">
-    <rect width="612" height="74" rx="19" fill="#0069A8"/>
-    <circle cx="42" cy="37" r="15" fill="#E8F6FE" opacity=".96"/>
-    <path d="M35 38l5 5 10-12" fill="none" stroke="#0069A8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="74" y="46" fill="#F6FCFF" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22" font-weight="650">Live games · Player stats · Win streaks</text>
+    <rect width="612" height="74" rx="19" fill="#0EA5E9"/>
+    <circle cx="42" cy="37" r="15" fill="#E0F2FE" opacity=".98"/>
+    <path d="M35 38l5 5 10-12" fill="none" stroke="#0369A1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="74" y="46" fill="#F0F9FF" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22" font-weight="650">Live games · Player stats · Win streaks</text>
   </g>
 </svg>

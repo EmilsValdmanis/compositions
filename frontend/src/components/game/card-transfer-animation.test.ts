@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
+import {
+  buildCardTransferKeyframes,
+  CARD_TRANSFER_DURATION_MS,
+  CARD_TRANSFER_PLAYER_SCALE,
+} from "#/components/game/card-transfer-animation";
 import { inferCardTransfer } from "#/components/game/card-transfer-state";
 import { type GameSnapshot } from "#/components/game-websocket-provider";
 
@@ -124,5 +129,35 @@ describe("inferCardTransfer", () => {
     });
 
     expect(inferCardTransfer(previous, current, "other-player")).toBeNull();
+  });
+});
+
+describe("card transfer motion", () => {
+  it("travels 50 percent slower than the original transfer", () => {
+    expect(CARD_TRANSFER_DURATION_MS).toBe(420);
+  });
+
+  it("shrinks from pile size to card-icon size when drawing", () => {
+    const frames = buildCardTransferKeyframes({
+      source: "deck",
+      target: "player",
+      translateX: 100,
+      translateY: 50,
+    });
+
+    expect(frames[0]?.transform).toContain("scale(1)");
+    expect(frames.at(-1)?.transform).toContain(`scale(${CARD_TRANSFER_PLAYER_SCALE})`);
+  });
+
+  it("grows from card-icon size to pile size when discarding", () => {
+    const frames = buildCardTransferKeyframes({
+      source: "player",
+      target: "discard",
+      translateX: 100,
+      translateY: 50,
+    });
+
+    expect(frames[0]?.transform).toContain(`scale(${CARD_TRANSFER_PLAYER_SCALE})`);
+    expect(frames.at(-1)?.transform).toContain("scale(1)");
   });
 });

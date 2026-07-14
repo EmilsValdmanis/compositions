@@ -1,8 +1,9 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "app_name": "Compositions",
+  "page_title": "Compositions — Online Card Game",
   "app_tagline": "Play your hand well",
-  "social_description": "A tactical rummy-style card game about building runs, closing rounds, and staying under 100 points.",
+  "social_description": "A tactical card game where you build compositions of cards. Finish rounds, and keep your score under 100.",
   "social_image_alt": "Compositions — build runs, close rounds, play to 100",
   "language": "Language",
   "language_english": "English",

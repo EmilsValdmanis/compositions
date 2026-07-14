@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import type { PlayerSnapshot } from "#/components/game-websocket-provider";
+import type { GameSnapshot, PlayerSnapshot } from "#/components/game-websocket-provider";
 
 if (typeof globalThis.document === "undefined") {
   const require = createRequire(import.meta.url);
@@ -45,5 +45,28 @@ describe("PlayerStrip", () => {
 
     expect(screen.getByLabelText("Avery forfeited")).toBeTruthy();
     expect(screen.queryByLabelText("Avery's turn")).toBeNull();
+  });
+
+  it("anchors card transfers to the player's card-count badge", () => {
+    const players: PlayerSnapshot[] = [
+      {
+        playerId: "player-1",
+        name: "Avery",
+        connected: true,
+        seat: 0,
+        isHost: false,
+        canReconnect: false,
+      },
+    ];
+    const game = {
+      turn: { playerId: "player-2" },
+      players: [{ playerId: "player-1", handCount: 9 }],
+    } as GameSnapshot;
+
+    render(<PlayerStrip players={players} game={game} />);
+
+    expect(document.querySelector('[data-card-motion-player="player-1"]')).toBe(
+      screen.getByLabelText("9 cards"),
+    );
   });
 });
