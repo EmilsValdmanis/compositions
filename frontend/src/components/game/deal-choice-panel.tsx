@@ -14,7 +14,7 @@ import {
   DragDropVerticalIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import {
   type DealingChoiceRequest,
   type PendingDealChoiceSnapshot,
@@ -54,6 +54,7 @@ import {
 import { Slider } from "#/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { cn } from "#/lib/utils";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 
 const GAME_DECK_CARD_COUNT = 108;
 const DECK_STACK_BASE_TOP = 4;
@@ -123,12 +124,13 @@ function SortableDealOrderPlayer({
   playerIndex: number;
   position: number;
 }) {
+  const shouldReduceMotion = useShouldReduceMotion();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: dealPlayerId(playerIndex),
   });
   const style = {
     transform: transform ? `translate3d(0, ${Math.round(transform.y)}px, 0)` : undefined,
-    transition,
+    transition: shouldReduceMotion ? undefined : transition,
   };
 
   return (
@@ -177,7 +179,7 @@ export function DealChoicePanel({
   const activePlayerCount = players.filter((player) => !player.forfeited).length;
   const maxCutSize = Math.max(0, GAME_DECK_CARD_COUNT - activePlayerCount * 12);
   const clampedCutSize = clampCutSize(cutSize, maxCutSize);
-  const prefersReducedMotion = useReducedMotion();
+  const prefersReducedMotion = useShouldReduceMotion();
   const dealerName = players[pendingDealChoice.dealerIndex]?.name ?? null;
   const tapOrderIds = tapOrder.map(dealPlayerId);
   const resetDealChoice = useEffectEvent(() => {

@@ -1,5 +1,6 @@
 import NumberFlow, { type NumberFlowProps } from "@number-flow/react";
 import { cn } from "#/lib/utils";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 
 const numberTiming: KeyframeAnimationOptions = {
   duration: 260,
@@ -20,12 +21,15 @@ type AnimatedNumberProps = Omit<
 
 /** Shared motion treatment for live game values. */
 export function AnimatedNumber({ className, ...props }: AnimatedNumberProps) {
+  const shouldReduceMotion = useShouldReduceMotion();
+
   return (
     <NumberFlow
       className={cn("inline-block tabular-nums", className)}
       transformTiming={numberTiming}
       spinTiming={numberTiming}
       opacityTiming={opacityTiming}
+      animated={!shouldReduceMotion}
       respectMotionPreference
       isolate
       {...props}

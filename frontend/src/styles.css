@@ -19,6 +19,48 @@ body {
   margin: 0;
 }
 
+@keyframes reduced-motion-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+html[data-reduce-motion] {
+  scroll-behavior: auto;
+
+  .animate-in,
+  .animate-out {
+    animation-duration: 1ms !important;
+  }
+
+  .animate-ping {
+    animation: none !important;
+  }
+
+  .animate-spin {
+    animation: reduced-motion-pulse 1.5s ease-in-out infinite !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-in,
+  .animate-out {
+    animation-duration: 1ms !important;
+  }
+
+  .animate-ping {
+    animation: none !important;
+  }
+
+  .animate-spin {
+    animation: reduced-motion-pulse 1.5s ease-in-out infinite !important;
+  }
+}
+
 /* shadcn --preset b5KbFbc38 */
 
 @theme inline {

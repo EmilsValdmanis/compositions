@@ -6,6 +6,7 @@ import { TanStackDevtools } from "@tanstack/react-devtools";
 import { inject } from "@vercel/analytics";
 import { injectSpeedInsights } from "@vercel/speed-insights";
 import { GameWebSocketProvider } from "#/components/game-websocket-provider";
+import { MotionProvider } from "#/components/motion-provider";
 import { ThemeProvider } from "#/components/theme-provider";
 import { AutoConnectWebSocket } from "#/components/routes/auto-connect-websocket";
 import { ThemeAwareToaster } from "#/components/routes/theme-aware-toaster";
@@ -30,13 +31,15 @@ export function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         <div className="flex h-dvh w-full flex-col">
           <ThemeProvider defaultTheme="system" storageKey="theme">
-            <TooltipProvider>
-              <GameWebSocketProvider>
-                {children}
-                <AutoConnectWebSocket />
-              </GameWebSocketProvider>
-              <ThemeAwareToaster />
-            </TooltipProvider>
+            <MotionProvider>
+              <TooltipProvider>
+                <GameWebSocketProvider>
+                  {children}
+                  <AutoConnectWebSocket />
+                </GameWebSocketProvider>
+                <ThemeAwareToaster />
+              </TooltipProvider>
+            </MotionProvider>
           </ThemeProvider>
           <TanStackDevtools
             config={{

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { type GameSnapshot } from "#/components/game-websocket-provider";
 import { GameCard } from "#/components/game/game-card";
 import { type CardTransfer, inferCardTransfer } from "#/components/game/card-transfer-state";
+import { shouldReduceMotion } from "#/lib/reduced-motion";
 
 type Flight = CardTransfer & {
   id: number;
@@ -81,7 +82,7 @@ export function CardTransferAnimation({
     const element = cardRef.current;
     if (!element || !flight) return;
 
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const reducedMotion = shouldReduceMotion();
     const movingToPlayer = flight.target === "player";
     const animation = element.animate(
       reducedMotion
