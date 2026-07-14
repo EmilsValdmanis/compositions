@@ -41,6 +41,7 @@ import {
   buildTablePlayRequest,
   buildTableCompositionViews,
   buildHandEntries,
+  buildDraftCompositionSnapshot,
   compositionIdFromDropId,
   findNewHandEntry,
   handIndexAfterSubmittedDrafts,
@@ -531,16 +532,7 @@ function useGameBoardController({
     : { invalidCompositionIds: new Set<string>(), invalidEntryKeys: new Set<string>() };
 
   const serializedDrafts = JSON.stringify(
-    draftedCompositionsView.map(
-      (composition) =>
-        ({
-          tableIndex: composition.tableIndex ?? undefined,
-          insertIndex: composition.insertIndex,
-          cardInsertIndices: composition.cardInsertIndices,
-          reclaimTargets: composition.reclaimTargets,
-          cards: composition.entries.map((entry) => entry.card),
-        }) satisfies DraftCompositionSnapshot,
-    ),
+    draftedCompositionsView.map(buildDraftCompositionSnapshot),
   );
   const syncTurnDrafts = useEffectEvent((drafts: DraftCompositionSnapshot[]) => {
     updateTurnDrafts({ compositions: drafts });

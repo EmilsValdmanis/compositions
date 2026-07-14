@@ -40,6 +40,137 @@ function renderDraftTable(
 }
 
 describe("draftPreviewForComposition", () => {
+  it("keeps a reclaimed joker with later additions on the same edge for spectators", () => {
+    const view = render(
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[
+            {
+              tableIndex: 0,
+              key: "table-0",
+              snapshot: {
+                type: "run",
+                cards: [{ rank: 12, suit: 0 }, { isJoker: true }, { rank: 1, suit: 0 }],
+                jokerRepresentations: { 1: [{ rank: 13, suit: 0 }] },
+                points: 30,
+                complete: false,
+              },
+              stagedEntries: [],
+              reclaims: [],
+              insertIndex: 3,
+            },
+          ]}
+          newCompositions={[]}
+          players={[]}
+          turnActivity={{
+            playerId: "player-1",
+            round: 1,
+            turnNumber: 1,
+            draftCompositions: [
+              {
+                tableIndex: 0,
+                insertIndex: 3,
+                cardPlacements: [{ reclaimJokerIndex: 1 }, { insertIndex: 0 }, { insertIndex: 0 }],
+                cards: [{ rank: 13, suit: 0 }, { isJoker: true }, { rank: 10, suit: 0 }],
+              },
+            ],
+          }}
+          canCompose={false}
+          showDraftTotal={false}
+        />
+      </DndContext>,
+    );
+
+    expect(
+      [...view.container.querySelectorAll<HTMLElement>("[aria-label]")].map((card) =>
+        card.getAttribute("aria-label"),
+      ),
+    ).toEqual(["10 of Hearts", "Joker", "Q of Hearts", "K of Hearts", "A of Hearts"]);
+  });
+
+  it("keeps two identical jokers on their independently assigned edges", () => {
+    const preview = draftPreviewForComposition(
+      {
+        tableIndex: 0,
+        key: "table-0",
+        snapshot: {
+          type: "run",
+          cards: [{ rank: 12, suit: 0 }, { isJoker: true }, { rank: 1, suit: 0 }],
+          jokerRepresentations: { 1: [{ rank: 13, suit: 0 }] },
+          points: 30,
+          complete: false,
+        },
+        stagedEntries: [],
+        reclaims: [],
+        insertIndex: 3,
+      },
+      {
+        tableIndex: 0,
+        insertIndex: 3,
+        cardPlacements: [
+          { reclaimJokerIndex: 1 },
+          { insertIndex: 3 },
+          { insertIndex: 0 },
+          { insertIndex: 0 },
+        ],
+        cards: [{ rank: 13, suit: 0 }, { isJoker: true }, { isJoker: true }, { rank: 10, suit: 0 }],
+      },
+      [{ rank: 13, suit: 0 }, { isJoker: true }, { isJoker: true }, { rank: 10, suit: 0 }],
+    );
+
+    expect(
+      preview.stagedEntries.map((entry) => ({
+        card: entry.card,
+        insertIndex: preview.cardInsertIndices?.[entry.key],
+      })),
+    ).toEqual([
+      { card: { rank: 10, suit: 0 }, insertIndex: 0 },
+      { card: { isJoker: true }, insertIndex: 0 },
+      { card: { isJoker: true }, insertIndex: 3 },
+    ]);
+    expect(preview.reclaims[0]?.replacementEntry.card).toEqual({ rank: 13, suit: 0 });
+  });
+
+  it("keeps additions on independently assigned edges", () => {
+    const preview = draftPreviewForComposition(
+      {
+        tableIndex: 0,
+        key: "table-0",
+        snapshot: {
+          type: "run",
+          cards: [
+            { rank: 5, suit: 0 },
+            { rank: 6, suit: 0 },
+            { rank: 7, suit: 0 },
+          ],
+          jokerRepresentations: {},
+          points: 18,
+          complete: false,
+        },
+        stagedEntries: [],
+        reclaims: [],
+        insertIndex: 3,
+      },
+      {
+        tableIndex: 0,
+        insertIndex: 3,
+        cardPlacements: [{ insertIndex: 0 }, { insertIndex: 3 }],
+        cards: [
+          { rank: 4, suit: 0 },
+          { rank: 8, suit: 0 },
+        ],
+      },
+      [
+        { rank: 4, suit: 0 },
+        { rank: 8, suit: 0 },
+      ],
+    );
+
+    expect(preview.stagedEntries.map((entry) => preview.cardInsertIndices?.[entry.key])).toEqual([
+      0, 3,
+    ]);
+  });
+
   it("shows multiple additions on the start edge in their resulting table order", () => {
     const preview = draftPreviewForComposition(
       {
@@ -63,7 +194,7 @@ describe("draftPreviewForComposition", () => {
       {
         tableIndex: 0,
         insertIndex: 0,
-        cardInsertIndices: { "4-0-1": 0, "3-0-1": 0 },
+        cardPlacements: [{ insertIndex: 0 }, { insertIndex: 0 }],
         cards: [
           { rank: 4, suit: 0 },
           { rank: 3, suit: 0 },
@@ -101,7 +232,7 @@ describe("draftPreviewForComposition", () => {
       },
       {
         tableIndex: 0,
-        reclaimTargets: { "13-3-2": 2 },
+        cardPlacements: [{}, { reclaimJokerIndex: 2 }],
         cards: [
           { rank: 13, suit: 2 },
           { rank: 13, suit: 3 },

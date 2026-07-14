@@ -415,29 +415,6 @@ func TestAuthenticatedWebSocketAcceptsConfiguredOrigin(t *testing.T) {
 	mustConnectSession(t, conn, "")
 }
 
-func TestCloneIndexMap(t *testing.T) {
-	t.Run("returns nil for empty input", func(t *testing.T) {
-		if cloned := cloneIndexMap(nil); cloned != nil {
-			t.Fatalf("cloneIndexMap(nil) = %#v; want nil", cloned)
-		}
-		if cloned := cloneIndexMap(map[string]int{}); cloned != nil {
-			t.Fatalf("cloneIndexMap(empty) = %#v; want nil", cloned)
-		}
-	})
-
-	t.Run("clones non-empty map", func(t *testing.T) {
-		source := map[string]int{"ace-1": 0}
-		cloned := cloneIndexMap(source)
-		if cloned["ace-1"] != 0 {
-			t.Fatalf("cloneIndexMap(source) = %#v; want preserved values", cloned)
-		}
-		cloned["ace-1"] = 2
-		if source["ace-1"] != 0 {
-			t.Fatal("cloneIndexMap(source) reused source map")
-		}
-	})
-}
-
 func TestAuthenticatedWebSocketRejectsMissingOriginWhenConfigured(t *testing.T) {
 	server := newWSServerWithAllowedOrigin(&authHandler{store: &stubAuthStore{}, now: time.Now}, "http://frontend.test")
 	httpServer := httptest.NewServer(server.routes())
@@ -1797,6 +1774,9 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 		}
 		mustReadError(t, conn, "missing data")
 	}
+	requestedDiscard := cardReq(game.Ace, game.Hearts)
+	mustSendEnvelope(t, conn, "discard", discardRequest{CardIndex: 0, Card: &requestedDiscard})
+	mustReadError(t, conn, "join a room first")
 	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)}}}})
 	mustReadError(t, conn, "join a room first")
 	mustSendEnvelope(t, conn, "play", playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})
@@ -1837,6 +1817,41 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	}
 	if reclaims, err := reclaimsFromRequest([]reclaimRequest{{CompositionIndex: 1, JokerIndex: 2, ReplacementCard: cardReq(game.Ten, game.Clubs)}}); err != nil || len(reclaims) != 1 || reclaims[0].CompositionIndex != 1 || reclaims[0].JokerIndex != 2 {
 		t.Fatalf("reclaimsFromRequest(valid) = %#v, %v; want one reclaim", reclaims, err)
+	}
+	startIndex := 0
+	reclaimJokerIndex := 1
+	drafts, err := draftCompositionsFromRequest([]draftCompositionRequest{{
+		CardPlacements: []draftCardPlacementRequest{
+			{ReclaimJokerIndex: &reclaimJokerIndex},
+			{InsertIndex: &startIndex},
+			{InsertIndex: &startIndex},
+		},
+		Cards: []cardRequest{cardReq(game.King, game.Hearts), jokerReq(), cardReq(game.Ten, game.Hearts)},
+	}})
+	if err != nil || len(drafts) != 1 || len(drafts[0].CardPlacements) != 3 {
+		t.Fatalf("draftCompositionsFromRequest(aligned placements) = %#v, %v; want one aligned draft", drafts, err)
+	}
+	if drafts[0].CardPlacements[0].ReclaimJokerIndex == nil || *drafts[0].CardPlacements[0].ReclaimJokerIndex != 1 || drafts[0].CardPlacements[1].InsertIndex == nil || *drafts[0].CardPlacements[1].InsertIndex != 0 {
+		t.Fatalf("draft card placements = %#v; want preserved reclaim and insert indices", drafts[0].CardPlacements)
+	}
+	if _, err := draftCompositionsFromRequest([]draftCompositionRequest{{
+		CardPlacements: []draftCardPlacementRequest{{InsertIndex: &startIndex}},
+		Cards:          []cardRequest{cardReq(game.King, game.Hearts), jokerReq()},
+	}}); err == nil || err.Error() != "draft card placements must match cards" {
+		t.Fatalf("draftCompositionsFromRequest(misaligned placements) error = %v; want alignment error", err)
+	}
+	negativeIndex := -1
+	if _, err := draftCompositionsFromRequest([]draftCompositionRequest{{
+		CardPlacements: []draftCardPlacementRequest{{InsertIndex: &negativeIndex}},
+		Cards:          []cardRequest{cardReq(game.King, game.Hearts)},
+	}}); err == nil || err.Error() != "invalid draft card insert index" {
+		t.Fatalf("draftCompositionsFromRequest(negative placement) error = %v; want invalid insert error", err)
+	}
+	if _, err := draftCompositionsFromRequest([]draftCompositionRequest{{
+		CardPlacements: []draftCardPlacementRequest{{ReclaimJokerIndex: &negativeIndex}},
+		Cards:          []cardRequest{cardReq(game.King, game.Hearts)},
+	}}); err == nil || err.Error() != "invalid draft reclaim joker index" {
+		t.Fatalf("draftCompositionsFromRequest(negative reclaim placement) error = %v; want invalid reclaim error", err)
 	}
 	if card, err := cardFromRequest(jokerReq()); err != nil || !card.IsJoker() {
 		t.Fatalf("cardFromRequest(joker) = %#v, %v; want joker", card, err)
@@ -1881,12 +1896,12 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 	}
 
 	insertIndex := 0
+	reclaimJokerIndex := 1
 	mustSendEnvelope(t, hostConn, "draft_update", draftUpdateRequest{Compositions: []draftCompositionRequest{{
-		TableIndex:        nil,
-		InsertIndex:       &insertIndex,
-		CardInsertIndices: map[string]int{"king-hearts": 0},
-		ReclaimTargets:    map[string]int{"king-diamonds": 1},
-		Cards:             []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)},
+		TableIndex:     nil,
+		InsertIndex:    &insertIndex,
+		CardPlacements: []draftCardPlacementRequest{{InsertIndex: &insertIndex}, {ReclaimJokerIndex: &reclaimJokerIndex}, {}},
+		Cards:          []cardRequest{cardReq(game.King, game.Hearts), cardReq(game.King, game.Diamonds), cardReq(game.King, game.Clubs)},
 	}}})
 	updatedHostRoom := mustReadRoomState(t, hostConn)
 	if updatedHostRoom.Code != hostRoom.Code {
@@ -1922,13 +1937,10 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 	if len(updatedGuestGame.Game.TurnActivity.DraftCompositions[0].Cards) != 3 {
 		t.Fatalf("draft composition cards = %d; want 3", len(updatedGuestGame.Game.TurnActivity.DraftCompositions[0].Cards))
 	}
-	if updatedGuestGame.Game.TurnActivity.DraftCompositions[0].CardInsertIndices["king-hearts"] != 0 {
-		t.Fatalf("draft composition cardInsertIndices = %#v; want preserved metadata", updatedGuestGame.Game.TurnActivity.DraftCompositions[0].CardInsertIndices)
+	cardPlacements := updatedGuestGame.Game.TurnActivity.DraftCompositions[0].CardPlacements
+	if len(cardPlacements) != 3 || cardPlacements[0].InsertIndex == nil || *cardPlacements[0].InsertIndex != 0 || cardPlacements[1].ReclaimJokerIndex == nil || *cardPlacements[1].ReclaimJokerIndex != 1 {
+		t.Fatalf("draft composition cardPlacements = %#v; want card-aligned metadata", cardPlacements)
 	}
-	if updatedGuestGame.Game.TurnActivity.DraftCompositions[0].ReclaimTargets["king-diamonds"] != 1 {
-		t.Fatalf("draft composition reclaimTargets = %#v; want preserved metadata", updatedGuestGame.Game.TurnActivity.DraftCompositions[0].ReclaimTargets)
-	}
-
 	mustSendEnvelope(t, guestConn, "draft_update", draftUpdateRequest{})
 	mustReadError(t, guestConn, "not your turn")
 	mustSendEnvelope(t, hostConn, "draft_update", draftUpdateRequest{Compositions: []draftCompositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})

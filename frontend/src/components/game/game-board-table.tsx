@@ -50,6 +50,23 @@ function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
   });
 }
 
+function alignedEntryIndexMap(
+  entries: HandEntry[],
+  placements: DraftCompositionSnapshot["cardPlacements"],
+  field: "insertIndex" | "reclaimJokerIndex",
+) {
+  const normalized: Record<string, number> = {};
+
+  for (const [index, entry] of entries.entries()) {
+    const value = placements?.[index]?.[field];
+    if (value !== undefined) {
+      normalized[entry.key] = value;
+    }
+  }
+
+  return normalized;
+}
+
 export function draftPreviewForComposition(
   tableComposition: TableCompositionView | undefined,
   draft: DraftCompositionSnapshot,
@@ -62,26 +79,21 @@ export function draftPreviewForComposition(
       stagedEntries,
       reclaims: [] as PlannedJokerReclaim[],
       insertIndex: draft.insertIndex,
-      cardInsertIndices: draft.cardInsertIndices,
+      cardInsertIndices: undefined,
     };
   }
 
   const insertIndex = draft.insertIndex ?? tableComposition.snapshot.cards.length;
-  const normalizedReclaimTargets: Record<string, number> = {};
-  const availableEntries = [...stagedEntries];
-
-  for (const [targetKey, jokerIndex] of Object.entries(draft.reclaimTargets ?? {})) {
-    const targetBaseKey = targetKey.replace(/-\d+$/, "");
-    const matchingIndex = availableEntries.findIndex(
-      (entry) => entry.key === targetKey || entry.key.replace(/-\d+$/, "") === targetBaseKey,
-    );
-    const matchingEntry =
-      matchingIndex >= 0 ? availableEntries.splice(matchingIndex, 1)[0] : undefined;
-
-    if (matchingEntry) {
-      normalizedReclaimTargets[matchingEntry.key] = jokerIndex;
-    }
-  }
+  const normalizedReclaimTargets = alignedEntryIndexMap(
+    stagedEntries,
+    draft.cardPlacements,
+    "reclaimJokerIndex",
+  );
+  const normalizedCardInsertIndices = alignedEntryIndexMap(
+    stagedEntries,
+    draft.cardPlacements,
+    "insertIndex",
+  );
 
   const plannedReclaims = planTableJokerReclaims(
     tableComposition.snapshot,
@@ -95,21 +107,24 @@ export function draftPreviewForComposition(
   const entriesByInsertIndex = new Map<number, HandEntry[]>();
 
   for (const entry of additionEntries) {
-    const entryInsertIndex = draft.cardInsertIndices?.[entry.key] ?? insertIndex;
+    const entryInsertIndex = normalizedCardInsertIndices[entry.key] ?? insertIndex;
     const entries = entriesByInsertIndex.get(entryInsertIndex) ?? [];
     entries.push(entry);
     entriesByInsertIndex.set(entryInsertIndex, entries);
   }
 
-  const orderedAdditionEntries = [...entriesByInsertIndex].flatMap(([entryInsertIndex, entries]) =>
-    entryInsertIndex === 0 ? [...entries].reverse() : entries,
-  );
+  const orderedAdditionEntries = [
+    ...[...(entriesByInsertIndex.get(0) ?? [])].reverse(),
+    ...[...entriesByInsertIndex]
+      .filter(([entryInsertIndex]) => entryInsertIndex !== 0)
+      .flatMap(([, entries]) => entries),
+  ];
 
   return {
     stagedEntries: orderedAdditionEntries,
     reclaims,
     insertIndex,
-    cardInsertIndices: draft.cardInsertIndices,
+    cardInsertIndices: normalizedCardInsertIndices,
   };
 }
 

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -124,12 +123,16 @@ type draftUpdateRequest struct {
 	Compositions []draftCompositionRequest `json:"compositions,omitempty"`
 }
 
+type draftCardPlacementRequest struct {
+	InsertIndex       *int `json:"insertIndex,omitempty"`
+	ReclaimJokerIndex *int `json:"reclaimJokerIndex,omitempty"`
+}
+
 type draftCompositionRequest struct {
-	TableIndex        *int           `json:"tableIndex,omitempty"`
-	InsertIndex       *int           `json:"insertIndex,omitempty"`
-	CardInsertIndices map[string]int `json:"cardInsertIndices,omitempty"`
-	ReclaimTargets    map[string]int `json:"reclaimTargets,omitempty"`
-	Cards             []cardRequest  `json:"cards"`
+	TableIndex     *int                        `json:"tableIndex,omitempty"`
+	InsertIndex    *int                        `json:"insertIndex,omitempty"`
+	CardPlacements []draftCardPlacementRequest `json:"cardPlacements,omitempty"`
+	Cards          []cardRequest               `json:"cards"`
 }
 
 type compositionAdditionRequest struct {
@@ -1022,28 +1025,42 @@ func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.Dr
 		if err != nil {
 			return nil, err
 		}
+		if len(req.CardPlacements) > 0 && len(req.CardPlacements) != len(cards) {
+			return nil, errors.New("draft card placements must match cards")
+		}
+		cardPlacements := make([]game.DraftCardPlacementSnapshot, 0, len(req.CardPlacements))
+		for _, placement := range req.CardPlacements {
+			if placement.InsertIndex != nil && *placement.InsertIndex < 0 {
+				return nil, errors.New("invalid draft card insert index")
+			}
+			if placement.ReclaimJokerIndex != nil && *placement.ReclaimJokerIndex < 0 {
+				return nil, errors.New("invalid draft reclaim joker index")
+			}
+			cardPlacements = append(cardPlacements, game.DraftCardPlacementSnapshot{
+				InsertIndex:       cloneIntPointer(placement.InsertIndex),
+				ReclaimJokerIndex: cloneIntPointer(placement.ReclaimJokerIndex),
+			})
+		}
 		snapshots := make([]game.CardSnapshot, 0, len(cards))
 		for _, card := range cards {
 			snapshots = append(snapshots, card.Snapshot())
 		}
 		drafts = append(drafts, game.DraftCompositionSnapshot{
-			TableIndex:        req.TableIndex,
-			InsertIndex:       req.InsertIndex,
-			CardInsertIndices: cloneIndexMap(req.CardInsertIndices),
-			ReclaimTargets:    cloneIndexMap(req.ReclaimTargets),
-			Cards:             snapshots,
+			TableIndex:     req.TableIndex,
+			InsertIndex:    req.InsertIndex,
+			CardPlacements: cardPlacements,
+			Cards:          snapshots,
 		})
 	}
 	return drafts, nil
 }
 
-func cloneIndexMap(source map[string]int) map[string]int {
-	if len(source) == 0 {
+func cloneIntPointer(source *int) *int {
+	if source == nil {
 		return nil
 	}
-	cloned := make(map[string]int, len(source))
-	maps.Copy(cloned, source)
-	return cloned
+	cloned := *source
+	return &cloned
 }
 
 func cardsFromRequest(requests []cardRequest) ([]game.Card, error) {

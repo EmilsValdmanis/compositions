@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   applyHandEntryOrder,
+  buildDraftCompositionSnapshot,
   buildHandEntries,
   buildTablePlayRequest,
   buildTableCompositionViews,
@@ -14,6 +15,62 @@ import {
   validateDraftedCompositions,
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
+
+describe("buildDraftCompositionSnapshot", () => {
+  it("aligns reclaim and edge metadata with transmitted cards, including virtual jokers", () => {
+    const entries = [
+      { key: "13-0-1", card: { rank: 13, suit: 0 }, sourceIndex: 0 },
+      {
+        key: "reclaimed-joker-0-1",
+        card: { isJoker: true },
+        sourceIndex: -1,
+        isVirtual: true,
+      },
+      { key: "10-0-1", card: { rank: 10, suit: 0 }, sourceIndex: 1 },
+    ];
+
+    const snapshot = buildDraftCompositionSnapshot({
+      id: "table-0",
+      tableIndex: 0,
+      handKeys: entries.map((entry) => entry.key),
+      entries,
+      insertIndex: 3,
+      cardInsertIndices: {
+        "reclaimed-joker-0-1": 0,
+        "10-0-1": 0,
+      },
+      reclaimTargets: { "13-0-1": 1 },
+    });
+
+    expect(snapshot.cards).toEqual([
+      { rank: 13, suit: 0 },
+      { isJoker: true },
+      { rank: 10, suit: 0 },
+    ]);
+    expect(snapshot.cardPlacements).toEqual([
+      { insertIndex: undefined, reclaimJokerIndex: 1 },
+      { insertIndex: 0, reclaimJokerIndex: undefined },
+      { insertIndex: 0, reclaimJokerIndex: undefined },
+    ]);
+  });
+
+  it("omits aligned metadata when no card has special placement", () => {
+    const entries = buildHandEntries([
+      { rank: 3, suit: 0 },
+      { rank: 4, suit: 0 },
+      { rank: 5, suit: 0 },
+    ]);
+
+    expect(
+      buildDraftCompositionSnapshot({
+        id: "new-1",
+        tableIndex: null,
+        handKeys: entries.map((entry) => entry.key),
+        entries,
+      }).cardPlacements,
+    ).toBeUndefined();
+  });
+});
 
 describe("validateDraftedCompositions", () => {
   it("identifies every invalid new composition", () => {

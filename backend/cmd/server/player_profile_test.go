@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -58,6 +59,89 @@ func TestHandlePlayerProfileRejectsInvalidID(t *testing.T) {
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status = %d; want %d", response.Code, http.StatusNotFound)
 	}
+}
+
+func TestHandlePlayerProfileBranches(t *testing.T) {
+	validID := "00000000-0000-0000-0000-000000000002"
+
+	t.Run("handles preflight", func(t *testing.T) {
+		server := newWSServer()
+		request := httptest.NewRequest(http.MethodOptions, "/api/players/"+validID, nil)
+		request.Header.Set("Origin", "http://localhost:3000")
+		response := httptest.NewRecorder()
+		server.handlePlayerProfile(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNoContent)
+		}
+	})
+
+	t.Run("rejects methods other than get", func(t *testing.T) {
+		server := newWSServer()
+		response := httptest.NewRecorder()
+		server.handlePlayerProfile(response, httptest.NewRequest(http.MethodPost, "/api/players/"+validID, nil))
+		if response.Code != http.StatusMethodNotAllowed || response.Header().Get("Allow") != http.MethodGet {
+			t.Fatalf("status = %d allow = %q; want 405 and GET", response.Code, response.Header().Get("Allow"))
+		}
+	})
+
+	for name, path := range map[string]string{
+		"empty id":     "/api/players/",
+		"nested path":  "/api/players/" + validID + "/extra",
+		"malformed id": "/api/players/not-a-uuid",
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := newWSServer()
+			response := httptest.NewRecorder()
+			server.handlePlayerProfile(response, httptest.NewRequest(http.MethodGet, path, nil))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("status = %d; want %d", response.Code, http.StatusNotFound)
+			}
+		})
+	}
+
+	t.Run("requires profile storage", func(t *testing.T) {
+		server := newWSServerWithDependencies(nil, noopUserStore{}, "")
+		response := httptest.NewRecorder()
+		server.handlePlayerProfile(response, httptest.NewRequest(http.MethodGet, "/api/players/"+validID, nil))
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusServiceUnavailable)
+		}
+	})
+
+	for name, testCase := range map[string]struct {
+		err        error
+		wantStatus int
+	}{
+		"missing profile": {err: database.ErrPlayerProfileNotFound, wantStatus: http.StatusNotFound},
+		"storage failure": {err: errors.New("profile store boom"), wantStatus: http.StatusInternalServerError},
+	} {
+		t.Run(name, func(t *testing.T) {
+			server := newWSServerWithDependencies(nil, playerProfileTestStore{userStore: noopUserStore{}, err: testCase.err}, "")
+			response := httptest.NewRecorder()
+			server.handlePlayerProfile(response, httptest.NewRequest(http.MethodGet, "/api/players/"+validID, nil))
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d; want %d", response.Code, testCase.wantStatus)
+			}
+		})
+	}
+
+	t.Run("handles response write failures", func(t *testing.T) {
+		server := newWSServerWithDependencies(nil, playerProfileTestStore{
+			userStore: noopUserStore{},
+			profile:   database.PlayerProfileRecord{ID: validID},
+		}, "")
+		server.handlePlayerProfile(&failingProfileResponseWriter{header: http.Header{}}, httptest.NewRequest(http.MethodGet, "/api/players/"+validID, nil))
+	})
+}
+
+type failingProfileResponseWriter struct {
+	header http.Header
+}
+
+func (w *failingProfileResponseWriter) Header() http.Header { return w.header }
+func (*failingProfileResponseWriter) WriteHeader(int)       {}
+func (*failingProfileResponseWriter) Write([]byte) (int, error) {
+	return 0, errors.New("write failed")
 }
 
 func TestRoomSnapshotIncludesAuthenticatedProfileID(t *testing.T) {

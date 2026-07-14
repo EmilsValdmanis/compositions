@@ -2,6 +2,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import {
   type CardSnapshot,
   type CompositionSnapshot,
+  type DraftCompositionSnapshot,
   type TablePlayRequest,
 } from "#/components/game-websocket-provider";
 import { isValidDraftComposition } from "#/components/game/game-card-utils";
@@ -74,6 +75,25 @@ export type OpeningTablePlayValidation = {
   canSubmit: boolean;
   reason?: "missing-own-composition";
 };
+
+export function buildDraftCompositionSnapshot(
+  composition: DraftedCompositionView,
+): DraftCompositionSnapshot {
+  const cardPlacements = composition.entries.map((entry) => ({
+    insertIndex: composition.cardInsertIndices?.[entry.key],
+    reclaimJokerIndex: composition.reclaimTargets?.[entry.key],
+  }));
+  const hasCardPlacements = cardPlacements.some(
+    (placement) => placement.insertIndex !== undefined || placement.reclaimJokerIndex !== undefined,
+  );
+
+  return {
+    tableIndex: composition.tableIndex ?? undefined,
+    insertIndex: composition.insertIndex,
+    cardPlacements: hasCardPlacements ? cardPlacements : undefined,
+    cards: composition.entries.map((entry) => entry.card),
+  };
+}
 
 export const FACE_DOWN_CARD: CardSnapshot = {};
 export const HAND_DROP_ID = "hand-drop-zone";

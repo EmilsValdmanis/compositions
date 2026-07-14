@@ -585,9 +585,7 @@ describe("GameBoardView spectator turn drafts", () => {
               {
                 tableIndex: 0,
                 cards: [{ rank: 3, suit: 1 }],
-                reclaimTargets: {
-                  "3-1-2": 0,
-                },
+                cardPlacements: [{ reclaimJokerIndex: 0 }],
               },
             ],
           },
