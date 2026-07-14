@@ -3,7 +3,6 @@ import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { Text } from "#/components/typography";
 import { UserDropdown } from "#/components/user-dropdown";
-import { LanguageSwitcher } from "#/components/language-switcher";
 import { m } from "#/paraglide/messages.js";
 
 const rootRouteApi = getRouteApi("__root__");
@@ -52,7 +51,6 @@ export function AppNavigation() {
 
         <div className="flex items-center justify-end gap-1 justify-self-end">
           <GameControlsMenu />
-          <LanguageSwitcher />
           {session ? <UserDropdown /> : null}
         </div>
       </div>

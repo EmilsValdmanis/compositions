@@ -1,12 +1,16 @@
-import { Globe02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { Globe02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "#/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { m } from "#/paraglide/messages.js";
@@ -17,9 +21,40 @@ const localeLabels: Record<Locale, () => string> = {
   lv: m.language_latvian,
 };
 
-export function LanguageSwitcher({ className }: { className?: string }) {
+function LanguageOptions() {
   const currentLocale = getLocale();
 
+  return (
+    <DropdownMenuRadioGroup
+      value={currentLocale}
+      onValueChange={(locale) => setLocale(locale as Locale)}
+    >
+      {locales.map((locale) => (
+        <DropdownMenuRadioItem key={locale} value={locale}>
+          {localeLabels[locale]()}
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
+  );
+}
+
+export function LanguageSubmenu() {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <HugeiconsIcon icon={Globe02Icon} />
+        {m.language()}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <DropdownMenuGroup>
+          <LanguageOptions />
+        </DropdownMenuGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+export function LanguageSwitcher({ className }: { className?: string }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -38,14 +73,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{m.language()}</DropdownMenuLabel>
-          {locales.map((locale) => (
-            <DropdownMenuItem key={locale} onClick={() => setLocale(locale)}>
-              <span>{localeLabels[locale]()}</span>
-              {locale === currentLocale ? (
-                <HugeiconsIcon icon={Tick02Icon} className="ml-auto" />
-              ) : null}
-            </DropdownMenuItem>
-          ))}
+          <LanguageOptions />
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

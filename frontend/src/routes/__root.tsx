@@ -45,7 +45,7 @@ export const Route = createRootRouteWithContext<{
           content: "width=device-width, initial-scale=1",
         },
         {
-          title: m.app_name(),
+          title: m.page_title(),
         },
         { name: "application-name", content: m.app_name() },
         { name: "theme-color", content: "#0069a8" },

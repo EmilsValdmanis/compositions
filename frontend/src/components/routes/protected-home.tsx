@@ -8,6 +8,7 @@ import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
+import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
 import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
 import { m } from "#/paraglide/messages.js";
@@ -92,9 +93,7 @@ export function ProtectedHome() {
   const roundResultsKey = roundResults?.room?.code
     ? `${roundResults.room.code}:${roundResults.game.round}`
     : null;
-  const isBootstrappingConnection =
-    state.connectionStatus === "idle" ||
-    (state.connectionStatus === "connecting" && state.room === null && state.game === null);
+  const isBootstrappingConnection = isGameRouteSnapshotResolving(state);
 
   useGameSoundEvents(state);
 

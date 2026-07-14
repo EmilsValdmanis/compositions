@@ -26,7 +26,7 @@ export function createSocialMeta({
   return [
     { name: "description", content: description },
     { property: "og:type", content: type },
-    { property: "og:site_name", content: "Compositions" },
+    { property: "og:site_name", content: m.app_name() },
     { property: "og:title", content: title },
     { property: "og:description", content: description },
     ...(url ? [{ property: "og:url", content: url }] : []),
