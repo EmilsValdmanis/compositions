@@ -1,6 +1,7 @@
-import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, Share08Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -59,24 +60,44 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function PlayerProfilePage({ profile }: { profile: PlayerProfile }) {
+export function PlayerProfilePage({
+  profile,
+  isOwnProfile,
+}: {
+  profile: PlayerProfile;
+  isOwnProfile: boolean;
+}) {
   const hasGames = profile.gamesPlayed > 0;
   const compositions = profile.compositionsCreated;
 
+  async function shareProfile() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      toast.success("Profile link copied");
+    } catch {
+      toast.error("Could not copy this profile link");
+    }
+  }
+
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      <div>
+      <div className="flex items-center justify-between gap-2">
         <Button render={<Link to="/" />} nativeButton={false} variant="ghost" size="sm">
           <HugeiconsIcon icon={ArrowLeft01Icon} data-icon="inline-start" />
           Back to game
         </Button>
+        {isOwnProfile ? (
+          <Button variant="ghost" size="sm" onClick={() => void shareProfile()}>
+            <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
+            Share profile
+          </Button>
+        ) : null}
       </div>
 
-      <Card className="relative overflow-hidden">
-        <div className="pointer-events-none absolute -top-20 -right-20 size-64 rounded-full bg-primary/10 blur-3xl" />
-        <CardHeader className="relative">
-          <div className="flex flex-wrap items-center gap-4">
-            <Avatar className="size-20 ring-4 ring-background shadow-md">
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-4">
+            <Avatar className="size-16 sm:size-20">
               {profile.imageUrl ? <AvatarImage src={profile.imageUrl} alt={profile.name} /> : null}
               <AvatarFallback className="text-xl">{getUserInitials(profile.name)}</AvatarFallback>
             </Avatar>
@@ -87,10 +108,10 @@ export function PlayerProfilePage({ profile }: { profile: PlayerProfile }) {
               <CardTitle className="truncate text-3xl tracking-tight md:text-4xl">
                 {profile.name}
               </CardTitle>
+              <Badge className="mt-1 w-fit" variant={hasGames ? "secondary" : "outline"}>
+                {hasGames ? `${profile.gamesPlayed} ranked games` : "Unranked"}
+              </Badge>
             </div>
-            <Badge variant={hasGames ? "secondary" : "outline"}>
-              {hasGames ? `${profile.gamesPlayed} ranked games` : "Unranked"}
-            </Badge>
           </div>
         </CardHeader>
       </Card>

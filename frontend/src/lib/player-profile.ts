@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeaders } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { authURL } from "#/lib/auth-shared";
 
@@ -29,13 +28,9 @@ export type PlayerProfile = z.infer<typeof playerProfileSchema>;
 export const getPlayerProfile = createServerFn({ method: "GET" })
   .validator(z.string().uuid())
   .handler(async ({ data: playerId }) => {
-    const requestHeaders = new Headers(getRequestHeaders());
-    const cookie = requestHeaders.get("cookie");
     const response = await fetch(
       authURL(`/api/players/${encodeURIComponent(playerId)}`, process.env.VITE_GAME_SERVER_URL),
-      {
-        headers: cookie ? { cookie, accept: "application/json" } : { accept: "application/json" },
-      },
+      { headers: { accept: "application/json" } },
     );
 
     if (response.status === 404) return null;
