@@ -47,19 +47,6 @@ func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if s == nil || s.auth == nil {
-		http.Error(w, errAuthenticationRequired.Error(), http.StatusUnauthorized)
-		return
-	}
-	if _, err := s.auth.sessionFromRequest(r); err != nil {
-		if errors.Is(err, errAuthenticationRequired) {
-			http.Error(w, errAuthenticationRequired.Error(), http.StatusUnauthorized)
-			return
-		}
-		http.Error(w, "failed to load session", http.StatusInternalServerError)
-		return
-	}
-
 	userID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/players/"))
 	if userID == "" || strings.Contains(userID, "/") {
 		http.NotFound(w, r)
@@ -86,7 +73,7 @@ func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
 	response := playerProfileResponse{
 		ID: profile.ID, Name: profile.Name, ImageURL: profile.ImageURL,
 		GamesPlayed: profile.GamesPlayed, GamesWon: profile.GamesWon, TotalPlacement: profile.TotalPlacement,
