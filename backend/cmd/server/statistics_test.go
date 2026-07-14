@@ -718,12 +718,14 @@ func TestWebSocketRemainingActionHandlers(t *testing.T) {
 		server.handlePlayAndDiscard(nil, currentSession, wsEnvelope{Data: mustMarshalRawMessage(playAndDiscardRequest{playRequest: playRequest{Compositions: []compositionRequest{{Cards: []cardRequest{invalidCard}}}}})})
 		server.handlePlayAndDiscard(nil, currentSession, wsEnvelope{Data: mustMarshalRawMessage(playAndDiscardRequest{playRequest: playRequest{Additions: []compositionAdditionRequest{{Cards: []cardRequest{invalidCard}}}}})})
 		server.handlePlayAndDiscard(nil, currentSession, wsEnvelope{Data: mustMarshalRawMessage(playAndDiscardRequest{playRequest: playRequest{Reclaims: []reclaimRequest{{ReplacementCard: invalidCard}}}})})
+		server.handlePlayAndDiscard(nil, currentSession, wsEnvelope{Data: mustMarshalRawMessage(playAndDiscardRequest{Card: &invalidCard})})
 
 		validRun := []cardRequest{
 			{Rank: int(game.Ten), Suit: int(game.Hearts)}, {Rank: int(game.Jack), Suit: int(game.Hearts)},
 			{Rank: int(game.Queen), Suit: int(game.Hearts)}, {Rank: int(game.King), Suit: int(game.Hearts)},
 		}
-		request := playAndDiscardRequest{playRequest: playRequest{Compositions: []compositionRequest{{Cards: validRun}}}, CardIndex: 0}
+		discardCard := cardRequest{Rank: int(game.Two), Suit: int(game.Clubs)}
+		request := playAndDiscardRequest{playRequest: playRequest{Compositions: []compositionRequest{{Cards: validRun}}}, CardIndex: 0, Card: &discardCard}
 		server.handlePlayAndDiscard(nil, otherSession, wsEnvelope{Data: mustMarshalRawMessage(request)})
 
 		snapshot := room.gameState.PersistenceSnapshot()
@@ -762,7 +764,7 @@ func TestHandleConnectionDispatchesNewActions(t *testing.T) {
 		{"request_end_game", requestEndGameRequest{Kind: "mutual_end"}},
 		{"vote_end_game", voteEndGameRequest{ProposalID: "x"}},
 		{"report_issue", reportIssueRequest{Description: "x"}},
-		{"play_and_discard", playAndDiscardRequest{CardIndex: 0}},
+		{"play_and_discard", playAndDiscardRequest{CardIndex: 0, Card: &cardRequest{Rank: int(game.Ace), Suit: int(game.Hearts)}}},
 	}
 	for _, test := range cases {
 		mustSendEnvelope(t, conn, test.kind, test.data)

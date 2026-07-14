@@ -145,12 +145,14 @@ type reclaimRequest struct {
 }
 
 type discardRequest struct {
-	CardIndex int `json:"cardIndex"`
+	CardIndex int          `json:"cardIndex"`
+	Card      *cardRequest `json:"card,omitempty"`
 }
 
 type playAndDiscardRequest struct {
 	playRequest
-	CardIndex int `json:"cardIndex"`
+	CardIndex int          `json:"cardIndex"`
+	Card      *cardRequest `json:"card,omitempty"`
 }
 
 type connectedEvent struct {
@@ -767,10 +769,16 @@ func (s *wsServer) handlePlayAndDiscard(conn *websocket.Conn, sessionID string, 
 		s.writeError(conn, err)
 		return
 	}
+	expectedCard, err := discardCardFromRequest(req.Card)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
 
-	roomState, recipients, result, err := s.lobby.playAndDiscard(
+	roomState, recipients, result, err := s.lobby.playAndDiscardMatching(
 		sessionID,
 		req.CardIndex,
+		expectedCard,
 		comps,
 		additions,
 		reclaims,
@@ -812,7 +820,13 @@ func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelop
 		return
 	}
 
-	roomState, recipients, result, err := s.lobby.discard(sessionID, req.CardIndex)
+	expectedCard, err := discardCardFromRequest(req.Card)
+	if err != nil {
+		s.writeError(conn, err)
+		return
+	}
+
+	roomState, recipients, result, err := s.lobby.discardMatching(sessionID, req.CardIndex, expectedCard)
 	if err != nil {
 		slog.Warn("discard failed", "sessionID", sessionID, "cardIndex", req.CardIndex, "error", err)
 		s.writeError(conn, err)
@@ -1057,4 +1071,15 @@ func cardFromRequest(req cardRequest) (game.Card, error) {
 		return game.Card{}, errors.New("invalid card suit")
 	}
 	return game.NewCard(rank, suit), nil
+}
+
+func discardCardFromRequest(req *cardRequest) (*game.Card, error) {
+	if req == nil {
+		return nil, errors.New("discard card is required")
+	}
+	card, err := cardFromRequest(*req)
+	if err != nil {
+		return nil, err
+	}
+	return &card, nil
 }

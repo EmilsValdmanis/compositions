@@ -284,6 +284,15 @@ func (gs *GameState) PlayTable(comps []*Composition, additions []CompositionAddi
 // Work on a restored copy so an invalid discard cannot leave a valid table
 // play applied without ending the turn.
 func (gs *GameState) PlayTableAndDiscard(cardIndex int, comps []*Composition, additions []CompositionAddition, reclaims ...JokerReclaim) error {
+	return gs.PlayTableAndDiscardMatching(cardIndex, nil, comps, additions, reclaims...)
+}
+
+// PlayTableAndDiscardMatching commits a table play and discards expectedCard.
+// cardIndex is kept as a fast path and for backwards compatibility, but the
+// card value is authoritative when one is supplied. This prevents a stale
+// client-side hand index from discarding a different card after table cards
+// have been removed.
+func (gs *GameState) PlayTableAndDiscardMatching(cardIndex int, expectedCard *Card, comps []*Composition, additions []CompositionAddition, reclaims ...JokerReclaim) error {
 	next, err := RestoreGameState(gs.PersistenceSnapshot())
 	if err != nil {
 		return err
@@ -291,7 +300,7 @@ func (gs *GameState) PlayTableAndDiscard(cardIndex int, comps []*Composition, ad
 	if err := next.PlayTable(comps, additions, reclaims...); err != nil {
 		return err
 	}
-	if err := next.DiscardFromHand(cardIndex); err != nil {
+	if err := next.DiscardFromHandMatching(cardIndex, expectedCard); err != nil {
 		return err
 	}
 
@@ -300,6 +309,12 @@ func (gs *GameState) PlayTableAndDiscard(cardIndex int, comps []*Composition, ad
 }
 
 func (gs *GameState) DiscardFromHand(cardIndex int) error {
+	return gs.DiscardFromHandMatching(cardIndex, nil)
+}
+
+// DiscardFromHandMatching discards the requested card even when cardIndex is
+// stale. If expectedCard is nil, it preserves the legacy index-only behavior.
+func (gs *GameState) DiscardFromHandMatching(cardIndex int, expectedCard *Card) error {
 	if gs.phase != PhaseInProgress {
 		return ErrGameNotInProgress
 	}
@@ -313,6 +328,21 @@ func (gs *GameState) DiscardFromHand(cardIndex int) error {
 	cp, err := gs.CurrentPlayer()
 	if err != nil {
 		return err
+	}
+	if expectedCard != nil {
+		matchesExpected := func(card Card) bool {
+			return card.isJoker == expectedCard.isJoker && cardsEqual(card, *expectedCard)
+		}
+
+		if cardIndex < 0 || cardIndex >= len(cp.hand.cards) || !matchesExpected(cp.hand.cards[cardIndex]) {
+			cardIndex = -1
+			for index, card := range cp.hand.cards {
+				if matchesExpected(card) {
+					cardIndex = index
+					break
+				}
+			}
+		}
 	}
 
 	card, ok := cp.hand.RemoveAt(cardIndex)

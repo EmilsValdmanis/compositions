@@ -1962,6 +1962,86 @@ func TestGameStatePlayTableAndDiscardRollsBackInvalidDiscard(t *testing.T) {
 	}
 }
 
+func TestGameStatePlayTableAndDiscardMatchingUsesCardValueWhenIndexIsStale(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+		{rank: Two, suit: Spades},
+		{rank: Three, suit: Clubs},
+		{rank: Four, suit: Hearts},
+	}
+	setComp, ok := NewSet(state.players[0].hand.cards[:3])
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	expected := card(Three, Clubs)
+
+	// Index zero points at the two after the kings are played. The card value
+	// must remain authoritative so the selected three is discarded instead.
+	if err := state.PlayTableAndDiscardMatching(0, &expected, []*Composition{setComp}, nil); err != nil {
+		t.Fatalf("PlayTableAndDiscardMatching() error = %v", err)
+	}
+
+	if top := state.discardPile.cards[0]; !sameCard(top, expected) {
+		t.Fatalf("discardPile.cards[0] = %+v; want Three of Clubs", top)
+	}
+	wantHand := []Card{card(Two, Spades), card(Four, Hearts)}
+	if !slices.EqualFunc(state.players[0].hand.cards, wantHand, sameCard) {
+		t.Fatalf("hand = %+v; want %+v", state.players[0].hand.cards, wantHand)
+	}
+}
+
+func TestGameStatePlayTableAndDiscardMatchingRollsBackWhenExpectedCardWasPlayed(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		{rank: King, suit: Hearts},
+		{rank: King, suit: Diamonds},
+		{rank: King, suit: Clubs},
+		{rank: Two, suit: Spades},
+	}
+	setComp, ok := NewSet(state.players[0].hand.cards[:3])
+	if !ok {
+		t.Fatal("NewSet() returned false; want true")
+	}
+	expected := card(King, Hearts)
+
+	err := state.PlayTableAndDiscardMatching(0, &expected, []*Composition{setComp}, nil)
+
+	if !errors.Is(err, ErrRemovingCard) {
+		t.Fatalf("PlayTableAndDiscardMatching() error = %v; want %v", err, ErrRemovingCard)
+	}
+	if len(state.activeCompositions) != 0 || len(state.players[0].hand.cards) != 4 {
+		t.Fatalf("state changed after rejected discard: compositions=%d hand=%+v", len(state.activeCompositions), state.players[0].hand.cards)
+	}
+}
+
+func TestGameStateDiscardFromHandMatchingHandlesStaleIndexAndDuplicates(t *testing.T) {
+	state := newTurnTestState()
+	state.turn.hasDrawn = true
+	state.players[0].hand.cards = []Card{
+		card(Two, Spades),
+		card(Three, Clubs),
+		card(Two, Spades),
+	}
+	expected := card(Two, Spades)
+
+	if err := state.DiscardFromHandMatching(1, &expected); err != nil {
+		t.Fatalf("DiscardFromHandMatching() error = %v", err)
+	}
+	if top := state.discardPile.cards[0]; !sameCard(top, expected) {
+		t.Fatalf("discardPile.cards[0] = %+v; want Two of Spades", top)
+	}
+	if len(state.players[0].hand.cards) != 2 || !sameCard(state.players[0].hand.cards[0], card(Three, Clubs)) || !sameCard(state.players[0].hand.cards[1], expected) {
+		t.Fatalf("hand = %+v; want Three of Clubs and duplicate Two of Spades", state.players[0].hand.cards)
+	}
+}
+
 func TestGameStateAddToCompositionsRejectsUnopenedPlayerWithoutOwnComposition(t *testing.T) {
 	state := newTurnTestState()
 	state.turn.hasDrawn = true

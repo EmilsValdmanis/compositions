@@ -175,14 +175,14 @@ export function ProtectedHome() {
     leaveRoom();
   }
 
-  async function handleDiscardCard(cardIndex: number) {
+  async function handleDiscardCard(cardIndex: number, card: Parameters<typeof discardCard>[1]) {
     if (!canDiscard) {
       toast.error("Draw before discarding");
       playGameSound("invalid-action");
       throw new Error("draw before discarding");
     }
 
-    return discardCard(cardIndex);
+    return discardCard(cardIndex, card);
   }
 
   async function handlePlayTable(play: Parameters<typeof playTable>[0]) {

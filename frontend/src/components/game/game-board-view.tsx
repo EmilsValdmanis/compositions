@@ -11,6 +11,7 @@ import {
 } from "@dnd-kit/core";
 import {
   type ActionResult,
+  type CardSnapshot,
   type DraftCompositionSnapshot,
   type GameSnapshot,
   type PlayerSnapshot,
@@ -139,13 +140,14 @@ type GameBoardViewProps = {
   connectedPlayers: number;
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
-  onDiscardCard: (cardIndex: number) => Promise<ActionResult> | void;
+  onDiscardCard: (cardIndex: number, card: CardSnapshot) => Promise<ActionResult> | void;
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
   onPlayTable: (play: TablePlayRequest) => Promise<ActionResult> | void;
   onPlayTableAndDiscard: (
     play: TablePlayRequest,
     cardIndex: number,
+    card: CardSnapshot,
   ) => Promise<ActionResult> | void;
   onSendEmote: (emoji: string) => void;
   disableDraftSync?: boolean;
@@ -763,15 +765,21 @@ function useGameBoardController({
             return;
           }
 
+          const discardCard = draggedEntry?.card;
+          if (!discardCard) {
+            return;
+          }
+
           if (draftedCompositionsView.length > 0) {
             await onPlayTableAndDiscard(
               buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
               discardIndex,
+              discardCard,
             );
             return;
           }
 
-          await onDiscardCard(discardIndex);
+          await onDiscardCard(discardIndex, discardCard);
         })();
       }
       return;

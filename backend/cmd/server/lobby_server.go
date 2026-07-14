@@ -919,8 +919,12 @@ func (l *lobbyServer) play(sessionID string, comps []*game.Composition, addition
 }
 
 func (l *lobbyServer) playAndDiscard(sessionID string, cardIndex int, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.playAndDiscardMatching(sessionID, cardIndex, nil, comps, additions, reclaims)
+}
+
+func (l *lobbyServer) playAndDiscardMatching(sessionID string, cardIndex int, expectedCard *game.Card, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "play_and_discard", func(state *game.GameState) error {
-		return state.PlayTableAndDiscard(cardIndex, comps, additions, reclaims...)
+		return state.PlayTableAndDiscardMatching(cardIndex, expectedCard, comps, additions, reclaims...)
 	}, func(room *room, _ *playerSession) error {
 		room.clearTurnTracking()
 		return nil
@@ -928,8 +932,12 @@ func (l *lobbyServer) playAndDiscard(sessionID string, cardIndex int, comps []*g
 }
 
 func (l *lobbyServer) discard(sessionID string, cardIndex int) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+	return l.discardMatching(sessionID, cardIndex, nil)
+}
+
+func (l *lobbyServer) discardMatching(sessionID string, cardIndex int, expectedCard *game.Card) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "discard", func(state *game.GameState) error {
-		return state.DiscardFromHand(cardIndex)
+		return state.DiscardFromHandMatching(cardIndex, expectedCard)
 	}, func(room *room, _ *playerSession) error {
 		room.clearTurnTracking()
 		return nil
