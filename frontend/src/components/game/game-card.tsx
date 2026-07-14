@@ -108,7 +108,7 @@ function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: s
 
 function faceDownGameCardClassName(size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center rounded-2xl border border-foreground/10 bg-foreground/5 shadow-sm transition",
+    "relative grid shrink-0 select-none place-items-center rounded-2xl border border-border bg-card shadow-sm transition",
     gameCardSizeClassNames[size],
     className,
   );
@@ -154,7 +154,7 @@ function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
 }
 
 function renderGameCardBack() {
-  return <span className="absolute inset-1.5 rounded-xl border border-white/10" />;
+  return <span className="absolute inset-1.5 rounded-xl border border-foreground/10 bg-muted" />;
 }
 
 type GameCardDecoration = {

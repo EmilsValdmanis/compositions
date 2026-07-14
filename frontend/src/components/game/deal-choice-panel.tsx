@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { closestCenter, DndContext, type DragEndEvent, type Modifier } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -12,24 +12,52 @@ import {
   ArrowRight01Icon,
   Cards02Icon,
   DragDropVerticalIcon,
-  Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   type DealingChoiceRequest,
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
+import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
+import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
-import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Button } from "#/components/ui/button";
-import { Label } from "#/components/ui/label";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "#/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "#/components/ui/field";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemFooter,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "#/components/ui/item";
 import { Slider } from "#/components/ui/slider";
-import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { cn } from "#/lib/utils";
 
 const GAME_DECK_CARD_COUNT = 108;
-const VISUAL_CARD_COUNT = 30;
+const DECK_STACK_BASE_TOP = 4;
+const DECK_CARD_VERTICAL_OFFSET = 0.25;
 
 type DealMode = "round_robin" | "tap";
 type DealStep = "cut" | "deal";
@@ -86,99 +114,6 @@ function clampCutSize(rawCutSize: string, maxCutSize: number) {
   return Math.min(Math.max(parsed, 0), maxCutSize);
 }
 
-function DeckCard({ index, cutVisualCount }: { index: number; cutVisualCount: number }) {
-  const isCut = index < cutVisualCount;
-  const cutIndex = cutVisualCount - index - 1;
-  const mainIndex = index - cutVisualCount;
-  const mainDepth = Math.min(mainIndex, 13);
-  const cutDepth = Math.min(cutIndex, 13);
-  const transform = isCut
-    ? `translate3d(${22 + cutDepth * 1.5}px, ${30 - cutDepth * 0.45}px, 0) rotate(${-7 + cutDepth * 0.5}deg)`
-    : `translate3d(${132 + mainDepth * 1.3}px, ${18 + mainDepth * 1.2}px, 0) rotate(${0.5 + mainDepth * 0.04}deg)`;
-
-  return (
-    <div
-      className={cn(
-        "absolute size-16 rounded-md border shadow-sm transition-[transform,opacity,box-shadow] duration-300 ease-out",
-        isCut
-          ? "border-primary/55 bg-primary/10 shadow-md"
-          : "border-border bg-card shadow-foreground/5",
-      )}
-      style={{
-        transform,
-        zIndex: isCut ? 90 + cutIndex : VISUAL_CARD_COUNT - mainIndex,
-        opacity: isCut || mainIndex < 20 ? 1 : 0,
-        transitionDelay: `${isCut ? cutIndex * 10 : mainIndex * 8}ms`,
-      }}
-    >
-      <div className={cn("m-2 h-1.5 rounded-full", isCut ? "bg-primary/35" : "bg-muted")} />
-      <div
-        className={cn("mx-2 mt-8 h-1.5 rounded-full", isCut ? "bg-primary/20" : "bg-muted/70")}
-      />
-    </div>
-  );
-}
-
-function CutDeckControl({
-  clampedCutSize,
-  maxCutSize,
-  onCutSizeChange,
-}: {
-  clampedCutSize: number;
-  maxCutSize: number;
-  onCutSizeChange: (cutSize: string) => void;
-}) {
-  const remainingCards = maxCutSize - clampedCutSize;
-  const cutVisualCount =
-    maxCutSize > 0 ? Math.round((clampedCutSize / maxCutSize) * VISUAL_CARD_COUNT) : 0;
-
-  return (
-    <div className="grid gap-3">
-      <div className="grid gap-3 rounded-lg border border-border/70 bg-background p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Label id="cut-size-label" className="text-xs font-medium uppercase tracking-[0.16em]">
-            Cut size
-          </Label>
-          <div className="flex items-center gap-2">
-            <Badge variant="secondary">
-              <AnimatedNumber value={clampedCutSize} /> cut
-            </Badge>
-            <Badge variant="outline">
-              <AnimatedNumber value={remainingCards} /> deck
-            </Badge>
-          </div>
-        </div>
-
-        <div className="relative h-40 overflow-hidden rounded-lg border border-border/70 bg-muted/20">
-          <div className="absolute inset-x-4 top-4 flex justify-between text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground">
-            <span>Cut packet</span>
-            <span>Dealing deck</span>
-          </div>
-          <div className="absolute left-2 top-10 h-24 w-63 sm:left-1/2 sm:-translate-x-1/2">
-            {Array.from({ length: VISUAL_CARD_COUNT }, (_, index) => (
-              <DeckCard key={index} index={index} cutVisualCount={cutVisualCount} />
-            ))}
-          </div>
-        </div>
-
-        <Slider
-          id="cut-size"
-          min={0}
-          max={maxCutSize}
-          step={1}
-          thumbAriaLabelledBy="cut-size-label"
-          value={[clampedCutSize]}
-          onValueChange={(value) => {
-            const nextCutSize = Array.isArray(value) ? value[0] : value;
-
-            onCutSizeChange(String(nextCutSize ?? 0));
-          }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function SortableDealOrderPlayer({
   player,
   playerIndex,
@@ -197,51 +132,29 @@ function SortableDealOrderPlayer({
   };
 
   return (
-    <div
+    <Item
       ref={setNodeRef}
       style={style}
+      variant="outline"
+      size="sm"
       className={cn(
-        "flex min-h-14 w-full min-w-0 cursor-grab touch-none items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-2 text-sm shadow-sm active:cursor-grabbing",
-        isDragging ? "opacity-60" : undefined,
+        "min-w-0 cursor-grab touch-none active:cursor-grabbing",
+        isDragging && "opacity-60",
       )}
       {...attributes}
       {...listeners}
     >
-      <Badge variant="outline" className="w-9 justify-center">
-        {position + 1}
-      </Badge>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{player.name}</p>
-        <p className="text-xs text-muted-foreground">Seat {player.seat + 1}</p>
-      </div>
-      <HugeiconsIcon
-        icon={DragDropVerticalIcon}
-        strokeWidth={2}
-        className="text-muted-foreground"
-      />
-    </div>
-  );
-}
-
-function StepMarker({ step, active, done }: { step: number; active: boolean; done: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span
-        className={cn(
-          "flex size-7 items-center justify-center rounded-full border text-xs font-semibold",
-          active || done
-            ? "border-primary bg-primary text-primary-foreground"
-            : "border-border bg-background text-muted-foreground",
-        )}
-      >
-        {done ? <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-4" /> : step}
-      </span>
-      <span
-        className={cn("text-sm font-medium", active ? "text-foreground" : "text-muted-foreground")}
-      >
-        {step === 1 ? "Cut" : "Deal"}
-      </span>
-    </div>
+      <ItemMedia>
+        <Badge variant="secondary">{position + 1}</Badge>
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>{player.name}</ItemTitle>
+        <ItemDescription>Seat {player.seat + 1}</ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <HugeiconsIcon icon={DragDropVerticalIcon} strokeWidth={2} />
+      </ItemActions>
+    </Item>
   );
 }
 
@@ -264,15 +177,19 @@ export function DealChoicePanel({
   const activePlayerCount = players.filter((player) => !player.forfeited).length;
   const maxCutSize = Math.max(0, GAME_DECK_CARD_COUNT - activePlayerCount * 12);
   const clampedCutSize = clampCutSize(cutSize, maxCutSize);
+  const prefersReducedMotion = useReducedMotion();
   const dealerName = players[pendingDealChoice.dealerIndex]?.name ?? null;
   const tapOrderIds = tapOrder.map(dealPlayerId);
-
-  useEffect(() => {
+  const resetDealChoice = useEffectEvent(() => {
     setDealStep("cut");
     setDealMode("round_robin");
     setCutSize("0");
     setTapOrder(defaultTapOrder(players, pendingDealChoice));
-  }, [dealChoiceKey, pendingDealChoice, players]);
+  });
+
+  useEffect(() => {
+    resetDealChoice();
+  }, [dealChoiceKey]);
 
   function handleTapOrderDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -310,71 +227,174 @@ export function DealChoicePanel({
   }
 
   return (
-    <div className="grid gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">Deal choice</p>
-          <p className="text-xs text-muted-foreground">
-            {dealerName ? `Dealer: ${dealerName}` : "Dealer selected"}
-          </p>
-        </div>
-        <Badge variant={isDealChooser ? "default" : "outline"}>
-          {isDealChooser ? "Your pick" : (dealChooserName ?? "Waiting")}
-        </Badge>
-      </div>
+    <Card size="sm" className="w-full">
+      <CardHeader>
+        <CardTitle>Prepare the deal</CardTitle>
+        <CardDescription>
+          {dealerName ? `Dealer: ${dealerName}` : "Dealer selected"}
+        </CardDescription>
+        <CardAction>
+          <Badge variant={isDealChooser ? "secondary" : "outline"}>
+            {isDealChooser ? `Step ${dealStep === "cut" ? 1 : 2} of 2` : "Waiting"}
+          </Badge>
+        </CardAction>
+      </CardHeader>
 
-      {isDealChooser ? (
-        <div className="grid gap-3">
-          <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background p-2">
-            <StepMarker step={1} active={dealStep === "cut"} done={dealStep === "deal"} />
-            <div className="h-px min-w-6 flex-1 bg-border" />
-            <StepMarker step={2} active={dealStep === "deal"} done={false} />
-          </div>
+      <CardContent>
+        {isDealChooser ? (
+          dealStep === "cut" ? (
+            <FieldGroup>
+              <Item variant="muted">
+                <ItemMedia variant="icon">
+                  <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
+                </ItemMedia>
+                <ItemContent>
+                  <ItemTitle>Cut the deck</ItemTitle>
+                  <ItemDescription>Choose how many cards to lift before dealing.</ItemDescription>
+                </ItemContent>
+                <ItemFooter>
+                  <div className="w-full">
+                    <div
+                      className="relative mx-auto h-32 w-full max-w-sm overflow-hidden [perspective:520px]"
+                      aria-hidden="true"
+                    >
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          left: "25%",
+                          x: "-50%",
+                          opacity: clampedCutSize > 0 ? 0.55 : 0,
+                          scaleX: 0.65 + (clampedCutSize / GAME_DECK_CARD_COUNT) * 0.35,
+                        }}
+                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+                        className="absolute bottom-7 h-2 w-20 rounded-full bg-black/40 blur-md"
+                      />
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          left: "75%",
+                          x: "-50%",
+                          opacity: 0.55,
+                          scaleX:
+                            0.65 +
+                            ((GAME_DECK_CARD_COUNT - clampedCutSize) / GAME_DECK_CARD_COUNT) * 0.35,
+                        }}
+                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+                        className="absolute bottom-7 h-2 w-20 rounded-full bg-black/40 blur-md"
+                      />
+                      {Array.from({ length: GAME_DECK_CARD_COUNT }, (_, index) => {
+                        const firstLiftedIndex = GAME_DECK_CARD_COUNT - clampedCutSize;
+                        const isLifted = index >= firstLiftedIndex;
+                        const stackIndex = isLifted ? index - firstLiftedIndex : index;
+                        const stackSize = isLifted
+                          ? clampedCutSize
+                          : GAME_DECK_CARD_COUNT - clampedCutSize;
+                        const depth = Math.max(0, stackSize - stackIndex - 1);
 
-          {dealStep === "cut" ? (
-            <div className="grid gap-3">
-              <CutDeckControl
-                clampedCutSize={clampedCutSize}
-                maxCutSize={maxCutSize}
-                onCutSizeChange={setCutSize}
-              />
-              <Button type="button" onClick={() => setDealStep("deal")}>
-                Continue
-                <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} data-icon="inline-end" />
-              </Button>
-            </div>
-          ) : (
-            <div className="grid min-w-0 gap-3 overflow-hidden">
-              <div className="grid gap-2">
-                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                  Dealing style
-                </p>
-                <Tabs
-                  value={dealMode}
+                        return (
+                          <motion.div
+                            key={index}
+                            initial={false}
+                            animate={{
+                              left: isLifted ? "25%" : "75%",
+                              x: "-50%",
+                              top: DECK_STACK_BASE_TOP - stackIndex * DECK_CARD_VERTICAL_OFFSET,
+                              rotateX: 54,
+                              rotateZ: isLifted ? -5 + (index % 3) * 0.4 : 4 - (index % 3) * 0.35,
+                            }}
+                            transition={
+                              prefersReducedMotion
+                                ? { duration: 0 }
+                                : { type: "spring", stiffness: 230, damping: 25, mass: 0.75 }
+                            }
+                            className="absolute h-24 w-17 origin-bottom"
+                            style={{
+                              zIndex: isLifted
+                                ? GAME_DECK_CARD_COUNT + stackIndex + 1
+                                : stackIndex + 1,
+                            }}
+                          >
+                            <GameCard
+                              card={FACE_DOWN_CARD}
+                              faceDown
+                              size="default"
+                              className={cn("size-full", depth === 0 ? "shadow-lg" : "shadow-none")}
+                            />
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                    <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-6">
+                      <div className="flex justify-center">
+                        <Badge variant="secondary">Lifted · {clampedCutSize}</Badge>
+                      </div>
+                      <div className="flex justify-center">
+                        <Badge variant="secondary">
+                          Deck · {GAME_DECK_CARD_COUNT - clampedCutSize}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </ItemFooter>
+              </Item>
+
+              <Field>
+                <FieldLabel id="cut-size-label" htmlFor="cut-size" className="sr-only">
+                  Cut size
+                </FieldLabel>
+                <Slider
+                  id="cut-size"
+                  min={0}
+                  max={maxCutSize}
+                  step={1}
+                  thumbAriaLabelledBy="cut-size-label"
+                  value={[clampedCutSize]}
                   onValueChange={(value) => {
-                    if (value === "round_robin" || value === "tap") {
-                      setDealMode(value);
+                    const nextCutSize = Array.isArray(value) ? value[0] : value;
+                    setCutSize(String(nextCutSize ?? 0));
+                  }}
+                />
+                <FieldDescription className="flex justify-between">
+                  <span>0</span>
+                  <span>{maxCutSize} cards maximum</span>
+                </FieldDescription>
+              </Field>
+            </FieldGroup>
+          ) : (
+            <FieldGroup>
+              <FieldSet>
+                <FieldLegend variant="label">Dealing style</FieldLegend>
+                <ToggleGroup
+                  value={[dealMode]}
+                  onValueChange={(value) => {
+                    const nextMode = value[0];
+                    if (nextMode === "round_robin" || nextMode === "tap") {
+                      setDealMode(nextMode);
                     }
                   }}
+                  variant="outline"
+                  spacing={2}
+                  className="grid w-full grid-cols-2"
                 >
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="round_robin">
-                      <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} data-icon="inline-start" />
-                      Round robin
-                    </TabsTrigger>
-                    <TabsTrigger value="tap">
-                      <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} data-icon="inline-start" />
-                      Tap order
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </div>
+                  <ToggleGroupItem value="round_robin" className="min-w-0">
+                    <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
+                    Round robin
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="tap" className="min-w-0">
+                    <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} />
+                    Tap order
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {dealMode === "round_robin"
+                    ? "Deal one card to each player in turn."
+                    : "Deal each player’s full hand in the order below."}
+                </FieldDescription>
+              </FieldSet>
 
               {dealMode === "tap" ? (
-                <div className="grid min-w-0 gap-2 overflow-hidden">
-                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                    Dealing order
-                  </p>
+                <FieldSet>
+                  <FieldLegend variant="label">Player order</FieldLegend>
                   <DndContext
                     autoScroll={false}
                     collisionDetection={closestCenter}
@@ -382,7 +402,7 @@ export function DealChoicePanel({
                     onDragEnd={handleTapOrderDragEnd}
                   >
                     <SortableContext items={tapOrderIds} strategy={verticalListSortingStrategy}>
-                      <div className="grid max-h-56 min-w-0 gap-2 overflow-y-auto overflow-x-hidden pr-1">
+                      <ItemGroup className="max-h-56 overflow-y-auto pr-1">
                         {tapOrder.map((playerIndex, index) => {
                           const player = players[playerIndex];
 
@@ -399,35 +419,52 @@ export function DealChoicePanel({
                             />
                           );
                         })}
-                      </div>
+                      </ItemGroup>
                     </SortableContext>
                   </DndContext>
-                </div>
+                </FieldSet>
               ) : null}
+            </FieldGroup>
+          )
+        ) : (
+          <Item variant="muted">
+            <ItemMedia variant="icon">
+              <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
+            </ItemMedia>
+            <ItemContent>
+              <ItemTitle>Waiting for {dealChooserName ?? "the deal chooser"}</ItemTitle>
+              <ItemDescription>They’re cutting the deck and choosing how to deal.</ItemDescription>
+            </ItemContent>
+          </Item>
+        )}
+      </CardContent>
 
-              <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-                <Button type="button" variant="outline" onClick={() => setDealStep("cut")}>
-                  <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} data-icon="inline-start" />
-                  Back
-                </Button>
-                <Button type="button" onClick={handleChooseDealing}>
-                  Start round
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="grid gap-1 text-sm text-muted-foreground">
-          <p>
-            Waiting for{" "}
-            <span className="font-medium text-foreground">
-              {dealChooserName ?? "the deal chooser"}
-            </span>{" "}
-            to cut the deck and choose the dealing style.
-          </p>
-        </div>
-      )}
-    </div>
+      {isDealChooser ? (
+        <CardFooter className="gap-2">
+          {dealStep === "deal" ? (
+            <Button type="button" variant="outline" onClick={() => setDealStep("cut")}>
+              <HugeiconsIcon icon={ArrowLeft02Icon} strokeWidth={2} data-icon="inline-start" />
+              Back
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            className="flex-1"
+            onClick={() => {
+              if (dealStep === "cut") {
+                setDealStep("deal");
+                return;
+              }
+              handleChooseDealing();
+            }}
+          >
+            {dealStep === "cut" ? "Continue" : "Start round"}
+            {dealStep === "cut" ? (
+              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} data-icon="inline-end" />
+            ) : null}
+          </Button>
+        </CardFooter>
+      ) : null}
+    </Card>
   );
 }
