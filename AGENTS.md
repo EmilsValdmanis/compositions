@@ -49,6 +49,7 @@ Do not run `vp dev` or other `vp` commands from the repository root.
 
 ### Before browser testing
 
+- Only do browser testing if explicitly asked by the user
 - Reuse services that are already running.
 - Confirm that both the backend and frontend have started successfully.
 - Use the development-only `dev-ui` route instead of Google login.

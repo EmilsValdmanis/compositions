@@ -69,4 +69,28 @@ describe("PlayerStrip", () => {
       screen.getByLabelText("9 cards"),
     );
   });
+
+  it("renders active emotes outside the scrollable player list", () => {
+    const players: PlayerSnapshot[] = [
+      {
+        playerId: "player-1",
+        name: "Avery",
+        connected: true,
+        seat: 0,
+        isHost: false,
+        canReconnect: false,
+        activeEmote: {
+          id: "emote-1",
+          emoji: "🔥",
+          expiresAt: new Date(Date.now() + 4000).toISOString(),
+        },
+      },
+    ];
+
+    render(<PlayerStrip players={players} game={null} />);
+
+    const emote = screen.getByLabelText("Player emote");
+    expect(emote.parentElement).toBe(document.body);
+    expect(emote.classList.contains("fixed")).toBe(true);
+  });
 });
