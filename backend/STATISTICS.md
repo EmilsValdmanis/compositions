@@ -53,7 +53,7 @@ If that player wins while opponents receive 18 and 27 penalty points:
 Most UI values are derived rather than stored redundantly:
 
 ```text
-total playtime             = sum(games.completed_at - games.started_at)
+total playtime             = sum(games.active_playtime_seconds)
 win rate                  = games_won / games_played
 average placement         = total_placement / games_played
 round win rate            = rounds_won / rounds_played
@@ -66,6 +66,13 @@ reliability               = 1 - forfeits / games_played
 ```
 
 All divisions should use `NULLIF(denominator, 0)` and the UI should show an eligibility state until the sample is meaningful.
+
+Active playtime runs only while a game is outside the lobby/game-over phases
+and every non-forfeited player is connected. It pauses on disconnect, resumes
+when all active players reconnect, and is checkpointed with the lobby state so
+overnight pauses and server downtime are excluded. A gap between persisted game
+activities contributes at most 15 minutes, so a browser left connected while
+everyone is away also cannot inflate the statistic.
 
 ## Badges and percentile awards
 

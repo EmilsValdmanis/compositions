@@ -28,6 +28,54 @@ type statisticsRecordingStore struct {
 	lobbySaveErrors  map[int]error
 }
 
+func TestStatisticsPlaytimePausesWhilePlayersAreDisconnected(t *testing.T) {
+	lobby, _, roomCode := newActiveLobbyForExitTests(t, 2)
+	gameRoom := lobby.rooms[roomCode]
+	started := time.Date(2026, time.July, 14, 18, 0, 0, 0, time.UTC)
+	gameRoom.statisticsGameID = "game-id"
+	gameRoom.statisticsActiveSince = started
+
+	for _, elapsed := range []time.Duration{10, 20, 30, 40, 45} {
+		gameRoom.updateStatisticsPlaytime(started.Add(elapsed * time.Minute))
+	}
+	gameRoom.players[1].connected = false
+	gameRoom.updateStatisticsPlaytime(started.Add(50 * time.Minute))
+	gameRoom.updateStatisticsPlaytime(started.Add(20 * time.Hour))
+	if gameRoom.statisticsPlaytime != 50*time.Minute || !gameRoom.statisticsActiveSince.IsZero() {
+		t.Fatalf("paused playtime = %v, active since = %v; want 50m and stopped", gameRoom.statisticsPlaytime, gameRoom.statisticsActiveSince)
+	}
+
+	gameRoom.players[1].connected = true
+	gameRoom.updateStatisticsPlaytime(started.Add(20 * time.Hour))
+	for _, elapsed := range []time.Duration{10, 20, 30} {
+		gameRoom.updateStatisticsPlaytime(started.Add(20*time.Hour + elapsed*time.Minute))
+	}
+	if gameRoom.statisticsPlaytime != 80*time.Minute {
+		t.Fatalf("resumed playtime = %v; want 1h20m", gameRoom.statisticsPlaytime)
+	}
+
+	if err := gameRoom.gameState.EndWithoutWinner(); err != nil {
+		t.Fatalf("EndWithoutWinner() error = %v", err)
+	}
+	gameRoom.updateStatisticsPlaytime(started.Add(20*time.Hour + 40*time.Minute))
+	if gameRoom.statisticsPlaytime != 90*time.Minute || !gameRoom.statisticsActiveSince.IsZero() {
+		t.Fatalf("final playtime = %v, active since = %v; want 1h30m and stopped", gameRoom.statisticsPlaytime, gameRoom.statisticsActiveSince)
+	}
+}
+
+func TestStatisticsPlaytimeCapsConnectedIdleGaps(t *testing.T) {
+	lobby, _, roomCode := newActiveLobbyForExitTests(t, 2)
+	gameRoom := lobby.rooms[roomCode]
+	started := time.Date(2026, time.July, 14, 18, 0, 0, 0, time.UTC)
+	gameRoom.statisticsGameID = "game-id"
+	gameRoom.statisticsActiveSince = started
+
+	gameRoom.updateStatisticsPlaytime(started.Add(20 * time.Hour))
+	if gameRoom.statisticsPlaytime != statisticsIdleLimit {
+		t.Fatalf("overnight connected playtime = %v; want capped %v", gameRoom.statisticsPlaytime, statisticsIdleLimit)
+	}
+}
+
 func (s *statisticsRecordingStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
 	s.lobbySaveCalls++
 	if err := s.lobbySaveErrors[s.lobbySaveCalls]; err != nil {

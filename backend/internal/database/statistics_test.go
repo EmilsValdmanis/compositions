@@ -28,6 +28,7 @@ func TestValidateCheckpoint(t *testing.T) {
 		{"incomplete counts", func(record *GameCheckpointRecord) { record.RoundsPlayed = 0 }},
 		{"too many players", func(record *GameCheckpointRecord) { record.PlayerCount = 5 }},
 		{"zero start time", func(record *GameCheckpointRecord) { record.StartedAt = time.Time{} }},
+		{"negative playtime", func(record *GameCheckpointRecord) { record.PlaytimeSeconds = -1 }},
 		{"invalid game uuid", func(record *GameCheckpointRecord) { record.ID = "bad" }},
 		{"invalid user uuid", func(record *GameCheckpointRecord) { record.Players[0].UserID = "bad" }},
 		{"duplicate user", func(record *GameCheckpointRecord) { record.Players = append(record.Players, record.Players[0]) }},

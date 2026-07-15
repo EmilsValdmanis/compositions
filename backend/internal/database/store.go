@@ -181,7 +181,7 @@ func (s *UserStore) GetPlayerProfile(ctx context.Context, userID string) (Player
 		SELECT u.id::text, u.name, u.image_url,
 			COALESCE(ps.games_played, 0), COALESCE(ps.games_won, 0), COALESCE(ps.total_placement, 0),
 			COALESCE((
-				SELECT SUM(EXTRACT(EPOCH FROM (g.completed_at - g.started_at)))::bigint
+				SELECT SUM(g.active_playtime_seconds)::bigint
 				FROM games g
 				JOIN game_player_statistics gps ON gps.game_id = g.id
 				WHERE gps.user_id = u.id

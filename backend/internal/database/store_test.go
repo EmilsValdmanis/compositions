@@ -275,7 +275,7 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 	started := time.Now().UTC().Add(-time.Hour)
 	first := CompletedGameRecord{
 		ID: uuid.NewString(), RoomCode: "ABC123", CompletionKind: "normal", RoundsPlayed: 2,
-		PlayerCount: 2, StartedAt: started, CompletedAt: started.Add(30 * time.Minute),
+		PlayerCount: 2, StartedAt: started, CompletedAt: started.Add(30 * time.Minute), PlaytimeSeconds: 30 * 60,
 		Players: []CompletedGamePlayerRecord{{
 			UserID: user.ID, Placement: 1, Won: true, RoundsPlayed: 2, RoundsWon: 2,
 			TurnsTaken: 8, CardsPlayed: 20, PointsInflicted: 80, RoundsOpened: 2, FastestOpeningTurn: 2,
@@ -332,7 +332,7 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 
 	second := CompletedGameRecord{
 		ID: uuid.NewString(), RoomCode: "XYZ789", CompletionKind: "normal", RoundsPlayed: 3,
-		PlayerCount: 2, StartedAt: started.Add(time.Hour), CompletedAt: started.Add(2 * time.Hour),
+		PlayerCount: 2, StartedAt: started.Add(time.Hour), CompletedAt: started.Add(2 * time.Hour), PlaytimeSeconds: 60 * 60,
 		Players: []CompletedGamePlayerRecord{{
 			UserID: user.ID, Placement: 2, RoundsPlayed: 3, RoundsWon: 1, Forfeited: true,
 			TurnsTaken: 5, CardsPlayed: 10, RoundsOpened: 1, FastestOpeningTurn: 3,
@@ -437,6 +437,26 @@ func TestStatisticsCheckpointMigrationUpgradesCompletedGames(t *testing.T) {
 	var status string
 	if err := pool.QueryRow(ctx, `SELECT status FROM games WHERE id = $1`, gameID).Scan(&status); err != nil || status != "completed" {
 		t.Fatalf("upgraded game status = %q, error = %v", status, err)
+	}
+	overnightGameID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at, completed_at)
+		VALUES ($1, 'OLD999', 'completed', 2, 2, NOW() - INTERVAL '20 hours', NOW())
+	`, overnightGameID); err != nil {
+		t.Fatalf("seed overnight game error = %v", err)
+	}
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(active playtime) error = %v", err)
+	}
+	var historicalPlaytime, overnightPlaytime int64
+	if err := pool.QueryRow(ctx, `SELECT active_playtime_seconds FROM games WHERE id = $1`, gameID).Scan(&historicalPlaytime); err != nil || historicalPlaytime != 60*60 {
+		t.Fatalf("historical active playtime = %d, error = %v; want 3600", historicalPlaytime, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT active_playtime_seconds FROM games WHERE id = $1`, overnightGameID).Scan(&overnightPlaytime); err != nil || overnightPlaytime != 0 {
+		t.Fatalf("overnight active playtime = %d, error = %v; want 0", overnightPlaytime, err)
+	}
+	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("migrator.Steps(-1 active playtime) error = %v", err)
 	}
 	checkpointID := uuid.NewString()
 	if _, err := pool.Exec(ctx, `

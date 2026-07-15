@@ -18,14 +18,15 @@ type Account struct {
 }
 
 type Game struct {
-	ID           pgtype.UUID        `json:"id"`
-	RoomCode     string             `json:"room_code"`
-	Status       string             `json:"status"`
-	RoundsPlayed int32              `json:"rounds_played"`
-	PlayerCount  int32              `json:"player_count"`
-	StartedAt    pgtype.Timestamptz `json:"started_at"`
-	CompletedAt  pgtype.Timestamptz `json:"completed_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	ID                    pgtype.UUID        `json:"id"`
+	RoomCode              string             `json:"room_code"`
+	Status                string             `json:"status"`
+	RoundsPlayed          int32              `json:"rounds_played"`
+	PlayerCount           int32              `json:"player_count"`
+	StartedAt             pgtype.Timestamptz `json:"started_at"`
+	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
+	ActivePlaytimeSeconds int64              `json:"active_playtime_seconds"`
+	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
 type GameBugReport struct {

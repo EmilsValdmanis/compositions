@@ -27,6 +27,7 @@ const (
 	playerEmoteTTL      = 4 * time.Second
 	endProposalTTL      = 90 * time.Second
 	endProposalCooldown = 30 * time.Second
+	statisticsIdleLimit = 15 * time.Minute
 	maxIssueLength      = 500
 )
 
@@ -87,6 +88,8 @@ type room struct {
 	conclusion               *gameConclusion
 	statisticsGameID         string
 	statisticsStartedAt      time.Time
+	statisticsPlaytime       time.Duration
+	statisticsActiveSince    time.Time
 	statisticsSaved          bool
 	statisticsDirty          bool
 	endProposalCooldownUntil time.Time
@@ -150,6 +153,8 @@ type persistedRoom struct {
 	Conclusion               *persistedGameConclusion    `json:"conclusion,omitempty"`
 	StatisticsGameID         string                      `json:"statisticsGameId,omitempty"`
 	StatisticsStartedAt      time.Time                   `json:"statisticsStartedAt,omitempty"`
+	StatisticsPlaytime       time.Duration               `json:"statisticsPlaytime,omitempty"`
+	StatisticsActiveSince    time.Time                   `json:"statisticsActiveSince,omitempty"`
 	StatisticsSaved          bool                        `json:"statisticsSaved,omitempty"`
 	StatisticsDirty          bool                        `json:"statisticsDirty,omitempty"`
 	EndProposalCooldownUntil time.Time                   `json:"endProposalCooldownUntil,omitempty"`
@@ -526,6 +531,8 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	if startingGame {
 		room.statisticsGameID = uuid.NewString()
 		room.statisticsStartedAt = time.Now().UTC()
+		room.statisticsPlaytime = 0
+		room.statisticsActiveSince = time.Time{}
 		room.statisticsSaved = false
 		room.statisticsDirty = true
 	}
@@ -1083,6 +1090,7 @@ func (l *lobbyServer) disconnectWithEmitter(sessionID string, conn *websocket.Co
 
 	player := room.playerByID(session.playerID)
 	player.connected = false
+	l.persistLocked("session disconnected")
 
 	roomState = room.snapshot()
 	recipients = room.connectedConns(l.sessions)
@@ -1165,6 +1173,7 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 			endProposalCooldownUntil: persistedRoom.EndProposalCooldownUntil,
 			statisticsGameID:         persistedRoom.StatisticsGameID,
 			statisticsStartedAt:      persistedRoom.StatisticsStartedAt,
+			statisticsPlaytime:       persistedRoom.StatisticsPlaytime,
 			statisticsSaved:          persistedRoom.StatisticsSaved,
 			statisticsDirty:          persistedRoom.StatisticsDirty,
 		}
@@ -1251,6 +1260,10 @@ func (l *lobbyServer) persistLocked(reason string) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
+	now := time.Now().UTC()
+	for _, room := range l.rooms {
+		room.updateStatisticsPlaytime(now)
+	}
 	// Persist the authoritative game state with its dirty checkpoint marker
 	// before writing derived statistics. If this write fails, a statistics row
 	// must not get ahead of the state we would restore after a restart.
@@ -1325,7 +1338,8 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 		}
 		checkpoint := database.GameCheckpointRecord{
 			ID: room.statisticsGameID, RoomCode: room.code, RoundsPlayed: room.gameState.RoundNumber(),
-			PlayerCount: len(results), StartedAt: startedAt, Players: players,
+			PlayerCount: len(results), StartedAt: startedAt,
+			PlaytimeSeconds: int64(room.statisticsPlaytime / time.Second), Players: players,
 		}
 		var err error
 		switch {
@@ -1337,7 +1351,8 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 			err = store.SaveCompletedGame(ctx, database.CompletedGameRecord{
 				ID: checkpoint.ID, RoomCode: checkpoint.RoomCode, CompletionKind: kind,
 				RoundsPlayed: checkpoint.RoundsPlayed, PlayerCount: checkpoint.PlayerCount,
-				StartedAt: checkpoint.StartedAt, CompletedAt: time.Now().UTC(), Players: players,
+				StartedAt: checkpoint.StartedAt, CompletedAt: time.Now().UTC(),
+				PlaytimeSeconds: checkpoint.PlaytimeSeconds, Players: players,
 			})
 		case phase == game.PhaseGameOver:
 			status := "abandoned"
@@ -1402,6 +1417,8 @@ func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
 			EndProposalCooldownUntil: room.endProposalCooldownUntil,
 			StatisticsGameID:         room.statisticsGameID,
 			StatisticsStartedAt:      room.statisticsStartedAt,
+			StatisticsPlaytime:       room.statisticsPlaytime,
+			StatisticsActiveSince:    room.statisticsActiveSince,
 			StatisticsSaved:          room.statisticsSaved,
 			StatisticsDirty:          room.statisticsDirty,
 		}
@@ -1794,6 +1811,8 @@ func (r *room) resetForLobby() error {
 	r.conclusion = nil
 	r.statisticsGameID = ""
 	r.statisticsStartedAt = time.Time{}
+	r.statisticsPlaytime = 0
+	r.statisticsActiveSince = time.Time{}
 	r.statisticsSaved = false
 	r.statisticsDirty = false
 	r.clearTurnTracking()
@@ -2110,6 +2129,26 @@ func (r *room) allPlayersConnected() bool {
 		}
 	}
 	return true
+}
+
+// updateStatisticsPlaytime settles the current active interval, then starts a
+// new one only while a resumable game has every active player online. Restored
+// rooms deliberately do not restore statisticsActiveSince because all
+// connections start offline after a server restart.
+func (r *room) updateStatisticsPlaytime(now time.Time) {
+	if r == nil {
+		return
+	}
+	if !r.statisticsActiveSince.IsZero() {
+		if elapsed := now.Sub(r.statisticsActiveSince); elapsed > 0 {
+			r.statisticsPlaytime += min(elapsed, statisticsIdleLimit)
+		}
+		r.statisticsActiveSince = time.Time{}
+	}
+	phase := r.gameStatePhase()
+	if r.statisticsGameID != "" && phase != game.PhaseLobby && phase != game.PhaseGameOver && r.allPlayersConnected() {
+		r.statisticsActiveSince = now
+	}
 }
 
 func (r *room) isCurrentTurn(playerID string) bool {
