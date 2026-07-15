@@ -243,13 +243,13 @@ export function GameBoardTable({
       ref={setNodeRef}
       data-over={isOverNewCompositionBoard || undefined}
       className={cn(
-        "h-full min-h-0 min-w-0 max-w-full overflow-auto transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
+        "h-full min-h-0 min-w-0 max-w-full overflow-hidden transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
         canCompose && isDraggingHandCard && isOverNewCompositionBoard
           ? "bg-primary/5 ring-2 ring-primary/70"
           : null,
       )}
     >
-      <CardContent className="flex min-h-full flex-1 flex-col justify-center gap-3 px-2 py-2 xl:gap-6 xl:px-3 xl:py-3">
+      <CardContent className="flex h-full min-h-0 min-w-0 flex-1 flex-col justify-center gap-3 overflow-auto overscroll-contain px-2 py-2 xl:gap-6 xl:px-3 xl:py-3">
         <div className="min-h-0 overflow-visible">
           {hasVisibleCompositions ? (
             <div className="flex min-h-0 flex-wrap items-center justify-start gap-2 overflow-visible p-1 sm:justify-center xl:gap-4">

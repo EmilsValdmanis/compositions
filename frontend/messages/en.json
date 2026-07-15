@@ -16,6 +16,7 @@
   "mock_other_player_turn": "Other player turn",
   "mock_other_player_turn_description": "Casey is the active player. Use this to inspect how the board reads when you are not the player making moves, while still seeing their drafted additions and new composition previews.",
   "dev_preview_mode": "Development preview mode",
+  "start": "Start",
   "board": "Board",
   "deal": "Deal",
   "results": "Results",

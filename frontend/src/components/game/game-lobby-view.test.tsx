@@ -170,6 +170,8 @@ describe("GameLobbyView", () => {
       onRoomCodeChange,
     });
 
+    expect(view.queryByText("Players")).toBeNull();
+
     fireEvent.click(view.getByRole("button", { name: "Create room" }));
     fireEvent.input(view.getByPlaceholderText("Room code"), {
       target: { value: "game7" },

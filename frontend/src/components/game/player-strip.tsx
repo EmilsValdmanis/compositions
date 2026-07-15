@@ -89,7 +89,7 @@ export function PlayerStrip({
         "grid w-full min-w-0 max-w-full gap-2",
         mobileHorizontal
           ? "grid-flow-col auto-cols-[minmax(9rem,1fr)] overflow-x-auto overscroll-x-contain pb-1 xl:grid-flow-row xl:auto-cols-auto xl:overflow-visible xl:pb-0"
-          : null,
+          : "min-h-0 flex-1 content-start overflow-y-auto overscroll-y-contain pr-1",
       )}
     >
       {players.map((player) => {
