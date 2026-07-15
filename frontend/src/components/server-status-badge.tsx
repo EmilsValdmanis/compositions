@@ -68,11 +68,15 @@ export function ServerStatusBadge() {
         <Separator />
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-xs/5 font-normal text-muted-foreground">{m.connection()}</Label>
+            <Label className="text-[0.7rem]/4 font-normal text-muted-foreground md:text-xs/5">
+              {m.connection()}
+            </Label>
             <Badge variant={connectionVariant}>{connectionLabels[state.connectionStatus]()}</Badge>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <Label className="text-xs/5 font-normal text-muted-foreground">{m.server()}</Label>
+            <Label className="text-[0.7rem]/4 font-normal text-muted-foreground md:text-xs/5">
+              {m.server()}
+            </Label>
             <Badge variant={serverVariants[serverStatus]} className="gap-1">
               {isCheckingServer && <Spinner className="size-3" />}
               <span className="capitalize">

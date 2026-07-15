@@ -19,7 +19,7 @@ function BrandTitle() {
 function ProtectedLayoutTitle() {
   return (
     <div className="min-w-0 text-center">
-      <H6 className="truncate tracking-[0.16em] uppercase text-foreground/90 md:text-base/6">
+      <H6 className="truncate text-sm/5 tracking-[0.16em] uppercase text-foreground/90 md:text-base/6">
         <BrandTitle />
       </H6>
     </div>

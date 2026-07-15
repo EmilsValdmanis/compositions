@@ -48,7 +48,7 @@ export function ActivityLabel({
   return (
     <Caption
       className={cn(
-        "flex h-5 items-center gap-1 text-[0.65rem]/4 font-medium tracking-wide uppercase",
+        "flex h-5 items-center gap-1 text-[0.6rem]/4 font-medium tracking-wide uppercase md:text-[0.65rem]/4",
         offsetClassName,
         className,
       )}

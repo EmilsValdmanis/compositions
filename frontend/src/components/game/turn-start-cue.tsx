@@ -83,19 +83,19 @@ export function TurnStartCue({
               <div className="min-w-0">
                 <Caption
                   data-slot="alert-description"
-                  className="mb-1 flex items-center gap-2 text-[0.55rem]/none font-medium tracking-[0.2em] uppercase"
+                  className="mb-1 flex items-center gap-2 text-[0.5rem]/none font-medium tracking-[0.2em] uppercase md:text-[0.55rem]/none"
                 >
                   <span className="size-1.5 rotate-45 bg-primary" aria-hidden="true" />
                   {m.table_is_yours()}
                 </Caption>
                 <H4
-                  className="truncate text-[1.05rem]/none font-bold tracking-[-0.04em] uppercase"
+                  className="truncate text-[0.95rem]/none font-bold tracking-[-0.04em] uppercase md:text-[1.05rem]/none"
                   data-slot="alert-title"
                 >
                   {m.your_turn()}
                 </H4>
               </div>
-              <Caption className="shrink-0 text-right text-[0.5rem]/[1.45] tracking-[0.16em] uppercase tabular-nums">
+              <Caption className="shrink-0 text-right text-[0.45rem]/[1.45] tracking-[0.16em] uppercase tabular-nums md:text-[0.5rem]/[1.45]">
                 R{String(round).padStart(2, "0")}
                 <br />T{String(turnNumber).padStart(2, "0")}
               </Caption>

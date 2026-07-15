@@ -212,10 +212,6 @@ export function GameLobbyView({
             {players.length ? (
               <div className="flex items-center gap-2">
                 <PlayerEmotePicker onSendEmote={onSendEmote} />
-                <Badge variant="outline">
-                  <AnimatedNumber value={players.length} />{" "}
-                  {m.seated_players_label({ count: players.length })}
-                </Badge>
               </div>
             ) : null}
           </div>

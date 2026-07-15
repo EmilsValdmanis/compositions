@@ -109,7 +109,10 @@ export function PlayerProfilePage({
             <Avatar className="size-16 sm:size-20">
               {profile.imageUrl ? <AvatarImage src={profile.imageUrl} alt={profile.name} /> : null}
               <AvatarFallback>
-                <P size="lg" className="font-heading text-xl/7 font-semibold tracking-tight">
+                <P
+                  size="lg"
+                  className="font-heading text-lg/6 font-semibold tracking-tight md:text-xl/7"
+                >
                   {getUserInitials(profile.name)}
                 </P>
               </AvatarFallback>

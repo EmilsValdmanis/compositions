@@ -24,7 +24,10 @@ function H1({ className, ...props }: HeadingProps<"h1">) {
 function H2({ className, ...props }: HeadingProps<"h2">) {
   return (
     <h2
-      className={cn("font-heading text-2xl/8 font-semibold tracking-tight text-balance", className)}
+      className={cn(
+        "font-heading text-xl/7 font-semibold tracking-tight text-balance md:text-2xl/8",
+        className,
+      )}
       {...props}
     />
   );
@@ -33,7 +36,10 @@ function H2({ className, ...props }: HeadingProps<"h2">) {
 function H3({ className, ...props }: HeadingProps<"h3">) {
   return (
     <h3
-      className={cn("font-heading text-xl/7 font-semibold tracking-tight text-balance", className)}
+      className={cn(
+        "font-heading text-lg/6 font-semibold tracking-tight text-balance md:text-xl/7",
+        className,
+      )}
       {...props}
     />
   );
@@ -42,7 +48,10 @@ function H3({ className, ...props }: HeadingProps<"h3">) {
 function H4({ className, ...props }: HeadingProps<"h4">) {
   return (
     <h4
-      className={cn("font-heading text-lg/6 font-semibold tracking-tight text-balance", className)}
+      className={cn(
+        "font-heading text-base/6 font-semibold tracking-tight text-balance md:text-lg/6",
+        className,
+      )}
       {...props}
     />
   );
@@ -51,7 +60,7 @@ function H4({ className, ...props }: HeadingProps<"h4">) {
 function H5({ className, ...props }: HeadingProps<"h5">) {
   return (
     <h5
-      className={cn("font-heading text-base/6 font-semibold text-balance", className)}
+      className={cn("font-heading text-sm/5 font-semibold text-balance md:text-base/6", className)}
       {...props}
     />
   );
@@ -59,17 +68,20 @@ function H5({ className, ...props }: HeadingProps<"h5">) {
 
 function H6({ className, ...props }: HeadingProps<"h6">) {
   return (
-    <h6 className={cn("font-heading text-sm/5 font-semibold text-balance", className)} {...props} />
+    <h6
+      className={cn("font-heading text-xs/4 font-semibold text-balance md:text-sm/5", className)}
+      {...props}
+    />
   );
 }
 
-const paragraphVariants = cva("text-sm font-normal tracking-normal", {
+const paragraphVariants = cva("font-normal tracking-normal", {
   variants: {
     size: {
-      xs: "text-xs/5",
-      sm: "text-sm/5",
-      default: "text-sm/6",
-      lg: "text-base/7",
+      xs: "text-[0.7rem]/4 md:text-xs/5",
+      sm: "text-xs/5 md:text-sm/5",
+      default: "text-xs/5 md:text-sm/6",
+      lg: "text-sm/6 md:text-base/7",
     },
   },
   defaultVariants: {
@@ -86,7 +98,10 @@ function P({ className, size, ...props }: PProps) {
 function Caption({ className, ...props }: ComponentProps<"p">) {
   return (
     <p
-      className={cn("text-xs/5 font-normal tracking-normal text-muted-foreground", className)}
+      className={cn(
+        "text-[0.7rem]/4 font-normal tracking-normal text-muted-foreground md:text-xs/5",
+        className,
+      )}
       {...props}
     />
   );

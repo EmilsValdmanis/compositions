@@ -17,7 +17,7 @@ export function AuthLayout() {
 
       <div className="flex grow flex-col items-center justify-center gap-6 px-6">
         <div className="flex max-w-2xl flex-col items-center gap-3 text-center">
-          <H1 className="relative text-4xl/none font-bold sm:text-7xl/none bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
+          <H1 className="relative text-4xl/none font-bold md:text-5xl/none bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
             {m.app_name()}
           </H1>
           <P className="max-w-xl text-muted-foreground">{m.social_description()}</P>
