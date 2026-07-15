@@ -16,7 +16,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "#/components/ui/card";
 import {
   Table,
   TableBody,
@@ -208,8 +215,8 @@ export function GameResultsView({
   }, [isWinner]);
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="border border-border/70 shadow-sm">
+    <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 p-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      <Card className="min-h-0 border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -219,7 +226,7 @@ export function GameResultsView({
             <Badge variant={isGameOver ? "default" : "secondary"}>{resultBadge}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="grid gap-4">
+        <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto overscroll-y-contain">
           <div className="overflow-hidden rounded-lg border border-border/70">
             <Table>
               <TableHeader>
@@ -309,13 +316,7 @@ export function GameResultsView({
             </Table>
           </div>
 
-          {isGameOver ? (
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <Button type="button" onClick={onReturnToLobby}>
-                {m.back_to_lobby()}
-              </Button>
-            </div>
-          ) : dealChoice.pendingDealChoice ? (
+          {!isGameOver && dealChoice.pendingDealChoice ? (
             <DealChoicePanel
               players={players}
               pendingDealChoice={dealChoice.pendingDealChoice}
@@ -323,19 +324,26 @@ export function GameResultsView({
               isDealChooser={dealChoice.isDealChooser}
               onChooseDealing={onChooseDealing}
             />
-          ) : (
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              {!isHost ? (
-                <P size="sm" className="text-muted-foreground">
-                  {m.waiting_for_host()}
-                </P>
-              ) : null}
-              <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
-                {m.start_next_round()}
-              </Button>
-            </div>
-          )}
+          ) : null}
         </CardContent>
+        {isGameOver ? (
+          <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
+            <Button type="button" onClick={onReturnToLobby}>
+              {m.back_to_lobby()}
+            </Button>
+          </CardFooter>
+        ) : dealChoice.pendingDealChoice ? null : (
+          <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
+            {!isHost ? (
+              <P size="sm" className="text-muted-foreground">
+                {m.waiting_for_host()}
+              </P>
+            ) : null}
+            <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
+              {m.start_next_round()}
+            </Button>
+          </CardFooter>
+        )}
       </Card>
 
       <GameBoardPlayers

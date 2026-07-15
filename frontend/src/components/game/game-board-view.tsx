@@ -308,7 +308,7 @@ function GameBoardLayout({
   return (
     <div
       ref={boardRef}
-      className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(8rem,1fr)_auto_auto] gap-2 xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)_auto_auto] xl:gap-4 [@media(max-height:600px)]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] [@media(max-height:600px)]:grid-rows-[auto_minmax(0,1fr)_5.25rem] [@media(max-height:600px)]:gap-2"
+      className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(8rem,1fr)_auto_auto] gap-2 p-1 xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)_auto_auto] xl:gap-4 [@media(max-height:600px)]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] [@media(max-height:600px)]:grid-rows-[auto_minmax(0,1fr)_5.25rem] [@media(max-height:600px)]:gap-2"
     >
       <div className="col-start-1 row-start-1 min-w-0 xl:col-start-2 xl:row-start-1 xl:flex xl:min-h-0 [@media(max-height:600px)]:col-span-2 [@media(max-height:600px)]:col-start-1 [@media(max-height:600px)]:row-start-1">
         <GameBoardPlayers

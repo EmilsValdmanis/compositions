@@ -16,6 +16,7 @@
   "mock_other_player_turn": "Cita spēlētāja gājiens",
   "mock_other_player_turn_description": "Aktīvais spēlētājs ir Casey. Izmantojiet šo skatu, lai pārbaudītu galdu, kad gājienu veic cits spēlētājs, vienlaikus redzot viņa sagatavotos papildinājumus un jauno kompozīciju priekšskatījumus.",
   "dev_preview_mode": "Izstrādes priekšskatījuma režīms",
+  "start": "Sākums",
   "board": "Galds",
   "deal": "Dalīšana",
   "results": "Rezultāti",

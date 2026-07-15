@@ -41,7 +41,7 @@ export function GameBoardPlayers({
     <Card
       size="sm"
       className={cn(
-        "min-w-0 shrink-0 overflow-hidden [--card-spacing:--spacing(2)] xl:grow xl:overflow-y-auto xl:[--card-spacing:--spacing(4)]",
+        "min-w-0 shrink-0 overflow-hidden [--card-spacing:--spacing(2)] xl:grow xl:[--card-spacing:--spacing(4)]",
         compactOnMobile ? "py-2! xl:py-4!" : "[@media(max-height:600px)]:h-full",
       )}
     >
@@ -68,11 +68,7 @@ export function GameBoardPlayers({
                 )}
                 <HugeiconsIcon icon={ChevronDownIcon} className="ml-auto size-4" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                sideOffset={8}
-                className="w-[min(24rem,calc(100vw-2rem))] p-2"
-              >
+              <DropdownMenuContent>
                 <PlayerStrip
                   players={players}
                   game={game}
@@ -113,7 +109,10 @@ export function GameBoardPlayers({
         </CardAction>
       </CardHeader>
       <CardContent
-        className={cn("h-full min-w-0 flex-col gap-3", compactOnMobile ? "hidden xl:flex" : "flex")}
+        className={cn(
+          "min-h-0 min-w-0 flex-1 flex-col gap-3",
+          compactOnMobile ? "hidden xl:flex" : "flex",
+        )}
       >
         <PlayerStrip
           players={players}

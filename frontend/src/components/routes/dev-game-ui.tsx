@@ -2,6 +2,7 @@ import { useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
+import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
@@ -17,7 +18,7 @@ import {
 import { m } from "#/paraglide/messages.js";
 
 const scenarios = mockScenarios;
-type DevViewMode = "board" | "deal" | "results";
+type DevViewMode = "start" | "board" | "deal" | "results";
 
 function cloneCards(cards: CardSnapshot[]) {
   return cards.map((card) => ({ ...card }));
@@ -293,7 +294,9 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
 export function DevGameUi() {
   const scenario = scenarios[0];
   const [gameOverride, setGameOverride] = useState<GameSnapshot | null>(null);
-  const [viewMode, setViewMode] = useState<DevViewMode>("board");
+  const [viewMode, setViewMode] = useState<DevViewMode>("start");
+  const [lobbyRoom, setLobbyRoom] = useState<RoomSnapshot | null>(null);
+  const [lobbyRoomCode, setLobbyRoomCode] = useState("");
 
   const players = scenario?.players ?? [];
   const room = scenario ? cloneRoom(scenario.room) : null;
@@ -375,6 +378,18 @@ export function DevGameUi() {
 
   function handleChooseDealing(_choice: DealingChoiceRequest | string) {}
 
+  function enterLobbyRoom(code: string) {
+    if (!room) return;
+
+    setLobbyRoom({
+      ...cloneRoom(room),
+      code: code.trim().toUpperCase() || room.code,
+      phase: "lobby",
+      pendingDealChoice: undefined,
+    });
+    setLobbyRoomCode("");
+  }
+
   return (
     <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-2 md:gap-4 [@media(max-height:600px)]:gap-2">
       <div className="flex shrink-0 items-center justify-end">
@@ -384,6 +399,7 @@ export function DevGameUi() {
           className="flex-none"
         >
           <TabsList aria-label={m.dev_preview_mode()}>
+            <TabsTrigger value="start">{m.start()}</TabsTrigger>
             <TabsTrigger value="board">{m.board()}</TabsTrigger>
             <TabsTrigger value="deal">{m.deal()}</TabsTrigger>
             <TabsTrigger value="results">{m.results()}</TabsTrigger>
@@ -392,7 +408,37 @@ export function DevGameUi() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:overflow-visible [@media(max-height:600px)]:overflow-hidden">
-        {viewMode === "deal" ? (
+        {viewMode === "start" ? (
+          <div className="flex min-h-0 flex-1 overflow-auto">
+            <GameLobbyView
+              room={lobbyRoom}
+              game={null}
+              completedGame={null}
+              players={lobbyRoom?.players ?? []}
+              roomCode={lobbyRoomCode}
+              roomActions={{
+                canCreateRoom: lobbyRoom == null,
+                canJoinRoom: lobbyRoom == null && lobbyRoomCode.trim().length > 0,
+                canLeaveRoom: lobbyRoom != null,
+                canStartGame: lobbyRoom != null,
+              }}
+              dealChoice={{
+                pendingDealChoice: null,
+                dealChooserName: null,
+                isDealChooser: false,
+              }}
+              onRoomCodeChange={setLobbyRoomCode}
+              onCreateRoom={() => enterLobbyRoom(room.code)}
+              onJoinRoom={enterLobbyRoom}
+              onStartGame={() => setViewMode("board")}
+              onChooseDealing={handleChooseDealing}
+              onLeaveRoom={() => setLobbyRoom(null)}
+              onSendEmote={() => {}}
+              onCopyRoomCode={() => {}}
+              onCopyRoomLink={() => {}}
+            />
+          </div>
+        ) : viewMode === "deal" ? (
           <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-2 py-6">
             <DealChoicePanel
               players={players}

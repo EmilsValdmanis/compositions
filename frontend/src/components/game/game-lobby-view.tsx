@@ -24,6 +24,7 @@ import {
 import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
 import { Caption, H2 } from "#/components/typography";
+import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
 type AsyncAction = () => Promise<void> | void;
@@ -85,7 +86,12 @@ export function GameLobbyView({
   const connectedCount = players.filter((player) => player.connected).length;
 
   return (
-    <div className="mx-auto my-auto grid w-full max-w-5xl gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    <div
+      className={cn(
+        "mx-auto my-auto grid w-full gap-4 p-1",
+        room ? "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]" : "max-w-2xl",
+      )}
+    >
       <Card className="min-w-0 border border-border/70 shadow-sm">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -202,30 +208,32 @@ export function GameLobbyView({
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 border border-border/70 shadow-sm">
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>{m.players()}</CardTitle>
-              <CardDescription>{players.length ? m.seats() : m.no_room_yet()}</CardDescription>
-            </div>
-            {players.length ? (
-              <div className="flex items-center gap-2">
-                <PlayerEmotePicker onSendEmote={onSendEmote} />
+      {room ? (
+        <Card className="min-w-0 border border-border/70 shadow-sm">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>{m.players()}</CardTitle>
+                <CardDescription>{players.length ? m.seats() : m.no_room_yet()}</CardDescription>
               </div>
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardContent className="min-w-0">
-          {players.length ? (
-            <PlayerStrip players={players} game={game} />
-          ) : (
-            <Caption className="rounded-2xl border border-dashed border-border/70 p-6">
-              {m.create_or_join_room()}
-            </Caption>
-          )}
-        </CardContent>
-      </Card>
+              {players.length ? (
+                <div className="flex items-center gap-2">
+                  <PlayerEmotePicker onSendEmote={onSendEmote} />
+                </div>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent className="min-w-0">
+            {players.length ? (
+              <PlayerStrip players={players} game={game} />
+            ) : (
+              <Caption className="rounded-2xl border border-dashed border-border/70 p-6">
+                {m.create_or_join_room()}
+              </Caption>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
