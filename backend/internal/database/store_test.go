@@ -370,6 +370,20 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 	if profile.ID != user.ID || profile.Name != user.Name || profile.GamesPlayed != 2 || profile.GamesWon != 1 || profile.TotalPlacement != 3 || profile.TotalPlaytimeSeconds != 90*60 || profile.RoundsPlayed != 5 || profile.LongestGameWinStreak != 1 {
 		t.Fatalf("player profile = %+v", profile)
 	}
+	history, err := store.GetPlayerGameHistory(ctx, user.ID, 1, 0)
+	if err != nil {
+		t.Fatalf("GetPlayerGameHistory(first page) error = %v", err)
+	}
+	if history.Total != 2 || len(history.Games) != 1 || history.Games[0].GameID != second.ID || history.Games[0].Placement != 2 || history.Games[0].PlaytimeSeconds != 60*60 {
+		t.Fatalf("first history page = %+v", history)
+	}
+	history, err = store.GetPlayerGameHistory(ctx, user.ID, 1, 1)
+	if err != nil {
+		t.Fatalf("GetPlayerGameHistory(second page) error = %v", err)
+	}
+	if history.Total != 2 || len(history.Games) != 1 || history.Games[0].GameID != first.ID || !history.Games[0].Won {
+		t.Fatalf("second history page = %+v", history)
+	}
 
 	unranked := GameCheckpointRecord{
 		ID: uuid.NewString(), RoomCode: "BUG123", RoundsPlayed: 2, PlayerCount: 2, StartedAt: started,

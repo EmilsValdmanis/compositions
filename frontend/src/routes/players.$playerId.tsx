@@ -1,7 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { PlayerProfilePage } from "#/components/routes/player-profile-page";
 import { AppNavigation } from "#/components/routes/protected-layout";
-import { getPlayerProfile } from "#/lib/player-profile";
+import { getPlayerGameHistory, getPlayerProfile } from "#/lib/player-profile";
 import { createSocialMeta } from "#/lib/social-meta";
 import { m } from "#/paraglide/messages.js";
 import { localizeHref } from "#/paraglide/runtime.js";
@@ -26,14 +26,18 @@ export const Route = createFileRoute("/players/$playerId")({
   loader: async ({ params }) => {
     const profile = await getPlayerProfile({ data: params.playerId });
     if (!profile) throw notFound();
-    return profile;
+    const history = await getPlayerGameHistory({
+      data: { playerId: params.playerId, page: 1, pageSize: 10 },
+    });
+    return { profile, history };
   },
   head: ({ loaderData, match }) => {
-    const title = loaderData ? `${loaderData.name} · ${m.app_name()}` : m.profile_title();
-    const description = profileDescription(loaderData);
+    const profile = loaderData?.profile;
+    const title = profile ? `${profile.name} · ${m.app_name()}` : m.profile_title();
+    const description = profileDescription(profile);
     const origin = match.context.siteOrigin;
-    const url = loaderData
-      ? `${origin}${localizeHref(`/players/${loaderData.id}`)}`
+    const url = profile
+      ? `${origin}${localizeHref(`/players/${profile.id}`)}`
       : `${origin}${localizeHref("/")}`;
 
     return {
@@ -45,14 +49,18 @@ export const Route = createFileRoute("/players/$playerId")({
 });
 
 function PlayerProfileRoute() {
-  const profile = Route.useLoaderData();
+  const { profile, history } = Route.useLoaderData();
   const { session } = Route.useRouteContext();
 
   return (
     <>
       <AppNavigation />
       <main className="flex min-h-0 w-full flex-1 flex-col p-4 md:p-6">
-        <PlayerProfilePage profile={profile} isOwnProfile={session?.user.id === profile.id} />
+        <PlayerProfilePage
+          profile={profile}
+          initialHistory={history}
+          isOwnProfile={session?.user.id === profile.id}
+        />
       </main>
     </>
   );
