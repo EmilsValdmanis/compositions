@@ -17,6 +17,7 @@ type GameCheckpointRecord struct {
 	ID, RoomCode              string
 	RoundsPlayed, PlayerCount int
 	StartedAt                 time.Time
+	PlaytimeSeconds           int64
 	Players                   []CompletedGamePlayerRecord
 }
 
@@ -25,6 +26,7 @@ type CompletedGameRecord struct {
 	CompletionKind            string
 	RoundsPlayed, PlayerCount int
 	StartedAt, CompletedAt    time.Time
+	PlaytimeSeconds           int64
 	Players                   []CompletedGamePlayerRecord
 }
 
@@ -106,7 +108,12 @@ func (s *UserStore) SaveUnrankedGame(ctx context.Context, checkpoint GameCheckpo
 			return err
 		}
 	}
-	_, err = tx.Exec(ctx, `UPDATE games SET status = $2, completed_at = $3, updated_at = NOW() WHERE id = $1 AND status = 'in_progress'`, gameID, status, completedAt)
+	_, err = tx.Exec(ctx, `
+		UPDATE games
+		SET status = $2, completed_at = $3,
+			active_playtime_seconds = GREATEST(active_playtime_seconds, $4), updated_at = NOW()
+		WHERE id = $1 AND status = 'in_progress'
+	`, gameID, status, completedAt, checkpoint.PlaytimeSeconds)
 	if err != nil {
 		return err
 	}
@@ -131,7 +138,8 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	}
 	checkpoint := GameCheckpointRecord{
 		ID: completed.ID, RoomCode: completed.RoomCode, RoundsPlayed: completed.RoundsPlayed,
-		PlayerCount: completed.PlayerCount, StartedAt: completed.StartedAt, Players: completed.Players,
+		PlayerCount: completed.PlayerCount, StartedAt: completed.StartedAt,
+		PlaytimeSeconds: completed.PlaytimeSeconds, Players: completed.Players,
 	}
 	gameID, err := validateCheckpoint(checkpoint)
 	if err != nil {
@@ -167,7 +175,12 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	if !active {
 		return tx.Commit(ctx)
 	}
-	tag, err := tx.Exec(ctx, `UPDATE games SET status = $2, completed_at = $3, updated_at = NOW() WHERE id = $1 AND status = 'in_progress'`, gameID, status, completed.CompletedAt)
+	tag, err := tx.Exec(ctx, `
+		UPDATE games
+		SET status = $2, completed_at = $3,
+			active_playtime_seconds = GREATEST(active_playtime_seconds, $4), updated_at = NOW()
+		WHERE id = $1 AND status = 'in_progress'
+	`, gameID, status, completed.CompletedAt, completed.PlaytimeSeconds)
 	if err != nil {
 		return err
 	}
@@ -194,6 +207,9 @@ func validateCheckpoint(checkpoint GameCheckpointRecord) (pgtype.UUID, error) {
 	}
 	if checkpoint.PlayerCount > 4 || len(checkpoint.Players) > checkpoint.PlayerCount || checkpoint.StartedAt.IsZero() {
 		return pgtype.UUID{}, errors.New("game checkpoint metadata is invalid")
+	}
+	if checkpoint.PlaytimeSeconds < 0 {
+		return pgtype.UUID{}, errors.New("game playtime cannot be negative")
 	}
 	var gameID pgtype.UUID
 	if err := gameID.Scan(checkpoint.ID); err != nil {
@@ -254,15 +270,16 @@ func validatePlayerStatistics(player CompletedGamePlayerRecord) error {
 
 func saveCheckpointHeader(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, checkpoint GameCheckpointRecord) (bool, error) {
 	tag, err := tx.Exec(ctx, `
-		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at)
-		VALUES ($1, $2, 'in_progress', $3, $4, $5)
+		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at, active_playtime_seconds)
+		VALUES ($1, $2, 'in_progress', $3, $4, $5, $6)
 		ON CONFLICT (id) DO UPDATE SET
 			room_code = EXCLUDED.room_code,
 			rounds_played = EXCLUDED.rounds_played,
 			player_count = EXCLUDED.player_count,
+			active_playtime_seconds = GREATEST(games.active_playtime_seconds, EXCLUDED.active_playtime_seconds),
 			updated_at = NOW()
 		WHERE games.status = 'in_progress'
-	`, gameID, strings.TrimSpace(checkpoint.RoomCode), checkpoint.RoundsPlayed, checkpoint.PlayerCount, checkpoint.StartedAt)
+	`, gameID, strings.TrimSpace(checkpoint.RoomCode), checkpoint.RoundsPlayed, checkpoint.PlayerCount, checkpoint.StartedAt, checkpoint.PlaytimeSeconds)
 	return tag.RowsAffected() > 0, err
 }
 

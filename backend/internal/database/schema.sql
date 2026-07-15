@@ -71,6 +71,7 @@ CREATE TABLE games (
     player_count INTEGER NOT NULL,
     started_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,
+    active_playtime_seconds BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

@@ -254,7 +254,6 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 	if store.saves == 0 {
 		t.Fatal("store.saves = 0; want persisted lobby state")
 	}
-
 	restoredPending := newLobbyServerWithStore(store)
 	if err := restoredPending.restorePersistedState(context.Background()); err != nil {
 		t.Fatalf("restorePersistedState(pending) error = %v", err)
@@ -271,6 +270,9 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 	if _, _, err := restoredPending.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: &cutSize}); err != nil {
 		t.Fatalf("chooseDealing(restored pending) error = %v", err)
 	}
+	pendingRoom.statisticsPlaytime = 37 * time.Minute
+	pendingRoom.statisticsActiveSince = time.Now().UTC()
+	restoredPending.persistLocked("playtime fixture")
 
 	restoredGame := newLobbyServerWithStore(store)
 	if err := restoredGame.restorePersistedState(context.Background()); err != nil {
@@ -282,6 +284,9 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 	}
 	if restoredRoom.players[0].connected || restoredRoom.players[1].connected {
 		t.Fatalf("restored connected flags = %v/%v; want both false before reconnect", restoredRoom.players[0].connected, restoredRoom.players[1].connected)
+	}
+	if restoredRoom.statisticsPlaytime < 37*time.Minute || !restoredRoom.statisticsActiveSince.IsZero() {
+		t.Fatalf("restored playtime = %v, active since = %v; want persisted duration and paused clock", restoredRoom.statisticsPlaytime, restoredRoom.statisticsActiveSince)
 	}
 
 	hostReconnect, hostRoomState, _, err := restoredGame.connectWithUser("", hostUser, nil)
