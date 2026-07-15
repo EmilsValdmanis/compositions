@@ -376,7 +376,7 @@ export function DevGameUi() {
   function handleChooseDealing(_choice: DealingChoiceRequest | string) {}
 
   return (
-    <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
+    <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-2 md:gap-4 [@media(max-height:600px)]:gap-2">
       <div className="flex shrink-0 items-center justify-end">
         <Tabs
           value={viewMode}
@@ -391,7 +391,7 @@ export function DevGameUi() {
         </Tabs>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-visible">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:overflow-visible [@media(max-height:600px)]:overflow-hidden">
         {viewMode === "deal" ? (
           <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-2 py-6">
             <DealChoicePanel

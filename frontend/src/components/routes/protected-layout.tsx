@@ -30,7 +30,7 @@ export function ProtectedLayout() {
   return (
     <>
       <AppNavigation />
-      <main className="flex min-h-0 w-full flex-1 flex-col gap-3 p-4 md:gap-4 md:p-6">
+      <main className="flex min-h-0 w-full flex-1 flex-col gap-2 p-2 md:gap-4 md:p-6 [@media(max-height:600px)]:gap-2 [@media(max-height:600px)]:p-2">
         <Outlet />
       </main>
     </>

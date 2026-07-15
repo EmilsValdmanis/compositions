@@ -306,8 +306,23 @@ function GameBoardLayout({
   onSendEmote: (emoji: string) => void;
 }) {
   return (
-    <div ref={boardRef} className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div
+      ref={boardRef}
+      className="grid min-h-0 min-w-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(8rem,1fr)_auto_auto] gap-2 xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)_auto_auto] xl:gap-4 [@media(max-height:600px)]:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] [@media(max-height:600px)]:grid-rows-[auto_minmax(0,1fr)_5.25rem] [@media(max-height:600px)]:gap-2"
+    >
+      <div className="col-start-1 row-start-1 min-w-0 xl:col-start-2 xl:row-start-1 xl:flex xl:min-h-0 [@media(max-height:600px)]:col-span-2 [@media(max-height:600px)]:col-start-1 [@media(max-height:600px)]:row-start-1">
+        <GameBoardPlayers
+          players={players}
+          game={game}
+          connectedPlayers={connectedPlayers}
+          hasDraftedCompositions={draftedCompositionsCount > 0}
+          compactOnMobile
+          onResetDraftCompositions={onResetDraftCompositions}
+          onSendEmote={onSendEmote}
+        />
+      </div>
+
+      <div className="col-start-1 row-start-2 min-h-0 min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 [@media(max-height:600px)]:col-start-1 [@media(max-height:600px)]:row-span-2 [@media(max-height:600px)]:row-start-2">
         <GameBoardTable
           tableCompositions={tableCompositions}
           newCompositions={newCompositions}
@@ -335,27 +350,20 @@ function GameBoardLayout({
           invalidCompositionIds={invalidCompositionIds}
           invalidEntryKeys={invalidEntryKeys}
         />
-
-        <div className="flex flex-col min-h-0 gap-4">
-          <GameBoardPlayers
-            players={players}
-            game={game}
-            connectedPlayers={connectedPlayers}
-            hasDraftedCompositions={draftedCompositionsCount > 0}
-            onResetDraftCompositions={onResetDraftCompositions}
-            onSendEmote={onSendEmote}
-          />
-          <GameBoardPiles
-            drawPileCount={game?.drawPileCount ?? 0}
-            topDiscardCard={topDiscardCard}
-            canDrawDeck={turnState.canDrawDeck}
-            canDrawDiscard={turnState.canDrawDiscard}
-            canDiscard={turnState.canDiscard}
-          />
-        </div>
       </div>
 
-      <div className="grid min-h-0 gap-4">
+      <div className="col-start-1 row-start-4 min-h-0 min-w-0 xl:col-start-2 xl:row-start-2 [@media(max-height:600px)]:col-start-2 [@media(max-height:600px)]:row-start-3">
+        <GameBoardPiles
+          drawPileCount={game?.drawPileCount ?? 0}
+          discardPileCount={game?.discardPile.length ?? 0}
+          topDiscardCard={topDiscardCard}
+          canDrawDeck={turnState.canDrawDeck}
+          canDrawDiscard={turnState.canDrawDiscard}
+          canDiscard={turnState.canDiscard}
+        />
+      </div>
+
+      <div className="col-start-1 row-start-3 grid min-h-0 min-w-0 shrink-0 xl:col-span-2 xl:row-start-3 [@media(max-height:600px)]:col-span-1 [@media(max-height:600px)]:col-start-2 [@media(max-height:600px)]:row-start-2">
         <GameBoardHand
           status={{
             hasGame: Boolean(game),

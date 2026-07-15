@@ -20,9 +20,15 @@ import { P } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
-function PlayerAvatar({ player }: { player: PlayerSnapshot }) {
+function PlayerAvatar({
+  player,
+  compactOnMobile = false,
+}: {
+  player: PlayerSnapshot;
+  compactOnMobile?: boolean;
+}) {
   const avatar = (
-    <Avatar className="shrink-0">
+    <Avatar className={cn("shrink-0", compactOnMobile ? "size-8 xl:size-10" : null)}>
       {player.imageUrl ? <AvatarImage src={player.imageUrl} alt={player.name} /> : null}
       <AvatarFallback>{getUserInitials(player.name)}</AvatarFallback>
       <AvatarBadge
@@ -68,15 +74,24 @@ export function PlayerStrip({
   game,
   showHostBadges = true,
   showTurnIndicator = true,
+  mobileHorizontal = false,
 }: {
   players: PlayerSnapshot[];
   game: GameSnapshot | null;
   showHostBadges?: boolean;
   showTurnIndicator?: boolean;
+  mobileHorizontal?: boolean;
 }) {
   const playerStates = game?.players ?? [];
   return (
-    <div className="grid w-full min-w-0 max-w-full gap-2">
+    <div
+      className={cn(
+        "grid w-full min-w-0 max-w-full gap-2",
+        mobileHorizontal
+          ? "grid-flow-col auto-cols-[minmax(9rem,1fr)] overflow-x-auto overscroll-x-contain pb-1 xl:grid-flow-row xl:auto-cols-auto xl:overflow-visible xl:pb-0"
+          : null,
+      )}
+    >
       {players.map((player) => {
         const gamePlayer = playerStates.find((item) => item.playerId === player.playerId);
         const isTurn = game?.turn.playerId === player.playerId;
@@ -86,11 +101,12 @@ export function PlayerStrip({
             key={player.playerId}
             className={cn(
               "relative grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-3xl border px-3 py-2",
+              mobileHorizontal ? "gap-2 px-2 py-1.5 xl:gap-3 xl:px-3 xl:py-2" : null,
               showActiveTurn ? "border-primary/40 bg-primary/10" : "border-border/60 bg-muted/20",
             )}
           >
             {player.activeEmote ? <PlayerEmoteBubble emote={player.activeEmote} /> : null}
-            <PlayerAvatar player={player} />
+            <PlayerAvatar player={player} compactOnMobile={mobileHorizontal} />
             <P
               size="sm"
               className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium"
