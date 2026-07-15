@@ -8,18 +8,29 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/EmilsValdmanis/compositions/internal/database"
 )
 
 type playerProfileTestStore struct {
 	userStore
-	profile database.PlayerProfileRecord
-	err     error
+	profile       database.PlayerProfileRecord
+	history       database.PlayerGameHistoryPage
+	err           error
+	historyErr    error
+	historyLimit  int
+	historyOffset int
 }
 
 func (s playerProfileTestStore) GetPlayerProfile(context.Context, string) (database.PlayerProfileRecord, error) {
 	return s.profile, s.err
+}
+
+func (s *playerProfileTestStore) GetPlayerGameHistory(_ context.Context, _ string, limit, offset int) (database.PlayerGameHistoryPage, error) {
+	s.historyLimit = limit
+	s.historyOffset = offset
+	return s.history, s.historyErr
 }
 
 func TestHandlePlayerProfile(t *testing.T) {
@@ -30,7 +41,7 @@ func TestHandlePlayerProfile(t *testing.T) {
 		CompositionsCreated:  41, SetsCreated: 17, RunsCreated: 24, PointsInflicted: 230,
 		LongestGameWinStreak: 2,
 	}
-	store := playerProfileTestStore{userStore: noopUserStore{}, profile: profile}
+	store := &playerProfileTestStore{userStore: noopUserStore{}, profile: profile}
 	server := newWSServerWithDependencies(nil, store, "")
 	request := httptest.NewRequest(http.MethodGet, "/api/players/"+profile.ID, nil)
 	response := httptest.NewRecorder()
@@ -49,6 +60,52 @@ func TestHandlePlayerProfile(t *testing.T) {
 	}
 	if payload.ID != profile.ID || payload.Name != profile.Name || payload.GamesPlayed != 8 || payload.GamesWon != 3 || payload.TotalPlaytimeSeconds != 5_430 {
 		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestHandlePlayerGameHistory(t *testing.T) {
+	playerID := "00000000-0000-0000-0000-000000000002"
+	completedAt := time.Date(2026, time.July, 15, 12, 30, 0, 0, time.UTC)
+	store := &playerProfileTestStore{
+		userStore: noopUserStore{},
+		history: database.PlayerGameHistoryPage{
+			Total: 23,
+			Games: []database.PlayerGameHistoryRecord{{
+				GameID: "00000000-0000-0000-0000-000000000003", Status: "completed",
+				CompletedAt: completedAt, Placement: 1, PlayerCount: 3, Won: true,
+				TotalPoints: 42, RoundsPlayed: 4, RoundsWon: 2, PlaytimeSeconds: 1800,
+			}},
+		},
+	}
+	server := newWSServerWithDependencies(nil, store, "")
+	response := httptest.NewRecorder()
+	server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games?page=2&pageSize=10", nil))
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d; want %d", response.Code, http.StatusOK)
+	}
+	if store.historyLimit != 10 || store.historyOffset != 10 {
+		t.Fatalf("pagination = limit:%d offset:%d; want 10/10", store.historyLimit, store.historyOffset)
+	}
+	var payload playerGameHistoryResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Page != 2 || payload.TotalItems != 23 || payload.TotalPages != 3 || len(payload.Games) != 1 || !payload.Games[0].Won {
+		t.Fatalf("payload = %+v", payload)
+	}
+}
+
+func TestHandlePlayerGameHistoryRejectsInvalidPagination(t *testing.T) {
+	playerID := "00000000-0000-0000-0000-000000000002"
+	server := newWSServerWithDependencies(nil, &playerProfileTestStore{userStore: noopUserStore{}}, "")
+	for _, query := range []string{"page=0", "page=nope", "pageSize=0", "pageSize=51"} {
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games?"+query, nil)
+		server.routes().ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("query %q status = %d; want %d", query, response.Code, http.StatusBadRequest)
+		}
 	}
 }
 
