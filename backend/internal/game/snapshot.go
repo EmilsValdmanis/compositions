@@ -49,13 +49,14 @@ type TurnActivitySnapshot struct {
 }
 
 type PlayerStateSnapshot struct {
-	PlayerID     string         `json:"playerId"`
-	HandCount    int            `json:"handCount"`
-	Hand         []CardSnapshot `json:"hand,omitempty"`
-	TotalPoints  int            `json:"totalPoints"`
-	PointsGained int            `json:"pointsGained"`
-	HasOpened    bool           `json:"hasOpened"`
-	Forfeited    bool           `json:"forfeited,omitempty"`
+	PlayerID              string         `json:"playerId"`
+	HandCount             int            `json:"handCount"`
+	Hand                  []CardSnapshot `json:"hand,omitempty"`
+	TotalPoints           int            `json:"totalPoints"`
+	PointsGained          int            `json:"pointsGained"`
+	UnadjustedTotalPoints int            `json:"unadjustedTotalPoints"`
+	HasOpened             bool           `json:"hasOpened"`
+	Forfeited             bool           `json:"forfeited,omitempty"`
 }
 
 type TurnSnapshot struct {
@@ -161,12 +162,13 @@ func playerStateSnapshots(players []*Player, revealHands bool) []PlayerStateSnap
 			continue
 		}
 		snapshot := PlayerStateSnapshot{
-			PlayerID:     player.ID,
-			HandCount:    len(player.hand.cards),
-			TotalPoints:  player.totalPoints,
-			PointsGained: player.pointsGained,
-			HasOpened:    player.hasOpened,
-			Forfeited:    player.forfeited,
+			PlayerID:              player.ID,
+			HandCount:             len(player.hand.cards),
+			TotalPoints:           player.totalPoints,
+			PointsGained:          player.pointsGained,
+			UnadjustedTotalPoints: player.unadjustedTotalPoints,
+			HasOpened:             player.hasOpened,
+			Forfeited:             player.forfeited,
 		}
 		if revealHands {
 			snapshot.Hand = cardSnapshots(player.hand.cards)

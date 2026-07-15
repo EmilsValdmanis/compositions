@@ -149,17 +149,27 @@ export function draftCompositionPointTotal(
     return null;
   }
 
-  if (type === "set") {
-    return draftSetPointTotal(cards);
+  const resolvedPoints =
+    type === "set"
+      ? draftSetPointTotal(cards)
+      : type === "run"
+        ? draftRunPointTotal(cards)
+        : // Match the backend's composition inference order: a valid set wins before
+          // the same cards are considered as an unordered run.
+          (draftSetPointTotal(cards) ?? draftRunPointTotal(cards));
+
+  if (resolvedPoints !== null) {
+    return resolvedPoints;
   }
 
-  if (type === "run") {
-    return draftRunPointTotal(cards);
+  // Natural cards already have an unambiguous face value while a draft is
+  // being assembled. Jokers stay unresolved until a valid composition tells
+  // us which card value they represent.
+  if (cards.some((card) => card.isJoker) || cards.some((card) => !hasValidNaturalIdentity(card))) {
+    return null;
   }
 
-  // Match the backend's composition inference order: a valid set wins before
-  // the same cards are considered as an unordered run.
-  return draftSetPointTotal(cards) ?? draftRunPointTotal(cards);
+  return cards.reduce((total, card) => total + rankPointValue(card.rank ?? 0), 0);
 }
 
 export function isValidDraftComposition(cards: CardSnapshot[], type?: CompositionSnapshot["type"]) {

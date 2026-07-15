@@ -1285,6 +1285,15 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 	if gotError.Message != "boom" {
 		t.Fatalf("gotError.Message = %q; want boom", gotError.Message)
 	}
+	server.writeActionError(errConn, "draft_update", errors.New("not your turn"))
+	gotActionErrorEnvelope := mustReadEnvelopeFromConn(t, errPeer)
+	var gotActionError errorEvent
+	if err := json.Unmarshal(gotActionErrorEnvelope.Data, &gotActionError); err != nil {
+		t.Fatalf("json.Unmarshal(action error event) error = %v", err)
+	}
+	if gotActionError.Action != "draft_update" || gotActionError.Code != "not_your_turn" {
+		t.Fatalf("gotActionError = %#v; want action-scoped draft rejection", gotActionError)
+	}
 
 	roomConnA, roomPeerA, closeRoomPairA := newSocketPair(t)
 	defer closeRoomPairA()
@@ -1945,9 +1954,9 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 		t.Fatalf("draft composition cardPlacements = %#v; want card-aligned metadata", cardPlacements)
 	}
 	mustSendEnvelope(t, guestConn, "draft_update", draftUpdateRequest{})
-	mustReadError(t, guestConn, "not your turn")
+	mustReadActionError(t, guestConn, "draft_update", "not your turn")
 	mustSendEnvelope(t, hostConn, "draft_update", draftUpdateRequest{Compositions: []draftCompositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: int(game.Hearts)}}}}})
-	mustReadError(t, hostConn, "invalid card rank")
+	mustReadActionError(t, hostConn, "draft_update", "invalid card rank")
 	_ = guestConnected
 }
 
@@ -1962,7 +1971,7 @@ func TestWebSocketDraftUpdateRequiresValidSessionPayload(t *testing.T) {
 	if err := conn.WriteJSON(wsEnvelope{Type: "draft_update"}); err != nil {
 		t.Fatalf("WriteJSON(draft_update missing data) error = %v", err)
 	}
-	mustReadError(t, conn, "missing data")
+	mustReadActionError(t, conn, "draft_update", "missing data")
 }
 
 func mustReadActionBroadcast(t *testing.T, conn *websocket.Conn, action, playerID string) gameStateEvent {

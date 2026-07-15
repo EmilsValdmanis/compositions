@@ -13,6 +13,7 @@ func TestGameStatePersistenceSnapshotRoundTrips(t *testing.T) {
 	first.hand.cards = []Card{NewCard(Three, Clubs), NewCard(Four, Clubs)}
 	first.totalPoints = 10
 	first.pointsGained = 5
+	first.unadjustedTotalPoints = 15
 	first.hasOpened = true
 	second := NewPlayer()
 	second.ID = "second"

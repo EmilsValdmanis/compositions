@@ -23,13 +23,14 @@ type PersistenceSnapshot struct {
 }
 
 type PersistencePlayerSnapshot struct {
-	ID           string               `json:"id"`
-	Hand         []CardSnapshot       `json:"hand"`
-	TotalPoints  int                  `json:"totalPoints"`
-	PointsGained int                  `json:"pointsGained"`
-	HasOpened    bool                 `json:"hasOpened"`
-	Forfeited    bool                 `json:"forfeited,omitempty"`
-	Statistics   PlayerGameStatistics `json:"statistics,omitempty"`
+	ID                    string               `json:"id"`
+	Hand                  []CardSnapshot       `json:"hand"`
+	TotalPoints           int                  `json:"totalPoints"`
+	PointsGained          int                  `json:"pointsGained"`
+	UnadjustedTotalPoints int                  `json:"unadjustedTotalPoints"`
+	HasOpened             bool                 `json:"hasOpened"`
+	Forfeited             bool                 `json:"forfeited,omitempty"`
+	Statistics            PlayerGameStatistics `json:"statistics,omitempty"`
 }
 
 type PersistenceCompositionSnapshot struct {
@@ -60,13 +61,14 @@ func (gs *GameState) PersistenceSnapshot() PersistenceSnapshot {
 			hand = cardSnapshots(player.hand.cards)
 		}
 		players = append(players, PersistencePlayerSnapshot{
-			ID:           player.ID,
-			Hand:         hand,
-			TotalPoints:  player.totalPoints,
-			PointsGained: player.pointsGained,
-			HasOpened:    player.hasOpened,
-			Forfeited:    player.forfeited,
-			Statistics:   player.statistics,
+			ID:                    player.ID,
+			Hand:                  hand,
+			TotalPoints:           player.totalPoints,
+			PointsGained:          player.pointsGained,
+			UnadjustedTotalPoints: player.unadjustedTotalPoints,
+			HasOpened:             player.hasOpened,
+			Forfeited:             player.forfeited,
+			Statistics:            player.statistics,
 		})
 	}
 
@@ -146,13 +148,14 @@ func RestoreGameState(snapshot PersistenceSnapshot) (*GameState, error) {
 			return nil, fmt.Errorf("restore hand for player %q: %w", playerSnapshot.ID, err)
 		}
 		players = append(players, &Player{
-			ID:           playerSnapshot.ID,
-			hand:         &Hand{cards: handCards},
-			totalPoints:  playerSnapshot.TotalPoints,
-			pointsGained: playerSnapshot.PointsGained,
-			hasOpened:    playerSnapshot.HasOpened,
-			forfeited:    playerSnapshot.Forfeited,
-			statistics:   playerSnapshot.Statistics,
+			ID:                    playerSnapshot.ID,
+			hand:                  &Hand{cards: handCards},
+			totalPoints:           playerSnapshot.TotalPoints,
+			pointsGained:          playerSnapshot.PointsGained,
+			unadjustedTotalPoints: playerSnapshot.UnadjustedTotalPoints,
+			hasOpened:             playerSnapshot.HasOpened,
+			forfeited:             playerSnapshot.Forfeited,
+			statistics:            playerSnapshot.Statistics,
 		})
 	}
 	if len(players) > snapshot.MaxPlayers {

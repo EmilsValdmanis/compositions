@@ -90,6 +90,7 @@ export type PlayerStateSnapshot = {
   hand?: CardSnapshot[];
   totalPoints: number;
   pointsGained: number;
+  unadjustedTotalPoints?: number;
   hasOpened: boolean;
   forfeited?: boolean;
 };
@@ -332,7 +333,7 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
     const code = data?.code ?? "internal_error";
     const developerMessage =
       typeof data?.message === "string" && data.message !== "" ? data.message : code;
-    if (current.lastEvent === "draft_update" && code === "not_your_turn") {
+    if (data?.action === "draft_update") {
       return clearError(current, {
         lastEvent: "error",
       });
@@ -440,7 +441,20 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     };
   }, []);
 
-  function rejectPendingActions(message: string) {
+  function rejectPendingActions(message: string, action?: string) {
+    if (action) {
+      const pendingIndex = pendingActionsRef.current.findIndex(
+        (pendingAction) => pendingAction.expectedAction === action,
+      );
+      if (pendingIndex < 0) {
+        return;
+      }
+
+      const [pendingAction] = pendingActionsRef.current.splice(pendingIndex, 1);
+      pendingAction?.reject(new Error(message));
+      return;
+    }
+
     const pendingActions = pendingActionsRef.current.splice(0);
 
     for (const pendingAction of pendingActions) {
@@ -483,12 +497,20 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     }
 
     if (message.type === "error") {
+      const action =
+        typeof message.data === "object" &&
+        message.data &&
+        "action" in message.data &&
+        typeof message.data.action === "string"
+          ? message.data.action
+          : undefined;
       rejectPendingActions(
         typeof message.data === "object" && message.data && "message" in message.data
           ? String(message.data.message)
           : typeof message.data === "object" && message.data && "code" in message.data
             ? String(message.data.code)
             : "internal_error",
+        action,
       );
     }
 

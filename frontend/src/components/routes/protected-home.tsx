@@ -5,7 +5,7 @@ import { GameBoardView } from "#/components/game/game-board-view";
 import { EndGameProposalAlert } from "#/components/game/end-game-proposal-alert";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
-import { playerName } from "#/components/game/game-view-helpers";
+import { playerName, playersForResults } from "#/components/game/game-view-helpers";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
@@ -102,6 +102,7 @@ export function ProtectedHome() {
   const roundResultsKey = roundResults?.room?.code
     ? `${roundResults.room.code}:${roundResults.game.round}`
     : null;
+  const roundResultPlayers = playersForResults(roundResults?.room ?? null, state.room);
   const isBootstrappingConnection = isGameRouteSnapshotResolving(state);
 
   useGameSoundEvents(state);
@@ -208,7 +209,7 @@ export function ProtectedHome() {
             <GameResultsView
               room={roundResults.room}
               game={roundResults.game}
-              players={roundResults.room?.players ?? players}
+              players={roundResultPlayers}
               playerId={state.playerId}
               connectedPlayers={connectedPlayers}
               dealChoice={{

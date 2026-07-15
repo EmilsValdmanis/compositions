@@ -703,6 +703,29 @@ func mustReadError(t *testing.T, conn *websocket.Conn, want string) {
 	}
 }
 
+func mustReadActionError(t *testing.T, conn *websocket.Conn, action, want string) {
+	t.Helper()
+
+	envelope := mustReadEnvelopeFromConn(t, conn)
+	if envelope.Type != "error" {
+		t.Fatalf("error response type = %q; want error", envelope.Type)
+	}
+	var event errorEvent
+	if err := json.Unmarshal(envelope.Data, &event); err != nil {
+		t.Fatalf("json.Unmarshal(error) error = %v", err)
+	}
+	if event.Action != action {
+		t.Fatalf("error action = %q; want %q", event.Action, action)
+	}
+	wantCode := clientErrorCode(errors.New(want))
+	if event.Code != wantCode {
+		t.Fatalf("error code = %q; want %q", event.Code, wantCode)
+	}
+	if event.Message != want {
+		t.Fatalf("error message = %q; want %q", event.Message, want)
+	}
+}
+
 func mustReadLeftRoom(t *testing.T, conn *websocket.Conn) leftRoomEvent {
 	t.Helper()
 
