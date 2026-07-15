@@ -166,6 +166,7 @@ type connectedEvent struct {
 type errorEvent struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	Action  string `json:"action,omitempty"`
 }
 
 type roomStateEvent struct {
@@ -392,7 +393,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 		}
 		if !messageLimiter.Allow() {
 			slog.Warn("websocket message rate limited", "sessionID", sessionID, "remote", conn.RemoteAddr().String())
-			s.writeError(conn, errRateLimitExceeded)
+			s.writeActionError(conn, envelope.Type, errRateLimitExceeded)
 			return
 		}
 		_ = setWSReadDeadline(conn)
@@ -803,14 +804,14 @@ func (s *wsServer) handleDraftUpdate(conn *websocket.Conn, sessionID string, env
 
 	drafts, err := draftCompositionsFromRequest(req.Compositions)
 	if err != nil {
-		s.writeError(conn, err)
+		s.writeActionError(conn, envelope.Type, err)
 		return
 	}
 
 	roomState, recipients, err := s.lobby.updateDraftActivity(sessionID, drafts)
 	if err != nil {
 		slog.Warn("draft update failed", "sessionID", sessionID, "error", err)
-		s.writeError(conn, err)
+		s.writeActionError(conn, envelope.Type, err)
 		return
 	}
 	conns := gameRecipientConns(recipients)
@@ -841,6 +842,14 @@ func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelop
 
 func (s *wsServer) writeError(conn *websocket.Conn, err error) {
 	logEmitFailure(conn, "error", errorEvent{Code: clientErrorCode(err), Message: clientErrorMessage(err)}, "write websocket error event failed")
+}
+
+func (s *wsServer) writeActionError(conn *websocket.Conn, action string, err error) {
+	logEmitFailure(conn, "error", errorEvent{
+		Code:    clientErrorCode(err),
+		Message: clientErrorMessage(err),
+		Action:  action,
+	}, "write websocket action error event failed", "action", action)
 }
 
 func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*websocket.Conn) {
@@ -896,15 +905,15 @@ func logEmitFailure(conn *websocket.Conn, messageType string, data any, logMessa
 func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID string, envelope wsEnvelope) (T, bool) {
 	var req T
 	if err := requireConnectedSession(sessionID); err != nil {
-		s.writeError(conn, err)
+		s.writeActionError(conn, envelope.Type, err)
 		return req, false
 	}
 	if err := s.lobby.requireActiveSessionConnection(sessionID, conn); err != nil {
-		s.writeError(conn, err)
+		s.writeActionError(conn, envelope.Type, err)
 		return req, false
 	}
 	if err := decodePayload(envelope.Data, &req); err != nil {
-		s.writeError(conn, err)
+		s.writeActionError(conn, envelope.Type, err)
 		return req, false
 	}
 	return req, true

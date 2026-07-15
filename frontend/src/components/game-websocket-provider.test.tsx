@@ -79,7 +79,8 @@ class FakeWebSocket {
 }
 
 function Harness({ children }: { children?: ReactNode }) {
-  const { state, connect, disconnect, discardCard, playTableAndDiscard } = useGameWebSocket();
+  const { state, connect, disconnect, discardCard, playTableAndDiscard, updateTurnDrafts } =
+    useGameWebSocket();
 
   return (
     <div>
@@ -96,6 +97,9 @@ function Harness({ children }: { children?: ReactNode }) {
       </button>
       <button type="button" onClick={() => void discardCard(4, { rank: 12, suit: 2 })}>
         Discard test card
+      </button>
+      <button type="button" onClick={() => updateTurnDrafts({ compositions: [] })}>
+        Sync drafts
       </button>
       <button
         type="button"
@@ -252,5 +256,59 @@ describe("GameWebSocketProvider", () => {
         card: { isJoker: true },
       },
     });
+  });
+
+  it("keeps passive draft rejections silent even after an intervening state broadcast", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    fireEvent.click(screen.getByRole("button", { name: "Sync drafts" }));
+
+    await act(async () => {
+      sockets[0]!.message({ type: "game_state", data: { game: null } });
+      sockets[0]!.message({
+        type: "error",
+        data: {
+          action: "draft_update",
+          code: "not_your_turn",
+          message: "not your turn",
+        },
+      });
+    });
+
+    expect(screen.getByTestId("last-error").textContent).toBe("");
+    expect(screen.getByTestId("last-error-code").textContent).toBe("");
+  });
+
+  it("still presents not-your-turn errors from explicit player actions", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    await act(async () => {
+      sockets[0]!.message({
+        type: "error",
+        data: { action: "discard", code: "not_your_turn", message: "not your turn" },
+      });
+    });
+
+    expect(screen.getByTestId("last-error-code").textContent).toBe("not_your_turn");
   });
 });

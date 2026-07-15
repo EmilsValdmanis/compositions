@@ -254,13 +254,21 @@ describe("GameBoardTable draft total", () => {
   it("shows the total before the player has opened", () => {
     const view = renderDraftTable(true);
 
-    expect(view.getByText(/Draft total/)).toBeTruthy();
+    expect(
+      [...view.container.querySelectorAll('[data-slot="badge"]')].some((badge) =>
+        badge.textContent?.includes("Total"),
+      ),
+    ).toBe(true);
   });
 
   it("hides the total after the player has opened", () => {
     const view = renderDraftTable(false);
 
-    expect(view.queryByText(/Draft total/)).toBeNull();
+    expect(
+      [...view.container.querySelectorAll('[data-slot="badge"]')].some((badge) =>
+        badge.textContent?.includes("Total"),
+      ),
+    ).toBe(false);
   });
 
   it("renders question-mark points for an unresolved natural-card and joker draft", () => {
@@ -271,5 +279,16 @@ describe("GameBoardTable draft total", () => {
 
     expect(unresolvedScore.textContent).toBe("?");
     expect(unresolvedScore.parentElement?.textContent).toContain("? pts");
+  });
+
+  it("renders a natural card's face value before the composition is valid", () => {
+    const view = renderDraftTable(false, [{ rank: 5, suit: 0 }]);
+
+    expect(
+      [...view.container.querySelectorAll('[data-slot="badge"]')].some(
+        (badge) => badge.textContent?.includes("5") && badge.textContent?.includes("pts"),
+      ),
+    ).toBe(true);
+    expect(view.queryByTitle("Complete a valid composition to resolve its point value")).toBeNull();
   });
 });

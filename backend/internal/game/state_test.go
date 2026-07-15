@@ -2760,8 +2760,14 @@ func TestGameStateFinishRoundAppliesOverHundredAdjustment(t *testing.T) {
 	if state.players[1].totalPoints != 89 {
 		t.Fatalf("adjusted player totalPoints = %d; want 89", state.players[1].totalPoints)
 	}
+	if state.players[1].unadjustedTotalPoints != 107 {
+		t.Fatalf("adjusted player unadjustedTotalPoints = %d; want 107", state.players[1].unadjustedTotalPoints)
+	}
 	if state.players[2].totalPoints != 89 {
 		t.Fatalf("safe player totalPoints = %d; want 89", state.players[2].totalPoints)
+	}
+	if state.players[2].unadjustedTotalPoints != 89 {
+		t.Fatalf("safe player unadjustedTotalPoints = %d; want 89", state.players[2].unadjustedTotalPoints)
 	}
 }
 

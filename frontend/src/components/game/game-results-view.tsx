@@ -9,6 +9,7 @@ import {
   type PlayerSnapshot,
 } from "#/components/game-websocket-provider";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
+import { resultScoreState, type ResultScorePhase } from "#/components/game/game-results-state";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameCard } from "#/components/game/game-card";
 import { cardName } from "#/components/game/game-card-utils";
@@ -35,6 +36,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { Caption, P } from "#/components/typography";
 import { fireCelebrationConfetti } from "#/lib/confetti";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -85,37 +87,51 @@ function keyedCards(cards: GameSnapshot["hand"]) {
 }
 
 function ResultPoints({
-  totalPoints,
-  pointsGained,
+  playerState,
+  phase,
 }: {
-  totalPoints: number;
-  pointsGained: number;
+  playerState: GameSnapshot["players"][number];
+  phase: ResultScorePhase;
 }) {
-  const [displayedPoints, setDisplayedPoints] = useState(() => ({
-    total: Math.max(0, totalPoints - pointsGained),
-    gained: 0,
-  }));
-
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setDisplayedPoints({ total: totalPoints, gained: pointsGained });
-    });
-
-    return () => window.cancelAnimationFrame(frame);
-  }, [pointsGained, totalPoints]);
+  const score = resultScoreState(playerState, phase);
 
   return (
     <>
-      <TableCell className="text-right">
-        <P size="sm" className="font-medium tabular-nums">
-          <AnimatedNumber value={displayedPoints.total} />
-        </P>
+      <TableCell
+        className="text-right"
+        data-score-phase={phase}
+        data-flying={score.hasAdjustment || undefined}
+      >
+        <div className="flex min-h-9 flex-col items-end justify-center gap-0.5">
+          <P
+            size="sm"
+            className={cn(
+              "font-medium tabular-nums transition-colors duration-300",
+              score.isShowingOverHundred && "text-destructive",
+            )}
+          >
+            <AnimatedNumber value={score.displayedTotal} />
+          </P>
+          {score.isShowingAdjustment ? (
+            <Badge
+              variant="outline"
+              className="h-4.5 border-primary/30 px-1.5 text-[0.625rem] text-primary"
+              title={m.flying_score_adjustment({
+                from: score.unadjustedTotal,
+                to: playerState.totalPoints,
+              })}
+            >
+              <span aria-hidden="true">↘</span>
+              {m.flying()}
+            </Badge>
+          ) : null}
+        </div>
       </TableCell>
       <TableCell className="text-right">
-        <Caption className={cn(displayedPoints.gained > 0 && "font-medium text-primary")}>
+        <Caption className={cn(score.displayedGained > 0 && "font-medium text-primary")}>
           <AnimatedNumber
-            value={displayedPoints.gained}
-            prefix={displayedPoints.gained > 0 ? "+" : undefined}
+            value={score.displayedGained}
+            prefix={score.displayedGained > 0 ? "+" : undefined}
           />
         </Caption>
       </TableCell>
@@ -218,6 +234,37 @@ export function GameResultsView({
           : m.complete();
   const hasCelebrated = useRef(false);
   const isWinner = winner?.playerId === playerId;
+  const shouldReduceMotion = useShouldReduceMotion();
+  const scoreRevealKey = `${game.round}:${shouldReduceMotion}`;
+  const [scoreReveal, setScoreReveal] = useState<{
+    key: string;
+    phase: ResultScorePhase;
+  }>(() => ({ key: scoreRevealKey, phase: "previous" }));
+  const scorePhase = shouldReduceMotion
+    ? "adjusted"
+    : scoreReveal.key === scoreRevealKey
+      ? scoreReveal.phase
+      : "previous";
+
+  useEffect(() => {
+    if (shouldReduceMotion) {
+      return;
+    }
+
+    const roundScoreTimer = window.setTimeout(
+      () => setScoreReveal({ key: scoreRevealKey, phase: "round" }),
+      500,
+    );
+    const adjustmentTimer = window.setTimeout(
+      () => setScoreReveal({ key: scoreRevealKey, phase: "adjusted" }),
+      1_500,
+    );
+
+    return () => {
+      window.clearTimeout(roundScoreTimer);
+      window.clearTimeout(adjustmentTimer);
+    };
+  }, [scoreRevealKey, shouldReduceMotion]);
 
   useEffect(() => {
     if (!isWinner || hasCelebrated.current) return;
@@ -317,10 +364,7 @@ export function GameResultsView({
                           />
                         )}
                       </TableCell>
-                      <ResultPoints
-                        totalPoints={playerState.totalPoints}
-                        pointsGained={playerState.pointsGained}
-                      />
+                      <ResultPoints playerState={playerState} phase={scorePhase} />
                     </TableRow>
                   );
                 })}

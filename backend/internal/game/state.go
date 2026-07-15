@@ -392,12 +392,14 @@ func (gs *GameState) finishRound(winnerIndex int) {
 		if i == winnerIndex || player == nil || player.forfeited {
 			if player != nil {
 				player.pointsGained = 0
+				player.unadjustedTotalPoints = player.totalPoints
 			}
 			continue
 		}
 		roundPoints := player.hand.Points()
 		player.pointsGained = roundPoints
 		player.totalPoints += roundPoints
+		player.unadjustedTotalPoints = player.totalPoints
 		player.statistics.PenaltyPoints += roundPoints
 		player.statistics.LargestRoundPenalty = max(player.statistics.LargestRoundPenalty, roundPoints)
 		pointsInflicted += roundPoints
@@ -633,6 +635,7 @@ func (gs *GameState) resetRoundState(drawPile *CardPile) {
 
 		player.hand = NewHand()
 		player.pointsGained = 0
+		player.unadjustedTotalPoints = player.totalPoints
 		player.hasOpened = false
 	}
 }
@@ -730,6 +733,7 @@ func (gs *GameState) ForfeitPlayer(playerID string) (string, error) {
 	}
 	player.hand = NewHand()
 	player.pointsGained = 0
+	player.unadjustedTotalPoints = player.totalPoints
 	player.forfeited = true
 
 	activeIndexes := gs.activePlayerIndexes()

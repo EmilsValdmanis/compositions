@@ -79,17 +79,15 @@ describe("draftCompositionPointTotal", () => {
   });
 
   it.each([
-    ["an empty draft", []],
-    ["one natural card", [{ rank: 6, suit: 0 }]],
+    ["one natural card", [{ rank: 6, suit: 0 }], 6],
     [
       "two natural cards",
       [
         { rank: 6, suit: 0 },
         { rank: 7, suit: 0 },
       ],
+      13,
     ],
-    ["a natural card and a joker", [{ rank: 6, suit: 0 }, { isJoker: true }]],
-    ["three jokers", [{ isJoker: true }, { isJoker: true }, { isJoker: true }]],
     [
       "a gapped run",
       [
@@ -97,6 +95,7 @@ describe("draftCompositionPointTotal", () => {
         { rank: 7, suit: 0 },
         { rank: 8, suit: 0 },
       ],
+      20,
     ],
     [
       "a mixed-suit run",
@@ -105,6 +104,7 @@ describe("draftCompositionPointTotal", () => {
         { rank: 6, suit: 1 },
         { rank: 7, suit: 0 },
       ],
+      18,
     ],
     [
       "a duplicate-suit set",
@@ -113,7 +113,23 @@ describe("draftCompositionPointTotal", () => {
         { rank: 9, suit: 0 },
         { rank: 9, suit: 1 },
       ],
+      27,
     ],
+  ] as const)("estimates %s from its natural cards", (_label, cards, points) => {
+    expect(draftCompositionPointTotal([...cards])).toBe(points);
+  });
+
+  it("leaves an empty draft unresolved", () => {
+    expect(draftCompositionPointTotal([])).toBeNull();
+  });
+
+  it("shows a staged five as five points before its composition is complete", () => {
+    expect(draftCompositionPointTotal([{ rank: 5, suit: 2 }])).toBe(5);
+  });
+
+  it.each([
+    ["a natural card and a joker", [{ rank: 6, suit: 0 }, { isJoker: true }]],
+    ["three jokers", [{ isJoker: true }, { isJoker: true }, { isJoker: true }]],
     ["a natural card without a rank", [{ suit: 0 }, { rank: 2, suit: 0 }, { rank: 3, suit: 0 }]],
     ["a natural card without a suit", [{ rank: 1 }, { rank: 2, suit: 0 }, { rank: 3, suit: 0 }]],
     [
@@ -168,7 +184,7 @@ describe("draftCompositionPointTotal", () => {
     ).toBe(26);
   });
 
-  it("leaves an invalid existing-composition preview unresolved", () => {
+  it("estimates an invalid natural-card addition while it is still being placed", () => {
     expect(
       draftCompositionPreviewPointTotal(
         {
@@ -183,7 +199,7 @@ describe("draftCompositionPointTotal", () => {
         },
         [{ rank: 9, suit: 0 }],
       ),
-    ).toBeNull();
+    ).toBe(27);
   });
 });
 
