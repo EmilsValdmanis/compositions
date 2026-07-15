@@ -17,6 +17,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -118,20 +119,22 @@ export function UserDropdown() {
               <HugeiconsIcon icon={BookOpen01Icon} />
               {m.rules()}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={toggleSounds}>
+            <DropdownMenuCheckboxItem
+              checked={soundsEnabled}
+              onCheckedChange={toggleSounds}
+              showUncheckedIndicator
+            >
               <HugeiconsIcon icon={soundsEnabled ? VolumeHighIcon : VolumeOffIcon} />
               {m.sound_effects()}
-              <Text variant="caption" className="ml-auto">
-                {soundsEnabled ? m.on() : m.off()}
-              </Text>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={toggleReducedMotion}>
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={reduceMotion}
+              onCheckedChange={toggleReducedMotion}
+              showUncheckedIndicator
+            >
               <HugeiconsIcon icon={Motion01Icon} />
               {m.reduce_motion()}
-              <Text variant="caption" className="ml-auto">
-                {reduceMotion ? m.on() : m.off()}
-              </Text>
-            </DropdownMenuItem>
+            </DropdownMenuCheckboxItem>
             {import.meta.env.DEV ? (
               <DropdownMenuItem render={<Link to="/dev-ui" />}>
                 <HugeiconsIcon icon={CodeXmlIcon} />
