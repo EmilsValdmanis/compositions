@@ -70,32 +70,32 @@ function cardAccentClass(card: CardSnapshot) {
 type GameCardSize = "hand" | "default" | "compact";
 
 const gameCardSizeClassNames: Record<GameCardSize, string> = {
-  hand: "h-32 w-20 p-2.5",
-  default: "h-24 w-16 p-2",
+  hand: "h-28 w-18 p-2 xl:h-32 xl:w-20 xl:p-2.5",
+  default: "h-20 w-14 p-1.5 xl:h-24 xl:w-16 xl:p-2",
   compact: "h-16 w-11 rounded-xl p-1.5",
 };
 
 const cardCornerTextClassNames: Record<GameCardSize, string> = {
-  hand: "text-lg/none",
-  default: "text-sm/none",
+  hand: "text-base/none xl:text-lg/none",
+  default: "text-xs/none xl:text-sm/none",
   compact: "text-[0.65rem]/none",
 };
 
 const cardCornerInsetClassNames: Record<GameCardSize, string> = {
-  hand: "left-2.5 top-2.5",
-  default: "left-2 top-2",
+  hand: "left-2 top-2 xl:left-2.5 xl:top-2.5",
+  default: "left-1.5 top-1.5 xl:left-2 xl:top-2",
   compact: "left-1.5 top-1.5",
 };
 
 const cardCornerEndInsetClassNames: Record<GameCardSize, string> = {
-  hand: "bottom-2.5 right-2.5",
-  default: "bottom-2 right-2",
+  hand: "bottom-2 right-2 xl:bottom-2.5 xl:right-2.5",
+  default: "bottom-1.5 right-1.5 xl:bottom-2 xl:right-2",
   compact: "bottom-1.5 right-1.5",
 };
 
 const cardSymbolClassNames: Record<GameCardSize, string> = {
-  hand: "size-8",
-  default: "size-6",
+  hand: "size-7 xl:size-8",
+  default: "size-5 xl:size-6",
   compact: "size-4",
 };
 
@@ -259,7 +259,7 @@ function SortableGameCard({
           : gameCardClassName(card, size, className),
         decorationRingClassName(decoration?.highlight),
         invalidRingClassName(invalid),
-        "touch-none cursor-grab active:cursor-grabbing",
+        "touch-pan-x cursor-grab active:cursor-grabbing xl:touch-none",
       )}
       title={accessibleName}
       aria-label={accessibleName}
@@ -319,7 +319,9 @@ function DraggableGameCard({
           : gameCardClassName(card, size, className),
         decorationRingClassName(decoration?.highlight),
         invalidRingClassName(invalid),
-        disabled ? "cursor-default opacity-50" : "touch-none cursor-grab active:cursor-grabbing",
+        disabled
+          ? "cursor-default opacity-50"
+          : "touch-pan-x cursor-grab active:cursor-grabbing xl:touch-none",
       )}
       title={accessibleName}
       aria-label={accessibleName}

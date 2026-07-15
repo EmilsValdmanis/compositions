@@ -269,7 +269,7 @@ export function CompositionRow({
       id={compositionDropId}
       activeClassName={null}
       className={cn(
-        "relative flex min-w-0 flex-col overflow-visible rounded-3xl border border-border/70 bg-muted/20 p-3",
+        "relative flex min-w-0 flex-col overflow-visible rounded-3xl border border-border/70 bg-muted/20 p-2 xl:p-3",
         isHighlightedComposition ? "border-primary/70 bg-primary/5" : null,
       )}
     >
@@ -277,7 +277,7 @@ export function CompositionRow({
         ref={setCompositionHoverRef}
         className="pointer-events-none absolute inset-0 z-0 rounded-3xl"
       />
-      <div className="mb-2.5 flex min-h-5 flex-wrap items-center justify-between gap-2">
+      <div className="mb-1.5 flex min-h-5 flex-wrap items-center justify-between gap-2 xl:mb-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline">#{index + 1}</Badge>
           {isNewComposition ? (
@@ -294,7 +294,7 @@ export function CompositionRow({
         </Caption>
       </div>
 
-      <div className="relative mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-3 overflow-visible">
+      <div className="relative flex w-fit max-w-none flex-nowrap items-center justify-start gap-2 overflow-visible xl:mx-auto xl:max-w-full xl:flex-wrap xl:justify-center xl:gap-3">
         <CompositionEdgeDropTarget
           compositionIndex={index}
           edge="start"

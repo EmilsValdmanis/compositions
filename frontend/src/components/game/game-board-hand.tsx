@@ -40,7 +40,7 @@ export function GameBoardHand({
   const { hasDraftedCompositions } = tablePlayState;
 
   return (
-    <Card className="min-h-0">
+    <Card className="min-h-0 shrink-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]">
       <CardContent className="min-h-0">
         {hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
@@ -49,8 +49,8 @@ export function GameBoardHand({
               className="min-h-0 rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="min-h-0 overflow-x-auto overflow-y-hidden">
-                  <div className="flex w-max min-w-full justify-center gap-2">
+                <div className="min-h-0 snap-x overflow-x-auto overflow-y-hidden overscroll-x-contain scroll-px-2">
+                  <div className="flex w-max min-w-full justify-start gap-2 xl:justify-center">
                     {availableHandEntries.map((entry) => (
                       <GameCard
                         key={entry.key}
@@ -62,6 +62,7 @@ export function GameBoardHand({
                           isVirtual: entry.isVirtual,
                         }}
                         className={cn(
+                          "snap-start [@media(max-height:600px)]:h-22 [@media(max-height:600px)]:w-15",
                           activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
                             ? "invisible"
                             : undefined,

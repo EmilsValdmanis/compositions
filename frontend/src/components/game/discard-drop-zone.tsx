@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
+import { cn } from "#/lib/utils";
 
 export function DiscardDropZone({
   disabled,
@@ -13,9 +14,10 @@ export function DiscardDropZone({
   return (
     <div
       ref={setNodeRef}
-      className={`rounded-3xl border border-dashed p-2.5 transition ${
-        isOver && !disabled ? "border-primary bg-primary/10" : "border-border bg-muted/20"
-      }`}
+      className={cn(
+        "h-full min-w-0 rounded-2xl transition-all",
+        isOver && !disabled ? "bg-primary/10 ring-2 ring-primary/70" : "ring-0",
+      )}
     >
       {children}
     </div>

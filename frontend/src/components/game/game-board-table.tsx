@@ -239,168 +239,162 @@ export function GameBoardTable({
     : null;
 
   return (
-    <Card className="min-h-0 overflow-hiddden overflow-y-auto xl:flex-1">
-      <CardContent className="min-h-0 flex-1">
-        <div
-          ref={setNodeRef}
-          className={[
-            "flex min-h-full flex-col justify-center gap-6 rounded-3xl border border-dashed border-border/70 px-3 py-3 transition-colors",
-            canCompose && isDraggingHandCard ? "border-border/70" : null,
-            canCompose && isDraggingHandCard && isOverNewCompositionBoard
-              ? "border-primary/70 bg-primary/5"
-              : null,
-          ]
-            .filter(Boolean)
-            .join(" ")}
-        >
-          <div className="min-h-0 overflow-visible">
-            {hasVisibleCompositions ? (
-              <div className="flex min-h-0 flex-wrap items-center justify-center gap-4 overflow-visible p-1">
-                {tableCompositions.map((composition) => (
-                  <div key={composition.key} className="w-fit shrink-0 overflow-visible p-1">
-                    {(() => {
-                      const spectatorDraft = spectatorDraftsByTableIndex.get(
-                        composition.tableIndex,
-                      );
-                      const stagedEntries =
-                        composition.stagedEntries.length > 0
-                          ? composition.stagedEntries
-                          : (spectatorDraft?.stagedEntries ?? []);
-                      const reclaims =
-                        composition.reclaims.length > 0
-                          ? composition.reclaims
-                          : (spectatorDraft?.reclaims ?? []);
-                      const insertIndex =
-                        composition.stagedEntries.length > 0
-                          ? composition.insertIndex
-                          : spectatorDraft?.insertIndex;
-                      const cardInsertIndices =
-                        composition.stagedEntries.length > 0
-                          ? composition.cardInsertIndices
-                          : spectatorDraft?.cardInsertIndices;
+    <Card
+      ref={setNodeRef}
+      data-over={isOverNewCompositionBoard || undefined}
+      className={cn(
+        "h-full min-h-0 min-w-0 max-w-full overflow-auto transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
+        canCompose && isDraggingHandCard && isOverNewCompositionBoard
+          ? "bg-primary/5 ring-2 ring-primary/70"
+          : null,
+      )}
+    >
+      <CardContent className="flex min-h-full flex-1 flex-col justify-center gap-3 px-2 py-2 xl:gap-6 xl:px-3 xl:py-3">
+        <div className="min-h-0 overflow-visible">
+          {hasVisibleCompositions ? (
+            <div className="flex min-h-0 flex-wrap items-center justify-start gap-2 overflow-visible p-1 sm:justify-center xl:gap-4">
+              {tableCompositions.map((composition) => (
+                <div key={composition.key} className="w-fit shrink-0 overflow-visible p-1">
+                  {(() => {
+                    const spectatorDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
+                    const stagedEntries =
+                      composition.stagedEntries.length > 0
+                        ? composition.stagedEntries
+                        : (spectatorDraft?.stagedEntries ?? []);
+                    const reclaims =
+                      composition.reclaims.length > 0
+                        ? composition.reclaims
+                        : (spectatorDraft?.reclaims ?? []);
+                    const insertIndex =
+                      composition.stagedEntries.length > 0
+                        ? composition.insertIndex
+                        : spectatorDraft?.insertIndex;
+                    const cardInsertIndices =
+                      composition.stagedEntries.length > 0
+                        ? composition.cardInsertIndices
+                        : spectatorDraft?.cardInsertIndices;
 
-                      return (
-                        <CompositionRow
-                          composition={composition.snapshot}
-                          index={composition.tableIndex}
-                          stagedEntries={stagedEntries}
-                          reclaims={reclaims}
-                          insertIndex={insertIndex}
-                          cardInsertIndices={cardInsertIndices}
-                          players={players}
-                          stagedEntryPlayerId={spectatorDraft?.playerId}
-                          stagedEntriesInteractive={composition.stagedEntries.length > 0}
-                          dropTargetsEnabled={canCompose}
-                          activity={activityByIndex.get(composition.tableIndex)}
-                          invalidEntryKeys={invalidEntryKeys}
-                        />
-                      );
-                    })()}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Caption className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center">
-                {m.no_compositions()}
-              </Caption>
-            )}
-          </div>
+                    return (
+                      <CompositionRow
+                        composition={composition.snapshot}
+                        index={composition.tableIndex}
+                        stagedEntries={stagedEntries}
+                        reclaims={reclaims}
+                        insertIndex={insertIndex}
+                        cardInsertIndices={cardInsertIndices}
+                        players={players}
+                        stagedEntryPlayerId={spectatorDraft?.playerId}
+                        stagedEntriesInteractive={composition.stagedEntries.length > 0}
+                        dropTargetsEnabled={canCompose}
+                        activity={activityByIndex.get(composition.tableIndex)}
+                        invalidEntryKeys={invalidEntryKeys}
+                      />
+                    );
+                  })()}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Caption className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center">
+              {m.no_compositions()}
+            </Caption>
+          )}
+        </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
-              <div className="flex min-h-5 basis-full items-center justify-center">
+        <div className="flex flex-wrap items-center justify-center gap-2 xl:gap-3">
+          {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
+            <div className="flex min-h-5 basis-full items-center justify-center">
+              <Badge variant="outline">
+                {m.draft_total()}{" "}
+                {visibleDraftPointsTotal === null ? (
+                  <span title={m.complete_drafts_points()}>?</span>
+                ) : (
+                  <AnimatedNumber value={visibleDraftPointsTotal} />
+                )}{" "}
+                {m.points_unit()}
+              </Badge>
+            </div>
+          ) : null}
+
+          {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
+            <div
+              key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
+              className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
+            >
+              <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
+                <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
                 <Badge variant="outline">
-                  {m.draft_total()}{" "}
-                  {visibleDraftPointsTotal === null ? (
-                    <span title={m.complete_drafts_points()}>?</span>
+                  {draftCompositionPointTotal(composition.cards) === null ? (
+                    <span title={m.complete_composition_points()}>?</span>
                   ) : (
-                    <AnimatedNumber value={visibleDraftPointsTotal} />
+                    <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
                   )}{" "}
                   {m.points_unit()}
                 </Badge>
               </div>
-            ) : null}
+              <div className="flex items-start gap-2">
+                {draftCardInstances(composition.cards).map(({ card, key }) => (
+                  <GameCard
+                    key={`${composition.tableIndex ?? "new"}-${key}`}
+                    card={card}
+                    size="default"
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
 
-            {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
-              <div
-                key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
-                className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
+          {newCompositions.map((composition) => (
+            <GameBoardDraftDropZone
+              key={composition.id}
+              id={draftCompositionDropId(composition.id)}
+              className={cn(
+                "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
+                invalidCompositionIds.has(composition.id)
+                  ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30"
+                  : null,
+              )}
+              invalid={invalidCompositionIds.has(composition.id)}
+            >
+              <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
+                <NewActivityLabel players={players} />
+                <Badge variant="outline">
+                  {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
+                  null ? (
+                    <span title={m.complete_composition_points()}>?</span>
+                  ) : (
+                    <AnimatedNumber
+                      value={
+                        draftCompositionPointTotal(
+                          composition.entries.map((entry) => entry.card),
+                        ) ?? 0
+                      }
+                    />
+                  )}{" "}
+                  {m.points_unit()}
+                </Badge>
+              </div>
+              <SortableContext
+                items={composition.entries.map((entry) => entry.key)}
+                strategy={horizontalListSortingStrategy}
               >
-                <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
-                  <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
-                  <Badge variant="outline">
-                    {draftCompositionPointTotal(composition.cards) === null ? (
-                      <span title={m.complete_composition_points()}>?</span>
-                    ) : (
-                      <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
-                    )}{" "}
-                    {m.points_unit()}
-                  </Badge>
-                </div>
                 <div className="flex items-start gap-2">
-                  {draftCardInstances(composition.cards).map(({ card, key }) => (
+                  {composition.entries.map((entry) => (
                     <GameCard
-                      key={`${composition.tableIndex ?? "new"}-${key}`}
-                      card={card}
+                      key={entry.key}
+                      card={entry.card}
                       size="default"
+                      draggable={{
+                        id: entry.key,
+                        cardIndex: entry.sourceIndex,
+                        isVirtual: entry.isVirtual,
+                      }}
                     />
                   ))}
                 </div>
-              </div>
-            ))}
-
-            {newCompositions.map((composition) => (
-              <GameBoardDraftDropZone
-                key={composition.id}
-                id={draftCompositionDropId(composition.id)}
-                className={cn(
-                  "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
-                  invalidCompositionIds.has(composition.id)
-                    ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30"
-                    : null,
-                )}
-                invalid={invalidCompositionIds.has(composition.id)}
-              >
-                <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
-                  <NewActivityLabel players={players} />
-                  <Badge variant="outline">
-                    {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
-                    null ? (
-                      <span title={m.complete_composition_points()}>?</span>
-                    ) : (
-                      <AnimatedNumber
-                        value={
-                          draftCompositionPointTotal(
-                            composition.entries.map((entry) => entry.card),
-                          ) ?? 0
-                        }
-                      />
-                    )}{" "}
-                    {m.points_unit()}
-                  </Badge>
-                </div>
-                <SortableContext
-                  items={composition.entries.map((entry) => entry.key)}
-                  strategy={horizontalListSortingStrategy}
-                >
-                  <div className="flex items-start gap-2">
-                    {composition.entries.map((entry) => (
-                      <GameCard
-                        key={entry.key}
-                        card={entry.card}
-                        size="default"
-                        draggable={{
-                          id: entry.key,
-                          cardIndex: entry.sourceIndex,
-                          isVirtual: entry.isVirtual,
-                        }}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </GameBoardDraftDropZone>
-            ))}
-          </div>
+              </SortableContext>
+            </GameBoardDraftDropZone>
+          ))}
         </div>
       </CardContent>
     </Card>
