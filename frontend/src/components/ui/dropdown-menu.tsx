@@ -3,7 +3,7 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 
 import { cn } from "@/lib/utils";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowRight01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight01Icon, Cancel01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 
 function DropdownMenu({ ...props }: MenuPrimitive.Root.Props) {
   return <MenuPrimitive.Root data-slot="dropdown-menu" {...props} />;
@@ -149,9 +149,11 @@ function DropdownMenuCheckboxItem({
   children,
   checked,
   inset,
+  showUncheckedIndicator = false,
   ...props
 }: MenuPrimitive.CheckboxItem.Props & {
   inset?: boolean;
+  showUncheckedIndicator?: boolean;
 }) {
   return (
     <MenuPrimitive.CheckboxItem
@@ -168,9 +170,13 @@ function DropdownMenuCheckboxItem({
         className="pointer-events-none absolute right-2 flex items-center justify-center"
         data-slot="dropdown-menu-checkbox-item-indicator"
       >
-        <MenuPrimitive.CheckboxItemIndicator>
-          <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
-        </MenuPrimitive.CheckboxItemIndicator>
+        {checked ? (
+          <MenuPrimitive.CheckboxItemIndicator>
+            <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+          </MenuPrimitive.CheckboxItemIndicator>
+        ) : showUncheckedIndicator ? (
+          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+        ) : null}
       </span>
       {children}
     </MenuPrimitive.CheckboxItem>
