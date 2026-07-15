@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Alert } from "#/components/ui/alert";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Separator } from "#/components/ui/separator";
-import { Text } from "#/components/typography";
+import { Caption, H4 } from "#/components/typography";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -81,23 +81,24 @@ export function TurnStartCue({
 
             <div className="flex min-w-0 items-center justify-between gap-3 px-4">
               <div className="min-w-0">
-                <Text
-                  as="div"
-                  variant="turn-eyebrow"
+                <Caption
                   data-slot="alert-description"
-                  className="mb-1 flex items-center gap-2"
+                  className="mb-1 flex items-center gap-2 text-[0.55rem]/none font-medium tracking-[0.2em] uppercase"
                 >
                   <span className="size-1.5 rotate-45 bg-primary" aria-hidden="true" />
                   {m.table_is_yours()}
-                </Text>
-                <Text as="div" variant="turn-title" data-slot="alert-title" className="truncate">
+                </Caption>
+                <H4
+                  className="truncate text-[1.05rem]/none font-bold tracking-[-0.04em] uppercase"
+                  data-slot="alert-title"
+                >
                   {m.your_turn()}
-                </Text>
+                </H4>
               </div>
-              <Text as="p" variant="turn-meta" className="shrink-0 text-right">
+              <Caption className="shrink-0 text-right text-[0.5rem]/[1.45] tracking-[0.16em] uppercase tabular-nums">
                 R{String(round).padStart(2, "0")}
                 <br />T{String(turnNumber).padStart(2, "0")}
-              </Text>
+              </Caption>
             </div>
           </Alert>
         </motion.div>

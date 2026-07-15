@@ -16,7 +16,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Spinner } from "#/components/ui/spinner";
-import { Strong } from "#/components/typography";
+import { P } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -91,12 +91,13 @@ export function PlayerStrip({
           >
             {player.activeEmote ? <PlayerEmoteBubble emote={player.activeEmote} /> : null}
             <PlayerAvatar player={player} />
-            <Strong
-              className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap"
+            <P
+              size="sm"
+              className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium"
               title={player.name}
             >
               {player.name}
-            </Strong>
+            </P>
             <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-1.5">
               {player.forfeited ? (
                 <HugeiconsIcon

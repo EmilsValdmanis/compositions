@@ -3,7 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { playerById } from "#/components/game/game-view-helpers";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
-import { Text } from "#/components/typography";
+import { Caption } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -46,17 +46,19 @@ export function ActivityLabel({
   offsetClassName?: string;
 }) {
   return (
-    <Text
-      as="div"
-      variant="activity"
-      className={cn("flex h-5 items-center gap-1", offsetClassName, className)}
+    <Caption
+      className={cn(
+        "flex h-5 items-center gap-1 text-[0.65rem]/4 font-medium tracking-wide uppercase",
+        offsetClassName,
+        className,
+      )}
     >
       {icon ? <HugeiconsIcon icon={icon} className="size-3.5" strokeWidth={2} /> : null}
       <span>{label}</span>
       {playerId ? (
         <PlayerMarker players={players} playerId={playerId} className="size-4 shrink-0" />
       ) : null}
-    </Text>
+    </Caption>
   );
 }
 

@@ -7,7 +7,7 @@ import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent, CardHeader } from "#/components/ui/card";
 import { Item, ItemContent, ItemGroup, ItemMedia } from "#/components/ui/item";
-import { H4, Text } from "#/components/typography";
+import { Caption, H4, H6, P } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -33,12 +33,8 @@ function RuleSection({ eyebrow, title, children }: RuleSectionProps) {
   return (
     <Card size="sm" className="shadow-none">
       <CardHeader>
-        <Text as="p" variant="eyebrow-compact">
-          {eyebrow}
-        </Text>
-        <Text as="h3" variant="body-strong">
-          {title}
-        </Text>
+        <Caption className="uppercase">{eyebrow}</Caption>
+        <H6>{title}</H6>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">{children}</CardContent>
     </Card>
@@ -47,22 +43,17 @@ function RuleSection({ eyebrow, title, children }: RuleSectionProps) {
 
 function RuleTitle({ children }: { children: ReactNode }) {
   return (
-    <Text as="div" variant="label" data-slot="item-title">
+    <P size="xs" className="font-medium" data-slot="item-title">
       {children}
-    </Text>
+    </P>
   );
 }
 
 function RuleDescription({ children }: { children: ReactNode }) {
   return (
-    <Text
-      as="p"
-      variant="caption"
-      data-slot="item-description"
-      className="line-clamp-none text-left"
-    >
+    <Caption data-slot="item-description" className="line-clamp-none text-left">
       {children}
-    </Text>
+    </Caption>
   );
 }
 
@@ -95,9 +86,9 @@ function CardLine({
   return (
     <div className="flex flex-col gap-2">
       {label ? (
-        <Text as="p" variant="label" className="text-muted-foreground">
+        <P size="xs" className="font-medium text-muted-foreground">
           {label}
-        </Text>
+        </P>
       ) : null}
       <div
         className={cn(
@@ -169,9 +160,9 @@ function ReclaimExample() {
 function OpeningExample() {
   return (
     <div className="flex flex-col gap-2">
-      <Text as="p" variant="label" className="text-muted-foreground">
+      <P size="xs" className="font-medium text-muted-foreground">
         {m.opening_example()}
-      </Text>
+      </P>
       <div className="flex flex-wrap items-center gap-4">
         <CardLine cards={[card(13, 0), card(13, 1), card(13, 2)]} />
         <Badge variant="outline">+</Badge>
@@ -210,9 +201,7 @@ export function GameRulesGuide({ className }: GameRulesGuideProps) {
     <div className={cn("flex min-h-0 flex-col gap-4", className)}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Text as="p" variant="eyebrow-compact">
-            {m.quick_rules()}
-          </Text>
+          <Caption className="uppercase">{m.quick_rules()}</Caption>
           <H4>{m.compositions()}</H4>
         </div>
         <Badge variant="outline">{m.two_decks()}</Badge>

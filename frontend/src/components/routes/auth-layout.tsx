@@ -1,5 +1,5 @@
 import { Outlet } from "@tanstack/react-router";
-import { P, Text } from "#/components/typography";
+import { H1, P } from "#/components/typography";
 import { LanguageSwitcher } from "#/components/language-switcher";
 import { m } from "#/paraglide/messages.js";
 
@@ -17,13 +17,9 @@ export function AuthLayout() {
 
       <div className="flex grow flex-col items-center justify-center gap-6 px-6">
         <div className="flex max-w-2xl flex-col items-center gap-3 text-center">
-          <Text
-            as="h1"
-            variant="display"
-            className="relative bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-transparent"
-          >
+          <H1 className="relative text-4xl/none font-bold sm:text-7xl/none bg-linear-to-b from-foreground to-muted-foreground bg-clip-text text-transparent">
             {m.app_name()}
-          </Text>
+          </H1>
           <P className="max-w-xl text-muted-foreground">{m.social_description()}</P>
         </div>
         <Outlet />
