@@ -20,6 +20,8 @@ import { m } from "#/paraglide/messages.js";
 const scenarios = mockScenarios;
 type DevViewMode = "start" | "board" | "deal" | "results";
 
+function handleChooseDealing(_choice: DealingChoiceRequest | string) {}
+
 function cloneCards(cards: CardSnapshot[]) {
   return cards.map((card) => ({ ...card }));
 }
@@ -375,8 +377,6 @@ export function DevGameUi() {
     setGameOverride(null);
     setViewMode("board");
   }
-
-  function handleChooseDealing(_choice: DealingChoiceRequest | string) {}
 
   function enterLobbyRoom(code: string) {
     if (!room) return;

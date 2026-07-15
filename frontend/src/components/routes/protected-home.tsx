@@ -13,6 +13,15 @@ import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
 import { m } from "#/paraglide/messages.js";
 
+async function copyText(text: string, successMessage: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(successMessage);
+  } catch {
+    toast.error(m.clipboard_copy_failed());
+  }
+}
+
 const protectedHomeRoute = getRouteApi("/_protected/");
 
 function roomShareUrl(code: string) {
@@ -133,15 +142,6 @@ export function ProtectedHome() {
 
     toast.error(state.lastError);
   }, [state.lastError, state.lastErrorId]);
-
-  async function copyText(text: string, successMessage: string) {
-    try {
-      await navigator.clipboard.writeText(text);
-      toast.success(successMessage);
-    } catch {
-      toast.error(m.clipboard_copy_failed());
-    }
-  }
 
   async function copyRoomCode() {
     if (!state.room?.code) {

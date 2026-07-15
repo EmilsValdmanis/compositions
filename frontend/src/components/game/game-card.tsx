@@ -263,7 +263,6 @@ function SortableGameCard({
       )}
       title={accessibleName}
       aria-label={accessibleName}
-      aria-invalid={invalid || undefined}
       {...listeners}
       {...attributes}
     >
@@ -325,7 +324,6 @@ function DraggableGameCard({
       )}
       title={accessibleName}
       aria-label={accessibleName}
-      aria-invalid={invalid || undefined}
       {...listeners}
       {...attributes}
     >

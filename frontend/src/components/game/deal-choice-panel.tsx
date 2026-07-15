@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import { closestCenter, DndContext, type DragEndEvent, type Modifier } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -161,7 +161,220 @@ function SortableDealOrderPlayer({
   );
 }
 
-export function DealChoicePanel({
+function DeckCutFieldGroup({
+  clampedCutSize,
+  maxCutSize,
+  prefersReducedMotion,
+  setCutSize,
+}: {
+  clampedCutSize: number;
+  maxCutSize: number;
+  prefersReducedMotion: boolean;
+  setCutSize: Dispatch<SetStateAction<string>>;
+}) {
+  return (
+    <FieldGroup>
+      <Item variant="muted">
+        <ItemMedia variant="icon">
+          <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>{m.cut_deck()}</ItemTitle>
+          <ItemDescription>{m.cut_deck_description()}</ItemDescription>
+        </ItemContent>
+        <ItemFooter>
+          <div className="w-full">
+            <div
+              className="relative mx-auto h-32 w-full max-w-sm overflow-hidden perspective-[520px]"
+              aria-hidden="true"
+            >
+              <motion.div
+                initial={false}
+                animate={{
+                  x: "-50%",
+                  opacity: clampedCutSize > 0 ? 0.55 : 0,
+                  scaleX: 0.65 + (clampedCutSize / GAME_DECK_CARD_COUNT) * 0.35,
+                }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+                className="absolute bottom-7 left-1/4 h-2 w-20 -translate-x-1/2 rounded-full bg-black/40 blur-md"
+              />
+              <motion.div
+                initial={false}
+                animate={{
+                  x: "-50%",
+                  opacity: 0.55,
+                  scaleX:
+                    0.65 + ((GAME_DECK_CARD_COUNT - clampedCutSize) / GAME_DECK_CARD_COUNT) * 0.35,
+                }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+                className="absolute bottom-7 left-3/4 h-2 w-20 -translate-x-1/2 rounded-full bg-black/40 blur-md"
+              />
+              {Array.from({ length: GAME_DECK_CARD_COUNT }, (_, index) => {
+                const firstLiftedIndex = GAME_DECK_CARD_COUNT - clampedCutSize;
+                const isLifted = index >= firstLiftedIndex;
+                const stackIndex = isLifted ? index - firstLiftedIndex : index;
+                const stackSize = isLifted ? clampedCutSize : GAME_DECK_CARD_COUNT - clampedCutSize;
+                const depth = Math.max(0, stackSize - stackIndex - 1);
+
+                return (
+                  <motion.div
+                    key={index}
+                    layout={!prefersReducedMotion}
+                    initial={false}
+                    animate={{
+                      x: "-50%",
+                      rotateX: 54,
+                      rotateZ: isLifted ? -5 + (index % 3) * 0.4 : 4 - (index % 3) * 0.35,
+                    }}
+                    transition={
+                      prefersReducedMotion
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 230, damping: 25, mass: 0.75 }
+                    }
+                    className="absolute h-24 w-17 -translate-x-1/2 origin-bottom"
+                    style={{
+                      left: isLifted ? "25%" : "75%",
+                      top: DECK_STACK_BASE_TOP - stackIndex * DECK_CARD_VERTICAL_OFFSET,
+                      zIndex: isLifted ? GAME_DECK_CARD_COUNT + stackIndex + 1 : stackIndex + 1,
+                    }}
+                  >
+                    <GameCard
+                      card={FACE_DOWN_CARD}
+                      faceDown
+                      size="default"
+                      className={cn("size-full", depth === 0 ? "shadow-lg" : "shadow-none")}
+                    />
+                  </motion.div>
+                );
+              })}
+            </div>
+            <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-6">
+              <div className="flex justify-center">
+                <Badge variant="secondary">{m.lifted_cards({ count: clampedCutSize })}</Badge>
+              </div>
+              <div className="flex justify-center">
+                <Badge variant="secondary">
+                  {m.deck_cards({ count: GAME_DECK_CARD_COUNT - clampedCutSize })}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </ItemFooter>
+      </Item>
+
+      <Field>
+        <FieldLabel id="cut-size-label" htmlFor="cut-size" className="sr-only">
+          {m.cut_size()}
+        </FieldLabel>
+        <Slider
+          id="cut-size"
+          min={0}
+          max={maxCutSize}
+          step={1}
+          thumbAriaLabelledBy="cut-size-label"
+          value={[clampedCutSize]}
+          onValueChange={(value) => {
+            const nextCutSize = Array.isArray(value) ? value[0] : value;
+            setCutSize(String(nextCutSize ?? 0));
+          }}
+        />
+        <FieldDescription className="flex justify-between">
+          <span>0</span>
+          <span>{m.cards_maximum({ count: maxCutSize })}</span>
+        </FieldDescription>
+      </Field>
+    </FieldGroup>
+  );
+}
+
+function DealModeFieldGroup({
+  players,
+  dealMode,
+  tapOrder,
+  setDealMode,
+  onTapOrderDragEnd,
+}: {
+  players: PlayerSnapshot[];
+  dealMode: DealMode;
+  tapOrder: number[];
+  setDealMode: Dispatch<SetStateAction<DealMode>>;
+  onTapOrderDragEnd: (event: DragEndEvent) => void;
+}) {
+  return (
+    <FieldGroup>
+      <FieldSet>
+        <FieldLegend variant="label">{m.dealing_style()}</FieldLegend>
+        <ToggleGroup
+          value={[dealMode]}
+          onValueChange={(value) => {
+            const nextMode = value[0];
+            if (nextMode === "round_robin" || nextMode === "tap") {
+              setDealMode(nextMode);
+            }
+          }}
+          variant="outline"
+          spacing={2}
+          className="grid w-full grid-cols-2"
+        >
+          <ToggleGroupItem value="round_robin" className="min-w-0">
+            <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
+            {m.round_robin()}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="tap" className="min-w-0">
+            <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} />
+            {m.tap_order()}
+          </ToggleGroupItem>
+        </ToggleGroup>
+        <FieldDescription>
+          {dealMode === "round_robin" ? m.round_robin_description() : m.tap_order_description()}
+        </FieldDescription>
+      </FieldSet>
+
+      {dealMode === "tap" ? (
+        <FieldSet>
+          <FieldLegend variant="label">{m.player_order()}</FieldLegend>
+          <DndContext
+            autoScroll={false}
+            collisionDetection={closestCenter}
+            modifiers={[restrictTapOrderDrag]}
+            onDragEnd={onTapOrderDragEnd}
+          >
+            <SortableContext
+              items={tapOrder.map(dealPlayerId)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ItemGroup className="max-h-56 overflow-y-auto pr-1">
+                {tapOrder.map((playerIndex, position) => {
+                  const player = players[playerIndex];
+                  return player ? (
+                    <SortableDealOrderPlayer
+                      key={player.playerId}
+                      player={player}
+                      playerIndex={playerIndex}
+                      position={position}
+                    />
+                  ) : null;
+                })}
+              </ItemGroup>
+            </SortableContext>
+          </DndContext>
+        </FieldSet>
+      ) : null}
+    </FieldGroup>
+  );
+}
+
+export function DealChoicePanel(props: DealChoicePanelProps) {
+  const dealChoiceKey = [
+    props.pendingDealChoice.dealerIndex,
+    props.pendingDealChoice.chooserIndex,
+    props.players.map((player) => `${player.playerId}:${Boolean(player.forfeited)}`).join(","),
+  ].join(":");
+
+  return <DealChoicePanelContent key={dealChoiceKey} {...props} />;
+}
+
+function DealChoicePanelContent({
   players,
   pendingDealChoice,
   dealChooserName,
@@ -171,29 +384,14 @@ export function DealChoicePanel({
   const [dealStep, setDealStep] = useState<DealStep>("cut");
   const [dealMode, setDealMode] = useState<DealMode>("round_robin");
   const [cutSize, setCutSize] = useState("0");
-  const [tapOrder, setTapOrder] = useState<number[]>([]);
-  const dealChoiceKey = [
-    pendingDealChoice.dealerIndex,
-    pendingDealChoice.chooserIndex,
-    players.map((player) => `${player.playerId}:${Boolean(player.forfeited)}`).join(","),
-  ].join(":");
+  const [tapOrder, setTapOrder] = useState<number[]>(() =>
+    defaultTapOrder(players, pendingDealChoice),
+  );
   const activePlayerCount = players.filter((player) => !player.forfeited).length;
   const maxCutSize = Math.max(0, GAME_DECK_CARD_COUNT - activePlayerCount * 12);
   const clampedCutSize = clampCutSize(cutSize, maxCutSize);
   const prefersReducedMotion = useShouldReduceMotion();
   const dealerName = players[pendingDealChoice.dealerIndex]?.name ?? null;
-  const tapOrderIds = tapOrder.map(dealPlayerId);
-  const resetDealChoice = useEffectEvent(() => {
-    setDealStep("cut");
-    setDealMode("round_robin");
-    setCutSize("0");
-    setTapOrder(defaultTapOrder(players, pendingDealChoice));
-  });
-
-  useEffect(() => {
-    resetDealChoice();
-  }, [dealChoiceKey]);
-
   function handleTapOrderDragEnd(event: DragEndEvent) {
     const { active, over } = event;
 
@@ -248,190 +446,20 @@ export function DealChoicePanel({
       <CardContent>
         {isDealChooser ? (
           dealStep === "cut" ? (
-            <FieldGroup>
-              <Item variant="muted">
-                <ItemMedia variant="icon">
-                  <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle>{m.cut_deck()}</ItemTitle>
-                  <ItemDescription>{m.cut_deck_description()}</ItemDescription>
-                </ItemContent>
-                <ItemFooter>
-                  <div className="w-full">
-                    <div
-                      className="relative mx-auto h-32 w-full max-w-sm overflow-hidden perspective-[520px]"
-                      aria-hidden="true"
-                    >
-                      <motion.div
-                        initial={false}
-                        animate={{
-                          left: "25%",
-                          x: "-50%",
-                          opacity: clampedCutSize > 0 ? 0.55 : 0,
-                          scaleX: 0.65 + (clampedCutSize / GAME_DECK_CARD_COUNT) * 0.35,
-                        }}
-                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                        className="absolute bottom-7 h-2 w-20 rounded-full bg-black/40 blur-md"
-                      />
-                      <motion.div
-                        initial={false}
-                        animate={{
-                          left: "75%",
-                          x: "-50%",
-                          opacity: 0.55,
-                          scaleX:
-                            0.65 +
-                            ((GAME_DECK_CARD_COUNT - clampedCutSize) / GAME_DECK_CARD_COUNT) * 0.35,
-                        }}
-                        transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                        className="absolute bottom-7 h-2 w-20 rounded-full bg-black/40 blur-md"
-                      />
-                      {Array.from({ length: GAME_DECK_CARD_COUNT }, (_, index) => {
-                        const firstLiftedIndex = GAME_DECK_CARD_COUNT - clampedCutSize;
-                        const isLifted = index >= firstLiftedIndex;
-                        const stackIndex = isLifted ? index - firstLiftedIndex : index;
-                        const stackSize = isLifted
-                          ? clampedCutSize
-                          : GAME_DECK_CARD_COUNT - clampedCutSize;
-                        const depth = Math.max(0, stackSize - stackIndex - 1);
-
-                        return (
-                          <motion.div
-                            key={index}
-                            initial={false}
-                            animate={{
-                              left: isLifted ? "25%" : "75%",
-                              x: "-50%",
-                              top: DECK_STACK_BASE_TOP - stackIndex * DECK_CARD_VERTICAL_OFFSET,
-                              rotateX: 54,
-                              rotateZ: isLifted ? -5 + (index % 3) * 0.4 : 4 - (index % 3) * 0.35,
-                            }}
-                            transition={
-                              prefersReducedMotion
-                                ? { duration: 0 }
-                                : { type: "spring", stiffness: 230, damping: 25, mass: 0.75 }
-                            }
-                            className="absolute h-24 w-17 origin-bottom"
-                            style={{
-                              zIndex: isLifted
-                                ? GAME_DECK_CARD_COUNT + stackIndex + 1
-                                : stackIndex + 1,
-                            }}
-                          >
-                            <GameCard
-                              card={FACE_DOWN_CARD}
-                              faceDown
-                              size="default"
-                              className={cn("size-full", depth === 0 ? "shadow-lg" : "shadow-none")}
-                            />
-                          </motion.div>
-                        );
-                      })}
-                    </div>
-                    <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-6">
-                      <div className="flex justify-center">
-                        <Badge variant="secondary">
-                          {m.lifted_cards({ count: clampedCutSize })}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-center">
-                        <Badge variant="secondary">
-                          {m.deck_cards({ count: GAME_DECK_CARD_COUNT - clampedCutSize })}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </ItemFooter>
-              </Item>
-
-              <Field>
-                <FieldLabel id="cut-size-label" htmlFor="cut-size" className="sr-only">
-                  {m.cut_size()}
-                </FieldLabel>
-                <Slider
-                  id="cut-size"
-                  min={0}
-                  max={maxCutSize}
-                  step={1}
-                  thumbAriaLabelledBy="cut-size-label"
-                  value={[clampedCutSize]}
-                  onValueChange={(value) => {
-                    const nextCutSize = Array.isArray(value) ? value[0] : value;
-                    setCutSize(String(nextCutSize ?? 0));
-                  }}
-                />
-                <FieldDescription className="flex justify-between">
-                  <span>0</span>
-                  <span>{m.cards_maximum({ count: maxCutSize })}</span>
-                </FieldDescription>
-              </Field>
-            </FieldGroup>
+            <DeckCutFieldGroup
+              clampedCutSize={clampedCutSize}
+              maxCutSize={maxCutSize}
+              prefersReducedMotion={prefersReducedMotion}
+              setCutSize={setCutSize}
+            />
           ) : (
-            <FieldGroup>
-              <FieldSet>
-                <FieldLegend variant="label">{m.dealing_style()}</FieldLegend>
-                <ToggleGroup
-                  value={[dealMode]}
-                  onValueChange={(value) => {
-                    const nextMode = value[0];
-                    if (nextMode === "round_robin" || nextMode === "tap") {
-                      setDealMode(nextMode);
-                    }
-                  }}
-                  variant="outline"
-                  spacing={2}
-                  className="grid w-full grid-cols-2"
-                >
-                  <ToggleGroupItem value="round_robin" className="min-w-0">
-                    <HugeiconsIcon icon={Cards02Icon} strokeWidth={2} />
-                    {m.round_robin()}
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="tap" className="min-w-0">
-                    <HugeiconsIcon icon={ArrangeIcon} strokeWidth={2} />
-                    {m.tap_order()}
-                  </ToggleGroupItem>
-                </ToggleGroup>
-                <FieldDescription>
-                  {dealMode === "round_robin"
-                    ? m.round_robin_description()
-                    : m.tap_order_description()}
-                </FieldDescription>
-              </FieldSet>
-
-              {dealMode === "tap" ? (
-                <FieldSet>
-                  <FieldLegend variant="label">{m.player_order()}</FieldLegend>
-                  <DndContext
-                    autoScroll={false}
-                    collisionDetection={closestCenter}
-                    modifiers={[restrictTapOrderDrag]}
-                    onDragEnd={handleTapOrderDragEnd}
-                  >
-                    <SortableContext items={tapOrderIds} strategy={verticalListSortingStrategy}>
-                      <ItemGroup className="max-h-56 overflow-y-auto pr-1">
-                        {tapOrder.map((playerIndex, index) => {
-                          const player = players[playerIndex];
-
-                          if (!player) {
-                            return null;
-                          }
-
-                          return (
-                            <SortableDealOrderPlayer
-                              key={player.playerId}
-                              player={player}
-                              playerIndex={playerIndex}
-                              position={index}
-                            />
-                          );
-                        })}
-                      </ItemGroup>
-                    </SortableContext>
-                  </DndContext>
-                </FieldSet>
-              ) : null}
-            </FieldGroup>
+            <DealModeFieldGroup
+              players={players}
+              dealMode={dealMode}
+              tapOrder={tapOrder}
+              setDealMode={setDealMode}
+              onTapOrderDragEnd={handleTapOrderDragEnd}
+            />
           )
         ) : (
           <Item variant="muted">

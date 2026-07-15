@@ -96,11 +96,13 @@ function CardLine({
           wrap ? "flex-wrap overflow-x-visible pb-0" : null,
         )}
       >
-        {cards.map((exampleCard, index) => (
+        {cards.map((exampleCard) => (
           <GameCard
-            key={`${
-              exampleCard.isJoker ? "joker" : `${exampleCard.rank}-${exampleCard.suit}`
-            }-${index}`}
+            key={
+              exampleCard.isJoker
+                ? "joker"
+                : `${exampleCard.rank ?? "unknown"}-${exampleCard.suit ?? "unknown"}`
+            }
             card={exampleCard}
             size="compact"
           />

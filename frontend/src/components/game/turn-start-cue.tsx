@@ -21,20 +21,17 @@ export function TurnStartCue({
 }) {
   const [visible, setVisible] = useState(true);
   const shouldReduceMotion = useShouldReduceMotion();
-  const turnKey = `${round}:${turnNumber}`;
 
   useEffect(() => {
-    setVisible(true);
     const hideTimer = window.setTimeout(() => setVisible(false), 1_600);
 
     return () => window.clearTimeout(hideTimer);
-  }, [turnKey]);
+  }, []);
 
   return (
     <AnimatePresence>
       {visible ? (
         <motion.div
-          key={turnKey}
           className="pointer-events-none fixed top-[clamp(4.5rem,12vh,8rem)] left-1/2 z-50 w-[min(22rem,calc(100vw-2rem))] will-change-[transform,opacity]"
           initial={{
             opacity: 0,
