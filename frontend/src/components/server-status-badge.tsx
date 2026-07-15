@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BadgeInfoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { checkGameServerHealth } from "#/lib/health";
-import { H6, Text } from "#/components/typography";
+import { Caption, H6 } from "#/components/typography";
 import { useGameWebSocket } from "./game-websocket-provider";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -63,31 +63,29 @@ export function ServerStatusBadge() {
       <PopoverContent align="start">
         <div className="space-y-1">
           <H6>{m.connection_status()}</H6>
-          <Text as="p" variant="caption">
-            {m.connection_diagnostics()}
-          </Text>
+          <Caption>{m.connection_diagnostics()}</Caption>
         </div>
         <Separator />
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-4">
-            <Text as={Label} variant="caption">
+            <Label className="text-[0.7rem]/4 font-normal text-muted-foreground md:text-xs/5">
               {m.connection()}
-            </Text>
+            </Label>
             <Badge variant={connectionVariant}>{connectionLabels[state.connectionStatus]()}</Badge>
           </div>
           <div className="flex items-center justify-between gap-4">
-            <Text as={Label} variant="caption">
+            <Label className="text-[0.7rem]/4 font-normal text-muted-foreground md:text-xs/5">
               {m.server()}
-            </Text>
+            </Label>
             <Badge variant={serverVariants[serverStatus]} className="gap-1">
               {isCheckingServer && <Spinner className="size-3" />}
-              <Text variant="status">
+              <span className="capitalize">
                 {serverStatus === "online"
                   ? m.status_online()
                   : serverStatus === "offline"
                     ? m.status_offline()
                     : m.status_checking()}
-              </Text>
+              </span>
             </Badge>
           </div>
         </div>

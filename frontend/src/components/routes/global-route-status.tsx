@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { Link, type ErrorComponentProps, type NotFoundRouteProps } from "@tanstack/react-router";
 import { Button } from "#/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader } from "#/components/ui/card";
-import { H2, Text } from "#/components/typography";
+import { Caption, H2 } from "#/components/typography";
 import { m } from "#/paraglide/messages.js";
 
 function errorMessage(error: unknown) {
@@ -26,9 +26,7 @@ function RouteStatusFrame({
     <div className="flex min-h-full flex-1 items-center justify-center p-6 sm:p-8">
       <Card className="w-full max-w-lg border border-border/70 bg-card/95 shadow-xl backdrop-blur-sm">
         <CardHeader className="gap-3">
-          <Text as="div" variant="eyebrow-wide">
-            {eyebrow}
-          </Text>
+          <Caption className="font-medium tracking-[0.24em] uppercase">{eyebrow}</Caption>
           <div className="space-y-1">
             <H2>{title}</H2>
             <CardDescription>{description}</CardDescription>

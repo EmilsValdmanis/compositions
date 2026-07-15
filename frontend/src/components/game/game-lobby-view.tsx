@@ -23,7 +23,7 @@ import {
 } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
-import { Eyebrow, Text } from "#/components/typography";
+import { Caption, H2 } from "#/components/typography";
 import { m } from "#/paraglide/messages.js";
 
 type AsyncAction = () => Promise<void> | void;
@@ -111,10 +111,10 @@ export function GameLobbyView({
               <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <Eyebrow>{m.room_code()}</Eyebrow>
-                    <Text as="p" variant="metric">
-                      {room.code}
-                    </Text>
+                    <Caption className="font-medium tracking-[0.18em] uppercase">
+                      {m.room_code()}
+                    </Caption>
+                    <H2 className="tabular-nums">{room.code}</H2>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button type="button" variant="outline" />}>
@@ -163,13 +163,15 @@ export function GameLobbyView({
               ) : null}
               {completedGame ? (
                 <div className="grid gap-1 rounded-2xl border border-border/70 bg-muted/20 p-4">
-                  <Eyebrow>{m.last_winner()}</Eyebrow>
-                  <Text as="p" variant="body" className="text-muted-foreground">
+                  <Caption className="font-medium tracking-[0.18em] uppercase">
+                    {m.last_winner()}
+                  </Caption>
+                  <Caption>
                     {m.winner_in_round({
                       name: victor?.name ?? m.a_player(),
                       round: completedGame.game.round,
                     })}
-                  </Text>
+                  </Caption>
                 </div>
               ) : null}
             </div>
@@ -210,10 +212,6 @@ export function GameLobbyView({
             {players.length ? (
               <div className="flex items-center gap-2">
                 <PlayerEmotePicker onSendEmote={onSendEmote} />
-                <Badge variant="outline">
-                  <AnimatedNumber value={players.length} />{" "}
-                  {m.seated_players_label({ count: players.length })}
-                </Badge>
               </div>
             ) : null}
           </div>
@@ -222,13 +220,9 @@ export function GameLobbyView({
           {players.length ? (
             <PlayerStrip players={players} game={game} />
           ) : (
-            <Text
-              as="div"
-              variant="body"
-              className="rounded-2xl border border-dashed border-border/70 p-6 text-muted-foreground"
-            >
+            <Caption className="rounded-2xl border border-dashed border-border/70 p-6">
               {m.create_or_join_room()}
-            </Text>
+            </Caption>
           )}
         </CardContent>
       </Card>

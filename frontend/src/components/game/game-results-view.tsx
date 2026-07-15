@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
-import { P, Strong, Text } from "#/components/typography";
+import { Caption, P } from "#/components/typography";
 import { fireCelebrationConfetti } from "#/lib/confetti";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -88,20 +88,17 @@ function ResultPoints({
   return (
     <>
       <TableCell className="text-right">
-        <Text variant="numeric">
+        <P size="sm" className="font-medium tabular-nums">
           <AnimatedNumber value={displayedPoints.total} />
-        </Text>
+        </P>
       </TableCell>
       <TableCell className="text-right">
-        <Text
-          variant={displayedPoints.gained > 0 ? "caption-strong" : "caption"}
-          className={cn(displayedPoints.gained > 0 ? "text-primary" : "text-muted-foreground")}
-        >
+        <Caption className={cn(displayedPoints.gained > 0 && "font-medium text-primary")}>
           <AnimatedNumber
             value={displayedPoints.gained}
             prefix={displayedPoints.gained > 0 ? "+" : undefined}
           />
-        </Text>
+        </Caption>
       </TableCell>
     </>
   );
@@ -140,9 +137,9 @@ function LeftoverHandTooltip({
           />
         }
       >
-        <Text variant="numeric">
+        <P size="sm" className="font-medium tabular-nums">
           <AnimatedNumber value={handCount} />
-        </Text>
+        </P>
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
       <TooltipContent className="flex flex-wrap justify-center gap-1 py-2.5 max-w-53">
@@ -246,7 +243,9 @@ export function GameResultsView({
                       )}
                     >
                       <TableCell>
-                        <Strong className={cn(isRoundWinner && "text-primary")}>{rank}</Strong>
+                        <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
+                          {rank}
+                        </P>
                       </TableCell>
                       <TableCell>
                         <div className="flex min-w-40 flex-wrap items-center gap-2">
@@ -267,22 +266,24 @@ export function GameResultsView({
                               )}
                             </AvatarFallback>
                             {isRoundWinner ? (
-                              <Text
-                                variant="emoji-sm"
+                              <span
                                 aria-hidden="true"
-                                className="absolute -top-3 -right-0.5 z-20 origin-bottom-left rotate-18 drop-shadow-sm"
+                                className="absolute -top-3 -right-0.5 z-20 origin-bottom-left rotate-18 text-sm/none drop-shadow-sm"
                                 style={{
                                   fontFamily:
                                     '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"',
                                 }}
                               >
                                 👑
-                              </Text>
+                              </span>
                             ) : null}
                           </Avatar>
-                          <Strong className={cn(isRoundWinner && "text-primary")}>
+                          <P
+                            size="sm"
+                            className={cn("font-medium", isRoundWinner && "text-primary")}
+                          >
                             {playerName}
-                          </Strong>
+                          </P>
                           {playerState.playerId === playerId ? (
                             <Badge variant="outline">{m.you()}</Badge>
                           ) : null}

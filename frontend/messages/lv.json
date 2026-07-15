@@ -81,17 +81,6 @@
   "a_player": "Kāds spēlētājs",
   "winner_in_round": "{name} — {round}. raundā",
   "online": "tiešsaistē",
-  "seated_players_label": [
-    {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=zero": "spēlētāju pie galda",
-        "countPlural=one": "spēlētājs pie galda",
-        "countPlural=other": "spēlētāji pie galda"
-      }
-    }
-  ],
   "draw_before_discarding": "Pirms nomešanas paņem kārti",
   "prepare_deal": "Sagatavo dalīšanu",
   "dealer_named": "Dalītājs: {name}",

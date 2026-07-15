@@ -81,16 +81,6 @@
   "a_player": "A player",
   "winner_in_round": "{name} in round {round}",
   "online": "online",
-  "seated_players_label": [
-    {
-      "declarations": ["input count", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=one": "player seated",
-        "countPlural=other": "players seated"
-      }
-    }
-  ],
   "draw_before_discarding": "Draw before discarding",
   "prepare_deal": "Prepare the deal",
   "dealer_named": "Dealer: {name}",

@@ -3,7 +3,6 @@ import { motion } from "motion/react";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { Text } from "#/components/typography";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { m } from "#/paraglide/messages.js";
 
@@ -60,7 +59,7 @@ export function PlayerEmoteBubble({
       className="pointer-events-none absolute -top-6 left-8 z-20 grid size-9 place-items-center rounded-full bg-background/95 p-0 shadow-lg ring-1 ring-foreground/5"
       style={emojiFont}
     >
-      <Text variant="emoji-xl">{emote.emoji}</Text>
+      <span className="text-xl/none">{emote.emoji}</span>
     </Badge>
   );
 }
@@ -92,9 +91,9 @@ export function PlayerEmotePicker({
           />
         }
       >
-        <Text variant="emoji-base" aria-hidden style={emojiFont}>
+        <span className="text-base/none" aria-hidden style={emojiFont}>
           🙂
-        </Text>
+        </span>
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-auto rounded-2xl p-2">
         <div className="grid grid-cols-4 gap-1">
@@ -108,9 +107,9 @@ export function PlayerEmotePicker({
               aria-label={m.send_emote({ emoji })}
               onClick={() => handleSendEmote(emoji)}
             >
-              <Text variant="emoji-lg" aria-hidden style={emojiFont}>
+              <span className="text-lg/none" aria-hidden style={emojiFont}>
                 {emoji}
-              </Text>
+              </span>
             </Button>
           ))}
         </div>

@@ -7,7 +7,7 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
-import { Caption, Eyebrow, H1, Text } from "#/components/typography";
+import { Caption, H1, H2, P } from "#/components/typography";
 import type { PlayerProfile } from "#/lib/player-profile";
 import { getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -45,9 +45,9 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
     <Card size="sm">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
-        <Text as="div" variant="stat" data-slot="card-title">
+        <H2 className="font-medium tabular-nums" data-slot="card-title">
           {value}
-        </Text>
+        </H2>
       </CardHeader>
       <CardContent>
         <Caption>{note}</Caption>
@@ -59,8 +59,12 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3">
-      <Text className="text-muted-foreground">{label}</Text>
-      <Text variant="numeric">{value}</Text>
+      <P size="sm" className="text-muted-foreground">
+        {label}
+      </P>
+      <P size="sm" className="font-medium tabular-nums">
+        {value}
+      </P>
     </div>
   );
 }
@@ -105,11 +109,21 @@ export function PlayerProfilePage({
             <Avatar className="size-16 sm:size-20">
               {profile.imageUrl ? <AvatarImage src={profile.imageUrl} alt={profile.name} /> : null}
               <AvatarFallback>
-                <Text variant="h3">{getUserInitials(profile.name)}</Text>
+                <P
+                  size="lg"
+                  className="font-heading text-lg/6 font-semibold tracking-tight md:text-xl/7"
+                >
+                  {getUserInitials(profile.name)}
+                </P>
               </AvatarFallback>
             </Avatar>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <Eyebrow data-slot="card-description">{m.player_profile()}</Eyebrow>
+              <Caption
+                className="font-medium tracking-[0.18em] uppercase"
+                data-slot="card-description"
+              >
+                {m.player_profile()}
+              </Caption>
               <H1 className="truncate">{profile.name}</H1>
               <Badge className="mt-1 w-fit" variant={hasGames ? "secondary" : "outline"}>
                 {hasGames ? m.ranked_games({ count: profile.gamesPlayed }) : m.unranked()}

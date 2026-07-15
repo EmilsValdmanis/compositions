@@ -27,7 +27,7 @@ import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
-import { Text } from "#/components/typography";
+import { Caption } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -300,12 +300,9 @@ export function GameBoardTable({
                 ))}
               </div>
             ) : (
-              <Text
-                as="div"
-                className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center text-muted-foreground"
-              >
+              <Caption className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center">
                 {m.no_compositions()}
-              </Text>
+              </Caption>
             )}
           </div>
 

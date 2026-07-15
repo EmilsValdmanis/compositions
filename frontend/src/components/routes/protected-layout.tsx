@@ -1,7 +1,7 @@
 import { Outlet, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
-import { Text } from "#/components/typography";
+import { H6 } from "#/components/typography";
 import { UserDropdown } from "#/components/user-dropdown";
 import { m } from "#/paraglide/messages.js";
 
@@ -19,9 +19,9 @@ function BrandTitle() {
 function ProtectedLayoutTitle() {
   return (
     <div className="min-w-0 text-center">
-      <Text as="p" variant="brand" className="truncate">
+      <H6 className="truncate text-sm/5 tracking-[0.16em] uppercase text-foreground/90 md:text-base/6">
         <BrandTitle />
-      </Text>
+      </H6>
     </div>
   );
 }

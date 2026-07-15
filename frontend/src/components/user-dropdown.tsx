@@ -31,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { useTheme } from "#/components/theme-provider";
-import { Strong, Text } from "#/components/typography";
+import { Caption, P } from "#/components/typography";
 import { authClient } from "#/lib/auth-client";
 import {
   areGameSoundsEnabled,
@@ -101,8 +101,10 @@ export function UserDropdown() {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <Strong className="text-foreground">{displayName || m.account()}</Strong>
-              {user?.email ? <Text variant="caption">{user.email}</Text> : null}
+              <P size="sm" className="font-medium text-foreground">
+                {displayName || m.account()}
+              </P>
+              {user?.email ? <Caption>{user.email}</Caption> : null}
             </DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />

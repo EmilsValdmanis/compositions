@@ -7,7 +7,7 @@ import {
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
 import { Card, CardContent } from "#/components/ui/card";
-import { Text } from "#/components/typography";
+import { Caption } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -71,22 +71,16 @@ export function GameBoardHand({
                   </div>
                 </div>
               ) : (
-                <Text
-                  as="div"
-                  className="rounded-3xl border border-dashed border-border/70 p-6 text-muted-foreground"
-                >
+                <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
                   {hasDraftedCompositions ? m.all_cards_staged() : m.no_cards_in_hand()}
-                </Text>
+                </Caption>
               )}
             </GameBoardDraftDropZone>
           </SortableContext>
         ) : (
-          <Text
-            as="div"
-            className="rounded-3xl border border-dashed border-border/70 p-6 text-muted-foreground"
-          >
+          <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
             {m.waiting_game_snapshot()}
-          </Text>
+          </Caption>
         )}
       </CardContent>
     </Card>

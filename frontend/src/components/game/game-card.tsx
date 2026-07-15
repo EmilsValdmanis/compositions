@@ -12,7 +12,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { cardName } from "#/components/game/game-card-utils";
-import { Text, type TypographyVariant } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { m } from "#/paraglide/messages.js";
@@ -76,10 +75,10 @@ const gameCardSizeClassNames: Record<GameCardSize, string> = {
   compact: "h-16 w-11 rounded-xl p-1.5",
 };
 
-const cardCornerTextVariants: Record<GameCardSize, TypographyVariant> = {
-  hand: "card-rank-hand",
-  default: "card-rank-default",
-  compact: "card-rank-compact",
+const cardCornerTextClassNames: Record<GameCardSize, string> = {
+  hand: "text-lg/none",
+  default: "text-sm/none",
+  compact: "text-[0.65rem]/none",
 };
 
 const cardCornerInsetClassNames: Record<GameCardSize, string> = {
@@ -123,12 +122,15 @@ function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
 
   return (
     <>
-      <Text
-        variant={cardCornerTextVariants[size]}
-        className={cn("absolute", cardCornerInsetClassNames[size])}
+      <span
+        className={cn(
+          "absolute font-semibold",
+          cardCornerTextClassNames[size],
+          cardCornerInsetClassNames[size],
+        )}
       >
         {rank}
-      </Text>
+      </span>
       {icon ? (
         <HugeiconsIcon
           icon={icon}
@@ -136,19 +138,25 @@ function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
           aria-hidden="true"
         />
       ) : (
-        <Text
-          variant={cardCornerTextVariants[size]}
-          className={cn("pointer-events-none", cardSymbolClassNames[size])}
+        <span
+          className={cn(
+            "pointer-events-none font-semibold",
+            cardCornerTextClassNames[size],
+            cardSymbolClassNames[size],
+          )}
         >
           ?
-        </Text>
+        </span>
       )}
-      <Text
-        variant={cardCornerTextVariants[size]}
-        className={cn("absolute", cardCornerEndInsetClassNames[size])}
+      <span
+        className={cn(
+          "absolute font-semibold",
+          cardCornerTextClassNames[size],
+          cardCornerEndInsetClassNames[size],
+        )}
       >
         {rank}
-      </Text>
+      </span>
     </>
   );
 }

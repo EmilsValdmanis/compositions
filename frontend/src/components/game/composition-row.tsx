@@ -23,7 +23,7 @@ import {
 import { cn } from "#/lib/utils";
 import { Badge } from "../ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
-import { Text } from "#/components/typography";
+import { Caption } from "#/components/typography";
 import { m } from "#/paraglide/messages.js";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
@@ -134,9 +134,7 @@ function CompositionEdgeDropTarget({
             active ? "bg-primary/80" : "bg-transparent",
           )}
         />
-        <Text
-          as="div"
-          variant="symbol"
+        <span
           className={cn(
             "edge-drop-pill absolute flex size-5 items-center justify-center rounded-full shadow-sm backdrop-blur-sm transition-[border-color,color,background-color,opacity] duration-150",
             "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
@@ -147,7 +145,7 @@ function CompositionEdgeDropTarget({
           )}
         >
           +
-        </Text>
+        </span>
       </div>
     </GameBoardDraftDropZone>
   );
@@ -286,14 +284,14 @@ export function CompositionRow({
             <NewActivityLabel players={players} playerId={activity?.playerId} />
           ) : null}
         </div>
-        <Text as="div" variant="caption" className="flex items-center gap-2">
+        <Caption className="flex items-center gap-2">
           {previewPoints === null ? (
             <span title={m.complete_composition_points()}>?</span>
           ) : (
             <AnimatedNumber value={previewPoints} />
           )}{" "}
           {m.points_unit()}
-        </Text>
+        </Caption>
       </div>
 
       <div className="relative mx-auto flex w-fit max-w-full flex-wrap items-center justify-center gap-3 overflow-visible">
