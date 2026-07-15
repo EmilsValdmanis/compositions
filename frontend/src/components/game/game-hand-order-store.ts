@@ -5,7 +5,7 @@ type HandOrderState = {
   orders: Record<string, string[]>;
 };
 
-const STORAGE_KEY = "compositions.game-hand-order";
+const STORAGE_KEY = "compositions.game-hand-order:v1";
 const EMPTY_ORDER: string[] = [];
 
 function sameStringArray(a: string[], b: string[]) {

@@ -361,6 +361,47 @@ function getDealerIndex(room: RoomSnapshot | null) {
   return hostIndex >= 0 ? hostIndex : 0;
 }
 
+function updateState(updater: (current: LobbyState) => LobbyState) {
+  gameWebSocketStore.setState((current) => updater(current));
+}
+
+function setConnectionError(message: string) {
+  updateState((current) =>
+    withError(current, message, {
+      connectionStatus: "disconnected",
+    }),
+  );
+}
+
+function resolveConnectionAuthError(_error: unknown) {
+  return "auth_required";
+}
+
+function parseEnvelope(rawData: unknown): Envelope | null {
+  if (typeof rawData !== "string") {
+    return null;
+  }
+
+  try {
+    const message = JSON.parse(rawData) as Envelope;
+    if (typeof message?.type !== "string" || message.type === "") {
+      return null;
+    }
+    return message;
+  } catch {
+    return null;
+  }
+}
+
+async function getConnectionAuth(): Promise<ConnectionAuth> {
+  try {
+    return await getGameConnectionAuth();
+  } catch (error) {
+    setConnectionError(resolveConnectionAuthError(error));
+    return null;
+  }
+}
+
 function useGameWebSocketController(): GameWebSocketContextValue {
   const socketRef = useRef<WebSocket | null>(null);
   const connectAttemptRef = useRef(0);
@@ -399,22 +440,6 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     };
   }, []);
 
-  function updateState(updater: (current: LobbyState) => LobbyState) {
-    gameWebSocketStore.setState((current) => updater(current));
-  }
-
-  function setConnectionError(message: string) {
-    updateState((current) =>
-      withError(current, message, {
-        connectionStatus: "disconnected",
-      }),
-    );
-  }
-
-  function resolveConnectionAuthError(_error: unknown) {
-    return "auth_required";
-  }
-
   function rejectPendingActions(message: string) {
     const pendingActions = pendingActionsRef.current.splice(0);
 
@@ -452,22 +477,6 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     });
   }
 
-  function parseEnvelope(rawData: unknown): Envelope | null {
-    if (typeof rawData !== "string") {
-      return null;
-    }
-
-    try {
-      const message = JSON.parse(rawData) as Envelope;
-      if (typeof message?.type !== "string" || message.type === "") {
-        return null;
-      }
-      return message;
-    } catch {
-      return null;
-    }
-  }
-
   function applyIncomingMessage(message: Envelope) {
     if (message.type === "action_result") {
       resolvePendingAction(message.data);
@@ -490,15 +499,6 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     }
 
     updateState((current) => reducer(current, message.data));
-  }
-
-  async function getConnectionAuth(): Promise<ConnectionAuth> {
-    try {
-      return await getGameConnectionAuth();
-    } catch (error) {
-      setConnectionError(resolveConnectionAuthError(error));
-      return null;
-    }
   }
 
   function send(type: string, data: unknown): void;
@@ -558,7 +558,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     return pendingAction;
   }
 
-  async function connect() {
+  const connect = async function connectWebSocket() {
     if (reconnectTimerRef.current) {
       window.clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
@@ -677,12 +677,12 @@ function useGameWebSocketController(): GameWebSocketContextValue {
           );
           reconnectTimerRef.current = window.setTimeout(() => {
             reconnectTimerRef.current = null;
-            void connect();
+            void connectWebSocket();
           }, reconnectDelay);
         }
       };
     });
-  }
+  };
 
   function disconnect() {
     if (reconnectTimerRef.current) {

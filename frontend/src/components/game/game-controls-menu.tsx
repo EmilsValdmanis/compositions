@@ -63,17 +63,18 @@ export function GameControlsMenu() {
       ? m.forfeit_other_wins({ name: otherActivePlayers[0]?.name ?? m.other_player() })
       : m.forfeit_players_continue({ count: otherActivePlayers.length });
 
-  async function runAction(action: () => Promise<unknown>, successMessage: string) {
+  function runAction(action: () => Promise<unknown>, successMessage: string) {
     setIsSubmitting(true);
-    try {
-      await action();
-      setOpenDialog(null);
-      toast.success(successMessage);
-    } catch {
-      // The shared WebSocket error handler presents the server's reason.
-    } finally {
-      setIsSubmitting(false);
-    }
+    return Promise.resolve()
+      .then(action)
+      .then(() => {
+        setOpenDialog(null);
+        toast.success(successMessage);
+      })
+      .catch(() => {
+        // The shared WebSocket error handler presents the server's reason.
+      })
+      .finally(() => setIsSubmitting(false));
   }
 
   async function submitReport(requestAbort: boolean) {

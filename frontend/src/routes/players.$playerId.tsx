@@ -24,12 +24,17 @@ function profileDescription(profile: Awaited<ReturnType<typeof getPlayerProfile>
 
 export const Route = createFileRoute("/players/$playerId")({
   loader: async ({ params }) => {
-    const profile = await getPlayerProfile({ data: params.playerId });
+    const [profileResult, historyResult] = await Promise.allSettled([
+      getPlayerProfile({ data: params.playerId }),
+      getPlayerGameHistory({
+        data: { playerId: params.playerId, page: 1, pageSize: 10 },
+      }),
+    ]);
+    if (profileResult.status === "rejected") throw profileResult.reason;
+    const profile = profileResult.value;
     if (!profile) throw notFound();
-    const history = await getPlayerGameHistory({
-      data: { playerId: params.playerId, page: 1, pageSize: 10 },
-    });
-    return { profile, history };
+    if (historyResult.status === "rejected") throw historyResult.reason;
+    return { profile, history: historyResult.value };
   },
   head: ({ loaderData, match }) => {
     const profile = loaderData?.profile;

@@ -1,8 +1,5 @@
 import SignInButton from "#/components/auth/sign-in-button";
-import { Route } from "#/routes/_auth/sign-in";
 
-export function SignInPage() {
-  const { returnTo } = Route.useSearch();
-
+export function SignInPage({ returnTo }: { returnTo?: string }) {
   return <SignInButton returnTo={returnTo} />;
 }

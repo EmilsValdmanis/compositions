@@ -114,12 +114,12 @@ export function draftPreviewForComposition(
     entriesByInsertIndex.set(entryInsertIndex, entries);
   }
 
-  const orderedAdditionEntries = [
-    ...[...(entriesByInsertIndex.get(0) ?? [])].reverse(),
-    ...[...entriesByInsertIndex]
-      .filter(([entryInsertIndex]) => entryInsertIndex !== 0)
-      .flatMap(([, entries]) => entries),
-  ];
+  const orderedAdditionEntries = [...(entriesByInsertIndex.get(0) ?? [])].reverse();
+  for (const [entryInsertIndex, entries] of entriesByInsertIndex) {
+    if (entryInsertIndex !== 0) {
+      orderedAdditionEntries.push(...entries);
+    }
+  }
 
   return {
     stagedEntries: orderedAdditionEntries,

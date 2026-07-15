@@ -33,16 +33,16 @@ export function EndGameProposalAlert() {
   );
   const hasAgreed = proposal.agreedPlayerIds.includes(state.playerId);
   const isTechnicalAbort = proposal.kind === "technical_abort";
+  const proposalId = proposal.id;
 
-  async function vote(approve: boolean) {
+  function vote(approve: boolean) {
     setIsVoting(true);
-    try {
-      await voteEndGame(proposal!.id, approve);
-    } catch {
-      // The shared WebSocket error handler presents the server's reason.
-    } finally {
-      setIsVoting(false);
-    }
+    void Promise.resolve()
+      .then(() => voteEndGame(proposalId, approve))
+      .catch(() => {
+        // The shared WebSocket error handler presents the server's reason.
+      })
+      .finally(() => setIsVoting(false));
   }
 
   return (
@@ -74,11 +74,11 @@ export function EndGameProposalAlert() {
                   size="sm"
                   variant="outline"
                   disabled={isVoting}
-                  onClick={() => void vote(false)}
+                  onClick={() => vote(false)}
                 >
                   {m.keep_playing()}
                 </Button>
-                <Button type="button" size="sm" disabled={isVoting} onClick={() => void vote(true)}>
+                <Button type="button" size="sm" disabled={isVoting} onClick={() => vote(true)}>
                   {isTechnicalAbort ? m.abort_game() : m.end_game()}
                 </Button>
               </>

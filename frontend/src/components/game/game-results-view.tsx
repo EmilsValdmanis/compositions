@@ -72,6 +72,18 @@ function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
 
 function noopResetDraftCompositions() {}
 
+function keyedCards(cards: GameSnapshot["hand"]) {
+  const occurrences = new Map<string, number>();
+
+  return cards.map((card) => {
+    const identity = card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
+    const occurrence = occurrences.get(identity) ?? 0;
+    occurrences.set(identity, occurrence + 1);
+
+    return { card, key: `${identity}-${occurrence}` };
+  });
+}
+
 function ResultPoints({
   totalPoints,
   pointsGained,
@@ -150,8 +162,8 @@ function LeftoverHandTooltip({
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
       <TooltipContent className="flex flex-wrap justify-center gap-1 py-2.5 max-w-53">
-        {hand.map((card, index) => (
-          <GameCard key={`${cardName(card)}-${index}`} card={card} size="compact" />
+        {keyedCards(hand).map(({ card, key }) => (
+          <GameCard key={key} card={card} size="compact" />
         ))}
       </TooltipContent>
     </Tooltip>

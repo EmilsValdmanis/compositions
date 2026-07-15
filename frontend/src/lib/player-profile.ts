@@ -3,7 +3,7 @@ import { z } from "zod";
 import { authURL } from "#/lib/auth-shared";
 
 export const playerProfileSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   name: z.string(),
   imageUrl: z.string(),
   gamesPlayed: z.number(),
@@ -26,9 +26,9 @@ export const playerProfileSchema = z.object({
 export type PlayerProfile = z.infer<typeof playerProfileSchema>;
 
 export const playerGameHistoryItemSchema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   status: z.enum(["completed", "forfeit"]),
-  completedAt: z.string().datetime({ offset: true }),
+  completedAt: z.iso.datetime({ offset: true }),
   placement: z.number().int().positive(),
   playerCount: z.number().int().min(2).max(4),
   won: z.boolean(),
@@ -50,7 +50,7 @@ export const playerGameHistorySchema = z.object({
 export type PlayerGameHistory = z.infer<typeof playerGameHistorySchema>;
 
 export const getPlayerProfile = createServerFn({ method: "GET" })
-  .validator(z.string().uuid())
+  .validator(z.uuid())
   .handler(async ({ data: playerId }) => {
     const response = await fetch(
       authURL(`/api/players/${encodeURIComponent(playerId)}`, process.env.VITE_GAME_SERVER_URL),
@@ -65,7 +65,7 @@ export const getPlayerProfile = createServerFn({ method: "GET" })
 export const getPlayerGameHistory = createServerFn({ method: "GET" })
   .validator(
     z.object({
-      playerId: z.string().uuid(),
+      playerId: z.uuid(),
       page: z.number().int().positive(),
       pageSize: z.number().int().min(1).max(50).default(10),
     }),

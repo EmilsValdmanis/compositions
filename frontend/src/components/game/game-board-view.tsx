@@ -831,6 +831,8 @@ function useGameBoardController({
 
     if (droppedOnTableEdgeTarget !== null && draggedEntry) {
       playGameSound("card-place");
+      const newCompositionId = `draft-${nextDraftIdRef.current}`;
+      nextDraftIdRef.current += 1;
       updateDraftCompositions((current) => {
         const existing = current.find(
           (composition) => composition.tableIndex === droppedOnTableEdgeTarget.compositionIndex,
@@ -850,13 +852,10 @@ function useGameBoardController({
           );
         }
 
-        const compositionId = `draft-${nextDraftIdRef.current}`;
-        nextDraftIdRef.current += 1;
-
         return [
           ...removeHandKeyFromDrafts(current, draggedHandKey),
           {
-            id: compositionId,
+            id: newCompositionId,
             handKeys: [draggedHandKey],
             tableIndex: droppedOnTableEdgeTarget.compositionIndex,
             insertIndex,
@@ -869,6 +868,8 @@ function useGameBoardController({
 
     if (droppedOnTableJokerTarget !== null && draggedEntry) {
       playGameSound("card-place");
+      const newCompositionId = `draft-${nextDraftIdRef.current}`;
+      nextDraftIdRef.current += 1;
       updateDraftCompositions((current) => {
         const existing = current.find(
           (composition) => composition.tableIndex === droppedOnTableJokerTarget.compositionIndex,
@@ -883,13 +884,10 @@ function useGameBoardController({
           );
         }
 
-        const compositionId = `draft-${nextDraftIdRef.current}`;
-        nextDraftIdRef.current += 1;
-
         return [
           ...removeHandKeyFromDrafts(current, draggedHandKey),
           {
-            id: compositionId,
+            id: newCompositionId,
             handKeys: [draggedHandKey],
             tableIndex: droppedOnTableJokerTarget.compositionIndex,
             insertIndex:
@@ -1054,6 +1052,7 @@ export function GameBoardView({
     >
       {turnState.isMyTurn && game ? (
         <TurnStartCue
+          key={`${game.round}:${game.turn.number}`}
           round={game.round}
           turnNumber={game.turn.number}
           playerName={currentPlayer?.name ?? turnState.turnPlayerName}

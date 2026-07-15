@@ -38,24 +38,39 @@ import {
 } from "#/lib/player-profile";
 import { getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
-import { getLocale } from "#/paraglide/runtime.js";
+import { getLocale, type Locale } from "#/paraglide/runtime.js";
+
+const PERCENT_FORMATTERS: Record<Locale, Intl.NumberFormat> = {
+  en: new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 0 }),
+  lv: new Intl.NumberFormat("lv", { style: "percent", maximumFractionDigits: 0 }),
+};
+const DECIMAL_FORMATTERS: Record<Locale, Intl.NumberFormat> = {
+  en: new Intl.NumberFormat("en", { maximumFractionDigits: 1 }),
+  lv: new Intl.NumberFormat("lv", { maximumFractionDigits: 1 }),
+};
+const COMPLETED_AT_FORMATTERS: Record<Locale, Intl.DateTimeFormat> = {
+  en: new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Riga",
+  }),
+  lv: new Intl.DateTimeFormat("lv", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Riga",
+  }),
+};
 
 function ratio(numerator: number, denominator: number) {
   return denominator > 0 ? numerator / denominator : null;
 }
 
 function formatPercent(value: number | null) {
-  return value === null
-    ? "—"
-    : new Intl.NumberFormat(getLocale(), { style: "percent", maximumFractionDigits: 0 }).format(
-        value,
-      );
+  return value === null ? "—" : PERCENT_FORMATTERS[getLocale()].format(value);
 }
 
 function formatDecimal(value: number | null) {
-  return value === null
-    ? "—"
-    : new Intl.NumberFormat(getLocale(), { maximumFractionDigits: 1 }).format(value);
+  return value === null ? "—" : DECIMAL_FORMATTERS[getLocale()].format(value);
 }
 
 function formatPlaytime(totalSeconds: number) {
@@ -86,10 +101,16 @@ function StatCard({ label, value, note }: { label: string; value: string; note: 
 }
 
 function formatCompletedAt(value: string) {
-  return new Intl.DateTimeFormat(getLocale(), {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return COMPLETED_AT_FORMATTERS[getLocale()].format(new Date(value));
+}
+
+async function shareProfile() {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    toast.success(m.profile_link_copied());
+  } catch {
+    toast.error(m.profile_link_copy_failed());
+  }
 }
 
 function GameHistory({
@@ -223,15 +244,6 @@ export function PlayerProfilePage({
 }) {
   const hasGames = profile.gamesPlayed > 0;
   const compositions = profile.compositionsCreated;
-
-  async function shareProfile() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast.success(m.profile_link_copied());
-    } catch {
-      toast.error(m.profile_link_copy_failed());
-    }
-  }
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
