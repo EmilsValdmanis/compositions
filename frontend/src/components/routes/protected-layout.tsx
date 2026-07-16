@@ -21,11 +21,15 @@ function BrandTitle() {
 
 function ProtectedLayoutTitle() {
   return (
-    <div className="min-w-0 text-center">
+    <Link
+      to="/"
+      aria-label={m.back_to_lobby()}
+      className="min-w-0 rounded-md text-center transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <H6 className="truncate text-sm/5 tracking-[0.16em] uppercase text-foreground/90 md:text-base/6">
         <BrandTitle />
       </H6>
-    </div>
+    </Link>
   );
 }
 
@@ -57,7 +61,8 @@ export function AppNavigation() {
             render={<Link to="/leaderboard" />}
             nativeButton={false}
             variant="ghost"
-            size="icon-sm"
+            size="icon"
+            className="rounded-full"
             aria-label={m.view_leaderboard()}
           >
             <HugeiconsIcon icon={RankingIcon} />

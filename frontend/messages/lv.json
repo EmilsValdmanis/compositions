@@ -255,7 +255,6 @@
   "flying_score_adjustment": "Virs 100: koriģēts no {from} uz {to} punktiem",
   "unknown_player": "Nezināms spēlētājs",
   "winner_accessible": "{name}, uzvarētājs",
-  "you": "Tu",
   "cards_left": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],
@@ -447,7 +446,6 @@
   "leaderboard": "Līderu tabula",
   "view_leaderboard": "Skatīt līderu tabulu",
   "all_time_rankings": "Visu laiku reitings",
-  "leaderboard_description": "Salīdzini visu laiku uzvaras, spēles, spēles laiku, uzvarētos raundus un gūtos punktus.",
   "leaderboard_statistic": "Līderu tabulas statistika",
   "rank": "Vieta",
   "player": "Spēlētājs",

@@ -250,7 +250,6 @@
   "flying_score_adjustment": "Over 100: adjusted from {from} to {to} points",
   "unknown_player": "Unknown player",
   "winner_accessible": "{name}, winner",
-  "you": "You",
   "cards_left": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],
@@ -435,7 +434,6 @@
   "leaderboard": "Leaderboard",
   "view_leaderboard": "View leaderboard",
   "all_time_rankings": "All-time rankings",
-  "leaderboard_description": "Compare all-time ranked wins, games, playtime, round wins, and points inflicted.",
   "leaderboard_statistic": "Leaderboard statistic",
   "rank": "Rank",
   "player": "Player",
