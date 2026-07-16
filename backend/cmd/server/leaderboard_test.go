@@ -19,12 +19,14 @@ type leaderboardTestStore struct {
 	cursor   *database.LeaderboardCursor
 	limit    int
 	viewerID string
+	metric   database.LeaderboardMetric
 }
 
-func (s *leaderboardTestStore) GetLeaderboard(_ context.Context, cursor *database.LeaderboardCursor, limit int, viewerID string) (database.LeaderboardPage, error) {
+func (s *leaderboardTestStore) GetLeaderboard(_ context.Context, cursor *database.LeaderboardCursor, limit int, viewerID string, metric database.LeaderboardMetric) (database.LeaderboardPage, error) {
 	s.cursor = cursor
 	s.limit = limit
 	s.viewerID = viewerID
+	s.metric = metric
 	return s.page, s.err
 }
 
@@ -35,7 +37,7 @@ func TestHandleLeaderboard(t *testing.T) {
 		userStore: noopUserStore{},
 		page: database.LeaderboardPage{
 			Players: []database.LeaderboardPlayerRecord{{
-				Rank: 1, PlayerID: firstID, Name: "Avery", Wins: 12, GamesPlayed: 20,
+				Rank: 1, Score: 12, PlayerID: firstID, Name: "Avery", Wins: 12, GamesPlayed: 20,
 				RoundsWon: 48, PointsInflicted: 920, TotalPlaytimeSeconds: 18_400,
 			}},
 			NextCursor: &database.LeaderboardCursor{Score: 12, PlayerID: firstID},
@@ -52,8 +54,8 @@ func TestHandleLeaderboard(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d; want %d", response.Code, http.StatusOK)
 	}
-	if store.limit != leaderboardPageSize || store.viewerID != secondID || store.cursor != nil {
-		t.Fatalf("request = limit:%d viewer:%q cursor:%+v", store.limit, store.viewerID, store.cursor)
+	if store.limit != leaderboardPageSize || store.viewerID != secondID || store.cursor != nil || store.metric != database.LeaderboardMetricWins {
+		t.Fatalf("request = limit:%d viewer:%q cursor:%+v metric:%q", store.limit, store.viewerID, store.cursor, store.metric)
 	}
 	var payload leaderboardResponse
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
@@ -64,7 +66,7 @@ func TestHandleLeaderboard(t *testing.T) {
 	}
 
 	nextResponse := httptest.NewRecorder()
-	nextURL := "/api/leaderboard?limit=25&cursor=" + url.QueryEscape(*payload.NextCursor)
+	nextURL := "/api/leaderboard?limit=25&metric=wins&cursor=" + url.QueryEscape(*payload.NextCursor)
 	server.routes().ServeHTTP(nextResponse, httptest.NewRequest(http.MethodGet, nextURL, nil))
 	if nextResponse.Code != http.StatusOK || store.limit != 25 || store.cursor == nil || store.cursor.Score != 12 || store.cursor.PlayerID != firstID {
 		t.Fatalf("next page status:%d limit:%d cursor:%+v", nextResponse.Code, store.limit, store.cursor)
@@ -78,6 +80,7 @@ func TestHandleLeaderboardRejectsInvalidRequests(t *testing.T) {
 		"/api/leaderboard?limit=51",
 		"/api/leaderboard?cursor=not-a-cursor",
 		"/api/leaderboard?playerId=not-a-player",
+		"/api/leaderboard?metric=unknown",
 	} {
 		response := httptest.NewRecorder()
 		server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
@@ -120,8 +123,18 @@ func TestLeaderboardCursorValidation(t *testing.T) {
 		"eyJzY29yZSI6MSwicGxheWVySWQiOiJub3QtYS11dWlkIn0",
 		"eyJzY29yZSI6MSwicGxheWVySWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJleHRyYSI6dHJ1ZX0",
 	} {
-		if _, err := decodeLeaderboardCursor(raw); err == nil {
+		if _, err := decodeLeaderboardCursor(raw, database.LeaderboardMetricWins); err == nil {
 			t.Fatalf("decodeLeaderboardCursor(%q) succeeded; want error", raw)
 		}
+	}
+
+	cursor, err := encodeLeaderboardCursor(database.LeaderboardCursor{
+		Score: 9, PlayerID: "00000000-0000-0000-0000-000000000001",
+	}, database.LeaderboardMetricGames)
+	if err != nil {
+		t.Fatalf("encode cursor: %v", err)
+	}
+	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricWins); err == nil {
+		t.Fatal("cursor for a different metric succeeded; want error")
 	}
 }

@@ -17,11 +17,12 @@ import (
 const leaderboardPageSize = 50
 
 type leaderboardStore interface {
-	GetLeaderboard(ctx context.Context, cursor *database.LeaderboardCursor, limit int, viewerUserID string) (database.LeaderboardPage, error)
+	GetLeaderboard(ctx context.Context, cursor *database.LeaderboardCursor, limit int, viewerUserID string, metric database.LeaderboardMetric) (database.LeaderboardPage, error)
 }
 
 type leaderboardPlayerResponse struct {
 	Rank                 int64  `json:"rank"`
+	Score                int64  `json:"score"`
 	PlayerID             string `json:"playerId"`
 	Name                 string `json:"name"`
 	ImageURL             string `json:"imageUrl"`
@@ -33,14 +34,16 @@ type leaderboardPlayerResponse struct {
 }
 
 type leaderboardResponse struct {
+	Metric     database.LeaderboardMetric  `json:"metric"`
 	Players    []leaderboardPlayerResponse `json:"players"`
 	NextCursor *string                     `json:"nextCursor"`
 	Placement  *leaderboardPlayerResponse  `json:"placement"`
 }
 
 type leaderboardCursorPayload struct {
-	Score    int64  `json:"score"`
-	PlayerID string `json:"playerId"`
+	Metric   database.LeaderboardMetric `json:"metric"`
+	Score    int64                      `json:"score"`
+	PlayerID string                     `json:"playerId"`
 }
 
 func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +62,12 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "limit must be between 1 and 50")
 		return
 	}
-	cursor, err := decodeLeaderboardCursor(r.URL.Query().Get("cursor"))
+	metric, ok := database.ParseLeaderboardMetric(r.URL.Query().Get("metric"))
+	if !ok {
+		writeHTTPError(w, http.StatusBadRequest, "invalid_metric", "leaderboard metric is invalid")
+		return
+	}
+	cursor, err := decodeLeaderboardCursor(r.URL.Query().Get("cursor"), metric)
 	if err != nil {
 		writeHTTPError(w, http.StatusBadRequest, "invalid_cursor", "leaderboard cursor is invalid")
 		return
@@ -77,7 +85,7 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, http.StatusServiceUnavailable, "leaderboard_unavailable", "leaderboard is unavailable")
 		return
 	}
-	page, err := store.GetLeaderboard(r.Context(), cursor, limit, viewerID)
+	page, err := store.GetLeaderboard(r.Context(), cursor, limit, viewerID, metric)
 	if err != nil {
 		slog.Error("load leaderboard failed", "error", err)
 		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to load leaderboard")
@@ -90,7 +98,7 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	var nextCursor *string
 	if page.NextCursor != nil {
-		encoded, err := encodeLeaderboardCursor(*page.NextCursor)
+		encoded, err := encodeLeaderboardCursor(*page.NextCursor, metric)
 		if err != nil {
 			slog.Error("encode leaderboard cursor failed", "error", err)
 			writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to load leaderboard")
@@ -107,7 +115,7 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
 	if err := json.NewEncoder(w).Encode(leaderboardResponse{
-		Players: players, NextCursor: nextCursor, Placement: placement,
+		Metric: metric, Players: players, NextCursor: nextCursor, Placement: placement,
 	}); err != nil {
 		slog.Error("write leaderboard response failed", "error", err)
 	}
@@ -115,21 +123,21 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 func leaderboardPlayerFromRecord(player database.LeaderboardPlayerRecord) leaderboardPlayerResponse {
 	return leaderboardPlayerResponse{
-		Rank: player.Rank, PlayerID: player.PlayerID, Name: player.Name, ImageURL: player.ImageURL,
+		Rank: player.Rank, Score: player.Score, PlayerID: player.PlayerID, Name: player.Name, ImageURL: player.ImageURL,
 		Wins: player.Wins, GamesPlayed: player.GamesPlayed, RoundsWon: player.RoundsWon,
 		PointsInflicted: player.PointsInflicted, TotalPlaytimeSeconds: player.TotalPlaytimeSeconds,
 	}
 }
 
-func encodeLeaderboardCursor(cursor database.LeaderboardCursor) (string, error) {
-	payload, err := json.Marshal(leaderboardCursorPayload{Score: cursor.Score, PlayerID: cursor.PlayerID})
+func encodeLeaderboardCursor(cursor database.LeaderboardCursor, metric database.LeaderboardMetric) (string, error) {
+	payload, err := json.Marshal(leaderboardCursorPayload{Metric: metric, Score: cursor.Score, PlayerID: cursor.PlayerID})
 	if err != nil {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(payload), nil
 }
 
-func decodeLeaderboardCursor(raw string) (*database.LeaderboardCursor, error) {
+func decodeLeaderboardCursor(raw string, metric database.LeaderboardMetric) (*database.LeaderboardCursor, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, nil
@@ -144,7 +152,7 @@ func decodeLeaderboardCursor(raw string) (*database.LeaderboardCursor, error) {
 	if err := decoder.Decode(&cursor); err != nil {
 		return nil, err
 	}
-	if cursor.Score < 0 || strings.TrimSpace(cursor.PlayerID) == "" {
+	if cursor.Metric != metric || cursor.Score < 0 || strings.TrimSpace(cursor.PlayerID) == "" {
 		return nil, errors.New("invalid leaderboard cursor values")
 	}
 	if _, err := uuid.Parse(cursor.PlayerID); err != nil {

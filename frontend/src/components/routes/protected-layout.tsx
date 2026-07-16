@@ -45,23 +45,22 @@ export function AppNavigation() {
 
   return (
     <nav className="w-full border-b bg-background/80 backdrop-blur-sm">
-      <div className="grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 px-4 py-2 md:px-6">
-        <div className="justify-self-start">
+      <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-2 md:px-6">
+        <div className="min-w-0 justify-self-start">
           <ServerStatusBadge />
         </div>
 
         <ProtectedLayoutTitle />
 
-        <div className="flex items-center justify-end gap-1 justify-self-end">
+        <div className="flex min-w-0 items-center justify-end gap-1 justify-self-end">
           <Button
             render={<Link to="/leaderboard" />}
             nativeButton={false}
             variant="ghost"
-            size="sm"
+            size="icon-sm"
             aria-label={m.view_leaderboard()}
           >
-            <HugeiconsIcon icon={RankingIcon} data-icon="inline-start" />
-            <span className="hidden lg:inline">{m.leaderboard()}</span>
+            <HugeiconsIcon icon={RankingIcon} />
           </Button>
           <GameControlsMenu />
           {session ? <UserDropdown /> : null}
