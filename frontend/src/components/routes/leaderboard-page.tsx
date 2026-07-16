@@ -1,16 +1,16 @@
-import { ChampionIcon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, ChampionIcon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef } from "react";
-import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -259,21 +259,22 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
             </P>
           </CardContent>
         ) : query.isError && players.length === 0 ? (
-          <CardContent className="flex min-h-80 items-center justify-center">
-            <Alert variant="destructive" className="max-w-lg">
-              <HugeiconsIcon icon={Refresh01Icon} aria-hidden="true" />
-              <AlertTitle>{m.leaderboard_error_title()}</AlertTitle>
-              <AlertDescription>{m.leaderboard_error_description()}</AlertDescription>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3 w-fit"
-                onClick={() => void query.refetch()}
-              >
-                <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />
-                {m.try_again()}
-              </Button>
-            </Alert>
+          <CardContent className="flex min-h-80 items-center justify-center p-6">
+            <Empty className="max-w-md border-0 p-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <HugeiconsIcon icon={Alert02Icon} aria-hidden="true" />
+                </EmptyMedia>
+                <EmptyTitle>{m.leaderboard_error_title()}</EmptyTitle>
+                <EmptyDescription>{m.leaderboard_error_description()}</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button size="sm" onClick={() => void query.refetch()}>
+                  <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />
+                  {m.try_again()}
+                </Button>
+              </EmptyContent>
+            </Empty>
           </CardContent>
         ) : players.length === 0 ? (
           <Empty className="min-h-80 border-0">

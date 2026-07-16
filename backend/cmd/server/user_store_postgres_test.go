@@ -188,6 +188,18 @@ func TestPostgresUserStoreGetPlayerProfile(t *testing.T) {
 	}
 }
 
+func TestPostgresUserStoreGetLeaderboard(t *testing.T) {
+	var nilStore *postgresUserStore
+	if _, err := nilStore.GetLeaderboard(context.Background(), nil, leaderboardPageSize, "player-id"); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("nil GetLeaderboard() error = %v; want configuration error", err)
+	}
+
+	store := &postgresUserStore{store: &database.UserStore{}}
+	if _, err := store.GetLeaderboard(context.Background(), nil, leaderboardPageSize, " player-id "); err == nil || err.Error() != "user store is not configured" {
+		t.Fatalf("GetLeaderboard() error = %v; want underlying store error", err)
+	}
+}
+
 func TestPostgresUserStoreLobbyState(t *testing.T) {
 	originalSaveStoredLobbyState := saveStoredLobbyState
 	defer func() { saveStoredLobbyState = originalSaveStoredLobbyState }()
