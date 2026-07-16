@@ -1,0 +1,160 @@
+package database
+
+import (
+	"context"
+	"errors"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+)
+
+type LeaderboardCursor struct {
+	Score    int64
+	PlayerID string
+}
+
+type LeaderboardPlayerRecord struct {
+	Rank                 int64
+	PlayerID             string
+	Name                 string
+	ImageURL             string
+	Wins                 int64
+	GamesPlayed          int64
+	RoundsWon            int64
+	PointsInflicted      int64
+	TotalPlaytimeSeconds int64
+}
+
+type LeaderboardPage struct {
+	Players    []LeaderboardPlayerRecord
+	NextCursor *LeaderboardCursor
+	Placement  *LeaderboardPlayerRecord
+}
+
+const leaderboardRankedPlayers = `
+	WITH playtimes AS (
+		SELECT gps.user_id, COALESCE(SUM(g.active_playtime_seconds), 0)::bigint AS total_playtime_seconds
+		FROM game_player_statistics gps
+		JOIN games g ON g.id = gps.game_id
+		WHERE g.status IN ('completed', 'forfeit') AND g.completed_at IS NOT NULL
+		GROUP BY gps.user_id
+	), ranked AS (
+		SELECT
+			ROW_NUMBER() OVER (ORDER BY ps.games_won DESC, ps.user_id ASC)::bigint AS rank,
+			u.id AS player_id,
+			u.name,
+			u.image_url,
+			ps.games_won AS wins,
+			ps.games_played,
+			ps.rounds_won,
+			ps.points_inflicted,
+			COALESCE(playtimes.total_playtime_seconds, 0)::bigint AS total_playtime_seconds
+		FROM player_statistics ps
+		JOIN users u ON u.id = ps.user_id
+		LEFT JOIN playtimes ON playtimes.user_id = ps.user_id
+		WHERE ps.games_played > 0
+	)
+`
+
+// GetLeaderboard returns players ranked by all-time ranked wins. The UUID
+// tie-breaker makes every cursor boundary deterministic even when scores match.
+func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCursor, limit int, viewerUserID string) (LeaderboardPage, error) {
+	if s == nil || s.pool == nil {
+		return LeaderboardPage{}, errors.New("user store is not configured")
+	}
+	if limit <= 0 || limit > 50 {
+		return LeaderboardPage{}, errors.New("leaderboard limit must be between 1 and 50")
+	}
+
+	hasCursor := cursor != nil
+	cursorScore := int64(0)
+	cursorPlayerID := pgtype.UUID{}
+	if cursor != nil {
+		if cursor.Score < 0 {
+			return LeaderboardPage{}, errors.New("leaderboard cursor score cannot be negative")
+		}
+		parsedID, err := parseUUID(cursor.PlayerID)
+		if err != nil {
+			return LeaderboardPage{}, err
+		}
+		cursorScore = cursor.Score
+		cursorPlayerID = parsedID
+	}
+
+	rows, err := s.pool.Query(ctx, leaderboardRankedPlayers+`
+		SELECT rank, player_id::text, name, image_url, wins, games_played,
+			rounds_won, points_inflicted, total_playtime_seconds
+		FROM ranked
+		WHERE NOT $1::boolean
+			OR wins < $2
+			OR (wins = $2 AND player_id > $3)
+		ORDER BY wins DESC, player_id ASC
+		LIMIT $4
+	`, hasCursor, cursorScore, cursorPlayerID, limit+1)
+	if err != nil {
+		return LeaderboardPage{}, err
+	}
+	defer rows.Close()
+
+	page := LeaderboardPage{Players: make([]LeaderboardPlayerRecord, 0, limit)}
+	for rows.Next() {
+		player, err := scanLeaderboardPlayer(rows)
+		if err != nil {
+			return LeaderboardPage{}, err
+		}
+		page.Players = append(page.Players, player)
+	}
+	if err := rows.Err(); err != nil {
+		return LeaderboardPage{}, err
+	}
+
+	if len(page.Players) > limit {
+		page.Players = page.Players[:limit]
+		last := page.Players[len(page.Players)-1]
+		page.NextCursor = &LeaderboardCursor{Score: last.Wins, PlayerID: last.PlayerID}
+	}
+
+	viewerUserID = strings.TrimSpace(viewerUserID)
+	if viewerUserID == "" {
+		return page, nil
+	}
+	viewerID, err := parseUUID(viewerUserID)
+	if err != nil {
+		return LeaderboardPage{}, err
+	}
+	placement, err := scanLeaderboardPlayer(s.pool.QueryRow(ctx, leaderboardRankedPlayers+`
+		SELECT rank, player_id::text, name, image_url, wins, games_played,
+			rounds_won, points_inflicted, total_playtime_seconds
+		FROM ranked
+		WHERE player_id = $1
+	`, viewerID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return page, nil
+	}
+	if err != nil {
+		return LeaderboardPage{}, err
+	}
+	page.Placement = &placement
+	return page, nil
+}
+
+type leaderboardPlayerScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanLeaderboardPlayer(scanner leaderboardPlayerScanner) (LeaderboardPlayerRecord, error) {
+	var player LeaderboardPlayerRecord
+	err := scanner.Scan(
+		&player.Rank,
+		&player.PlayerID,
+		&player.Name,
+		&player.ImageURL,
+		&player.Wins,
+		&player.GamesPlayed,
+		&player.RoundsWon,
+		&player.PointsInflicted,
+		&player.TotalPlaytimeSeconds,
+	)
+	return player, err
+}
