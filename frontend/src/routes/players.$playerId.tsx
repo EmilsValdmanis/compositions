@@ -2,6 +2,7 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { PlayerProfilePage } from "#/components/routes/player-profile-page";
 import { AppNavigation } from "#/components/routes/protected-layout";
 import { getPlayerGameHistory, getPlayerProfile } from "#/lib/player-profile";
+import { pageTitle } from "#/lib/page-title";
 import { createSocialMeta } from "#/lib/social-meta";
 import { m } from "#/paraglide/messages.js";
 import { localizeHref } from "#/paraglide/runtime.js";
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/players/$playerId")({
   },
   head: ({ loaderData, match }) => {
     const profile = loaderData?.profile;
-    const title = profile ? `${profile.name} · ${m.app_name()}` : m.profile_title();
+    const title = pageTitle(profile?.name ?? m.profile_title());
     const description = profileDescription(profile);
     const origin = match.context.siteOrigin;
     const url = profile

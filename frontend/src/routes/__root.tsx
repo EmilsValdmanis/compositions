@@ -50,7 +50,7 @@ export const Route = createRootRouteWithContext<{
         { name: "application-name", content: m.app_name() },
         { name: "theme-color", content: "#0069a8" },
         ...createSocialMeta({
-          title: `${m.app_name()} — ${m.app_tagline()}`,
+          title: m.page_title(),
           description: defaultSocialDescription(),
           origin: match.context.siteOrigin,
         }),
