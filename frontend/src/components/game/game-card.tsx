@@ -101,7 +101,7 @@ const cardSymbolClassNames: Record<GameCardSize, string> = {
 
 function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center rounded-2xl border shadow-sm transition",
+    "relative grid shrink-0 select-none place-items-center rounded-2xl border shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     cardAccentClass(card),
     gameCardSizeClassNames[size],
     className,
@@ -110,7 +110,7 @@ function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: s
 
 function faceDownGameCardClassName(size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center rounded-2xl border border-border bg-card shadow-sm transition",
+    "relative grid shrink-0 select-none place-items-center rounded-2xl border border-border bg-card shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     gameCardSizeClassNames[size],
     className,
   );
@@ -259,7 +259,7 @@ function SortableGameCard({
           : gameCardClassName(card, size, className),
         decorationRingClassName(decoration?.highlight),
         invalidRingClassName(invalid),
-        "touch-pan-x cursor-grab active:cursor-grabbing xl:touch-none",
+        "touch-pan-x cursor-grab active:scale-[0.98] active:cursor-grabbing xl:touch-none",
       )}
       title={accessibleName}
       aria-label={accessibleName}
@@ -320,7 +320,7 @@ function DraggableGameCard({
         invalidRingClassName(invalid),
         disabled
           ? "cursor-default opacity-50"
-          : "touch-pan-x cursor-grab active:cursor-grabbing xl:touch-none",
+          : "touch-pan-x cursor-grab active:scale-[0.98] active:cursor-grabbing xl:touch-none",
       )}
       title={accessibleName}
       aria-label={accessibleName}

@@ -41,6 +41,7 @@ const { act, cleanup, fireEvent, render, waitFor } = await import("@testing-libr
 const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
 
 let dndContextProps: {
+  sensors?: Array<{ options?: Record<string, unknown> }>;
   onDragStart?: (event: any) => void;
   onDragOver?: (event: any) => void;
   onDragEnd?: (event: any) => void;
@@ -54,6 +55,9 @@ vi.mock("#/components/game-websocket-provider", () => ({
 }));
 
 vi.mock("@dnd-kit/core", () => ({
+  KeyboardSensor: class KeyboardSensor {},
+  MouseSensor: class MouseSensor {},
+  TouchSensor: class TouchSensor {},
   DndContext: ({ children, ...props }: { children: ReactNode }) => {
     dndContextProps = props;
     return <>{children}</>;
@@ -73,6 +77,8 @@ vi.mock("@dnd-kit/core", () => ({
     setNodeRef: vi.fn(),
     isOver: false,
   }),
+  useSensor: (_sensor: unknown, options?: Record<string, unknown>) => ({ options }),
+  useSensors: (...sensors: Array<{ options?: Record<string, unknown> }>) => sensors,
 }));
 
 vi.mock("@dnd-kit/sortable", () => ({
@@ -83,6 +89,7 @@ vi.mock("@dnd-kit/sortable", () => ({
     return <>{children}</>;
   },
   horizontalListSortingStrategy: vi.fn(),
+  sortableKeyboardCoordinates: vi.fn(),
   arrayMove: <T,>(items: T[], from: number, to: number) => {
     const next = [...items];
     const [item] = next.splice(from, 1);
@@ -162,6 +169,43 @@ const players: PlayerSnapshot[] = [
     canReconnect: false,
   },
 ];
+
+describe("GameBoardView drag sensors", () => {
+  it("keeps touch scrolling available until a deliberate hold starts dragging", () => {
+    render(
+      <GameBoardView
+        game={makeGame([{ rank: 1, suit: 0 }])}
+        roomCode="ROOM"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 2, suit: 0 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        disableDraftSync
+      />,
+    );
+
+    expect(dndContextProps.sensors?.[0]?.options).toEqual({
+      activationConstraint: { distance: 4 },
+    });
+    expect(dndContextProps.sensors?.[1]?.options).toEqual({
+      activationConstraint: { delay: 220, tolerance: 8 },
+    });
+    expect(dndContextProps.sensors?.[2]?.options).toHaveProperty("coordinateGetter");
+  });
+});
 
 function dragStart(handKey: string, cardIndex: number) {
   dndContextProps.onDragStart?.({
