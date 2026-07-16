@@ -3,12 +3,18 @@ import {
   closestCenter,
   DndContext,
   DragOverlay,
+  KeyboardSensor,
+  MouseSensor,
   pointerWithin,
+  TouchSensor,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  useSensor,
+  useSensors,
 } from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import {
   type ActionResult,
   type CardSnapshot,
@@ -1012,6 +1018,20 @@ export function GameBoardView({
   disableDraftSync,
 }: GameBoardViewProps) {
   const boardRef = useRef<HTMLDivElement>(null);
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 4 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 220,
+        tolerance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
   const controller = useGameBoardController({
     game,
     roomCode,
@@ -1044,6 +1064,7 @@ export function GameBoardView({
 
   return (
     <DndContext
+      sensors={sensors}
       collisionDetection={collisionDetection}
       onDragStart={controller.handleDragStart}
       onDragOver={controller.handleDragOver}
