@@ -62,7 +62,6 @@ export function AppNavigation() {
             nativeButton={false}
             variant="ghost"
             size="icon"
-            className="rounded-full"
             aria-label={m.view_leaderboard()}
           >
             <HugeiconsIcon icon={RankingIcon} />
