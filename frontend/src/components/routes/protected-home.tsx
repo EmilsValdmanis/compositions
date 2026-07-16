@@ -11,6 +11,7 @@ import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-s
 import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
 import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
+import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
 
 async function copyText(text: string, successMessage: string) {
@@ -104,6 +105,13 @@ export function ProtectedHome() {
     : null;
   const roundResultPlayers = playersForResults(roundResults?.room ?? null, state.room);
   const isBootstrappingConnection = isGameRouteSnapshotResolving(state);
+  const currentPageTitle = roundResults
+    ? m.results()
+    : isLobbyPhase
+      ? state.room
+        ? m.lobby()
+        : m.start()
+      : m.board();
 
   useGameSoundEvents(state);
 
@@ -197,12 +205,18 @@ export function ProtectedHome() {
   }
 
   if (isBootstrappingConnection) {
-    return <GameRouteLoadingScreen />;
+    return (
+      <>
+        <title>{pageTitle(m.loading())}</title>
+        <GameRouteLoadingScreen />
+      </>
+    );
   }
 
   return (
     <ClientOnly fallback={<GameRouteLoadingScreen />}>
       <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
+        <title>{pageTitle(currentPageTitle)}</title>
         <EndGameProposalAlert />
         {roundResults ? (
           <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">

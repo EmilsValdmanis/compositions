@@ -1,7 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "app_name": "Compositions",
-  "page_title": "Compositions — Online Card Game",
+  "page_title": "Online Card Game - Compositions",
   "app_tagline": "Play your hand well",
   "social_description": "A tactical card game where you build compositions of cards. Finish rounds, and keep your score under 100.",
   "social_image_alt": "Compositions — build runs, close rounds, play to 100",
@@ -450,7 +450,7 @@
   "loading_more_players": "Loading more players…",
   "retry_loading_players": "Retry loading players",
   "scroll_for_more_players": "Scroll for more players",
-  "profile_title": "Player · Compositions",
+  "profile_title": "Player",
   "error_unknown": "An unknown error occurred.",
   "error_internal_error": "Something went wrong on the server. Please try again.",
   "error_rate_limit_exceeded": "Too many requests. Please wait and try again.",

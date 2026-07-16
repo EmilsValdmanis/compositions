@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { LeaderboardPage } from "#/components/routes/leaderboard-page";
 import { DEFAULT_LEADERBOARD_METRIC, leaderboardInfiniteOptions } from "#/lib/leaderboard";
+import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
 
 export const Route = createFileRoute("/_protected/leaderboard")({
@@ -12,7 +13,7 @@ export const Route = createFileRoute("/_protected/leaderboard")({
     );
   },
   head: () => ({
-    meta: [{ title: `${m.leaderboard()} · ${m.app_name()}` }],
+    meta: [{ title: pageTitle(m.leaderboard()) }],
   }),
   component: LeaderboardRoute,
 });

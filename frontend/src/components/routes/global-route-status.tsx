@@ -4,6 +4,7 @@ import { Link, type ErrorComponentProps, type NotFoundRouteProps } from "@tansta
 import { Button } from "#/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader } from "#/components/ui/card";
 import { Caption, H2 } from "#/components/typography";
+import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
 
 function errorMessage(error: unknown) {
@@ -23,18 +24,21 @@ function RouteStatusFrame({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-full flex-1 items-center justify-center p-6 sm:p-8">
-      <Card className="w-full max-w-lg border border-border/70 bg-card/95 shadow-xl backdrop-blur-sm">
-        <CardHeader className="gap-3">
-          <Caption className="font-medium tracking-[0.24em] uppercase">{eyebrow}</Caption>
-          <div className="space-y-1">
-            <H2>{title}</H2>
-            <CardDescription>{description}</CardDescription>
-          </div>
-        </CardHeader>
-        {children ? <CardFooter className="gap-3">{children}</CardFooter> : null}
-      </Card>
-    </div>
+    <>
+      <title>{pageTitle(title)}</title>
+      <div className="flex min-h-full flex-1 items-center justify-center p-6 sm:p-8">
+        <Card className="w-full max-w-lg border border-border/70 bg-card/95 shadow-xl backdrop-blur-sm">
+          <CardHeader className="gap-3">
+            <Caption className="font-medium tracking-[0.24em] uppercase">{eyebrow}</Caption>
+            <div className="space-y-1">
+              <H2>{title}</H2>
+              <CardDescription>{description}</CardDescription>
+            </div>
+          </CardHeader>
+          {children ? <CardFooter className="gap-3">{children}</CardFooter> : null}
+        </Card>
+      </div>
+    </>
   );
 }
 
