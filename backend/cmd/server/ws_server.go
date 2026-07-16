@@ -323,6 +323,7 @@ func (s *wsServer) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/auth/", s.handleSessionRoutes)
+	mux.HandleFunc("/api/leaderboard", s.handleLeaderboard)
 	mux.HandleFunc("/api/players/", s.handlePlayerProfile)
 	mux.HandleFunc("/ws", s.handleWS)
 	return mux

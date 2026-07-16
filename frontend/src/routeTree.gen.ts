@@ -13,6 +13,7 @@ import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as ProtectedIndexRouteImport } from './routes/_protected/index'
 import { Route as PlayersPlayerIdRouteImport } from './routes/players.$playerId'
+import { Route as ProtectedLeaderboardRouteImport } from './routes/_protected/leaderboard'
 import { Route as ProtectedDevUiRouteImport } from './routes/_protected/dev-ui'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 
@@ -34,6 +35,11 @@ const PlayersPlayerIdRoute = PlayersPlayerIdRouteImport.update({
   path: '/players/$playerId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProtectedLeaderboardRoute = ProtectedLeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
+  getParentRoute: () => ProtectedRoute,
+} as any)
 const ProtectedDevUiRoute = ProtectedDevUiRouteImport.update({
   id: '/dev-ui',
   path: '/dev-ui',
@@ -49,12 +55,14 @@ export interface FileRoutesByFullPath {
   '/': typeof ProtectedIndexRoute
   '/sign-in': typeof AuthSignInRoute
   '/dev-ui': typeof ProtectedDevUiRoute
+  '/leaderboard': typeof ProtectedLeaderboardRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof ProtectedIndexRoute
   '/sign-in': typeof AuthSignInRoute
   '/dev-ui': typeof ProtectedDevUiRoute
+  '/leaderboard': typeof ProtectedLeaderboardRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
 }
 export interface FileRoutesById {
@@ -63,20 +71,27 @@ export interface FileRoutesById {
   '/_protected': typeof ProtectedRouteWithChildren
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_protected/dev-ui': typeof ProtectedDevUiRoute
+  '/_protected/leaderboard': typeof ProtectedLeaderboardRoute
   '/players/$playerId': typeof PlayersPlayerIdRoute
   '/_protected/': typeof ProtectedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in' | '/dev-ui' | '/players/$playerId'
+  fullPaths:
+    | '/'
+    | '/sign-in'
+    | '/dev-ui'
+    | '/leaderboard'
+    | '/players/$playerId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/dev-ui' | '/players/$playerId'
+  to: '/' | '/sign-in' | '/dev-ui' | '/leaderboard' | '/players/$playerId'
   id:
     | '__root__'
     | '/_auth'
     | '/_protected'
     | '/_auth/sign-in'
     | '/_protected/dev-ui'
+    | '/_protected/leaderboard'
     | '/players/$playerId'
     | '/_protected/'
   fileRoutesById: FileRoutesById
@@ -117,6 +132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayersPlayerIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_protected/leaderboard': {
+      id: '/_protected/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof ProtectedLeaderboardRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
     '/_protected/dev-ui': {
       id: '/_protected/dev-ui'
       path: '/dev-ui'
@@ -146,11 +168,13 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface ProtectedRouteChildren {
   ProtectedDevUiRoute: typeof ProtectedDevUiRoute
+  ProtectedLeaderboardRoute: typeof ProtectedLeaderboardRoute
   ProtectedIndexRoute: typeof ProtectedIndexRoute
 }
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedDevUiRoute: ProtectedDevUiRoute,
+  ProtectedLeaderboardRoute: ProtectedLeaderboardRoute,
   ProtectedIndexRoute: ProtectedIndexRoute,
 }
 

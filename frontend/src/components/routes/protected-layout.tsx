@@ -1,7 +1,10 @@
-import { Outlet, getRouteApi } from "@tanstack/react-router";
+import { RankingIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Link, Outlet, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { H6 } from "#/components/typography";
+import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
 import { m } from "#/paraglide/messages.js";
 
@@ -50,6 +53,16 @@ export function AppNavigation() {
         <ProtectedLayoutTitle />
 
         <div className="flex items-center justify-end gap-1 justify-self-end">
+          <Button
+            render={<Link to="/leaderboard" />}
+            nativeButton={false}
+            variant="ghost"
+            size="sm"
+            aria-label={m.view_leaderboard()}
+          >
+            <HugeiconsIcon icon={RankingIcon} data-icon="inline-start" />
+            <span className="hidden lg:inline">{m.leaderboard()}</span>
+          </Button>
           <GameControlsMenu />
           {session ? <UserDropdown /> : null}
         </div>
