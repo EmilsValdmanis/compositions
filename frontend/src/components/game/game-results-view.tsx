@@ -350,9 +350,6 @@ export function GameResultsView({
                           >
                             {playerName}
                           </P>
-                          {playerState.playerId === playerId ? (
-                            <Badge variant="outline">{m.you()}</Badge>
-                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
