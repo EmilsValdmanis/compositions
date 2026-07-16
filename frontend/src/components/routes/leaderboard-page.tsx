@@ -1,4 +1,10 @@
-import { Alert02Icon, ChampionIcon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  ArrowLeft02Icon,
+  ChampionIcon,
+  RankingIcon,
+  Refresh01Icon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -89,7 +95,7 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-function PlayerIdentity({ player, isCurrent }: { player: LeaderboardPlayer; isCurrent: boolean }) {
+function PlayerIdentity({ player }: { player: LeaderboardPlayer }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <Avatar size="sm" className="hidden shrink-0 sm:flex">
@@ -103,11 +109,6 @@ function PlayerIdentity({ player, isCurrent }: { player: LeaderboardPlayer; isCu
       >
         {player.name}
       </Link>
-      {isCurrent ? (
-        <Badge variant="secondary" className="hidden shrink-0 sm:inline-flex">
-          {m.you()}
-        </Badge>
-      ) : null}
     </div>
   );
 }
@@ -116,7 +117,10 @@ function LeaderboardHeader({ metric }: { metric: LeaderboardMetric }) {
   return (
     <TableHeader className="sticky top-0 z-20 bg-card shadow-sm">
       <TableRow className="hover:bg-transparent">
-        <TableHead>{m.rank()}</TableHead>
+        <TableHead>
+          <span aria-hidden="true">#</span>
+          <span className="sr-only">{m.rank()}</span>
+        </TableHead>
         <TableHead>{m.player()}</TableHead>
         <TableHead className="text-right">{getMetricLabel(metric)}</TableHead>
       </TableRow>
@@ -148,7 +152,7 @@ function LeaderboardTableRow({
         <RankBadge rank={player.rank} />
       </TableCell>
       <TableCell className="max-w-0">
-        <PlayerIdentity player={player} isCurrent={isCurrent} />
+        <PlayerIdentity player={player} />
       </TableCell>
       <TableCell className="text-right font-semibold tabular-nums">
         {formatScore(metric, player.score)}
@@ -171,13 +175,7 @@ function PlacementFooter({
           <RankBadge rank={player.rank} />
         </TableCell>
         <TableCell className="max-w-0">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <PlayerIdentity player={player} isCurrent={false} />
-            <Badge variant="outline" className="shrink-0">
-              <span className="sm:hidden">{m.you()}</span>
-              <span className="hidden sm:inline">{m.your_placement()}</span>
-            </Badge>
-          </div>
+          <PlayerIdentity player={player} />
         </TableCell>
         <TableCell className="text-right font-semibold tabular-nums">
           {formatScore(metric, player.score)}
@@ -224,6 +222,9 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
   const bottomPadding = lastVirtualRow
     ? Math.max(0, virtualizer.getTotalSize() - lastVirtualRow.end)
     : 0;
+  const isPlacementVisible =
+    placement !== null &&
+    virtualRows.some((virtualRow) => players[virtualRow.index]?.playerId === placement.playerId);
 
   useEffect(() => {
     if (
@@ -254,6 +255,16 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
   return (
     <section className="mx-auto w-full max-w-6xl space-y-4">
       <header className="px-2 pt-2 md:px-0">
+        <Button
+          render={<Link to="/" />}
+          nativeButton={false}
+          variant="ghost"
+          size="sm"
+          className="mb-3 -ml-3"
+        >
+          <HugeiconsIcon icon={ArrowLeft02Icon} data-icon="inline-start" />
+          {m.back_to_lobby()}
+        </Button>
         <div className="flex items-center gap-2 text-primary">
           <HugeiconsIcon icon={ChampionIcon} aria-hidden="true" />
           <P size="sm" className="font-medium tracking-[0.16em] uppercase">
@@ -261,7 +272,6 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
           </P>
         </div>
         <H1 className="mt-1">{m.leaderboard()}</H1>
-        <P className="mt-1 max-w-2xl text-muted-foreground">{m.leaderboard_description()}</P>
       </header>
 
       <Card className="gap-0 overflow-hidden py-0">
@@ -318,6 +328,11 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
                 containerClassName="max-h-[min(62vh,42rem)] overscroll-contain"
                 aria-label={`${m.leaderboard()}: ${getMetricLabel(metric)}`}
               >
+                <colgroup>
+                  <col className="w-20" />
+                  <col />
+                  <col />
+                </colgroup>
                 <LeaderboardHeader metric={metric} />
                 <TableBody>
                   {topPadding > 0 ? (
@@ -351,7 +366,9 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
                     </TableRow>
                   ) : null}
                 </TableBody>
-                {placement ? <PlacementFooter player={placement} metric={metric} /> : null}
+                {placement && !isPlacementVisible ? (
+                  <PlacementFooter player={placement} metric={metric} />
+                ) : null}
               </Table>
 
               {isFetchingNextPage || isFetchNextPageError || hasNextPage ? (
