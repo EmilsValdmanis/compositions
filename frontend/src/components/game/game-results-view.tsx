@@ -285,16 +285,16 @@ export function GameResultsView({
             <Badge variant={isGameOver ? "default" : "secondary"}>{resultBadge}</Badge>
           </div>
         </CardHeader>
-        <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto overscroll-y-contain">
+        <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto scroll-fade-x overscroll-y-contain">
           <div className="overflow-hidden rounded-lg border border-border/70">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-14">#</TableHead>
+                  <TableHead>#</TableHead>
                   <TableHead>{m.player()}</TableHead>
                   <TableHead className="text-right">{m.cards()}</TableHead>
                   <TableHead className="text-right">{m.score()}</TableHead>
-                  <TableHead className="w-16 text-right">{m.round()}</TableHead>
+                  <TableHead className="text-right">{m.round()}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -314,7 +314,7 @@ export function GameResultsView({
                         </P>
                       </TableCell>
                       <TableCell>
-                        <div className="flex min-w-40 flex-wrap items-center gap-2">
+                        <div className="flex w-fit items-center gap-2">
                           <Avatar
                             size="sm"
                             aria-label={

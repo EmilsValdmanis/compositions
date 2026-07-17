@@ -95,13 +95,7 @@ export function GameControlsMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="size-8 sm:size-9"
-              aria-label={m.game_controls()}
-            />
+            <Button type="button" variant="ghost" size="icon" aria-label={m.game_controls()} />
           }
         >
           <HugeiconsIcon icon={MoreVerticalIcon} />
