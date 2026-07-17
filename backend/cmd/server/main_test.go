@@ -198,8 +198,8 @@ func TestNewSentryClientOptions(t *testing.T) {
 	if !options.EnableTracing {
 		t.Fatal("newSentryClientOptions().EnableTracing = false; want true")
 	}
-	if !options.EnableLogs {
-		t.Fatal("newSentryClientOptions().EnableLogs = false; want true")
+	if options.DisableLogs {
+		t.Fatal("newSentryClientOptions().DisableLogs = true; want false")
 	}
 }
 

@@ -51,7 +51,6 @@ func newSentryClientOptions() sentry.ClientOptions {
 		AttachStacktrace: true,
 		EnableTracing:    true,
 		TracesSampler:    sentry.TracesSampler(traceSampleRate),
-		EnableLogs:       true,
 	}
 }
 
