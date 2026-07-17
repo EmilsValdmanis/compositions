@@ -3,7 +3,8 @@
 import { DndContext } from "@dnd-kit/core";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { GameBoardTable, draftPreviewForComposition } from "#/components/game/game-board-table";
+import { GameBoardTable } from "#/components/game/game-board-table";
+import { draftPreviewForComposition } from "#/components/game/game-board-table-state";
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 
 afterEach(cleanup);
