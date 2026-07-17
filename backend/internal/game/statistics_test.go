@@ -89,6 +89,27 @@ func TestGameStatisticsTrackCompletedCompositionScoringAndResult(t *testing.T) {
 	}
 }
 
+func TestQuickGameEndsAfterItsFirstCompletedRound(t *testing.T) {
+	state := newTurnTestState()
+	state.gameMode = GameModeQuick
+	winner, loser := state.players[0], state.players[1]
+	winner.statistics.RoundsPlayed = 1
+	loser.statistics.RoundsPlayed = 1
+	loser.hand.cards = []Card{card(King, Hearts), card(Five, Clubs)}
+
+	state.finishRound(0)
+
+	if state.phase != PhaseGameOver || state.roundWinnerIndex != 0 || state.round != 1 {
+		t.Fatalf("quick result phase=%v winner=%d round=%d", state.phase, state.roundWinnerIndex, state.round)
+	}
+	if winner.statistics.RoundsWon != 1 || winner.statistics.PointsInflicted != 15 || loser.statistics.PenaltyPoints != 15 {
+		t.Fatalf("quick statistics winner=%+v loser=%+v", winner.statistics, loser.statistics)
+	}
+	if results := state.CompletedPlayerStatistics(); len(results) != 2 || !results[0].Winner || results[1].TotalPoints != 15 {
+		t.Fatalf("quick completed statistics = %+v", results)
+	}
+}
+
 func TestGameStatisticsTrackDrawSourcesAndForfeitResult(t *testing.T) {
 	state := newTurnTestState()
 	state.players[0].statistics.RoundsPlayed = 1

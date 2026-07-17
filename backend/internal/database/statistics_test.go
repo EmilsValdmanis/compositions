@@ -30,6 +30,7 @@ func TestValidateCheckpoint(t *testing.T) {
 		{"zero start time", func(record *GameCheckpointRecord) { record.StartedAt = time.Time{} }},
 		{"negative playtime", func(record *GameCheckpointRecord) { record.PlaytimeSeconds = -1 }},
 		{"invalid game uuid", func(record *GameCheckpointRecord) { record.ID = "bad" }},
+		{"invalid game mode", func(record *GameCheckpointRecord) { record.GameMode = "arcade" }},
 		{"invalid user uuid", func(record *GameCheckpointRecord) { record.Players[0].UserID = "bad" }},
 		{"duplicate user", func(record *GameCheckpointRecord) { record.Players = append(record.Players, record.Players[0]) }},
 		{"negative statistic", func(record *GameCheckpointRecord) { record.Players[0].TurnsTaken = -1 }},

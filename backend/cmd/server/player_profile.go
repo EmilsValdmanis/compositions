@@ -19,7 +19,7 @@ type playerProfileStore interface {
 }
 
 type playerGameHistoryStore interface {
-	GetPlayerGameHistory(ctx context.Context, userID string, limit, offset int) (database.PlayerGameHistoryPage, error)
+	GetPlayerGameHistory(ctx context.Context, userID string, limit, offset int, filters ...database.GameHistoryFilter) (database.PlayerGameHistoryPage, error)
 }
 
 const (
@@ -30,6 +30,8 @@ const (
 type playerGameHistoryItemResponse struct {
 	ID              string    `json:"id"`
 	Status          string    `json:"status"`
+	GameMode        string    `json:"gameMode"`
+	Ranked          bool      `json:"ranked"`
 	CompletedAt     time.Time `json:"completedAt"`
 	Placement       int       `json:"placement"`
 	PlayerCount     int       `json:"playerCount"`
@@ -49,25 +51,30 @@ type playerGameHistoryResponse struct {
 	TotalPages int                             `json:"totalPages"`
 }
 
+type playerStatisticsResponse struct {
+	GamesPlayed           int64 `json:"gamesPlayed"`
+	GamesWon              int64 `json:"gamesWon"`
+	TotalPlacement        int64 `json:"totalPlacement"`
+	TotalPlaytimeSeconds  int64 `json:"totalPlaytimeSeconds"`
+	RoundsPlayed          int64 `json:"roundsPlayed"`
+	RoundsWon             int64 `json:"roundsWon"`
+	CompositionsCreated   int64 `json:"compositionsCreated"`
+	SetsCreated           int64 `json:"setsCreated"`
+	RunsCreated           int64 `json:"runsCreated"`
+	PointsInflicted       int64 `json:"pointsInflicted"`
+	PenaltyPoints         int64 `json:"penaltyPoints"`
+	CurrentGameWinStreak  int   `json:"currentGameWinStreak"`
+	LongestGameWinStreak  int   `json:"longestGameWinStreak"`
+	CurrentRoundWinStreak int   `json:"currentRoundWinStreak"`
+	LongestRoundWinStreak int   `json:"longestRoundWinStreak"`
+}
+
 type playerProfileResponse struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	ImageURL              string `json:"imageUrl"`
-	GamesPlayed           int64  `json:"gamesPlayed"`
-	GamesWon              int64  `json:"gamesWon"`
-	TotalPlacement        int64  `json:"totalPlacement"`
-	TotalPlaytimeSeconds  int64  `json:"totalPlaytimeSeconds"`
-	RoundsPlayed          int64  `json:"roundsPlayed"`
-	RoundsWon             int64  `json:"roundsWon"`
-	CompositionsCreated   int64  `json:"compositionsCreated"`
-	SetsCreated           int64  `json:"setsCreated"`
-	RunsCreated           int64  `json:"runsCreated"`
-	PointsInflicted       int64  `json:"pointsInflicted"`
-	PenaltyPoints         int64  `json:"penaltyPoints"`
-	CurrentGameWinStreak  int    `json:"currentGameWinStreak"`
-	LongestGameWinStreak  int    `json:"longestGameWinStreak"`
-	CurrentRoundWinStreak int    `json:"currentRoundWinStreak"`
-	LongestRoundWinStreak int    `json:"longestRoundWinStreak"`
+	ID         string                   `json:"id"`
+	Name       string                   `json:"name"`
+	ImageURL   string                   `json:"imageUrl"`
+	RankedFull playerStatisticsResponse `json:"rankedFull"`
+	Quick      playerStatisticsResponse `json:"quick"`
 }
 
 func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +122,16 @@ func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=60, stale-while-revalidate=300")
 	response := playerProfileResponse{
 		ID: profile.ID, Name: profile.Name, ImageURL: profile.ImageURL,
+		RankedFull: playerStatisticsResponseFromRecord(profile.PlayerStatisticsRecord),
+		Quick:      playerStatisticsResponseFromRecord(profile.Quick),
+	}
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		slog.Error("write player profile response failed", "error", err)
+	}
+}
+
+func playerStatisticsResponseFromRecord(profile database.PlayerStatisticsRecord) playerStatisticsResponse {
+	return playerStatisticsResponse{
 		GamesPlayed: profile.GamesPlayed, GamesWon: profile.GamesWon, TotalPlacement: profile.TotalPlacement,
 		TotalPlaytimeSeconds: profile.TotalPlaytimeSeconds,
 		RoundsPlayed:         profile.RoundsPlayed, RoundsWon: profile.RoundsWon,
@@ -122,9 +139,6 @@ func (s *wsServer) handlePlayerProfile(w http.ResponseWriter, r *http.Request) {
 		PointsInflicted: profile.PointsInflicted, PenaltyPoints: profile.PenaltyPoints,
 		CurrentGameWinStreak: profile.CurrentGameWinStreak, LongestGameWinStreak: profile.LongestGameWinStreak,
 		CurrentRoundWinStreak: profile.CurrentRoundWinStreak, LongestRoundWinStreak: profile.LongestRoundWinStreak,
-	}
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		slog.Error("write player profile response failed", "error", err)
 	}
 }
 
@@ -139,13 +153,18 @@ func (s *wsServer) handlePlayerGameHistory(w http.ResponseWriter, r *http.Reques
 		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page size must be between 1 and 50")
 		return
 	}
+	filter, ok := database.ParseGameHistoryFilter(strings.TrimSpace(r.URL.Query().Get("mode")))
+	if !ok {
+		writeHTTPError(w, http.StatusBadRequest, "invalid_game_mode", "game history mode is invalid")
+		return
+	}
 	store, ok := s.userStore.(playerGameHistoryStore)
 	if !ok {
 		writeHTTPError(w, http.StatusServiceUnavailable, "player_profiles_unavailable", "player profiles are unavailable")
 		return
 	}
 
-	history, err := store.GetPlayerGameHistory(r.Context(), userID, pageSize, (page-1)*pageSize)
+	history, err := store.GetPlayerGameHistory(r.Context(), userID, pageSize, (page-1)*pageSize, filter)
 	if errors.Is(err, database.ErrPlayerProfileNotFound) {
 		writeHTTPError(w, http.StatusNotFound, "not_found", "player profile not found")
 		return
@@ -160,6 +179,7 @@ func (s *wsServer) handlePlayerGameHistory(w http.ResponseWriter, r *http.Reques
 	for _, game := range history.Games {
 		games = append(games, playerGameHistoryItemResponse{
 			ID: game.GameID, Status: game.Status, CompletedAt: game.CompletedAt,
+			GameMode: game.GameMode, Ranked: game.Ranked,
 			Placement: game.Placement, PlayerCount: game.PlayerCount,
 			Won: game.Won, Forfeited: game.Forfeited, TotalPoints: game.TotalPoints,
 			RoundsPlayed: game.RoundsPlayed, RoundsWon: game.RoundsWon,

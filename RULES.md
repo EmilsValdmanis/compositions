@@ -7,7 +7,10 @@ Kompozīcijas is a turn-based card game played with **2 standard decks**
 The goal is to **get rid of all cards** by forming valid compositions and
 minimizing points across rounds.
 
-The game is played over multiple rounds until a player wins the overall game.
+The app supports two game modes:
+
+- **Quick game**: one round; the round winner wins the game. Quick results are tracked separately and are not ranked.
+- **Full game**: multiple rounds until a player wins the overall game. Full games are ranked.
 
 ---
 
@@ -230,8 +233,8 @@ All other players:
 
 ## Winning the Game
 
-- The game continues across multiple rounds.
-- Players accumulate points.
+- In a quick game, the first completed round ends the game and its round winner wins.
+- In a full game, play continues across multiple rounds and players accumulate points.
 
 ### Leaving and Ending Early
 
@@ -251,7 +254,7 @@ All other players:
 
 ### Final Winner
 
-- The player who forces **all other players above 100 points** wins.
+- In a full game, the player who forces **all other players above 100 points** wins.
 
 ---
 

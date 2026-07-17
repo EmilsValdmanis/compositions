@@ -86,6 +86,7 @@ func leaderboardRankedPlayers(metric LeaderboardMetric) (string, error) {
 		FROM game_player_statistics gps
 		JOIN games g ON g.id = gps.game_id
 		WHERE g.status IN ('completed', 'forfeit') AND g.completed_at IS NOT NULL
+			AND g.game_mode = 'full' AND g.ranked
 		GROUP BY gps.user_id
 	), ranked AS (
 		SELECT
@@ -102,7 +103,7 @@ func leaderboardRankedPlayers(metric LeaderboardMetric) (string, error) {
 		FROM player_statistics ps
 		JOIN users u ON u.id = ps.user_id
 		LEFT JOIN playtimes ON playtimes.user_id = ps.user_id
-		WHERE ps.games_played > 0
+		WHERE ps.games_played > 0 AND ps.game_mode = 'full' AND ps.ranked
 	)
 `, score), nil
 }

@@ -16,7 +16,15 @@ type GameState struct {
 	dealerIndex        int
 	turn               Turn
 	roundWinnerIndex   int
+	gameMode           GameMode
 }
+
+type GameMode string
+
+const (
+	GameModeFull  GameMode = "full"
+	GameModeQuick GameMode = "quick"
+)
 
 type GamePhase int
 
@@ -118,6 +126,7 @@ var (
 	ErrInvalidCutSize              = errors.New("invalid cut size")
 	ErrPlayerNotFound              = errors.New("player not found")
 	ErrPlayerAlreadyForfeited      = errors.New("player already forfeited")
+	ErrInvalidGameMode             = errors.New("invalid game mode")
 )
 
 var newShuffledGameDeck = func() *CardPile {
@@ -140,6 +149,7 @@ func NewGameState() *GameState {
 		round:              1,
 		dealerIndex:        0,
 		roundWinnerIndex:   -1,
+		gameMode:           GameModeFull,
 		turn: Turn{
 			number:      1,
 			playerIndex: 0,
@@ -420,6 +430,11 @@ func (gs *GameState) finishRound(winnerIndex int) {
 		winner.statistics.SixPairsWins++
 	}
 
+	if gs.gameMode == GameModeQuick {
+		gs.phase = PhaseGameOver
+		return
+	}
+
 	if gs.allOtherPlayersOverHundred(winnerIndex) {
 		gs.phase = PhaseGameOver
 		return
@@ -548,13 +563,25 @@ func (gs *GameState) removeCompletedCompositionsToDiscard() {
 }
 
 func (gs *GameState) StartGame(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int) error {
+	return gs.StartGameWithMode(dealerIndex, chooserIndex, dt, order, cutSize, GameModeFull)
+}
+
+func (gs *GameState) StartGameWithMode(dealerIndex, chooserIndex int, dt DealTypes, order []int, cutSize int, mode GameMode) error {
 	if gs.phase != PhaseLobby {
 		return ErrGameInProgress
 	}
+	if !mode.Valid() {
+		return ErrInvalidGameMode
+	}
 
 	gs.resetRoundState(gs.drawPile)
+	gs.gameMode = mode
 
 	return gs.startRound(dealerIndex, chooserIndex, dt, order, cutSize)
+}
+
+func (mode GameMode) Valid() bool {
+	return mode == GameModeFull || mode == GameModeQuick
 }
 
 func (gs *GameState) StartNextRound(dt DealTypes, order []int, cutSize int) error {

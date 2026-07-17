@@ -116,6 +116,7 @@ type gameConclusion struct {
 type pendingDealChoice struct {
 	dealerIndex  int
 	chooserIndex int
+	gameMode     game.GameMode
 }
 
 type dealingChoiceOptions struct {
@@ -161,8 +162,9 @@ type persistedRoom struct {
 }
 
 type persistedPendingDealChoice struct {
-	DealerIndex  int `json:"dealerIndex"`
-	ChooserIndex int `json:"chooserIndex"`
+	DealerIndex  int           `json:"dealerIndex"`
+	ChooserIndex int           `json:"chooserIndex"`
+	GameMode     game.GameMode `json:"gameMode,omitempty"`
 }
 
 type persistedRoomPlayer struct {
@@ -427,7 +429,7 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
-func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot, []*websocket.Conn, error) {
+func (l *lobbyServer) startGame(sessionID string, dealerIndex int, requestedModes ...game.GameMode) (roomSnapshot, []*websocket.Conn, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -454,11 +456,18 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int) (roomSnapshot
 	if dealerIndex < 0 || dealerIndex >= len(room.players) {
 		return roomSnapshot{}, nil, game.ErrInvalidDealer
 	}
+	gameMode := game.GameModeFull
+	if len(requestedModes) > 0 {
+		gameMode = requestedModes[0]
+	}
+	if !gameMode.Valid() {
+		return roomSnapshot{}, nil, game.ErrInvalidGameMode
+	}
 
 	chooserIndex := (dealerIndex - 1 + len(room.players)) % len(room.players)
-	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex}
+	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex, gameMode: gameMode}
 
-	slog.Info("game start requested", "roomCode", room.code, "sessionID", session.sessionID, "dealerIndex", dealerIndex, "chooserIndex", chooserIndex, "playerCount", len(room.players))
+	slog.Info("game start requested", "roomCode", room.code, "sessionID", session.sessionID, "dealerIndex", dealerIndex, "chooserIndex", chooserIndex, "playerCount", len(room.players), "gameMode", gameMode)
 	l.persistLocked("game start requested")
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
@@ -500,12 +509,17 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	startRound := func(dt game.DealTypes, order []int) error {
 		switch room.gameStatePhase() {
 		case game.PhaseLobby:
-			return room.gameState.StartGame(
+			gameMode := room.pendingDealChoice.gameMode
+			if gameMode == "" {
+				gameMode = game.GameModeFull
+			}
+			return room.gameState.StartGameWithMode(
 				room.pendingDealChoice.dealerIndex,
 				room.pendingDealChoice.chooserIndex,
 				dt,
 				order,
 				cutSize,
+				gameMode,
 			)
 		case game.PhaseRoundOver:
 			return room.gameState.StartNextRound(dt, order, cutSize)
@@ -1202,9 +1216,17 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 			}
 		}
 		if persistedRoom.PendingDealChoice != nil {
+			gameMode := persistedRoom.PendingDealChoice.GameMode
+			if gameMode == "" {
+				gameMode = game.GameModeFull
+			}
+			if !gameMode.Valid() {
+				return errors.New("persisted deal choice has invalid game mode")
+			}
 			restoredRoom.pendingDealChoice = &pendingDealChoice{
 				dealerIndex:  persistedRoom.PendingDealChoice.DealerIndex,
 				chooserIndex: persistedRoom.PendingDealChoice.ChooserIndex,
+				gameMode:     gameMode,
 			}
 		}
 		for _, persistedPlayer := range persistedRoom.Players {
@@ -1338,6 +1360,7 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 		}
 		checkpoint := database.GameCheckpointRecord{
 			ID: room.statisticsGameID, RoomCode: room.code, RoundsPlayed: room.gameState.RoundNumber(),
+			GameMode: string(room.gameState.GameMode()), Ranked: room.gameState.GameMode() == game.GameModeFull,
 			PlayerCount: len(results), StartedAt: startedAt,
 			PlaytimeSeconds: int64(room.statisticsPlaytime / time.Second), Players: players,
 		}
@@ -1350,6 +1373,7 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 			}
 			err = store.SaveCompletedGame(ctx, database.CompletedGameRecord{
 				ID: checkpoint.ID, RoomCode: checkpoint.RoomCode, CompletionKind: kind,
+				GameMode: checkpoint.GameMode, Ranked: checkpoint.Ranked,
 				RoundsPlayed: checkpoint.RoundsPlayed, PlayerCount: checkpoint.PlayerCount,
 				StartedAt: checkpoint.StartedAt, CompletedAt: time.Now().UTC(),
 				PlaytimeSeconds: checkpoint.PlaytimeSeconds, Players: players,
@@ -1449,9 +1473,14 @@ func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
 			}
 		}
 		if room.pendingDealChoice != nil {
+			gameMode := room.pendingDealChoice.gameMode
+			if gameMode == "" {
+				gameMode = game.GameModeFull
+			}
 			persistedRoom.PendingDealChoice = &persistedPendingDealChoice{
 				DealerIndex:  room.pendingDealChoice.dealerIndex,
 				ChooserIndex: room.pendingDealChoice.chooserIndex,
+				GameMode:     gameMode,
 			}
 		}
 		for _, player := range room.players {
@@ -1722,6 +1751,7 @@ func (r *room) snapshot() roomSnapshot {
 		Code:         r.code,
 		Phase:        phaseName(phase),
 		HostPlayerID: r.hostID,
+		GameMode:     r.gameState.GameMode(),
 		Players:      players,
 	}
 	if proposal := r.activeEndProposal(now); proposal != nil {
@@ -1749,6 +1779,11 @@ func (r *room) snapshot() roomSnapshot {
 		}
 	}
 	if r.pendingDealChoice != nil {
+		gameMode := r.pendingDealChoice.gameMode
+		if gameMode == "" {
+			gameMode = game.GameModeFull
+		}
+		snapshot.GameMode = gameMode
 		snapshot.PendingDealChoice = &pendingDealChoiceSnapshot{
 			DealerIndex:     r.pendingDealChoice.dealerIndex,
 			ChooserIndex:    r.pendingDealChoice.chooserIndex,

@@ -7,6 +7,7 @@ import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName, playersForResults } from "#/components/game/game-view-helpers";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
+import { type GameMode } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
 import { useGameSoundEvents } from "#/lib/game-sound-events";
@@ -55,6 +56,7 @@ export function ProtectedHome() {
   } = useGameWebSocket();
   const autoJoinAttemptedRoomCodeRef = useRef<string | null>(null);
   const [roomCode, setRoomCode] = useState(search.room ?? "");
+  const [gameMode, setGameMode] = useState<GameMode>("full");
   const [dismissedCompletedGameKey, setDismissedCompletedGameKey] = useState<string | null>(null);
   const players = state.room?.players ?? [];
   const activePlayers = players.filter((player) => !player.forfeited);
@@ -245,7 +247,13 @@ export function ProtectedHome() {
               completedGame={completedGame}
               players={players}
               roomCode={roomCode}
-              roomActions={{ canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame }}
+              roomActions={{
+                canCreateRoom,
+                canJoinRoom,
+                canLeaveRoom,
+                canStartGame,
+                canSelectGameMode: isHost && pendingDealChoice == null,
+              }}
               dealChoice={{
                 pendingDealChoice,
                 dealChooserName: dealChooser?.name ?? null,
@@ -254,7 +262,11 @@ export function ProtectedHome() {
               onRoomCodeChange={handleRoomCodeChange}
               onCreateRoom={createRoom}
               onJoinRoom={joinRoom}
-              onStartGame={startGame}
+              gameMode={
+                state.room?.pendingDealChoice ? (state.room.gameMode ?? gameMode) : gameMode
+              }
+              onGameModeChange={setGameMode}
+              onStartGame={() => startGame(gameMode)}
               onChooseDealing={chooseDealing}
               onLeaveRoom={handleLeaveRoom}
               onSendEmote={sendEmote}

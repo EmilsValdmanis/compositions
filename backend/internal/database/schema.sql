@@ -72,6 +72,8 @@ CREATE TABLE games (
     started_at TIMESTAMPTZ NOT NULL,
     completed_at TIMESTAMPTZ,
     active_playtime_seconds BIGINT NOT NULL DEFAULT 0,
+	game_mode TEXT NOT NULL DEFAULT 'full',
+	ranked BOOLEAN NOT NULL DEFAULT TRUE,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -116,7 +118,9 @@ CREATE TABLE game_player_statistics (
 );
 
 CREATE TABLE player_statistics (
-    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	game_mode TEXT NOT NULL DEFAULT 'full',
+	ranked BOOLEAN NOT NULL DEFAULT TRUE,
     games_played BIGINT NOT NULL DEFAULT 0,
     games_won BIGINT NOT NULL DEFAULT 0,
     total_placement BIGINT NOT NULL DEFAULT 0,
@@ -152,5 +156,6 @@ CREATE TABLE player_statistics (
     longest_game_win_streak INTEGER NOT NULL DEFAULT 0,
     current_round_win_streak INTEGER NOT NULL DEFAULT 0,
     longest_round_win_streak INTEGER NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	PRIMARY KEY (user_id, game_mode, ranked)
 );

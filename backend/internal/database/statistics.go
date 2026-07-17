@@ -15,6 +15,8 @@ const maxStoredStatistic = int64(1<<31 - 1)
 
 type GameCheckpointRecord struct {
 	ID, RoomCode              string
+	GameMode                  string
+	Ranked                    bool
 	RoundsPlayed, PlayerCount int
 	StartedAt                 time.Time
 	PlaytimeSeconds           int64
@@ -23,6 +25,8 @@ type GameCheckpointRecord struct {
 
 type CompletedGameRecord struct {
 	ID, RoomCode              string
+	GameMode                  string
+	Ranked                    bool
 	CompletionKind            string
 	RoundsPlayed, PlayerCount int
 	StartedAt, CompletedAt    time.Time
@@ -138,6 +142,7 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	}
 	checkpoint := GameCheckpointRecord{
 		ID: completed.ID, RoomCode: completed.RoomCode, RoundsPlayed: completed.RoundsPlayed,
+		GameMode: completed.GameMode, Ranked: completed.Ranked,
 		PlayerCount: completed.PlayerCount, StartedAt: completed.StartedAt,
 		PlaytimeSeconds: completed.PlaytimeSeconds, Players: completed.Players,
 	}
@@ -145,6 +150,7 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	if err != nil {
 		return fmt.Errorf("completed game statistics are incomplete: %w", err)
 	}
+	gameMode, ranked, _ := normalizedGameScope(completed.GameMode, completed.Ranked)
 	winners := 0
 	for _, player := range completed.Players {
 		if player.Placement <= 0 || player.Placement > completed.PlayerCount {
@@ -191,7 +197,7 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 		if err := saveGamePlayer(ctx, tx, gameID, player, true); err != nil {
 			return err
 		}
-		if err := addLifetimeStatistics(ctx, tx, player); err != nil {
+		if err := addLifetimeStatistics(ctx, tx, player, gameMode, ranked); err != nil {
 			return err
 		}
 	}
@@ -210,6 +216,9 @@ func validateCheckpoint(checkpoint GameCheckpointRecord) (pgtype.UUID, error) {
 	}
 	if checkpoint.PlaytimeSeconds < 0 {
 		return pgtype.UUID{}, errors.New("game playtime cannot be negative")
+	}
+	if _, _, err := normalizedGameScope(checkpoint.GameMode, checkpoint.Ranked); err != nil {
+		return pgtype.UUID{}, err
 	}
 	var gameID pgtype.UUID
 	if err := gameID.Scan(checkpoint.ID); err != nil {
@@ -234,6 +243,17 @@ func validateCheckpoint(checkpoint GameCheckpointRecord) (pgtype.UUID, error) {
 		}
 	}
 	return gameID, nil
+}
+
+func normalizedGameScope(mode string, ranked bool) (string, bool, error) {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return "full", true, nil
+	}
+	if mode != "full" && mode != "quick" {
+		return "", false, errors.New("invalid game mode")
+	}
+	return mode, ranked, nil
 }
 
 func validatePlayerStatistics(player CompletedGamePlayerRecord) error {
@@ -269,17 +289,23 @@ func validatePlayerStatistics(player CompletedGamePlayerRecord) error {
 }
 
 func saveCheckpointHeader(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, checkpoint GameCheckpointRecord) (bool, error) {
+	gameMode, ranked, err := normalizedGameScope(checkpoint.GameMode, checkpoint.Ranked)
+	if err != nil {
+		return false, err
+	}
 	tag, err := tx.Exec(ctx, `
-		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at, active_playtime_seconds)
-		VALUES ($1, $2, 'in_progress', $3, $4, $5, $6)
+		INSERT INTO games (id, room_code, status, rounds_played, player_count, started_at, active_playtime_seconds, game_mode, ranked)
+		VALUES ($1, $2, 'in_progress', $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
 			room_code = EXCLUDED.room_code,
 			rounds_played = EXCLUDED.rounds_played,
 			player_count = EXCLUDED.player_count,
+			game_mode = EXCLUDED.game_mode,
+			ranked = EXCLUDED.ranked,
 			active_playtime_seconds = GREATEST(games.active_playtime_seconds, EXCLUDED.active_playtime_seconds),
 			updated_at = NOW()
 		WHERE games.status = 'in_progress'
-	`, gameID, strings.TrimSpace(checkpoint.RoomCode), checkpoint.RoundsPlayed, checkpoint.PlayerCount, checkpoint.StartedAt, checkpoint.PlaytimeSeconds)
+	`, gameID, strings.TrimSpace(checkpoint.RoomCode), checkpoint.RoundsPlayed, checkpoint.PlayerCount, checkpoint.StartedAt, checkpoint.PlaytimeSeconds, gameMode, ranked)
 	return tag.RowsAffected() > 0, err
 }
 
@@ -338,14 +364,14 @@ func saveGamePlayer(ctx context.Context, tx pgx.Tx, gameID pgtype.UUID, p Comple
 	return err
 }
 
-func addLifetimeStatistics(ctx context.Context, tx pgx.Tx, p CompletedGamePlayerRecord) error {
+func addLifetimeStatistics(ctx context.Context, tx pgx.Tx, p CompletedGamePlayerRecord, gameMode string, ranked bool) error {
 	var userID pgtype.UUID
 	if err := userID.Scan(p.UserID); err != nil {
 		return fmt.Errorf("invalid statistics user id: %w", err)
 	}
 	_, err := tx.Exec(ctx, `
 		INSERT INTO player_statistics (
-			user_id, games_played, games_won, total_placement, rounds_played, rounds_won, same_suit_wins,
+			user_id, game_mode, ranked, games_played, games_won, total_placement, rounds_played, rounds_won, same_suit_wins,
 			six_pairs_wins, forfeits, turns_taken, cards_drawn_from_deck, cards_drawn_from_discard,
 			cards_discarded, cards_played, compositions_created, sets_created, runs_created, additions_done,
 			compositions_completed, sets_completed, runs_completed, jokers_played, jokers_reclaimed,
@@ -353,11 +379,11 @@ func addLifetimeStatistics(ctx context.Context, tx pgx.Tx, p CompletedGamePlayer
 			largest_round_points_inflicted, most_cards_remaining, rounds_opened, fastest_opening_turn,
 			current_game_win_streak, longest_game_win_streak, current_round_win_streak, longest_round_win_streak
 		) VALUES (
-			$1, 1, $2::bigint, $3, $4, $5, $6, $7, $8::bigint, $9, $10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-			$2::int, $2::int, $32, $33
+			$1, $2, $3, 1, $4::bigint, $5, $6, $7, $8, $9, $10::bigint, $11, $12, $13, $14, $15, $16, $17, $18,
+			$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33,
+			$4::int, $4::int, $34, $35
 		)
-		ON CONFLICT (user_id) DO UPDATE SET
+		ON CONFLICT (user_id, game_mode, ranked) DO UPDATE SET
 			games_played = player_statistics.games_played + 1,
 			games_won = player_statistics.games_won + EXCLUDED.games_won,
 			total_placement = player_statistics.total_placement + EXCLUDED.total_placement,
@@ -391,10 +417,10 @@ func addLifetimeStatistics(ctx context.Context, tx pgx.Tx, p CompletedGamePlayer
 			fastest_opening_turn = CASE WHEN player_statistics.fastest_opening_turn = 0 THEN EXCLUDED.fastest_opening_turn WHEN EXCLUDED.fastest_opening_turn = 0 THEN player_statistics.fastest_opening_turn ELSE LEAST(player_statistics.fastest_opening_turn, EXCLUDED.fastest_opening_turn) END,
 			current_game_win_streak = CASE WHEN EXCLUDED.games_won = 1 THEN player_statistics.current_game_win_streak + 1 ELSE 0 END,
 			longest_game_win_streak = GREATEST(player_statistics.longest_game_win_streak, CASE WHEN EXCLUDED.games_won = 1 THEN player_statistics.current_game_win_streak + 1 ELSE 0 END),
-			current_round_win_streak = CASE WHEN $32 = 0 THEN 0 WHEN $5 = $4 THEN player_statistics.current_round_win_streak + $32 ELSE $32 END,
-			longest_round_win_streak = GREATEST(player_statistics.longest_round_win_streak, $33, player_statistics.current_round_win_streak + $34),
+			current_round_win_streak = CASE WHEN $34 = 0 THEN 0 WHEN $7 = $6 THEN player_statistics.current_round_win_streak + $34 ELSE $34 END,
+			longest_round_win_streak = GREATEST(player_statistics.longest_round_win_streak, $35, player_statistics.current_round_win_streak + $36),
 			updated_at = NOW()
-	`, userID, boolInt(p.Won), p.Placement, p.RoundsPlayed, p.RoundsWon, p.SameSuitWins, p.SixPairsWins,
+	`, userID, gameMode, ranked, boolInt(p.Won), p.Placement, p.RoundsPlayed, p.RoundsWon, p.SameSuitWins, p.SixPairsWins,
 		boolInt(p.Forfeited), p.TurnsTaken, p.CardsDrawnFromDeck, p.CardsDrawnFromDiscard, p.CardsDiscarded,
 		p.CardsPlayed, p.CompositionsCreated, p.SetsCreated, p.RunsCreated, p.AdditionsDone,
 		p.CompositionsCompleted, p.SetsCompleted, p.RunsCompleted, p.JokersPlayed, p.JokersReclaimed,

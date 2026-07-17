@@ -119,11 +119,11 @@ func (s *postgresUserStore) GetPlayerProfile(ctx context.Context, userID string)
 	return s.store.GetPlayerProfile(ctx, strings.TrimSpace(userID))
 }
 
-func (s *postgresUserStore) GetPlayerGameHistory(ctx context.Context, userID string, limit, offset int) (database.PlayerGameHistoryPage, error) {
+func (s *postgresUserStore) GetPlayerGameHistory(ctx context.Context, userID string, limit, offset int, filters ...database.GameHistoryFilter) (database.PlayerGameHistoryPage, error) {
 	if s == nil || s.store == nil {
 		return database.PlayerGameHistoryPage{}, errors.New("user store is not configured")
 	}
-	return s.store.GetPlayerGameHistory(ctx, strings.TrimSpace(userID), limit, offset)
+	return s.store.GetPlayerGameHistory(ctx, strings.TrimSpace(userID), limit, offset, filters...)
 }
 
 func (s *postgresUserStore) GetLeaderboard(ctx context.Context, cursor *database.LeaderboardCursor, limit int, viewerUserID string, metric database.LeaderboardMetric) (database.LeaderboardPage, error) {

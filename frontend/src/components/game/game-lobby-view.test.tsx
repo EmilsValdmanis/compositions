@@ -251,6 +251,27 @@ describe("GameLobbyView", () => {
     expect(onSendEmote).toHaveBeenCalledWith("👍");
   });
 
+  it("lets the host select a quick game before starting", () => {
+    const onGameModeChange = vi.fn();
+    const view = renderLobby({
+      room: makeRoom(),
+      players,
+      gameMode: "full",
+      roomActions: {
+        canCreateRoom: false,
+        canJoinRoom: false,
+        canLeaveRoom: true,
+        canStartGame: true,
+        canSelectGameMode: true,
+      },
+      onGameModeChange,
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Quick game" }));
+
+    expect(onGameModeChange).toHaveBeenCalledWith("quick");
+  });
+
   it("keeps the chooser on the deal step when an emote updates the players", () => {
     const pendingDealChoice = {
       dealerIndex: 0,

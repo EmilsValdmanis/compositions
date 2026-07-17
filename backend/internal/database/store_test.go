@@ -350,7 +350,7 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 		SELECT games_played, games_won, total_placement, rounds_played, rounds_won, forfeits,
 		       turns_taken, cards_played, points_inflicted, fastest_opening_turn,
 		       current_game_win_streak, longest_game_win_streak, current_round_win_streak, longest_round_win_streak
-		FROM player_statistics WHERE user_id = $1
+		FROM player_statistics WHERE user_id = $1 AND game_mode = 'full' AND ranked
 	`, user.ID).Scan(&gamesPlayed, &gamesWon, &totalPlacement, &roundsPlayed, &roundsWon, &forfeits,
 		&turnsTaken, &cardsPlayed, &pointsInflicted, &fastestOpening,
 		&currentGameStreak, &longestGameStreak, &currentRoundStreak, &longestRoundStreak)
@@ -385,6 +385,28 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 		t.Fatalf("second history page = %+v", history)
 	}
 
+	quick := CompletedGameRecord{
+		ID: uuid.NewString(), RoomCode: "FAST12", CompletionKind: "normal", GameMode: "quick", Ranked: false,
+		RoundsPlayed: 1, PlayerCount: 2, StartedAt: started.Add(3 * time.Hour),
+		CompletedAt: started.Add(3*time.Hour + 10*time.Minute), PlaytimeSeconds: 10 * 60,
+		Players: []CompletedGamePlayerRecord{{
+			UserID: user.ID, Placement: 1, Won: true, RoundsPlayed: 1, RoundsWon: 1,
+			TurnsTaken: 3, CardsPlayed: 7, PointsInflicted: 25,
+			StartingRoundWinStreak: 1, EndingRoundWinStreak: 1, LongestRoundWinStreak: 1,
+		}},
+	}
+	if err := store.SaveCompletedGame(ctx, quick); err != nil {
+		t.Fatalf("SaveCompletedGame(quick) error = %v", err)
+	}
+	profile, err = store.GetPlayerProfile(ctx, user.ID)
+	if err != nil || profile.GamesPlayed != 2 || profile.Quick.GamesPlayed != 1 || profile.Quick.GamesWon != 1 || profile.Quick.TotalPlaytimeSeconds != 10*60 {
+		t.Fatalf("scoped player profile = %+v, error = %v", profile, err)
+	}
+	quickHistory, err := store.GetPlayerGameHistory(ctx, user.ID, 10, 0, GameHistoryQuick)
+	if err != nil || quickHistory.Total != 1 || len(quickHistory.Games) != 1 || quickHistory.Games[0].GameID != quick.ID || quickHistory.Games[0].Ranked {
+		t.Fatalf("quick history = %+v, error = %v", quickHistory, err)
+	}
+
 	unranked := GameCheckpointRecord{
 		ID: uuid.NewString(), RoomCode: "BUG123", RoundsPlayed: 2, PlayerCount: 2, StartedAt: started,
 		Players: []CompletedGamePlayerRecord{{UserID: user.ID, Forfeited: true, TurnsTaken: 7, CardsPlayed: 14}},
@@ -416,7 +438,7 @@ func TestUserStoreSaveCompletedGameIsIdempotentAndUpdatesLifetimeStatistics(t *t
 		t.Fatalf("unranked checkpoint = status:%q forfeited:%v turns:%d placement:%+v error:%v", unrankedStatus, unrankedForfeited, unrankedTurns, unrankedPlacement, err)
 	}
 	var lifetimeGames int
-	if err := store.pool.QueryRow(ctx, `SELECT games_played FROM player_statistics WHERE user_id = $1`, user.ID).Scan(&lifetimeGames); err != nil || lifetimeGames != 2 {
+	if err := store.pool.QueryRow(ctx, `SELECT games_played FROM player_statistics WHERE user_id = $1 AND game_mode = 'full' AND ranked`, user.ID).Scan(&lifetimeGames); err != nil || lifetimeGames != 2 {
 		t.Fatalf("lifetime games after unranked finalization = %d, error = %v", lifetimeGames, err)
 	}
 }
@@ -468,6 +490,34 @@ func TestStatisticsCheckpointMigrationUpgradesCompletedGames(t *testing.T) {
 	}
 	if err := pool.QueryRow(ctx, `SELECT active_playtime_seconds FROM games WHERE id = $1`, overnightGameID).Scan(&overnightPlaytime); err != nil || overnightPlaytime != 0 {
 		t.Fatalf("overnight active playtime = %d, error = %v; want 0", overnightPlaytime, err)
+	}
+	userID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO users (id, name) VALUES ($1, 'Migration Player')`, userID); err != nil {
+		t.Fatalf("seed pre-mode user error = %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO player_statistics (user_id, games_played) VALUES ($1, 7)`, userID); err != nil {
+		t.Fatalf("seed pre-mode statistics error = %v", err)
+	}
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(game modes) error = %v", err)
+	}
+	var migratedMode string
+	var migratedRanked bool
+	var migratedGames int
+	if err := pool.QueryRow(ctx, `SELECT game_mode, ranked, games_played FROM player_statistics WHERE user_id = $1`, userID).Scan(&migratedMode, &migratedRanked, &migratedGames); err != nil || migratedMode != "full" || !migratedRanked || migratedGames != 7 {
+		t.Fatalf("migrated statistics mode=%q ranked=%v games=%d error=%v", migratedMode, migratedRanked, migratedGames, err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT game_mode, ranked FROM games WHERE id = $1`, gameID).Scan(&migratedMode, &migratedRanked); err != nil || migratedMode != "full" || !migratedRanked {
+		t.Fatalf("migrated game mode=%q ranked=%v error=%v", migratedMode, migratedRanked, err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO player_statistics (user_id, game_mode, ranked, games_played) VALUES ($1, 'quick', FALSE, 2)`, userID); err != nil {
+		t.Fatalf("insert scoped quick statistics error = %v", err)
+	}
+	if err := migrator.Steps(-1); err != nil {
+		t.Fatalf("migrator.Steps(-1 game modes) error = %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT games_played FROM player_statistics WHERE user_id = $1`, userID).Scan(&migratedGames); err != nil || migratedGames != 7 {
+		t.Fatalf("downgraded statistics games=%d error=%v", migratedGames, err)
 	}
 	if err := migrator.Steps(-1); err != nil {
 		t.Fatalf("migrator.Steps(-1 active playtime) error = %v", err)

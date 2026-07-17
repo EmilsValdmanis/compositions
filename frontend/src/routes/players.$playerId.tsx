@@ -8,18 +8,20 @@ import { m } from "#/paraglide/messages.js";
 import { localizeHref } from "#/paraglide/runtime.js";
 
 function profileDescription(profile: Awaited<ReturnType<typeof getPlayerProfile>> | undefined) {
-  if (!profile || profile.gamesPlayed === 0) {
+  if (!profile || profile.rankedFull.gamesPlayed === 0) {
     return profile
       ? m.profile_first_game_description({ name: profile.name })
       : m.profile_generic_description();
   }
 
-  const winRate = Math.round((profile.gamesWon / profile.gamesPlayed) * 100);
+  const winRate = Math.round((profile.rankedFull.gamesWon / profile.rankedFull.gamesPlayed) * 100);
   return m.profile_stats_description({
-    winsText: m.profile_wins_count({ count: profile.gamesWon }),
-    gamesText: m.profile_games_count({ count: profile.gamesPlayed }),
+    winsText: m.profile_wins_count({ count: profile.rankedFull.gamesWon }),
+    gamesText: m.profile_games_count({ count: profile.rankedFull.gamesPlayed }),
     winRate,
-    compositionsText: m.profile_compositions_count({ count: profile.compositionsCreated }),
+    compositionsText: m.profile_compositions_count({
+      count: profile.rankedFull.compositionsCreated,
+    }),
   });
 }
 
@@ -28,7 +30,7 @@ export const Route = createFileRoute("/players/$playerId")({
     const [profileResult, historyResult] = await Promise.allSettled([
       getPlayerProfile({ data: params.playerId }),
       getPlayerGameHistory({
-        data: { playerId: params.playerId, page: 1, pageSize: 10 },
+        data: { playerId: params.playerId, page: 1, pageSize: 10, mode: "all" },
       }),
     ]);
     if (profileResult.status === "rejected") throw profileResult.reason;

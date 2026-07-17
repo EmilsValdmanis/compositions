@@ -10,6 +10,7 @@ const PersistenceSnapshotVersion = 1
 
 type PersistenceSnapshot struct {
 	Version            int                              `json:"version"`
+	GameMode           GameMode                         `json:"gameMode,omitempty"`
 	Players            []PersistencePlayerSnapshot      `json:"players"`
 	ActiveCompositions []PersistenceCompositionSnapshot `json:"activeCompositions"`
 	DrawPile           []CardSnapshot                   `json:"drawPile"`
@@ -105,6 +106,7 @@ func (gs *GameState) PersistenceSnapshot() PersistenceSnapshot {
 
 	return PersistenceSnapshot{
 		Version:            PersistenceSnapshotVersion,
+		GameMode:           gs.GameMode(),
 		Players:            players,
 		ActiveCompositions: compositions,
 		DrawPile:           drawPile,
@@ -130,6 +132,12 @@ func RestoreGameState(snapshot PersistenceSnapshot) (*GameState, error) {
 	}
 	if snapshot.Phase < PhaseLobby || snapshot.Phase > PhaseGameOver {
 		return nil, errors.New("invalid game phase")
+	}
+	if snapshot.GameMode == "" {
+		snapshot.GameMode = GameModeFull
+	}
+	if !snapshot.GameMode.Valid() {
+		return nil, ErrInvalidGameMode
 	}
 
 	players := make([]*Player, 0, len(snapshot.Players))
@@ -208,6 +216,7 @@ func RestoreGameState(snapshot PersistenceSnapshot) (*GameState, error) {
 		dealerIndex:        snapshot.DealerIndex,
 		turn:               turn,
 		roundWinnerIndex:   snapshot.RoundWinnerIndex,
+		gameMode:           snapshot.GameMode,
 	}, nil
 }
 

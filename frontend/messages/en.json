@@ -330,6 +330,11 @@
   "profile_link_copied": "Profile link copied",
   "profile_link_copy_failed": "Could not copy this profile link",
   "player_profile": "Player profile",
+  "game_mode": "Game mode",
+  "quick_game": "Quick game",
+  "full_game": "Full game",
+  "quick_game_description": "One casual round. Results are tracked separately from ranked play.",
+  "full_game_description": "Ranked rounds continue until one player makes everybody else fly.",
   "ranked_games": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],
@@ -341,10 +346,24 @@
     }
   ],
   "unranked": "Unranked",
+  "ranked_full": "Ranked full",
+  "quick_games_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} quick game",
+        "countPlural=other": "{count} quick games"
+      }
+    }
+  ],
+  "profile_statistics_mode": "Profile statistics mode",
   "games_played": "Games played",
   "ranked_finishes": "Ranked finishes",
+  "quick_finishes": "Casual quick finishes",
   "total_playtime": "Total playtime",
   "completed_ranked_games": "Completed ranked games",
+  "completed_quick_games": "Completed quick games",
   "win_rate": "Win rate",
   "game_wins": [
     {
@@ -371,8 +390,13 @@
   ],
   "no_ranked_history": "No ranked history yet",
   "stats_after_first_game": "Statistics will appear here after this player completes their first ranked game.",
+  "no_quick_history": "No quick-game history yet",
+  "quick_stats_after_first_game": "Statistics will appear here after this player completes their first quick game.",
   "game_history": "Game history",
-  "game_history_description": "Every ranked finish, newest first.",
+  "game_history_description": "Full and quick finishes, newest first.",
+  "game_history_filter": "Game history filter",
+  "all_modes": "All modes",
+  "mode": "Mode",
   "game_history_error": "Game history could not be loaded. Please try again.",
   "played_at": "Played",
   "result": "Result",
@@ -392,6 +416,8 @@
   "runs_sets": "Runs / sets",
   "competitive_record": "Competitive record",
   "competitive_record_description": "Streaks and scoring across ranked games.",
+  "quick_record": "Quick record",
+  "quick_record_description": "Streaks and scoring across casual one-round games.",
   "current_win_streak": "Current win streak",
   "best_win_streak": "Best win streak",
   "points_inflicted": "Points inflicted",
@@ -433,7 +459,7 @@
   ],
   "leaderboard": "Leaderboard",
   "view_leaderboard": "View leaderboard",
-  "all_time_rankings": "All-time rankings",
+  "all_time_rankings": "All-time ranked full games",
   "leaderboard_statistic": "Leaderboard statistic",
   "rank": "Rank",
   "player": "Player",
@@ -475,6 +501,7 @@
   "error_deal_chooser_only": "Only the deal chooser can choose how to deal.",
   "error_cut_size_required": "Choose a deck cut size.",
   "error_invalid_cut_size": "The deck cut size is invalid.",
+  "error_invalid_game_mode": "The selected game mode is invalid.",
   "error_invalid_dealing_type": "The dealing style is invalid.",
   "error_invalid_dealing_order": "The dealing order is invalid.",
   "error_lobby_only_leave": "You can only leave while in the lobby.",

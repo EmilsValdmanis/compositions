@@ -8,7 +8,7 @@ Statistics use counters rather than an event row for every card action:
 2. Those counters are included in the persisted lobby snapshot, so a server restart does not lose an active game's progress.
 3. Each started game receives a stable UUID and creates an `in_progress` checkpoint.
 4. The same cumulative player row is replaced after every completed round and immediately after a forfeit. There is no row per action or per round.
-5. Ranked completion finalizes those rows and updates each player's cached `player_statistics` row in the same transaction. The transition away from `in_progress` makes retries idempotent.
+5. A completed game finalizes those rows and updates each player's scoped cached `player_statistics` row in the same transaction. The transition away from `in_progress` makes retries idempotent.
 
 The lobby snapshot is written before each derived statistics checkpoint. After
 the checkpoint succeeds, the server writes the snapshot again with its dirty
@@ -18,18 +18,25 @@ marker that safely retries the idempotent checkpoint after restart.
 
 Mutual endings, technical aborts, and abandoned games retain their latest per-game activity with null outcomes, but do not affect ranked lifetime statistics. Guests still affect player count and placement, but only authenticated users receive profile statistics.
 
-`game_player_statistics` is the auditable per-game source. `player_statistics` is a ranked lifetime cache for inexpensive profiles and leaderboards. If an aggregation rule ever changes, the cache can be rebuilt from per-game rows filtered to `games.status IN ('completed', 'forfeit')`.
+`game_player_statistics` is the auditable per-game source. `player_statistics` is a lifetime cache keyed by `(user_id, game_mode, ranked)` for inexpensive profiles and leaderboards. If an aggregation rule ever changes, the cache can be rebuilt from per-game rows filtered to `games.status IN ('completed', 'forfeit')` and the desired mode/ranked scope.
+
+Current scopes are:
+
+- `full + ranked`: the existing multi-round game, used by ranked profiles and leaderboards
+- `quick + unranked`: a single completed round, shown separately on profiles and excluded from leaderboards
+
+Game mode and ranked eligibility are separate columns so a casual full-game or ranked quick-game queue can be introduced later without changing the storage model.
 
 Checkpoint writes happen only at meaningful boundaries:
 
 - game start
 - completed round
 - player forfeit
-- final ranked or unranked ending
+- final completed or outcome-free ending
 
 This means a long turn does not generate extra database rows or writes, while completed-round and reliability information survives a later abort.
 
-Game statuses are `in_progress`, `completed`, `forfeit`, `mutual_end`, `technical_abort`, and `abandoned`. Placement and win fields remain null for every unranked status. Ranked profile statistics come from the lifetime cache; reliability or diagnostic views that intentionally include aborted games can query the retained per-game rows directly.
+Game statuses are `in_progress`, `completed`, `forfeit`, `mutual_end`, `technical_abort`, and `abandoned`. Status describes lifecycle/outcome rather than ranked eligibility. Placement and win fields remain null for mutual endings, technical aborts, and abandoned games. Profile statistics come from the matching lifetime scope; reliability or diagnostic views that intentionally include aborted games can query the retained per-game rows directly.
 
 ## Short examples
 

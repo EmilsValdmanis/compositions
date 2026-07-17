@@ -66,7 +66,8 @@ type joinRoomRequest struct {
 }
 
 type startGameRequest struct {
-	DealerIndex int `json:"dealerIndex"`
+	DealerIndex int           `json:"dealerIndex"`
+	GameMode    game.GameMode `json:"gameMode"`
 }
 
 type chooseDealingRequest struct {
@@ -196,6 +197,7 @@ type roomSnapshot struct {
 	Code              string                     `json:"code"`
 	Phase             string                     `json:"phase"`
 	HostPlayerID      string                     `json:"hostPlayerId"`
+	GameMode          game.GameMode              `json:"gameMode"`
 	DealerIndex       int                        `json:"dealerIndex,omitempty"`
 	PendingDealChoice *pendingDealChoiceSnapshot `json:"pendingDealChoice,omitempty"`
 	Players           []playerSnapshot           `json:"players"`
@@ -566,7 +568,11 @@ func (s *wsServer) handleStartGame(conn *websocket.Conn, sessionID string, envel
 		return
 	}
 
-	roomState, recipients, err := s.lobby.startGame(sessionID, req.DealerIndex)
+	gameMode := req.GameMode
+	if gameMode == "" {
+		gameMode = game.GameModeFull
+	}
+	roomState, recipients, err := s.lobby.startGame(sessionID, req.DealerIndex, gameMode)
 	if err != nil {
 		slog.Warn("start game failed", "sessionID", sessionID, "error", err)
 		s.writeError(conn, err)

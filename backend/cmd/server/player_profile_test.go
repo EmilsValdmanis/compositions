@@ -21,25 +21,32 @@ type playerProfileTestStore struct {
 	historyErr    error
 	historyLimit  int
 	historyOffset int
+	historyFilter database.GameHistoryFilter
 }
 
 func (s playerProfileTestStore) GetPlayerProfile(context.Context, string) (database.PlayerProfileRecord, error) {
 	return s.profile, s.err
 }
 
-func (s *playerProfileTestStore) GetPlayerGameHistory(_ context.Context, _ string, limit, offset int) (database.PlayerGameHistoryPage, error) {
+func (s *playerProfileTestStore) GetPlayerGameHistory(_ context.Context, _ string, limit, offset int, filters ...database.GameHistoryFilter) (database.PlayerGameHistoryPage, error) {
 	s.historyLimit = limit
 	s.historyOffset = offset
+	if len(filters) > 0 {
+		s.historyFilter = filters[0]
+	}
 	return s.history, s.historyErr
 }
 
 func TestHandlePlayerProfile(t *testing.T) {
 	profile := database.PlayerProfileRecord{
 		ID: "00000000-0000-0000-0000-000000000002", Name: "Avery", ImageURL: "https://example.com/avatar.png",
-		GamesPlayed: 8, GamesWon: 3, TotalPlacement: 14, RoundsPlayed: 22, RoundsWon: 9, Forfeits: 2,
-		TotalPlaytimeSeconds: 5_430,
-		CompositionsCreated:  41, SetsCreated: 17, RunsCreated: 24, PointsInflicted: 230,
-		LongestGameWinStreak: 2,
+		PlayerStatisticsRecord: database.PlayerStatisticsRecord{
+			GamesPlayed: 8, GamesWon: 3, TotalPlacement: 14, RoundsPlayed: 22, RoundsWon: 9, Forfeits: 2,
+			TotalPlaytimeSeconds: 5_430,
+			CompositionsCreated:  41, SetsCreated: 17, RunsCreated: 24, PointsInflicted: 230,
+			LongestGameWinStreak: 2,
+		},
+		Quick: database.PlayerStatisticsRecord{GamesPlayed: 4, GamesWon: 2},
 	}
 	store := &playerProfileTestStore{userStore: noopUserStore{}, profile: profile}
 	server := newWSServerWithDependencies(nil, store, "")
@@ -58,7 +65,7 @@ func TestHandlePlayerProfile(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if payload.ID != profile.ID || payload.Name != profile.Name || payload.GamesPlayed != 8 || payload.GamesWon != 3 || payload.TotalPlaytimeSeconds != 5_430 {
+	if payload.ID != profile.ID || payload.Name != profile.Name || payload.RankedFull.GamesPlayed != 8 || payload.RankedFull.GamesWon != 3 || payload.RankedFull.TotalPlaytimeSeconds != 5_430 || payload.Quick.GamesPlayed != 4 {
 		t.Fatalf("payload = %+v", payload)
 	}
 }
@@ -71,7 +78,7 @@ func TestHandlePlayerGameHistory(t *testing.T) {
 		history: database.PlayerGameHistoryPage{
 			Total: 23,
 			Games: []database.PlayerGameHistoryRecord{{
-				GameID: "00000000-0000-0000-0000-000000000003", Status: "completed",
+				GameID: "00000000-0000-0000-0000-000000000003", Status: "completed", GameMode: "quick",
 				CompletedAt: completedAt, Placement: 1, PlayerCount: 3, Won: true,
 				TotalPoints: 42, RoundsPlayed: 4, RoundsWon: 2, PlaytimeSeconds: 1800,
 			}},
@@ -79,12 +86,12 @@ func TestHandlePlayerGameHistory(t *testing.T) {
 	}
 	server := newWSServerWithDependencies(nil, store, "")
 	response := httptest.NewRecorder()
-	server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games?page=2&pageSize=10", nil))
+	server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games?page=2&pageSize=10&mode=quick", nil))
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d; want %d", response.Code, http.StatusOK)
 	}
-	if store.historyLimit != 10 || store.historyOffset != 10 {
+	if store.historyLimit != 10 || store.historyOffset != 10 || store.historyFilter != database.GameHistoryQuick {
 		t.Fatalf("pagination = limit:%d offset:%d; want 10/10", store.historyLimit, store.historyOffset)
 	}
 	var payload playerGameHistoryResponse
@@ -99,7 +106,7 @@ func TestHandlePlayerGameHistory(t *testing.T) {
 func TestHandlePlayerGameHistoryRejectsInvalidPagination(t *testing.T) {
 	playerID := "00000000-0000-0000-0000-000000000002"
 	server := newWSServerWithDependencies(nil, &playerProfileTestStore{userStore: noopUserStore{}}, "")
-	for _, query := range []string{"page=0", "page=nope", "pageSize=0", "pageSize=51"} {
+	for _, query := range []string{"page=0", "page=nope", "pageSize=0", "pageSize=51", "mode=ranked"} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games?"+query, nil)
 		server.routes().ServeHTTP(response, request)

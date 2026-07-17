@@ -10,6 +10,8 @@ import (
 
 type PlayerGameHistoryRecord struct {
 	GameID, Status                       string
+	GameMode                             string
+	Ranked                               bool
 	CompletedAt                          time.Time
 	Placement, PlayerCount               int
 	Won, Forfeited                       bool
@@ -17,14 +19,35 @@ type PlayerGameHistoryRecord struct {
 	PlaytimeSeconds                      int64
 }
 
+type GameHistoryFilter string
+
+const (
+	GameHistoryAll   GameHistoryFilter = "all"
+	GameHistoryFull  GameHistoryFilter = "full"
+	GameHistoryQuick GameHistoryFilter = "quick"
+)
+
+func ParseGameHistoryFilter(value string) (GameHistoryFilter, bool) {
+	filter := GameHistoryFilter(value)
+	if filter == "" {
+		return GameHistoryAll, true
+	}
+	switch filter {
+	case GameHistoryAll, GameHistoryFull, GameHistoryQuick:
+		return filter, true
+	default:
+		return "", false
+	}
+}
+
 type PlayerGameHistoryPage struct {
 	Games []PlayerGameHistoryRecord
 	Total int64
 }
 
-// GetPlayerGameHistory returns ranked games newest first. Limit and offset are
-// supplied by the HTTP layer, which bounds them before reaching the database.
-func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, limit, offset int) (PlayerGameHistoryPage, error) {
+// GetPlayerGameHistory returns completed games newest first. Limit, offset,
+// and the optional mode filter are bounded by the HTTP layer.
+func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, limit, offset int, filters ...GameHistoryFilter) (PlayerGameHistoryPage, error) {
 	if s == nil || s.pool == nil {
 		return PlayerGameHistoryPage{}, errors.New("user store is not configured")
 	}
@@ -36,6 +59,13 @@ func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, lim
 	if err != nil {
 		return PlayerGameHistoryPage{}, err
 	}
+	filter := GameHistoryAll
+	if len(filters) > 0 {
+		filter = filters[0]
+	}
+	if filter != GameHistoryAll && filter != GameHistoryFull && filter != GameHistoryQuick {
+		return PlayerGameHistoryPage{}, errors.New("invalid game history filter")
+	}
 
 	var total int64
 	err = s.pool.QueryRow(ctx, `
@@ -45,9 +75,10 @@ func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, lim
 		LEFT JOIN games g ON g.id = gps.game_id
 			AND g.status IN ('completed', 'forfeit')
 			AND g.completed_at IS NOT NULL
+			AND ($2 = 'all' OR g.game_mode = $2)
 		WHERE u.id = $1
 		GROUP BY u.id
-	`, uuidID).Scan(&total)
+	`, uuidID, filter).Scan(&total)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PlayerGameHistoryPage{}, ErrPlayerProfileNotFound
 	}
@@ -56,7 +87,7 @@ func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, lim
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT g.id::text, g.status, g.completed_at,
+		SELECT g.id::text, g.status, g.game_mode, g.ranked, g.completed_at,
 			gps.placement, g.player_count, gps.won, gps.forfeited,
 			gps.total_points, gps.rounds_played, gps.rounds_won,
 			g.active_playtime_seconds
@@ -65,9 +96,10 @@ func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, lim
 		WHERE gps.user_id = $1
 			AND g.status IN ('completed', 'forfeit')
 			AND g.completed_at IS NOT NULL
+			AND ($4 = 'all' OR g.game_mode = $4)
 		ORDER BY g.completed_at DESC, g.id DESC
 		LIMIT $2 OFFSET $3
-	`, uuidID, limit, offset)
+	`, uuidID, limit, offset, filter)
 	if err != nil {
 		return PlayerGameHistoryPage{}, err
 	}
@@ -77,7 +109,7 @@ func (s *UserStore) GetPlayerGameHistory(ctx context.Context, userID string, lim
 	for rows.Next() {
 		var game PlayerGameHistoryRecord
 		if err := rows.Scan(
-			&game.GameID, &game.Status, &game.CompletedAt,
+			&game.GameID, &game.Status, &game.GameMode, &game.Ranked, &game.CompletedAt,
 			&game.Placement, &game.PlayerCount, &game.Won, &game.Forfeited,
 			&game.TotalPoints, &game.RoundsPlayed, &game.RoundsWon,
 			&game.PlaytimeSeconds,

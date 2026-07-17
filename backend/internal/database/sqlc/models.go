@@ -26,6 +26,8 @@ type Game struct {
 	StartedAt             pgtype.Timestamptz `json:"started_at"`
 	CompletedAt           pgtype.Timestamptz `json:"completed_at"`
 	ActivePlaytimeSeconds int64              `json:"active_playtime_seconds"`
+	GameMode              string             `json:"game_mode"`
+	Ranked                bool               `json:"ranked"`
 	UpdatedAt             pgtype.Timestamptz `json:"updated_at"`
 }
 
@@ -90,6 +92,8 @@ type LobbyState struct {
 
 type PlayerStatistic struct {
 	UserID                      pgtype.UUID        `json:"user_id"`
+	GameMode                    string             `json:"game_mode"`
+	Ranked                      bool               `json:"ranked"`
 	GamesPlayed                 int64              `json:"games_played"`
 	GamesWon                    int64              `json:"games_won"`
 	TotalPlacement              int64              `json:"total_placement"`
