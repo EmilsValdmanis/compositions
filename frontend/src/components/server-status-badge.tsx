@@ -51,7 +51,9 @@ export function ServerStatusBadge() {
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="icon" className="relative" />}>
+      <PopoverTrigger
+        render={<Button variant="outline" size="icon" className="relative size-8 sm:size-9" />}
+      >
         <HugeiconsIcon icon={BadgeInfoIcon} />
         {hasIssue && (
           <span className="absolute right-0 top-0 flex size-2.5">

@@ -12,7 +12,7 @@ const rootRouteApi = getRouteApi("__root__");
 
 function BrandTitle() {
   return (
-    <span className="inline-flex min-w-0 items-center justify-center gap-2">
+    <span className="inline-flex min-w-0 max-w-full items-center justify-center gap-1.5 sm:gap-2">
       <img
         src="/favicon.svg"
         alt=""
@@ -29,9 +29,9 @@ function ProtectedLayoutTitle() {
     <Link
       to="/"
       aria-label={m.back_to_lobby()}
-      className="min-w-0 rounded-md text-center transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="w-full min-w-0 max-w-full rounded-md px-1 text-center transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto sm:px-0"
     >
-      <H6 className="truncate text-sm/5 tracking-[0.16em] uppercase text-foreground/90 md:text-base/6">
+      <H6 className="truncate text-xs/5 tracking-[0.1em] uppercase text-foreground/90 sm:text-sm/5 sm:tracking-[0.16em] md:text-base/6">
         <BrandTitle />
       </H6>
     </Link>
@@ -54,7 +54,7 @@ export function AppNavigation() {
 
   return (
     <nav className="w-full border-b bg-background/80 backdrop-blur-sm">
-      <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 py-2 md:px-6">
+      <div className="grid w-full grid-cols-[6.25rem_minmax(0,1fr)_6.25rem] items-center gap-2 px-2 py-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:gap-3 sm:px-4 md:px-6">
         <div className="min-w-0 justify-self-start">
           <ServerStatusBadge />
         </div>
@@ -67,6 +67,7 @@ export function AppNavigation() {
             nativeButton={false}
             variant="ghost"
             size="icon"
+            className="size-8 sm:size-9"
             aria-label={m.view_leaderboard()}
           >
             <HugeiconsIcon icon={RankingIcon} />

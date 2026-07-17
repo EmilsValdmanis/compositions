@@ -88,7 +88,7 @@ export function UserDropdown() {
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-full"
+              className="size-8 rounded-full sm:size-9"
               aria-label={m.account_menu()}
             />
           }
