@@ -84,14 +84,7 @@ export function UserDropdown() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-full sm:size-9"
-              aria-label={m.account_menu()}
-            />
-          }
+          render={<Button variant="ghost" size="icon" aria-label={m.account_menu()} />}
         >
           <Avatar>
             <AvatarImage src={user?.image || ""} />

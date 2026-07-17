@@ -39,8 +39,8 @@ export function GameBoardHand({
   const { hasGame } = status;
   const { hasDraftedCompositions } = tablePlayState;
   return (
-    <Card className="min-h-0 shrink-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]">
-      <CardContent className="min-h-0">
+    <Card className="min-h-0 shrink-0 pb-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]">
+      <CardContent className="min-h-0 px-0">
         {hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
             <GameBoardDraftDropZone
@@ -48,8 +48,8 @@ export function GameBoardHand({
               className="min-h-0 rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="min-h-0 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 pb-1">
-                  <div className="flex w-max min-w-full justify-start gap-2 xl:justify-center">
+                <div className="min-h-0 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-(--card-spacing) scroll-fade-x pb-1">
+                  <div className="flex w-max min-w-full justify-start pb-(--card-spacing) gap-2 xl:justify-center">
                     {availableHandEntries.map((entry) => (
                       <GameCard
                         key={entry.key}
