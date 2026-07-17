@@ -136,7 +136,7 @@ function GameHistory({
   return (
     <Card>
       <CardHeader className="border-b">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <CardTitle>{m.game_history()}</CardTitle>
             <CardDescription>{m.game_history_description()}</CardDescription>
@@ -154,10 +154,26 @@ function GameHistory({
             spacing={0}
             size="sm"
             aria-label={m.game_history_filter()}
+            className="grid w-full grid-cols-3 sm:flex sm:w-fit"
           >
-            <ToggleGroupItem value="all">{m.all_modes()}</ToggleGroupItem>
-            <ToggleGroupItem value="full">{m.ranked_full()}</ToggleGroupItem>
-            <ToggleGroupItem value="quick">{m.quick_game()}</ToggleGroupItem>
+            <ToggleGroupItem
+              value="all"
+              className="h-auto min-h-8 min-w-0 px-2 text-center whitespace-normal sm:px-3 sm:whitespace-nowrap"
+            >
+              {m.all_modes()}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="full"
+              className="h-auto min-h-8 min-w-0 px-2 text-center whitespace-normal sm:px-3 sm:whitespace-nowrap"
+            >
+              {m.ranked_full()}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="quick"
+              className="h-auto min-h-8 min-w-0 px-2 text-center whitespace-normal sm:px-3 sm:whitespace-nowrap"
+            >
+              {m.quick_game()}
+            </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </CardHeader>

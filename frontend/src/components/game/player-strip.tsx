@@ -75,12 +75,14 @@ export function PlayerStrip({
   showHostBadges = true,
   showTurnIndicator = true,
   mobileHorizontal = false,
+  emoteClassName,
 }: {
   players: PlayerSnapshot[];
   game: GameSnapshot | null;
   showHostBadges?: boolean;
   showTurnIndicator?: boolean;
   mobileHorizontal?: boolean;
+  emoteClassName?: string;
 }) {
   const playerStates = game?.players ?? [];
   return (
@@ -105,7 +107,9 @@ export function PlayerStrip({
               showActiveTurn ? "border-primary/40 bg-primary/10" : "border-border/60 bg-muted/20",
             )}
           >
-            {player.activeEmote ? <PlayerEmoteBubble emote={player.activeEmote} /> : null}
+            {player.activeEmote ? (
+              <PlayerEmoteBubble emote={player.activeEmote} className={emoteClassName} />
+            ) : null}
             <PlayerAvatar player={player} compactOnMobile={mobileHorizontal} />
             <P
               size="sm"

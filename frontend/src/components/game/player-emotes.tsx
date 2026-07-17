@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
+import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
 export const PLAYER_EMOTES = [
@@ -28,8 +29,10 @@ const emojiFont = {
 
 export function PlayerEmoteBubble({
   emote,
+  className,
 }: {
   emote: { id: string; emoji: string; expiresAt: string };
+  className?: string;
 }) {
   const shouldReduceMotion = useShouldReduceMotion();
   const anchorRef = useRef<HTMLSpanElement>(null);
@@ -94,7 +97,10 @@ export function PlayerEmoteBubble({
                   }}
                 />
               }
-              className="pointer-events-none fixed z-50 grid size-9 place-items-center rounded-full bg-background/95 p-0 shadow-lg ring-1 ring-foreground/5"
+              className={cn(
+                "pointer-events-none fixed z-50 grid size-9 place-items-center rounded-full bg-background/95 p-0 shadow-lg ring-1 ring-foreground/5",
+                className,
+              )}
               style={{ ...emojiFont, left: position.left, top: position.top }}
             >
               <span className="text-xl/none">{emote.emoji}</span>
@@ -103,6 +109,70 @@ export function PlayerEmoteBubble({
           )
         : null}
     </>
+  );
+}
+
+export function MobilePlayerEmotes({
+  players,
+}: {
+  players: Array<{
+    playerId: string;
+    name: string;
+    activeEmote?: { id: string; emoji: string; expiresAt: string };
+  }>;
+}) {
+  const shouldReduceMotion = useShouldReduceMotion();
+  const activeEmotes = players
+    .flatMap((player) =>
+      player.activeEmote ? [{ ...player.activeEmote, playerName: player.name }] : [],
+    )
+    .toSorted((left, right) => Date.parse(right.expiresAt) - Date.parse(left.expiresAt))
+    .slice(0, 3);
+
+  if (typeof document === "undefined" || activeEmotes.length === 0) return null;
+
+  return createPortal(
+    <div
+      className="pointer-events-none fixed inset-x-3 top-20 z-50 flex flex-col items-center gap-2 xl:hidden"
+      aria-live="polite"
+    >
+      {activeEmotes.map((emote) => (
+        <Badge
+          key={emote.id}
+          variant="outline"
+          aria-label={m.player_emote()}
+          render={
+            <motion.div
+              initial={{
+                opacity: 0,
+                transform: shouldReduceMotion
+                  ? "translateY(0) scale(1)"
+                  : "translateY(-6px) scale(0.96)",
+              }}
+              animate={{
+                opacity: [0, 1, 1, 0],
+                transform: shouldReduceMotion
+                  ? "translateY(0) scale(1)"
+                  : [
+                      "translateY(-6px) scale(0.96)",
+                      "translateY(0) scale(1)",
+                      "translateY(0) scale(1)",
+                      "translateY(-4px) scale(0.98)",
+                    ],
+              }}
+              transition={{ duration: 4, ease: "easeOut", times: [0, 0.12, 0.72, 1] }}
+            />
+          }
+          className="h-auto max-w-full gap-2 rounded-full bg-background/95 px-3 py-2 shadow-lg ring-1 ring-foreground/5"
+        >
+          <span className="max-w-48 truncate text-xs font-medium">{emote.playerName}</span>
+          <span className="text-xl/none" aria-hidden style={emojiFont}>
+            {emote.emoji}
+          </span>
+        </Badge>
+      ))}
+    </div>,
+    document.body,
   );
 }
 
