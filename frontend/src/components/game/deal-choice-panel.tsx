@@ -58,8 +58,9 @@ import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { m } from "#/paraglide/messages.js";
 
 const GAME_DECK_CARD_COUNT = 108;
-const DECK_STACK_BASE_TOP = 4;
-const DECK_CARD_VERTICAL_OFFSET = 0.25;
+const DECK_VISUAL_CARD_COUNT = 18;
+const DECK_STACK_BASE_BOTTOM = 24;
+const DECK_CARD_VERTICAL_OFFSET = 0.65;
 
 type DealMode = "round_robin" | "tap";
 type DealStep = "cut" | "deal";
@@ -114,6 +115,21 @@ function clampCutSize(rawCutSize: string, maxCutSize: number) {
   }
 
   return Math.min(Math.max(parsed, 0), maxCutSize);
+}
+
+export function deckVisualizationLayerCounts(cutSize: number) {
+  const normalizedCutSize = Math.min(Math.max(cutSize, 0), GAME_DECK_CARD_COUNT);
+
+  if (normalizedCutSize === 0) {
+    return { lifted: 0, remaining: DECK_VISUAL_CARD_COUNT };
+  }
+
+  const lifted = Math.max(
+    1,
+    Math.round((normalizedCutSize / GAME_DECK_CARD_COUNT) * DECK_VISUAL_CARD_COUNT),
+  );
+
+  return { lifted, remaining: DECK_VISUAL_CARD_COUNT - lifted };
 }
 
 function SortableDealOrderPlayer({
@@ -172,6 +188,8 @@ function DeckCutFieldGroup({
   prefersReducedMotion: boolean;
   setCutSize: Dispatch<SetStateAction<string>>;
 }) {
+  const visualLayers = deckVisualizationLayerCounts(clampedCutSize);
+
   return (
     <FieldGroup>
       <Item variant="muted">
@@ -196,7 +214,7 @@ function DeckCutFieldGroup({
                   scaleX: 0.65 + (clampedCutSize / GAME_DECK_CARD_COUNT) * 0.35,
                 }}
                 transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                className="absolute bottom-7 left-1/4 h-2 w-20 -translate-x-1/2 rounded-full bg-black/40 blur-md"
+                className="absolute bottom-7 left-1/4 h-2 w-20 rounded-full bg-black/40 blur-md"
               />
               <motion.div
                 initial={false}
@@ -207,13 +225,13 @@ function DeckCutFieldGroup({
                     0.65 + ((GAME_DECK_CARD_COUNT - clampedCutSize) / GAME_DECK_CARD_COUNT) * 0.35,
                 }}
                 transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                className="absolute bottom-7 left-3/4 h-2 w-20 -translate-x-1/2 rounded-full bg-black/40 blur-md"
+                className="absolute bottom-7 left-3/4 h-2 w-20 rounded-full bg-black/40 blur-md"
               />
-              {Array.from({ length: GAME_DECK_CARD_COUNT }, (_, index) => {
-                const firstLiftedIndex = GAME_DECK_CARD_COUNT - clampedCutSize;
+              {Array.from({ length: DECK_VISUAL_CARD_COUNT }, (_, index) => {
+                const firstLiftedIndex = visualLayers.remaining;
                 const isLifted = index >= firstLiftedIndex;
                 const stackIndex = isLifted ? index - firstLiftedIndex : index;
-                const stackSize = isLifted ? clampedCutSize : GAME_DECK_CARD_COUNT - clampedCutSize;
+                const stackSize = isLifted ? visualLayers.lifted : visualLayers.remaining;
                 const depth = Math.max(0, stackSize - stackIndex - 1);
 
                 return (
@@ -224,18 +242,18 @@ function DeckCutFieldGroup({
                     animate={{
                       x: "-50%",
                       rotateX: 54,
-                      rotateZ: isLifted ? -5 + (index % 3) * 0.4 : 4 - (index % 3) * 0.35,
+                      rotateZ: isLifted ? -4 : 4,
                     }}
                     transition={
                       prefersReducedMotion
                         ? { duration: 0 }
                         : { type: "spring", stiffness: 230, damping: 25, mass: 0.75 }
                     }
-                    className="absolute h-24 w-17 -translate-x-1/2 origin-bottom"
+                    className="absolute h-24 w-17 origin-bottom"
                     style={{
                       left: isLifted ? "25%" : "75%",
-                      top: DECK_STACK_BASE_TOP - stackIndex * DECK_CARD_VERTICAL_OFFSET,
-                      zIndex: isLifted ? GAME_DECK_CARD_COUNT + stackIndex + 1 : stackIndex + 1,
+                      bottom: DECK_STACK_BASE_BOTTOM + stackIndex * DECK_CARD_VERTICAL_OFFSET,
+                      zIndex: isLifted ? DECK_VISUAL_CARD_COUNT + stackIndex + 1 : stackIndex + 1,
                     }}
                   >
                     <GameCard
