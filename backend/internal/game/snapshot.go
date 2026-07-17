@@ -68,6 +68,7 @@ type TurnSnapshot struct {
 }
 
 type GameSnapshot struct {
+	GameMode           GameMode              `json:"gameMode"`
 	Phase              GamePhase             `json:"phase"`
 	Round              int                   `json:"round"`
 	DealerIndex        int                   `json:"dealerIndex"`
@@ -87,6 +88,7 @@ func (gs *GameState) SnapshotForPlayer(playerID string) (GameSnapshot, bool) {
 	}
 
 	snapshot := GameSnapshot{
+		GameMode:           gs.GameMode(),
 		Phase:              gs.phase,
 		Round:              gs.round,
 		DealerIndex:        gs.dealerIndex,
@@ -107,6 +109,13 @@ func (gs *GameState) SnapshotForPlayer(playerID string) (GameSnapshot, bool) {
 	}
 
 	return GameSnapshot{}, false
+}
+
+func (gs *GameState) GameMode() GameMode {
+	if gs == nil || !gs.gameMode.Valid() {
+		return GameModeFull
+	}
+	return gs.gameMode
 }
 
 func (gs *GameState) CurrentPlayerIndex() int {

@@ -30,9 +30,11 @@ import {
   TableHeader,
   TableRow,
 } from "#/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { Caption, H1, H2, P } from "#/components/typography";
 import {
   getPlayerGameHistory,
+  type GameHistoryFilter,
   type PlayerGameHistory,
   type PlayerProfile,
 } from "#/lib/player-profile";
@@ -121,10 +123,11 @@ function GameHistory({
   initialHistory: PlayerGameHistory;
 }) {
   const [page, setPage] = useState(1);
+  const [mode, setMode] = useState<GameHistoryFilter>("all");
   const { data, isError, isFetching } = useQuery({
-    queryKey: ["player-game-history", playerId, page],
-    queryFn: () => getPlayerGameHistory({ data: { playerId, page, pageSize: 10 } }),
-    initialData: page === 1 ? initialHistory : undefined,
+    queryKey: ["player-game-history", playerId, mode, page],
+    queryFn: () => getPlayerGameHistory({ data: { playerId, page, pageSize: 10, mode } }),
+    initialData: page === 1 && mode === "all" ? initialHistory : undefined,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -138,9 +141,24 @@ function GameHistory({
             <CardTitle>{m.game_history()}</CardTitle>
             <CardDescription>{m.game_history_description()}</CardDescription>
           </div>
-          <Badge variant="outline" className="mt-0.5 tabular-nums">
-            {m.ranked_games({ count: history.totalItems })}
-          </Badge>
+          <ToggleGroup
+            value={[mode]}
+            onValueChange={(value) => {
+              const nextMode = value[0];
+              if (nextMode === "all" || nextMode === "full" || nextMode === "quick") {
+                setMode(nextMode);
+                setPage(1);
+              }
+            }}
+            variant="outline"
+            spacing={0}
+            size="sm"
+            aria-label={m.game_history_filter()}
+          >
+            <ToggleGroupItem value="all">{m.all_modes()}</ToggleGroupItem>
+            <ToggleGroupItem value="full">{m.ranked_full()}</ToggleGroupItem>
+            <ToggleGroupItem value="quick">{m.quick_game()}</ToggleGroupItem>
+          </ToggleGroup>
         </div>
       </CardHeader>
 
@@ -156,6 +174,7 @@ function GameHistory({
             <TableRow className="hover:bg-transparent">
               <TableHead>{m.played_at()}</TableHead>
               <TableHead>{m.result()}</TableHead>
+              <TableHead>{m.mode()}</TableHead>
               <TableHead className="text-right">{m.place()}</TableHead>
               <TableHead className="text-right">{m.players()}</TableHead>
               <TableHead className="text-right">{m.rounds()}</TableHead>
@@ -172,6 +191,11 @@ function GameHistory({
                     variant={game.won ? "default" : game.forfeited ? "destructive" : "secondary"}
                   >
                     {game.won ? m.victory() : game.forfeited ? m.forfeit() : m.finished()}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">
+                    {game.gameMode === "quick" ? m.quick_game() : m.ranked_full()}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-medium tabular-nums">
@@ -242,8 +266,12 @@ export function PlayerProfilePage({
   initialHistory: PlayerGameHistory;
   isOwnProfile: boolean;
 }) {
-  const hasGames = profile.gamesPlayed > 0;
-  const compositions = profile.compositionsCreated;
+  const [profileMode, setProfileMode] = useState<"rankedFull" | "quick">("rankedFull");
+  const statistics = profile[profileMode];
+  const hasGames = statistics.gamesPlayed > 0;
+  const hasAnyGames = profile.rankedFull.gamesPlayed > 0 || profile.quick.gamesPlayed > 0;
+  const isQuick = profileMode === "quick";
+  const compositions = statistics.compositionsCreated;
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
@@ -282,47 +310,68 @@ export function PlayerProfilePage({
                 {m.player_profile()}
               </Caption>
               <H1 className="truncate">{profile.name}</H1>
-              <Badge className="mt-1 w-fit" variant={hasGames ? "secondary" : "outline"}>
-                {hasGames ? m.ranked_games({ count: profile.gamesPlayed }) : m.unranked()}
-              </Badge>
+              <div className="mt-1 flex flex-wrap gap-2">
+                <Badge variant={profile.rankedFull.gamesPlayed > 0 ? "secondary" : "outline"}>
+                  {m.ranked_games({ count: profile.rankedFull.gamesPlayed })}
+                </Badge>
+                <Badge variant={profile.quick.gamesPlayed > 0 ? "secondary" : "outline"}>
+                  {m.quick_games_count({ count: profile.quick.gamesPlayed })}
+                </Badge>
+              </div>
             </div>
           </div>
         </CardHeader>
       </Card>
 
+      <ToggleGroup
+        value={[profileMode]}
+        onValueChange={(value) => {
+          const nextMode = value[0];
+          if (nextMode === "rankedFull" || nextMode === "quick") setProfileMode(nextMode);
+        }}
+        variant="outline"
+        spacing={0}
+        aria-label={m.profile_statistics_mode()}
+      >
+        <ToggleGroupItem value="rankedFull">{m.ranked_full()}</ToggleGroupItem>
+        <ToggleGroupItem value="quick">{m.quick_game()}</ToggleGroupItem>
+      </ToggleGroup>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           label={m.games_played()}
-          value={String(profile.gamesPlayed)}
-          note={m.ranked_finishes()}
+          value={String(statistics.gamesPlayed)}
+          note={isQuick ? m.quick_finishes() : m.ranked_finishes()}
         />
         <StatCard
           label={m.total_playtime()}
-          value={formatPlaytime(profile.totalPlaytimeSeconds)}
-          note={m.completed_ranked_games()}
+          value={formatPlaytime(statistics.totalPlaytimeSeconds)}
+          note={isQuick ? m.completed_quick_games() : m.completed_ranked_games()}
         />
         <StatCard
           label={m.win_rate()}
-          value={formatPercent(ratio(profile.gamesWon, profile.gamesPlayed))}
-          note={m.game_wins({ count: profile.gamesWon })}
+          value={formatPercent(ratio(statistics.gamesWon, statistics.gamesPlayed))}
+          note={m.game_wins({ count: statistics.gamesWon })}
         />
         <StatCard
           label={m.average_finish()}
-          value={formatDecimal(ratio(profile.totalPlacement, profile.gamesPlayed))}
+          value={formatDecimal(ratio(statistics.totalPlacement, statistics.gamesPlayed))}
           note={m.lower_better()}
         />
         <StatCard
           label={m.round_win_rate()}
-          value={formatPercent(ratio(profile.roundsWon, profile.roundsPlayed))}
-          note={m.round_wins({ count: profile.roundsWon })}
+          value={formatPercent(ratio(statistics.roundsWon, statistics.roundsPlayed))}
+          note={m.round_wins({ count: statistics.roundsWon })}
         />
       </div>
 
       {!hasGames ? (
         <Card>
           <CardHeader>
-            <CardTitle>{m.no_ranked_history()}</CardTitle>
-            <CardDescription>{m.stats_after_first_game()}</CardDescription>
+            <CardTitle>{isQuick ? m.no_quick_history() : m.no_ranked_history()}</CardTitle>
+            <CardDescription>
+              {isQuick ? m.quick_stats_after_first_game() : m.stats_after_first_game()}
+            </CardDescription>
           </CardHeader>
         </Card>
       ) : (
@@ -333,44 +382,49 @@ export function PlayerProfilePage({
               <CardDescription>{m.round_craft_description()}</CardDescription>
             </CardHeader>
             <CardContent>
-              <DetailRow label={m.rounds_played()} value={String(profile.roundsPlayed)} />
+              <DetailRow label={m.rounds_played()} value={String(statistics.roundsPlayed)} />
               <Separator />
               <DetailRow
                 label={m.round_win_rate()}
-                value={formatPercent(ratio(profile.roundsWon, profile.roundsPlayed))}
+                value={formatPercent(ratio(statistics.roundsWon, statistics.roundsPlayed))}
               />
               <Separator />
               <DetailRow label={m.compositions_created()} value={String(compositions)} />
               <Separator />
               <DetailRow
                 label={m.runs_sets()}
-                value={`${profile.runsCreated} / ${profile.setsCreated}`}
+                value={`${statistics.runsCreated} / ${statistics.setsCreated}`}
               />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>{m.competitive_record()}</CardTitle>
-              <CardDescription>{m.competitive_record_description()}</CardDescription>
+              <CardTitle>{isQuick ? m.quick_record() : m.competitive_record()}</CardTitle>
+              <CardDescription>
+                {isQuick ? m.quick_record_description() : m.competitive_record_description()}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <DetailRow
                 label={m.current_win_streak()}
-                value={String(profile.currentGameWinStreak)}
+                value={String(statistics.currentGameWinStreak)}
               />
               <Separator />
-              <DetailRow label={m.best_win_streak()} value={String(profile.longestGameWinStreak)} />
+              <DetailRow
+                label={m.best_win_streak()}
+                value={String(statistics.longestGameWinStreak)}
+              />
               <Separator />
-              <DetailRow label={m.points_inflicted()} value={String(profile.pointsInflicted)} />
+              <DetailRow label={m.points_inflicted()} value={String(statistics.pointsInflicted)} />
               <Separator />
-              <DetailRow label={m.penalty_points()} value={String(profile.penaltyPoints)} />
+              <DetailRow label={m.penalty_points()} value={String(statistics.penaltyPoints)} />
             </CardContent>
           </Card>
         </div>
       )}
 
-      {hasGames ? <GameHistory playerId={profile.id} initialHistory={initialHistory} /> : null}
+      {hasAnyGames ? <GameHistory playerId={profile.id} initialHistory={initialHistory} /> : null}
     </section>
   );
 }

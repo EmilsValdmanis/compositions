@@ -60,8 +60,7 @@ type StoredUserRecord struct {
 	ImageURL string
 }
 
-type PlayerProfileRecord struct {
-	ID, Name, ImageURL                            string
+type PlayerStatisticsRecord struct {
 	GamesPlayed, GamesWon, TotalPlacement         int64
 	TotalPlaytimeSeconds                          int64
 	RoundsPlayed, RoundsWon, Forfeits             int64
@@ -69,6 +68,12 @@ type PlayerProfileRecord struct {
 	PointsInflicted, PenaltyPoints                int64
 	CurrentGameWinStreak, LongestGameWinStreak    int
 	CurrentRoundWinStreak, LongestRoundWinStreak  int
+}
+
+type PlayerProfileRecord struct {
+	ID, Name, ImageURL string
+	PlayerStatisticsRecord
+	Quick PlayerStatisticsRecord
 }
 
 type GameBugReportRecord struct {
@@ -179,22 +184,41 @@ func (s *UserStore) GetPlayerProfile(ctx context.Context, userID string) (Player
 	var profile PlayerProfileRecord
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id::text, u.name, u.image_url,
-			COALESCE(ps.games_played, 0), COALESCE(ps.games_won, 0), COALESCE(ps.total_placement, 0),
+			COALESCE(ranked_ps.games_played, 0), COALESCE(ranked_ps.games_won, 0), COALESCE(ranked_ps.total_placement, 0),
 			COALESCE((
 				SELECT SUM(g.active_playtime_seconds)::bigint
 				FROM games g
 				JOIN game_player_statistics gps ON gps.game_id = g.id
 				WHERE gps.user_id = u.id
 					AND g.status IN ('completed', 'forfeit')
+					AND g.game_mode = 'full' AND g.ranked
 					AND g.completed_at IS NOT NULL
 			), 0),
-			COALESCE(ps.rounds_played, 0), COALESCE(ps.rounds_won, 0), COALESCE(ps.forfeits, 0),
-			COALESCE(ps.compositions_created, 0), COALESCE(ps.sets_created, 0), COALESCE(ps.runs_created, 0),
-			COALESCE(ps.points_inflicted, 0), COALESCE(ps.penalty_points, 0),
-			COALESCE(ps.current_game_win_streak, 0), COALESCE(ps.longest_game_win_streak, 0),
-			COALESCE(ps.current_round_win_streak, 0), COALESCE(ps.longest_round_win_streak, 0)
+			COALESCE(ranked_ps.rounds_played, 0), COALESCE(ranked_ps.rounds_won, 0), COALESCE(ranked_ps.forfeits, 0),
+			COALESCE(ranked_ps.compositions_created, 0), COALESCE(ranked_ps.sets_created, 0), COALESCE(ranked_ps.runs_created, 0),
+			COALESCE(ranked_ps.points_inflicted, 0), COALESCE(ranked_ps.penalty_points, 0),
+			COALESCE(ranked_ps.current_game_win_streak, 0), COALESCE(ranked_ps.longest_game_win_streak, 0),
+			COALESCE(ranked_ps.current_round_win_streak, 0), COALESCE(ranked_ps.longest_round_win_streak, 0),
+			COALESCE(quick_ps.games_played, 0), COALESCE(quick_ps.games_won, 0), COALESCE(quick_ps.total_placement, 0),
+			COALESCE((
+				SELECT SUM(g.active_playtime_seconds)::bigint
+				FROM games g
+				JOIN game_player_statistics gps ON gps.game_id = g.id
+				WHERE gps.user_id = u.id
+					AND g.status IN ('completed', 'forfeit')
+					AND g.game_mode = 'quick' AND NOT g.ranked
+					AND g.completed_at IS NOT NULL
+			), 0),
+			COALESCE(quick_ps.rounds_played, 0), COALESCE(quick_ps.rounds_won, 0), COALESCE(quick_ps.forfeits, 0),
+			COALESCE(quick_ps.compositions_created, 0), COALESCE(quick_ps.sets_created, 0), COALESCE(quick_ps.runs_created, 0),
+			COALESCE(quick_ps.points_inflicted, 0), COALESCE(quick_ps.penalty_points, 0),
+			COALESCE(quick_ps.current_game_win_streak, 0), COALESCE(quick_ps.longest_game_win_streak, 0),
+			COALESCE(quick_ps.current_round_win_streak, 0), COALESCE(quick_ps.longest_round_win_streak, 0)
 		FROM users u
-		LEFT JOIN player_statistics ps ON ps.user_id = u.id
+		LEFT JOIN player_statistics ranked_ps ON ranked_ps.user_id = u.id
+			AND ranked_ps.game_mode = 'full' AND ranked_ps.ranked
+		LEFT JOIN player_statistics quick_ps ON quick_ps.user_id = u.id
+			AND quick_ps.game_mode = 'quick' AND NOT quick_ps.ranked
 		WHERE u.id = $1
 	`, uuidID).Scan(
 		&profile.ID, &profile.Name, &profile.ImageURL,
@@ -205,6 +229,13 @@ func (s *UserStore) GetPlayerProfile(ctx context.Context, userID string) (Player
 		&profile.PointsInflicted, &profile.PenaltyPoints,
 		&profile.CurrentGameWinStreak, &profile.LongestGameWinStreak,
 		&profile.CurrentRoundWinStreak, &profile.LongestRoundWinStreak,
+		&profile.Quick.GamesPlayed, &profile.Quick.GamesWon, &profile.Quick.TotalPlacement,
+		&profile.Quick.TotalPlaytimeSeconds,
+		&profile.Quick.RoundsPlayed, &profile.Quick.RoundsWon, &profile.Quick.Forfeits,
+		&profile.Quick.CompositionsCreated, &profile.Quick.SetsCreated, &profile.Quick.RunsCreated,
+		&profile.Quick.PointsInflicted, &profile.Quick.PenaltyPoints,
+		&profile.Quick.CurrentGameWinStreak, &profile.Quick.LongestGameWinStreak,
+		&profile.Quick.CurrentRoundWinStreak, &profile.Quick.LongestRoundWinStreak,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return PlayerProfileRecord{}, ErrPlayerProfileNotFound

@@ -36,6 +36,7 @@ func TestGameStatePersistenceSnapshotRoundTrips(t *testing.T) {
 		discardDrawCard:    NewCard(Eight, Hearts),
 	}
 	state.roundWinnerIndex = -1
+	state.gameMode = GameModeQuick
 
 	beforeFirst, ok := state.SnapshotForPlayer("first")
 	if !ok {
@@ -76,6 +77,22 @@ func TestGameStatePersistenceSnapshotRoundTrips(t *testing.T) {
 	}
 	if !cardsEqual(restored.turn.discardDrawCard, state.turn.discardDrawCard) {
 		t.Fatalf("restored discardDrawCard = %#v; want %#v", restored.turn.discardDrawCard, state.turn.discardDrawCard)
+	}
+	if restored.GameMode() != GameModeQuick {
+		t.Fatalf("restored game mode = %q; want quick", restored.GameMode())
+	}
+}
+
+func TestRestoreGameStateDefaultsLegacySnapshotsToFullMode(t *testing.T) {
+	restored, err := RestoreGameState(PersistenceSnapshot{
+		Version: PersistenceSnapshotVersion, MaxPlayers: 4, Phase: PhaseLobby, Round: 1,
+		Turn: PersistenceTurnSnapshot{Number: 1}, RoundWinnerIndex: -1,
+	})
+	if err != nil {
+		t.Fatalf("RestoreGameState(legacy) error = %v", err)
+	}
+	if restored.GameMode() != GameModeFull {
+		t.Fatalf("legacy game mode = %q; want full", restored.GameMode())
 	}
 }
 

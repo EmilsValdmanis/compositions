@@ -113,6 +113,40 @@ func newActiveLobbyForExitTests(t *testing.T, playerCount int) (*lobbyServer, []
 	return lobby, events, roomState.Code
 }
 
+func TestLobbyStartsQuickGameWithSelectedMode(t *testing.T) {
+	lobby := newLobbyServer()
+	host, _, _, err := lobby.connect("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guest, _, _, err := lobby.connect("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roomState, _, err := lobby.createRoom(host.SessionID, "Host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.joinRoom(guest.SessionID, roomState.Code, "Guest"); err != nil {
+		t.Fatal(err)
+	}
+	pending, _, err := lobby.startGame(host.SessionID, 0, game.GameModeQuick)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.GameMode != game.GameModeQuick || pending.PendingDealChoice == nil {
+		t.Fatalf("pending quick room = %+v", pending)
+	}
+	cutSize := 0
+	started, _, err := lobby.chooseDealing(guest.SessionID, "round_robin", dealingChoiceOptions{cutSize: &cutSize})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.GameMode != game.GameModeQuick || lobby.rooms[roomState.Code].gameState.GameMode() != game.GameModeQuick {
+		t.Fatalf("started quick room = %+v", started)
+	}
+}
+
 func TestLobbyForfeitGameKeepsCardsAvailableAndTransfersHost(t *testing.T) {
 	lobby, events, roomCode := newActiveLobbyForExitTests(t, 3)
 	room := lobby.rooms[roomCode]

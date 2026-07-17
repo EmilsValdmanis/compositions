@@ -2,10 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { authURL } from "#/lib/auth-shared";
 
-export const playerProfileSchema = z.object({
-  id: z.uuid(),
-  name: z.string(),
-  imageUrl: z.string(),
+export const playerStatisticsSchema = z.object({
   gamesPlayed: z.number(),
   gamesWon: z.number(),
   totalPlacement: z.number(),
@@ -23,11 +20,21 @@ export const playerProfileSchema = z.object({
   longestRoundWinStreak: z.number(),
 });
 
+export const playerProfileSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  imageUrl: z.string(),
+  rankedFull: playerStatisticsSchema,
+  quick: playerStatisticsSchema,
+});
+
 export type PlayerProfile = z.infer<typeof playerProfileSchema>;
 
 export const playerGameHistoryItemSchema = z.object({
   id: z.uuid(),
   status: z.enum(["completed", "forfeit"]),
+  gameMode: z.enum(["quick", "full"]),
+  ranked: z.boolean(),
   completedAt: z.iso.datetime({ offset: true }),
   placement: z.number().int().positive(),
   playerCount: z.number().int().min(2).max(4),
@@ -48,6 +55,8 @@ export const playerGameHistorySchema = z.object({
 });
 
 export type PlayerGameHistory = z.infer<typeof playerGameHistorySchema>;
+export const gameHistoryFilterSchema = z.enum(["all", "full", "quick"]);
+export type GameHistoryFilter = z.infer<typeof gameHistoryFilterSchema>;
 
 export const getPlayerProfile = createServerFn({ method: "GET" })
   .validator(z.uuid())
@@ -68,10 +77,11 @@ export const getPlayerGameHistory = createServerFn({ method: "GET" })
       playerId: z.uuid(),
       page: z.number().int().positive(),
       pageSize: z.number().int().min(1).max(50).default(10),
+      mode: gameHistoryFilterSchema.default("all"),
     }),
   )
   .handler(async ({ data }) => {
-    const path = `/api/players/${encodeURIComponent(data.playerId)}/games?page=${data.page}&pageSize=${data.pageSize}`;
+    const path = `/api/players/${encodeURIComponent(data.playerId)}/games?page=${data.page}&pageSize=${data.pageSize}&mode=${data.mode}`;
     const response = await fetch(authURL(path, process.env.VITE_GAME_SERVER_URL), {
       headers: { accept: "application/json" },
     });

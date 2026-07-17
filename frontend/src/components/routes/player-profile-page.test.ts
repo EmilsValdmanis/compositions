@@ -20,21 +20,40 @@ const profile: PlayerProfile = {
   id: "00000000-0000-0000-0000-000000000002",
   name: "Avery",
   imageUrl: "",
-  gamesPlayed: 8,
-  gamesWon: 3,
-  totalPlacement: 14,
-  totalPlaytimeSeconds: 5_430,
-  roundsPlayed: 22,
-  roundsWon: 9,
-  compositionsCreated: 41,
-  setsCreated: 17,
-  runsCreated: 24,
-  pointsInflicted: 230,
-  penaltyPoints: 98,
-  currentGameWinStreak: 1,
-  longestGameWinStreak: 2,
-  currentRoundWinStreak: 2,
-  longestRoundWinStreak: 4,
+  rankedFull: {
+    gamesPlayed: 8,
+    gamesWon: 3,
+    totalPlacement: 14,
+    totalPlaytimeSeconds: 5_430,
+    roundsPlayed: 22,
+    roundsWon: 9,
+    compositionsCreated: 41,
+    setsCreated: 17,
+    runsCreated: 24,
+    pointsInflicted: 230,
+    penaltyPoints: 98,
+    currentGameWinStreak: 1,
+    longestGameWinStreak: 2,
+    currentRoundWinStreak: 2,
+    longestRoundWinStreak: 4,
+  },
+  quick: {
+    gamesPlayed: 2,
+    gamesWon: 1,
+    totalPlacement: 3,
+    totalPlaytimeSeconds: 900,
+    roundsPlayed: 2,
+    roundsWon: 1,
+    compositionsCreated: 8,
+    setsCreated: 3,
+    runsCreated: 5,
+    pointsInflicted: 40,
+    penaltyPoints: 20,
+    currentGameWinStreak: 1,
+    longestGameWinStreak: 1,
+    currentRoundWinStreak: 1,
+    longestRoundWinStreak: 1,
+  },
 };
 
 const history: PlayerGameHistory = {
@@ -42,6 +61,8 @@ const history: PlayerGameHistory = {
     {
       id: "123e4567-e89b-42d3-a456-426614174000",
       status: "completed",
+      gameMode: "full",
+      ranked: true,
       completedAt: "2026-07-15T12:30:00.000Z",
       placement: 1,
       playerCount: 3,
@@ -121,5 +142,15 @@ describe("PlayerProfilePage", () => {
     expect(screen.getByText("Page 1 of 1")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Previous" })).toHaveProperty("disabled", true);
     expect(screen.getByRole("button", { name: "Next" })).toHaveProperty("disabled", true);
+  });
+
+  it("switches between ranked-full and quick statistics", () => {
+    renderProfile(false);
+
+    const quickButtons = screen.getAllByRole("button", { name: "Quick game" });
+    fireEvent.click(quickButtons[0]!);
+
+    expect(screen.getByText("Quick record")).toBeTruthy();
+    expect(screen.getByText("Casual quick finishes")).toBeTruthy();
   });
 });

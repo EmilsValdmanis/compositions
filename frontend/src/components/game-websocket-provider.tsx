@@ -6,6 +6,8 @@ import { gameErrorMessage } from "#/lib/game-error-messages";
 
 type ConnectionStatus = "idle" | "disconnected" | "connecting" | "connected";
 
+export type GameMode = "quick" | "full";
+
 export type CardSnapshot = {
   rank?: number;
   suit?: number;
@@ -104,6 +106,7 @@ export type TurnSnapshot = {
 };
 
 export type GameSnapshot = {
+  gameMode?: GameMode;
   phase: number;
   round: number;
   dealerIndex: number;
@@ -160,6 +163,7 @@ export type PendingDealChoiceSnapshot = {
 export type RoomSnapshot = {
   code: string;
   phase: string;
+  gameMode?: GameMode;
   hostPlayerId: string;
   dealerIndex?: number;
   pendingDealChoice?: PendingDealChoiceSnapshot;
@@ -217,7 +221,7 @@ type GameWebSocketContextValue = {
   disconnect: () => void;
   createRoom: () => void;
   joinRoom: (roomCode: string) => void;
-  startGame: () => void;
+  startGame: (gameMode: GameMode) => void;
   startNextRound: () => void;
   chooseDealing: (choice: DealingChoiceRequest | string) => void;
   leaveRoom: () => void;
@@ -734,7 +738,8 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     disconnect,
     createRoom: () => send("create_room", {}),
     joinRoom: (roomCode) => send("join_room", { roomCode }),
-    startGame: () => send("start_game", { dealerIndex: getDealerIndex(state.room) }),
+    startGame: (gameMode) =>
+      send("start_game", { dealerIndex: getDealerIndex(state.room), gameMode }),
     startNextRound: () => send("start_next_round", {}),
     chooseDealing: (choice) =>
       send("choose_dealing", typeof choice === "string" ? { dealType: choice } : choice),

@@ -43,6 +43,7 @@ var gameClientErrorCodes = []struct {
 	{game.ErrInvalidDealingType, "invalid_dealing_type"},
 	{game.ErrInvalidDealingOrder, "invalid_dealing_order"},
 	{game.ErrInvalidCutSize, "invalid_cut_size"},
+	{game.ErrInvalidGameMode, "invalid_game_mode"},
 	{game.ErrPlayerNotFound, "player_not_found"},
 	{game.ErrPlayerAlreadyForfeited, "already_forfeited"},
 }
@@ -65,6 +66,7 @@ var exactClientErrorCodes = map[string]string{
 	"invalid dealing type":                          "invalid_dealing_type",
 	"invalid dealing order":                         "invalid_dealing_order",
 	"invalid cut size":                              "invalid_cut_size",
+	"invalid game mode":                             "invalid_game_mode",
 	"player not found":                              "player_not_found",
 	"player already forfeited":                      "already_forfeited",
 	"rate limit exceeded":                           "rate_limit_exceeded",

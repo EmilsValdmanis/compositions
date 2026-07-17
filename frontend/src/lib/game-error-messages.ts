@@ -24,6 +24,7 @@ const errorMessages: Record<string, () => string> = {
   deal_chooser_only: m.error_deal_chooser_only,
   cut_size_required: m.error_cut_size_required,
   invalid_cut_size: m.error_invalid_cut_size,
+  invalid_game_mode: m.error_invalid_game_mode,
   invalid_dealing_type: m.error_invalid_dealing_type,
   invalid_dealing_order: m.error_invalid_dealing_order,
   lobby_only_leave: m.error_lobby_only_leave,

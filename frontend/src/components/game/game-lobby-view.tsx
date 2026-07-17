@@ -2,6 +2,7 @@ import {
   type CompletedGameSnapshot,
   type DealingChoiceRequest,
   type GameSnapshot,
+  type GameMode,
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
   type RoomSnapshot,
@@ -22,7 +23,9 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
+import { FieldDescription, FieldLegend, FieldSet } from "#/components/ui/field";
 import { Separator } from "#/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { Caption, H2 } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -34,6 +37,7 @@ type RoomActions = {
   canJoinRoom: boolean;
   canLeaveRoom: boolean;
   canStartGame: boolean;
+  canSelectGameMode?: boolean;
 };
 
 type DealChoiceState = {
@@ -48,11 +52,13 @@ type GameLobbyViewProps = {
   completedGame: CompletedGameSnapshot | null;
   players: PlayerSnapshot[];
   roomCode: string;
+  gameMode?: GameMode;
   roomActions: RoomActions;
   dealChoice: DealChoiceState;
   onRoomCodeChange: (roomCode: string) => void;
   onCreateRoom: () => void;
   onJoinRoom: (roomCode: string) => void;
+  onGameModeChange?: (gameMode: GameMode) => void;
   onStartGame: () => void;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
   onLeaveRoom: () => void;
@@ -67,9 +73,11 @@ export function GameLobbyView({
   completedGame,
   players,
   roomCode,
+  gameMode = "full",
   roomActions,
   dealChoice,
   onRoomCodeChange,
+  onGameModeChange,
   onCreateRoom,
   onJoinRoom,
   onStartGame,
@@ -79,7 +87,7 @@ export function GameLobbyView({
   onCopyRoomCode,
   onCopyRoomLink,
 }: GameLobbyViewProps) {
-  const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame } = roomActions;
+  const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame, canSelectGameMode } = roomActions;
   const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
   const victorPlayerId = completedGame?.game.players[completedGame.game.roundWinnerIndex]?.playerId;
   const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
@@ -145,6 +153,27 @@ export function GameLobbyView({
                   </DropdownMenu>
                 </div>
               </div>
+              <FieldSet>
+                <FieldLegend variant="label">{m.game_mode()}</FieldLegend>
+                <ToggleGroup
+                  value={[gameMode]}
+                  onValueChange={(value) => {
+                    const nextMode = value[0];
+                    if (nextMode === "quick" || nextMode === "full") onGameModeChange?.(nextMode);
+                  }}
+                  disabled={!canSelectGameMode}
+                  variant="outline"
+                  spacing={0}
+                  className="grid w-full grid-cols-2"
+                  aria-label={m.game_mode()}
+                >
+                  <ToggleGroupItem value="quick">{m.quick_game()}</ToggleGroupItem>
+                  <ToggleGroupItem value="full">{m.full_game()}</ToggleGroupItem>
+                </ToggleGroup>
+                <FieldDescription>
+                  {gameMode === "quick" ? m.quick_game_description() : m.full_game_description()}
+                </FieldDescription>
+              </FieldSet>
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" onClick={onStartGame} disabled={!canStartGame}>
                   {m.start_game()}

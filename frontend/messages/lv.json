@@ -336,6 +336,11 @@
   "profile_link_copied": "Profila saite nokopēta",
   "profile_link_copy_failed": "Neizdevās nokopēt profila saiti",
   "player_profile": "Spēlētāja profils",
+  "game_mode": "Spēles režīms",
+  "quick_game": "Ātrā spēle",
+  "full_game": "Pilnā spēle",
+  "quick_game_description": "Viens brīvais raunds. Rezultāti tiek uzskaitīti atsevišķi no reitinga spēlēm.",
+  "full_game_description": "Reitinga raundi turpinās, līdz viens spēlētājs liek visiem pārējiem lidot.",
   "ranked_games": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],
@@ -348,10 +353,25 @@
     }
   ],
   "unranked": "Bez reitinga",
+  "ranked_full": "Pilnā reitinga spēle",
+  "quick_games_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=zero": "{count} ātro spēļu",
+        "countPlural=one": "{count} ātrā spēle",
+        "countPlural=other": "{count} ātrās spēles"
+      }
+    }
+  ],
+  "profile_statistics_mode": "Profila statistikas režīms",
   "games_played": "Spēles",
   "ranked_finishes": "Reitinga finiši",
+  "quick_finishes": "Ātro spēļu finiši",
   "total_playtime": "Spēles laiks",
   "completed_ranked_games": "Reitinga spēlēs",
+  "completed_quick_games": "Pabeigtās ātrās spēles",
   "win_rate": "Uzvaras spēlēs",
   "game_wins": [
     {
@@ -380,8 +400,13 @@
   ],
   "no_ranked_history": "Reitinga vēstures vēl nav",
   "stats_after_first_game": "Statistika šeit parādīsies pēc spēlētāja pirmās pabeigtās reitinga spēles.",
+  "no_quick_history": "Ātro spēļu vēstures vēl nav",
+  "quick_stats_after_first_game": "Statistika šeit parādīsies pēc spēlētāja pirmās pabeigtās ātrās spēles.",
   "game_history": "Spēļu vēsture",
-  "game_history_description": "Visas reitinga spēles, sākot ar jaunāko.",
+  "game_history_description": "Pilnās un ātrās spēles, sākot ar jaunāko.",
+  "game_history_filter": "Spēļu vēstures filtrs",
+  "all_modes": "Visi režīmi",
+  "mode": "Režīms",
   "game_history_error": "Neizdevās ielādēt spēļu vēsturi. Mēģini vēlreiz.",
   "played_at": "Spēlēts",
   "result": "Rezultāts",
@@ -401,6 +426,8 @@
   "runs_sets": "Secības / komplekti",
   "competitive_record": "Sacensību rezultāti",
   "competitive_record_description": "Sērijas un punkti reitinga spēlēs.",
+  "quick_record": "Ātro spēļu rezultāti",
+  "quick_record_description": "Sērijas un punkti brīvajās viena raunda spēlēs.",
   "current_win_streak": "Pašreizējā uzvaru sērija",
   "best_win_streak": "Labākā uzvaru sērija",
   "points_inflicted": "Pretiniekiem piešķirtie punkti",
@@ -445,7 +472,7 @@
   ],
   "leaderboard": "Līderu tabula",
   "view_leaderboard": "Skatīt līderu tabulu",
-  "all_time_rankings": "Visu laiku reitings",
+  "all_time_rankings": "Pilno reitinga spēļu kopvērtējums",
   "leaderboard_statistic": "Līderu tabulas statistika",
   "rank": "Vieta",
   "player": "Spēlētājs",
@@ -487,6 +514,7 @@
   "error_deal_chooser_only": "Dalīšanas veidu var izvēlēties tikai norādītais spēlētājs.",
   "error_cut_size_required": "Izvēlies, cik kāršu nocelt.",
   "error_invalid_cut_size": "Noņemto kāršu skaits nav derīgs.",
+  "error_invalid_game_mode": "Izvēlētais spēles režīms nav derīgs.",
   "error_invalid_dealing_type": "Dalīšanas veids nav derīgs.",
   "error_invalid_dealing_order": "Dalīšanas secība nav derīga.",
   "error_lobby_only_leave": "Istabu var pamest tikai uzgaidāmajā telpā.",
