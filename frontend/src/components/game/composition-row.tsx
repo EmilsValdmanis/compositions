@@ -16,7 +16,7 @@ import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-
 import { GameCard } from "#/components/game/game-card";
 import { draftCompositionPreviewPointTotal } from "#/components/game/game-card-utils";
 import {
-  ActivityLabel,
+  AddActivityLabel,
   NewActivityLabel,
   ReclaimActivityLabel,
 } from "#/components/game/game-view-utils";
@@ -87,10 +87,9 @@ function CompositionEdgeDraftZone({
             decoration={{
               highlight: "addition",
               label: (
-                <ActivityLabel
+                <AddActivityLabel
                   players={players}
                   playerId={playerId}
-                  label={m.activity_add()}
                   offsetClassName="translate-y-[2px]"
                 />
               ),
@@ -373,10 +372,9 @@ export function CompositionRow({
                                 offsetClassName="translate-y-[2px]"
                               />
                             ) : (
-                              <ActivityLabel
+                              <AddActivityLabel
                                 players={players}
                                 playerId={previewPlayerId}
-                                label={m.activity_add()}
                                 offsetClassName="translate-y-[2px]"
                               />
                             ),

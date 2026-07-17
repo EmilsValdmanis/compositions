@@ -325,7 +325,8 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
             <>
               <Table
                 containerRef={scrollRef}
-                containerClassName="max-h-[min(62vh,42rem)] overscroll-contain"
+                className="min-w-[32rem]"
+                containerClassName="max-h-[min(62dvh,42rem)] touch-auto overflow-auto overscroll-contain"
                 aria-label={`${m.leaderboard()}: ${getMetricLabel(metric)}`}
               >
                 <colgroup>

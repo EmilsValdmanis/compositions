@@ -13,7 +13,12 @@ const rootRouteApi = getRouteApi("__root__");
 function BrandTitle() {
   return (
     <span className="inline-flex min-w-0 items-center justify-center gap-2">
-      <img src="/favicon.svg" alt="" className="size-5 shrink-0" aria-hidden="true" />
+      <img
+        src="/favicon.svg"
+        alt=""
+        className="size-5 shrink-0 -translate-y-px"
+        aria-hidden="true"
+      />
       <span className="truncate">{m.app_name()}</span>
     </span>
   );
