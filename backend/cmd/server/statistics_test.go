@@ -216,7 +216,13 @@ func TestStatisticsCheckpointLifecycle(t *testing.T) {
 	currentIndex := snapshot.Turn.PlayerIndex
 	currentPlayerID := snapshot.Players[currentIndex].ID
 	snapshot.Turn.HasDrawn = true
-	snapshot.Players[currentIndex].Hand = []game.CardSnapshot{{Rank: game.Two, Suit: game.Clubs}}
+	for i := range snapshot.Players {
+		// Keep the round outcome deterministic: random dealt hands can put every
+		// opponent over 100 points and finish the game instead of the round.
+		snapshot.Players[i].Hand = []game.CardSnapshot{{Rank: game.Two, Suit: game.Clubs}}
+		snapshot.Players[i].TotalPoints = 0
+		snapshot.Players[i].UnadjustedTotalPoints = 0
+	}
 	restored, err := game.RestoreGameState(snapshot)
 	if err != nil {
 		t.Fatal(err)
