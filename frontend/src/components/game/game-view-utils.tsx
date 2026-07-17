@@ -1,4 +1,4 @@
-import { Add01Icon, CardExchange01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ChevronUpIcon, SparklesIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { playerById } from "#/components/game/game-view-helpers";
@@ -87,7 +87,5 @@ export function AddActivityLabel(
 export function ReclaimActivityLabel(
   props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon" | "iconOnly">,
 ) {
-  return (
-    <ActivityLabel {...props} label={m.activity_reclaim()} icon={CardExchange01Icon} iconOnly />
-  );
+  return <ActivityLabel {...props} label={m.activity_reclaim()} icon={ChevronUpIcon} iconOnly />;
 }

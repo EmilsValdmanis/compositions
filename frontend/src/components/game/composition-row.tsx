@@ -14,17 +14,12 @@ import {
 } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { draftCompositionPreviewPointTotal } from "#/components/game/game-card-utils";
 import {
   AddActivityLabel,
   NewActivityLabel,
   ReclaimActivityLabel,
 } from "#/components/game/game-view-utils";
 import { cn } from "#/lib/utils";
-import { Badge } from "../ui/badge";
-import { AnimatedNumber } from "#/components/ui/animated-number";
-import { Caption } from "#/components/typography";
-import { m } from "#/paraglide/messages.js";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
 const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
@@ -225,17 +220,6 @@ export function CompositionRow({
   const reclaimByJokerIndex = new Map(reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim]));
   const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
   const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
-  const hasPointPreview = additionEntries.length > 0 || reclaims.length > 0;
-  const previewPoints = hasPointPreview
-    ? draftCompositionPreviewPointTotal(
-        composition,
-        additionEntries.map((entry) => entry.card),
-        reclaims.map((reclaim) => ({
-          jokerIndex: reclaim.jokerIndex,
-          replacementCard: reclaim.replacementEntry.card,
-        })),
-      )
-    : composition.points;
   const cardActivities = activity?.cardActivities ?? {};
   const isNewComposition = activity?.kind === "new_composition";
   const isHighlightedComposition = isNewComposition;
@@ -276,22 +260,11 @@ export function CompositionRow({
         ref={setCompositionHoverRef}
         className="pointer-events-none absolute inset-0 z-0 rounded-3xl"
       />
-      <div className="mb-1.5 flex min-h-5 flex-wrap items-center justify-between gap-2 xl:mb-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline">#{index + 1}</Badge>
-          {isNewComposition ? (
-            <NewActivityLabel players={players} playerId={activity?.playerId} />
-          ) : null}
+      {isNewComposition ? (
+        <div className="mb-1.5 flex min-h-5 items-center xl:mb-2.5">
+          <NewActivityLabel players={players} playerId={activity?.playerId} />
         </div>
-        <Caption className="flex items-center gap-2">
-          {previewPoints === null ? (
-            <span title={m.complete_composition_points()}>?</span>
-          ) : (
-            <AnimatedNumber value={previewPoints} />
-          )}{" "}
-          {m.points_unit()}
-        </Caption>
-      </div>
+      ) : null}
 
       <div className="relative flex w-fit max-w-none flex-nowrap items-center justify-start gap-2 overflow-visible xl:mx-auto xl:max-w-full xl:flex-wrap xl:justify-center xl:gap-3">
         <CompositionEdgeDropTarget

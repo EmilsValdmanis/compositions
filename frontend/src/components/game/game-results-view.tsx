@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cards01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { Cards01Icon, SentIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type CompletedGameSnapshot,
@@ -102,29 +102,34 @@ function ResultPoints({
         data-score-phase={phase}
         data-flying={score.hasAdjustment || undefined}
       >
-        <div className="flex min-h-9 flex-col items-end justify-center gap-0.5">
+        <div className="flex min-h-9 items-center justify-end gap-2">
+          {score.isShowingAdjustment ? (
+            <HugeiconsIcon
+              icon={SentIcon}
+              className="text-primary"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
+          ) : null}
           <P
             size="sm"
             className={cn(
-              "font-medium tabular-nums transition-colors duration-300",
+              "flex font-medium tabular-nums transition-[border-color,color] duration-200",
               score.isShowingOverHundred && "text-destructive",
+              score.isShowingAdjustment &&
+                "size-9 items-center justify-center rounded-full border border-primary text-primary",
             )}
+            title={
+              score.isShowingAdjustment
+                ? m.flying_score_adjustment({
+                    from: score.unadjustedTotal,
+                    to: playerState.totalPoints,
+                  })
+                : undefined
+            }
           >
             <AnimatedNumber value={score.displayedTotal} />
           </P>
-          {score.isShowingAdjustment ? (
-            <Badge
-              variant="outline"
-              className="h-4.5 border-primary/30 px-1.5 text-[0.625rem] text-primary"
-              title={m.flying_score_adjustment({
-                from: score.unadjustedTotal,
-                to: playerState.totalPoints,
-              })}
-            >
-              <span aria-hidden="true">↘</span>
-              {m.flying()}
-            </Badge>
-          ) : null}
         </div>
       </TableCell>
       <TableCell className="text-right">

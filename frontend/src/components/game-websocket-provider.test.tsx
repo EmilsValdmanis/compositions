@@ -89,6 +89,7 @@ function Harness({ children }: { children?: ReactNode }) {
       <p data-testid="last-error">{state.lastError}</p>
       <p data-testid="last-error-code">{state.lastErrorCode}</p>
       <p data-testid="last-error-message">{state.lastErrorMessage}</p>
+      <p data-testid="completed-game-phase">{state.completedGame?.room.phase}</p>
       <button type="button" onClick={() => void connect()}>
         Connect
       </button>
@@ -199,6 +200,94 @@ describe("GameWebSocketProvider", () => {
       type: "connect",
       data: { sessionId: "session-1" },
     });
+  });
+
+  it("keeps quick-game results when the final game snapshot broadcast is missed", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    const players = [
+      {
+        playerId: "player-1",
+        name: "Avery",
+        connected: true,
+        seat: 0,
+        isHost: true,
+        canReconnect: false,
+      },
+    ];
+    const game = {
+      gameMode: "quick",
+      phase: 1,
+      round: 1,
+      dealerIndex: 0,
+      roundWinnerIndex: 0,
+      turn: { number: 1, playerIndex: 0, playerId: "player-1", hasDrawn: true },
+      players: [
+        {
+          playerId: "player-1",
+          handCount: 0,
+          totalPoints: 0,
+          pointsGained: 0,
+          hasOpened: true,
+        },
+      ],
+      hand: [],
+      drawPileCount: 20,
+      discardPile: [],
+      activeCompositions: [],
+    };
+
+    await act(async () => {
+      sockets[0]!.message({
+        type: "game_state",
+        data: {
+          room: {
+            code: "QUICK1",
+            phase: "in_progress",
+            gameMode: "quick",
+            hostPlayerId: "player-1",
+            players,
+          },
+          game,
+        },
+      });
+      sockets[0]!.message({
+        type: "room_state",
+        data: {
+          room: {
+            code: "QUICK1",
+            phase: "game_over",
+            gameMode: "quick",
+            hostPlayerId: "player-1",
+            players,
+          },
+        },
+      });
+      sockets[0]!.message({
+        type: "room_state",
+        data: {
+          room: {
+            code: "QUICK1",
+            phase: "lobby",
+            gameMode: "quick",
+            hostPlayerId: "player-1",
+            players,
+          },
+        },
+      });
+    });
+
+    expect(screen.getByTestId("completed-game-phase").textContent).toBe("game_over");
   });
 
   it("localizes error codes while retaining the backend message for developers", async () => {

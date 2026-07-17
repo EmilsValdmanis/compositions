@@ -87,6 +87,8 @@ describe("draftPreviewForComposition", () => {
         card.getAttribute("aria-label"),
       ),
     ).toEqual(["10 of Hearts", "Joker", "Q of Hearts", "K of Hearts", "A of Hearts"]);
+    expect(view.queryByText("#1")).toBeNull();
+    expect(view.queryByText("30 pts")).toBeNull();
   });
 
   it("keeps two identical jokers on their independently assigned edges", () => {

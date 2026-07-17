@@ -74,6 +74,7 @@ type tablePlayState struct {
 	handCards          []Card
 	activeCompositions []*Composition
 	hasOpened          bool
+	syntheticReclaims  int
 }
 
 type openingPlayCandidate struct {
@@ -907,19 +908,31 @@ func (gs *GameState) canTakeDiscardNow() bool {
 			}
 
 			for cardIndex, replacementCard := range availableCards {
-				if cardIndex != len(availableCards)-1 {
-					continue
-				}
 				if !comp.canReclaimJoker(jokerIndex, replacementCard) {
 					continue
 				}
 
-				reclaim := tablePlayCandidate{
-					usedMask:    discardMask,
-					reclaim:     &JokerReclaim{CompositionIndex: compositionIndex, JokerIndex: jokerIndex, ReplacementCard: replacementCard},
-					usesDiscard: true,
+				candidateState := baseState
+				candidateDiscardMask := discardMask
+				usedMask := uint32(1) << uint(cardIndex)
+				usesDiscard := cardIndex == len(availableCards)-1
+				candidateScratch := scratch
+				if !usesDiscard {
+					candidateCards := make([]Card, 0, len(availableCards)+1)
+					candidateCards = append(candidateCards, availableCards[:len(availableCards)-1]...)
+					candidateCards = append(candidateCards, tableCard, availableCards[len(availableCards)-1])
+					candidateState.handCards = candidateCards
+					candidateState.syntheticReclaims = 1
+					candidateDiscardMask = uint32(1) << uint(len(candidateCards)-1)
+					candidateScratch.maskCards = make([]Card, 0, len(candidateCards))
 				}
-				if hasLegalPlayWithDiscard(baseState, discardMask, scratch, &reclaim) {
+
+				reclaim := tablePlayCandidate{
+					usedMask:    usedMask,
+					reclaim:     &JokerReclaim{CompositionIndex: compositionIndex, JokerIndex: jokerIndex, ReplacementCard: replacementCard},
+					usesDiscard: usesDiscard,
+				}
+				if hasLegalPlayWithDiscard(candidateState, candidateDiscardMask, candidateScratch, &reclaim) {
 					return true
 				}
 			}
@@ -963,6 +976,10 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 
 	for subset := range discardMask {
 		mask := subset | discardMask
+		if usedMask&mask != 0 {
+			continue
+		}
+		nextUsedMask := usedMask | mask
 		cards := cardsForMask(baseState.handCards, mask, scratch.maskCards)
 
 		if bits.OnesCount32(subset) >= 2 {
@@ -973,10 +990,10 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 
 				selectedCompMasks = append(selectedCompMasks, mask)
 				selectedCompVariants = append(selectedCompVariants, variant)
-				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, mask, true, scratch) {
+				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
 					return true
 				}
-				if searchSupportCandidates(baseState, discardMask, 1, mask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+				if searchSupportCandidates(baseState, discardMask, 1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
 					return true
 				}
 				selectedCompMasks = selectedCompMasks[:len(selectedCompMasks)-1]
@@ -996,10 +1013,10 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 				}
 
 				selectedAdditions = append(selectedAdditions, selectedAddition{compositionIndex: compositionIndex, insertIndex: &insertIndex, mask: mask})
-				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, mask, true, scratch) {
+				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
 					return true
 				}
-				if searchSupportCandidates(baseState, discardMask, 1, mask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+				if searchSupportCandidates(baseState, discardMask, 1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
 					return true
 				}
 				selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
@@ -1227,7 +1244,7 @@ func validateTablePlay(baseState tablePlayState, compMasks []uint32, compVariant
 	if !baseState.hasOpened && openingPoints < 40 {
 		return false
 	}
-	if len(baseState.handCards)-bits.OnesCount32(usedMask)+len(reclaims) == 0 {
+	if len(baseState.handCards)-bits.OnesCount32(usedMask)+len(reclaims)-baseState.syntheticReclaims == 0 {
 		return false
 	}
 
@@ -1313,7 +1330,9 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 			if !runCardsAreOrdered(comp.cards) && !runCardsAreReverseOrdered(comp.cards) {
 				return tablePlayState{}, ErrInvalidComposition
 			}
-			comp.normalizeRunCards()
+			if !comp.normalizeRunCards() {
+				return tablePlayState{}, ErrInvalidComposition
+			}
 		}
 		playedCards = append(playedCards, comp.cards...)
 		openingPoints += comp.Points()

@@ -1,4 +1,4 @@
-import { ChevronDownIcon, UndoIcon } from "@hugeicons/core-free-icons";
+import { ChevronDownIcon, RankingIcon, UndoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
 import { MobilePlayerEmotes, PlayerEmotePicker } from "#/components/game/player-emotes";
@@ -11,15 +11,98 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "#/components/ui/popover";
 import { Spinner } from "#/components/ui/spinner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "#/components/ui/table";
+import { P } from "#/components/typography";
 import { cn } from "#/lib/utils";
-import { Badge } from "../ui/badge";
 import { m } from "#/paraglide/messages.js";
+
+function GameScoreboard({
+  game,
+  players,
+}: {
+  game: GameSnapshot | null;
+  players: PlayerSnapshot[];
+}) {
+  const rows = (game?.players ?? [])
+    .toSorted((left, right) => left.totalPoints - right.totalPoints)
+    .map((playerState, index) => ({
+      rank: index + 1,
+      playerState,
+      player: players.find((player) => player.playerId === playerState.playerId),
+    }));
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label={m.results()}
+            disabled={!game}
+          />
+        }
+      >
+        <HugeiconsIcon icon={RankingIcon} strokeWidth={2} />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] p-0">
+        <PopoverHeader className="px-4 pt-4">
+          <PopoverTitle>{m.results()}</PopoverTitle>
+        </PopoverHeader>
+        <div className="overflow-hidden rounded-b-3xl border-t border-border/70">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>#</TableHead>
+                <TableHead>{m.player()}</TableHead>
+                <TableHead className="text-right">{m.cards()}</TableHead>
+                <TableHead className="text-right">{m.score()}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.map(({ rank, player, playerState }) => (
+                <TableRow key={playerState.playerId}>
+                  <TableCell className="tabular-nums">{rank}</TableCell>
+                  <TableCell>
+                    <P size="sm" className="max-w-36 truncate font-medium" title={player?.name}>
+                      {player?.name ?? m.unknown_player()}
+                    </P>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <AnimatedNumber value={playerState.handCount} />
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    <AnimatedNumber value={playerState.totalPoints} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export function GameBoardPlayers({
   players,
   game,
-  connectedPlayers,
   hasDraftedCompositions,
   showTurnIndicator = true,
   compactOnMobile = false,
@@ -35,7 +118,6 @@ export function GameBoardPlayers({
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
 }) {
-  const activePlayerCount = players.filter((player) => !player.forfeited).length;
   const turnPlayer = players.find((player) => player.playerId === game?.turn.playerId);
   return (
     <>
@@ -94,6 +176,7 @@ export function GameBoardPlayers({
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              <GameScoreboard game={game} players={players} />
               <PlayerEmotePicker onSendEmote={onSendEmote} />
             </div>
           </CardHeader>
@@ -104,10 +187,7 @@ export function GameBoardPlayers({
           <CardAction>
             <div className="flex items-center gap-2">
               <PlayerEmotePicker onSendEmote={onSendEmote} />
-              <Badge variant="outline">
-                <AnimatedNumber value={connectedPlayers} />/
-                <AnimatedNumber value={activePlayerCount} /> {m.online()}
-              </Badge>
+              <GameScoreboard game={game} players={players} />
             </div>
           </CardAction>
         </CardHeader>

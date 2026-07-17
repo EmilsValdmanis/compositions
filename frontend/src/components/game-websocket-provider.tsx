@@ -299,16 +299,20 @@ const incomingMessageReducers: Record<string, (current: LobbyState, data: any) =
       playerId: data?.playerId ?? current.playerId,
       lastEvent: "connected",
     }),
-  room_state: (current, data) =>
-    clearError(current, {
-      room: data?.room ?? null,
-      game: data?.room?.phase === "lobby" ? null : current.game,
-      completedGame:
-        data?.room?.phase === "lobby" && current.completedGame?.room.code === data?.room?.code
-          ? current.completedGame
-          : current.completedGame,
+  room_state: (current, data) => {
+    const room = data?.room ?? null;
+    const completedGame =
+      room?.phase === "game_over" && current.game
+        ? { room, game: current.game }
+        : current.completedGame;
+
+    return clearError(current, {
+      room,
+      game: room?.phase === "lobby" ? null : current.game,
+      completedGame,
       lastEvent: "room_state",
-    }),
+    });
+  },
   game_state: (current, data) =>
     clearError(current, {
       room: data?.room ?? current.room,
