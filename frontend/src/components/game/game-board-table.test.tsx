@@ -2,7 +2,7 @@
 
 import { DndContext } from "@dnd-kit/core";
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { GameBoardTable, draftPreviewForComposition } from "#/components/game/game-board-table";
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 
@@ -290,5 +290,76 @@ describe("GameBoardTable draft total", () => {
       ),
     ).toBe(true);
     expect(view.queryByTitle("Complete a valid composition to resolve its point value")).toBeNull();
+  });
+});
+
+describe("GameBoardTable mobile draft placement", () => {
+  it("scrolls a newly created composition into view", () => {
+    const originalMatchMedia = window.matchMedia;
+    const originalScrollIntoView = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollIntoView",
+    );
+    const scrollIntoView = vi.fn();
+
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(max-width: 79.999rem)",
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }),
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    const renderTable = (
+      newCompositions: Parameters<typeof GameBoardTable>[0]["newCompositions"],
+    ) => (
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[]}
+          newCompositions={newCompositions}
+          players={[]}
+          canCompose
+          showDraftTotal={false}
+        />
+      </DndContext>
+    );
+    const view = render(renderTable([]));
+
+    view.rerender(
+      renderTable([
+        {
+          id: "draft-1",
+          handKeys: ["3-0-1"],
+          tableIndex: null,
+          entries: [{ key: "3-0-1", card: { rank: 3, suit: 0 }, sourceIndex: 0 }],
+        },
+      ]),
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: originalMatchMedia,
+    });
+    if (originalScrollIntoView) {
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollIntoView);
+    } else {
+      Reflect.deleteProperty(HTMLElement.prototype, "scrollIntoView");
+    }
   });
 });

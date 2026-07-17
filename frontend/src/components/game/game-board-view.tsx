@@ -1024,7 +1024,7 @@ export function GameBoardView({
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 220,
+        delay: 180,
         tolerance: 8,
       },
     }),

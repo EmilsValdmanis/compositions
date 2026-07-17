@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
@@ -28,6 +29,7 @@ import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 import { Caption } from "#/components/typography";
+import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -149,6 +151,9 @@ export function GameBoardTable({
   invalidEntryKeys?: Set<string>;
 }) {
   const { active } = useDndContext();
+  const shouldReduceMotion = useShouldReduceMotion();
+  const draftSectionRef = useRef<HTMLDivElement>(null);
+  const previousNewCompositionCountRef = useRef(newCompositions.length);
   const { setNodeRef, isOver: isOverNewCompositionBoard } = useDroppable({
     id: NEW_COMPOSITION_DROP_ID,
     disabled: !canCompose,
@@ -181,6 +186,33 @@ export function GameBoardTable({
     active !== null &&
     active.data.current?.drawSource === undefined &&
     typeof active.id === "string";
+
+  useEffect(() => {
+    const previousCount = previousNewCompositionCountRef.current;
+    previousNewCompositionCountRef.current = newCompositions.length;
+
+    if (newCompositions.length <= previousCount) {
+      return;
+    }
+
+    const isMobileLayout = window.matchMedia
+      ? window.matchMedia("(max-width: 79.999rem)").matches
+      : window.innerWidth < 1280;
+    if (!isMobileLayout) {
+      return;
+    }
+
+    const draftSection = draftSectionRef.current;
+    if (typeof draftSection?.scrollIntoView !== "function") {
+      return;
+    }
+
+    draftSection.scrollIntoView({
+      behavior: shouldReduceMotion ? "auto" : "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [newCompositions.length, shouldReduceMotion]);
 
   for (const draft of stagedDrafts) {
     if (draft.tableIndex === undefined) {
@@ -249,152 +281,159 @@ export function GameBoardTable({
           : null,
       )}
     >
-      <CardContent className="flex h-full min-h-0 min-w-0 flex-1 flex-col justify-center gap-3 overflow-auto overscroll-contain px-2 py-2 xl:gap-6 xl:px-3 xl:py-3">
-        <div className="min-h-0 overflow-visible">
-          {hasVisibleCompositions ? (
-            <div className="flex min-h-0 flex-wrap items-center justify-start gap-2 overflow-visible p-1 sm:justify-center xl:gap-4">
-              {tableCompositions.map((composition) => (
-                <div key={composition.key} className="w-fit shrink-0 overflow-visible p-1">
-                  {(() => {
-                    const spectatorDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
-                    const stagedEntries =
-                      composition.stagedEntries.length > 0
-                        ? composition.stagedEntries
-                        : (spectatorDraft?.stagedEntries ?? []);
-                    const reclaims =
-                      composition.reclaims.length > 0
-                        ? composition.reclaims
-                        : (spectatorDraft?.reclaims ?? []);
-                    const insertIndex =
-                      composition.stagedEntries.length > 0
-                        ? composition.insertIndex
-                        : spectatorDraft?.insertIndex;
-                    const cardInsertIndices =
-                      composition.stagedEntries.length > 0
-                        ? composition.cardInsertIndices
-                        : spectatorDraft?.cardInsertIndices;
+      <CardContent className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-auto overscroll-contain px-2 py-2 xl:px-3 xl:py-3">
+        <div className="my-auto flex w-full shrink-0 flex-col gap-3 xl:gap-6">
+          <div className="w-full shrink-0 overflow-visible">
+            {hasVisibleCompositions ? (
+              <div className="flex w-full flex-wrap items-center justify-center gap-2 overflow-visible p-1 xl:gap-4">
+                {tableCompositions.map((composition) => (
+                  <div key={composition.key} className="w-fit shrink-0 overflow-visible p-1">
+                    {(() => {
+                      const spectatorDraft = spectatorDraftsByTableIndex.get(
+                        composition.tableIndex,
+                      );
+                      const stagedEntries =
+                        composition.stagedEntries.length > 0
+                          ? composition.stagedEntries
+                          : (spectatorDraft?.stagedEntries ?? []);
+                      const reclaims =
+                        composition.reclaims.length > 0
+                          ? composition.reclaims
+                          : (spectatorDraft?.reclaims ?? []);
+                      const insertIndex =
+                        composition.stagedEntries.length > 0
+                          ? composition.insertIndex
+                          : spectatorDraft?.insertIndex;
+                      const cardInsertIndices =
+                        composition.stagedEntries.length > 0
+                          ? composition.cardInsertIndices
+                          : spectatorDraft?.cardInsertIndices;
 
-                    return (
-                      <CompositionRow
-                        composition={composition.snapshot}
-                        index={composition.tableIndex}
-                        stagedEntries={stagedEntries}
-                        reclaims={reclaims}
-                        insertIndex={insertIndex}
-                        cardInsertIndices={cardInsertIndices}
-                        players={players}
-                        stagedEntryPlayerId={spectatorDraft?.playerId}
-                        stagedEntriesInteractive={composition.stagedEntries.length > 0}
-                        dropTargetsEnabled={canCompose}
-                        activity={activityByIndex.get(composition.tableIndex)}
-                        invalidEntryKeys={invalidEntryKeys}
-                      />
-                    );
-                  })()}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Caption className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center">
-              {m.no_compositions()}
-            </Caption>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-2 xl:gap-3">
-          {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
-            <div className="flex min-h-5 basis-full items-center justify-center">
-              <Badge variant="outline">
-                {m.draft_total()}{" "}
-                {visibleDraftPointsTotal === null ? (
-                  <span title={m.complete_drafts_points()}>?</span>
-                ) : (
-                  <AnimatedNumber value={visibleDraftPointsTotal} />
-                )}{" "}
-                {m.points_unit()}
-              </Badge>
-            </div>
-          ) : null}
-
-          {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
-            <div
-              key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
-              className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
-            >
-              <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
-                <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
-                <Badge variant="outline">
-                  {draftCompositionPointTotal(composition.cards) === null ? (
-                    <span title={m.complete_composition_points()}>?</span>
-                  ) : (
-                    <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
-                  )}{" "}
-                  {m.points_unit()}
-                </Badge>
-              </div>
-              <div className="flex items-start gap-2">
-                {draftCardInstances(composition.cards).map(({ card, key }) => (
-                  <GameCard
-                    key={`${composition.tableIndex ?? "new"}-${key}`}
-                    card={card}
-                    size="default"
-                  />
+                      return (
+                        <CompositionRow
+                          composition={composition.snapshot}
+                          index={composition.tableIndex}
+                          stagedEntries={stagedEntries}
+                          reclaims={reclaims}
+                          insertIndex={insertIndex}
+                          cardInsertIndices={cardInsertIndices}
+                          players={players}
+                          stagedEntryPlayerId={spectatorDraft?.playerId}
+                          stagedEntriesInteractive={composition.stagedEntries.length > 0}
+                          dropTargetsEnabled={canCompose}
+                          activity={activityByIndex.get(composition.tableIndex)}
+                          invalidEntryKeys={invalidEntryKeys}
+                        />
+                      );
+                    })()}
+                  </div>
                 ))}
               </div>
-            </div>
-          ))}
+            ) : (
+              <Caption className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center">
+                {m.no_compositions()}
+              </Caption>
+            )}
+          </div>
 
-          {newCompositions.map((composition) => (
-            <GameBoardDraftDropZone
-              key={composition.id}
-              id={draftCompositionDropId(composition.id)}
-              className={cn(
-                "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
-                invalidCompositionIds.has(composition.id)
-                  ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30"
-                  : null,
-              )}
-              invalid={invalidCompositionIds.has(composition.id)}
-            >
-              <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
-                <NewActivityLabel players={players} />
+          <div
+            ref={draftSectionRef}
+            className="flex w-full shrink-0 flex-wrap items-center justify-center gap-2 xl:gap-3"
+          >
+            {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
+              <div className="flex min-h-5 basis-full items-center justify-center">
                 <Badge variant="outline">
-                  {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
-                  null ? (
-                    <span title={m.complete_composition_points()}>?</span>
+                  {m.draft_total()}{" "}
+                  {visibleDraftPointsTotal === null ? (
+                    <span title={m.complete_drafts_points()}>?</span>
                   ) : (
-                    <AnimatedNumber
-                      value={
-                        draftCompositionPointTotal(
-                          composition.entries.map((entry) => entry.card),
-                        ) ?? 0
-                      }
-                    />
+                    <AnimatedNumber value={visibleDraftPointsTotal} />
                   )}{" "}
                   {m.points_unit()}
                 </Badge>
               </div>
-              <SortableContext
-                items={composition.entries.map((entry) => entry.key)}
-                strategy={horizontalListSortingStrategy}
+            ) : null}
+
+            {stagedNewDrafts.map((composition: DraftCompositionSnapshot, index: number) => (
+              <div
+                key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
+                className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
               >
+                <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
+                  <NewActivityLabel players={players} playerId={turnActivity?.playerId} />
+                  <Badge variant="outline">
+                    {draftCompositionPointTotal(composition.cards) === null ? (
+                      <span title={m.complete_composition_points()}>?</span>
+                    ) : (
+                      <AnimatedNumber value={draftCompositionPointTotal(composition.cards) ?? 0} />
+                    )}{" "}
+                    {m.points_unit()}
+                  </Badge>
+                </div>
                 <div className="flex items-start gap-2">
-                  {composition.entries.map((entry) => (
+                  {draftCardInstances(composition.cards).map(({ card, key }) => (
                     <GameCard
-                      key={entry.key}
-                      card={entry.card}
+                      key={`${composition.tableIndex ?? "new"}-${key}`}
+                      card={card}
                       size="default"
-                      draggable={{
-                        id: entry.key,
-                        cardIndex: entry.sourceIndex,
-                        isVirtual: entry.isVirtual,
-                      }}
                     />
                   ))}
                 </div>
-              </SortableContext>
-            </GameBoardDraftDropZone>
-          ))}
+              </div>
+            ))}
+
+            {newCompositions.map((composition) => (
+              <GameBoardDraftDropZone
+                key={composition.id}
+                id={draftCompositionDropId(composition.id)}
+                className={cn(
+                  "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
+                  invalidCompositionIds.has(composition.id)
+                    ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30"
+                    : null,
+                )}
+                invalid={invalidCompositionIds.has(composition.id)}
+              >
+                <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
+                  <NewActivityLabel players={players} />
+                  <Badge variant="outline">
+                    {draftCompositionPointTotal(composition.entries.map((entry) => entry.card)) ===
+                    null ? (
+                      <span title={m.complete_composition_points()}>?</span>
+                    ) : (
+                      <AnimatedNumber
+                        value={
+                          draftCompositionPointTotal(
+                            composition.entries.map((entry) => entry.card),
+                          ) ?? 0
+                        }
+                      />
+                    )}{" "}
+                    {m.points_unit()}
+                  </Badge>
+                </div>
+                <SortableContext
+                  items={composition.entries.map((entry) => entry.key)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  <div className="flex items-start gap-2">
+                    {composition.entries.map((entry) => (
+                      <GameCard
+                        key={entry.key}
+                        card={entry.card}
+                        size="default"
+                        draggable={{
+                          id: entry.key,
+                          cardIndex: entry.sourceIndex,
+                          isVirtual: entry.isVirtual,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </GameBoardDraftDropZone>
+            ))}
+          </div>
         </div>
       </CardContent>
     </Card>
