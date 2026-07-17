@@ -30,7 +30,7 @@ function PlayerMarker({
   );
 }
 
-export function ActivityLabel({
+function ActivityLabel({
   players,
   playerId,
   label = m.activity_new(),
