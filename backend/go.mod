@@ -9,7 +9,7 @@ require (
 	github.com/getsentry/sentry-go/slog v0.48.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/gorilla/websocket v1.5.3
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.10.0
 	github.com/testcontainers/testcontainers-go v0.42.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/time v0.15.0
