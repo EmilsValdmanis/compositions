@@ -35,7 +35,9 @@ func newComposition(cards []Card, variant compositionVariant, requireOrderedRun 
 		if requireOrderedRun && !runCardsAreOrdered(c.cards) && !runCardsAreReverseOrdered(c.cards) {
 			return nil, false
 		}
-		c.normalizeRunCards()
+		if !c.normalizeRunCards() {
+			return nil, false
+		}
 	}
 	c.assignJokers()
 	return c, true
@@ -491,9 +493,25 @@ func (c *Composition) assignRunJokers() bool {
 	return true
 }
 
-func (c *Composition) normalizeRunCards() {
-	ordered, _, _, _ := bestRunOrder(c.cards)
+func (c *Composition) normalizeRunCards() bool {
+	ordered, _, _, ok := bestRunOrder(c.cards)
+	if ok {
+		c.cards = ordered
+		return true
+	}
+
+	// A boundary joker can make the unordered candidates tie even though the
+	// player's descending card order resolves the intended run. Normalize from
+	// that direction before giving up on the composition.
+	reversed := slices.Clone(c.cards)
+	slices.Reverse(reversed)
+	ordered, _, _, ok = bestRunOrder(reversed)
+	if !ok {
+		return false
+	}
+
 	c.cards = ordered
+	return true
 }
 
 func missingSetCards(rank Rank, usedSuits map[Suit]bool) ([]Card, bool) {

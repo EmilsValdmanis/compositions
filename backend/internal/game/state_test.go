@@ -1219,6 +1219,44 @@ func TestGameStateDrawFromDiscardAllowsImmediateJokerReclaim(t *testing.T) {
 	}
 }
 
+func TestGameStateDrawFromDiscardAllowsPlayUsingJokerReclaimedWithHandCard(t *testing.T) {
+	state := newTurnTestState()
+	state.players[0].hasOpened = true
+	state.players[0].hand.cards = []Card{
+		card(Six, Hearts),
+		card(Eight, Clubs),
+		card(Two, Diamonds),
+	}
+	state.discardPile = &CardPile{cards: []Card{card(Ten, Clubs)}}
+
+	tableRun, ok := NewRun([]Card{
+		card(Five, Hearts),
+		joker(),
+		card(Seven, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want table run")
+	}
+	state.activeCompositions = []*Composition{tableRun}
+
+	if err := state.DrawFromDiscard(); err != nil {
+		t.Fatalf("DrawFromDiscard() error = %v; want reclaim-assisted draw", err)
+	}
+
+	newRun, ok := NewRun([]Card{card(Eight, Clubs), joker(), card(Ten, Clubs)})
+	if !ok {
+		t.Fatal("NewRun() returned false; want Eight-Joker-Ten")
+	}
+	err := state.PlayTable([]*Composition{newRun}, nil, JokerReclaim{
+		CompositionIndex: 0,
+		JokerIndex:       1,
+		ReplacementCard:  card(Six, Hearts),
+	})
+	if err != nil {
+		t.Fatalf("PlayTable() error = %v; want reclaimed joker reused in new run", err)
+	}
+}
+
 func TestGameStateDrawFromDeckStillFailsWhenBothPilesAreEmpty(t *testing.T) {
 	state := newTurnTestState()
 	state.drawPile = &CardPile{cards: []Card{}}

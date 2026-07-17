@@ -127,6 +127,10 @@ describe("GameResultsView flying score reveal", () => {
     await act(async () => vi.advanceTimersByTime(1_000));
     expect(flyingScore?.dataset.scorePhase).toBe("adjusted");
     expect(flyingScore?.textContent).toContain("89");
-    expect(flyingScore?.textContent).toContain("Flew");
+    expect(flyingScore?.textContent).not.toContain("Flew");
+    expect(
+      flyingScore?.querySelector('[title="Over 100: adjusted from 107 to 89 points"]'),
+    ).not.toBeNull();
+    expect(flyingScore?.querySelector("svg")).not.toBeNull();
   });
 });

@@ -316,6 +316,23 @@ func TestNewRun_AcceptsDescendingSequence(t *testing.T) {
 	}
 }
 
+func TestNewRun_AcceptsDescendingSequenceStartingWithJoker(t *testing.T) {
+	comp, ok := NewRun([]Card{
+		joker(),
+		card(Jack, Hearts),
+		card(Ten, Hearts),
+	})
+	if !ok {
+		t.Fatal("NewRun() returned false; want true for Joker-Jack-Ten")
+	}
+
+	want := []Card{card(Ten, Hearts), card(Jack, Hearts), joker()}
+	if !slices.EqualFunc(comp.cards, want, cardsEqual) {
+		t.Fatalf("NewRun() cards = %#v; want normalized Ten-Jack-Joker", comp.cards)
+	}
+	expectJokerRepresentation(t, comp, 2, card(Queen, Hearts))
+}
+
 func TestNewRun_RejectsMixedOrderSequence(t *testing.T) {
 	cards := []Card{
 		card(Seven, Hearts),
