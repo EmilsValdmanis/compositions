@@ -26,7 +26,7 @@ const rootRouteApi = getRouteApi("__root__");
 
 export function AppSidebar() {
   const { session } = rootRouteApi.useRouteContext();
-  const { state, sendGameInvite } = useGameWebSocket();
+  const { state, dismissCompletedGame, sendGameInvite } = useGameWebSocket();
   const { setOpenMobile } = useSidebar();
   const currentPage = useAppPage();
   const players = state.room?.players ?? [];
@@ -42,6 +42,11 @@ export function AppSidebar() {
     setOpenMobile(false);
   }
 
+  function goToLobby() {
+    dismissCompletedGame();
+    closeMobileSidebar();
+  }
+
   return (
     <Sidebar side="left" variant="floating" collapsible="icon">
       <SidebarHeader>
@@ -50,7 +55,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               size="lg"
               tooltip={m.back_to_lobby()}
-              render={<Link to="/" onClick={closeMobileSidebar} />}
+              render={<Link to="/" onClick={goToLobby} />}
             >
               <img src="/favicon.svg" alt="" className="size-8" aria-hidden="true" />
               <span className="font-heading font-semibold">{m.app_name()}</span>
@@ -67,7 +72,7 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   tooltip={m.lobby()}
                   isActive={currentPage === "lobby"}
-                  render={<Link to="/" onClick={closeMobileSidebar} />}
+                  render={<Link to="/" onClick={goToLobby} />}
                 >
                   <HugeiconsIcon icon={Home01Icon} />
                   <span>{m.lobby()}</span>
@@ -94,6 +99,9 @@ export function AppSidebar() {
             <SidebarSeparator />
             <SidebarFriendsList
               friends={state.social.friends}
+              isLoading={
+                state.connectionStatus === "idle" || state.connectionStatus === "connecting"
+              }
               canInvite={canInvite}
               unavailableUserIds={unavailableUserIds}
               onInvite={sendGameInvite}

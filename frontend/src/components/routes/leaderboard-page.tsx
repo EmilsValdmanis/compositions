@@ -1,10 +1,4 @@
-import {
-  Alert02Icon,
-  ArrowLeft02Icon,
-  ChampionIcon,
-  RankingIcon,
-  Refresh01Icon,
-} from "@hugeicons/core-free-icons";
+import { Alert02Icon, ChampionIcon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -267,16 +261,6 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
   return (
     <section className="mx-auto w-full max-w-6xl space-y-4">
       <header className="px-2 pt-2 md:px-0">
-        <Button
-          render={<Link to="/" />}
-          nativeButton={false}
-          variant="ghost"
-          size="sm"
-          className="mb-3 -ml-3"
-        >
-          <HugeiconsIcon icon={ArrowLeft02Icon} data-icon="inline-start" />
-          {m.back_to_lobby()}
-        </Button>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="flex items-center gap-2 text-primary">

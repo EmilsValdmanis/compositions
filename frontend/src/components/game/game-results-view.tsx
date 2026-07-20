@@ -55,7 +55,6 @@ type GameResultsViewProps = {
   connectedPlayers: number;
   dealChoice: DealChoiceState;
   onStartNextRound?: () => void;
-  onReturnToLobby?: () => void;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
   onSendEmote: (emoji: string) => void;
   social?: SocialState;
@@ -202,7 +201,6 @@ export function GameResultsView({
   connectedPlayers,
   dealChoice,
   onStartNextRound,
-  onReturnToLobby,
   onChooseDealing,
   onSendEmote,
   social,
@@ -389,13 +387,7 @@ export function GameResultsView({
             />
           ) : null}
         </CardContent>
-        {isGameOver ? (
-          <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
-            <Button type="button" onClick={onReturnToLobby}>
-              {m.back_to_lobby()}
-            </Button>
-          </CardFooter>
-        ) : dealChoice.pendingDealChoice ? null : (
+        {!isGameOver && !dealChoice.pendingDealChoice ? (
           <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
             {!isHost ? (
               <P size="sm" className="text-muted-foreground">
@@ -406,7 +398,7 @@ export function GameResultsView({
               {m.start_next_round()}
             </Button>
           </CardFooter>
-        )}
+        ) : null}
       </Card>
 
       <GameBoardPlayers

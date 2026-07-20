@@ -1,12 +1,6 @@
-import {
-  ArrowLeft01Icon,
-  ArrowLeft02Icon,
-  ArrowRight01Icon,
-  Share08Icon,
-} from "@hugeicons/core-free-icons";
+import { ArrowLeft02Icon, ArrowRight01Icon, Share08Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
@@ -291,18 +285,14 @@ export function PlayerProfilePage({
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <Button render={<Link to="/" />} nativeButton={false} variant="ghost" size="sm">
-          <HugeiconsIcon icon={ArrowLeft01Icon} data-icon="inline-start" />
-          {m.back_to_game()}
-        </Button>
-        {isOwnProfile ? (
+      {isOwnProfile ? (
+        <div className="flex justify-end">
           <Button variant="ghost" size="sm" onClick={() => void shareProfile()}>
             <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
             {m.share_profile()}
           </Button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <Card className="overflow-hidden">
         <CardHeader>

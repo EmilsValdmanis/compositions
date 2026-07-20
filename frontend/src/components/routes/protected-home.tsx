@@ -58,7 +58,6 @@ export function ProtectedHome() {
   const autoJoinAttemptedRoomCodeRef = useRef<string | null>(null);
   const [roomCode, setRoomCode] = useState(search.room ?? "");
   const [gameMode, setGameMode] = useState<GameMode>("full");
-  const [dismissedCompletedGameKey, setDismissedCompletedGameKey] = useState<string | null>(null);
   const players = state.room?.players ?? [];
   const activePlayers = players.filter((player) => !player.forfeited);
   const currentPlayer = players.find((player) => player.playerId === state.playerId) ?? null;
@@ -92,20 +91,12 @@ export function ProtectedHome() {
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
   const turnPlayerName = playerName(players, state.game?.turn.playerId);
   const completedGame = state.completedGame;
-  const completedGameKey = completedGame
-    ? `${completedGame.room.code}:${completedGame.game.round}`
-    : null;
   const roundResults =
     phase === "round_over" || phase === "game_over"
       ? state.game
         ? { room: state.room, game: state.game }
         : null
-      : completedGame && completedGameKey !== dismissedCompletedGameKey
-        ? completedGame
-        : null;
-  const roundResultsKey = roundResults?.room?.code
-    ? `${roundResults.room.code}:${roundResults.game.round}`
-    : null;
+      : completedGame;
   const roundResultPlayers = playersForResults(roundResults?.room ?? null, state.room);
   const isBootstrappingConnection = isGameRouteSnapshotResolving(state);
   const currentPageTitle = roundResults
@@ -201,12 +192,6 @@ export function ProtectedHome() {
     return playTable(play);
   }
 
-  function handleReturnToLobby() {
-    if (roundResultsKey) {
-      setDismissedCompletedGameKey(roundResultsKey);
-    }
-  }
-
   if (isBootstrappingConnection) {
     return (
       <>
@@ -235,7 +220,6 @@ export function ProtectedHome() {
                 isDealChooser: Boolean(isDealChooser),
               }}
               onStartNextRound={startNextRound}
-              onReturnToLobby={handleReturnToLobby}
               onChooseDealing={chooseDealing}
               onSendEmote={sendEmote}
               social={state.social}

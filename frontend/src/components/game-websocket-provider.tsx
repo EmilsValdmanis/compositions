@@ -259,6 +259,7 @@ type GameWebSocketContextValue = {
   state: LobbyState;
   connect: () => Promise<void>;
   disconnect: () => void;
+  dismissCompletedGame: () => void;
   createRoom: () => void;
   joinRoom: (roomCode: string) => void;
   sendFriendRequest: (userId: string) => Promise<ActionResult>;
@@ -813,6 +814,11 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     state,
     connect,
     disconnect,
+    dismissCompletedGame: () =>
+      updateState((current) => ({
+        ...current,
+        completedGame: null,
+      })),
     createRoom: () => send("create_room", {}),
     joinRoom: (roomCode) => send("join_room", { roomCode }),
     sendFriendRequest: (userId) => send("send_friend_request", { userId }, { awaitResult: true }),
