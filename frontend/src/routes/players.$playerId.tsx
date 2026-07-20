@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { PlayerProfilePage } from "#/components/routes/player-profile-page";
-import { AppNavigation } from "#/components/routes/protected-layout";
+import { AppShell } from "#/components/routes/protected-layout";
 import { getPlayerGameHistory, getPlayerProfile } from "#/lib/player-profile";
 import { pageTitle } from "#/lib/page-title";
 import { createSocialMeta } from "#/lib/social-meta";
@@ -61,15 +61,12 @@ function PlayerProfileRoute() {
   const { session } = Route.useRouteContext();
 
   return (
-    <>
-      <AppNavigation />
-      <main className="flex min-h-0 w-full flex-1 flex-col p-4 md:p-6">
-        <PlayerProfilePage
-          profile={profile}
-          initialHistory={history}
-          isOwnProfile={session?.user.id === profile.id}
-        />
-      </main>
-    </>
+    <AppShell contentClassName="p-4 pt-12 md:p-6">
+      <PlayerProfilePage
+        profile={profile}
+        initialHistory={history}
+        isOwnProfile={session?.user.id === profile.id}
+      />
+    </AppShell>
   );
 }
