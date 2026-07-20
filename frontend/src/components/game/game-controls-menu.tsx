@@ -37,12 +37,17 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field";
+import { SidebarMenuButton } from "#/components/ui/sidebar";
 import { Textarea } from "#/components/ui/textarea";
 import { m } from "#/paraglide/messages.js";
 
 type OpenDialog = "forfeit" | "end" | "report" | null;
 
-export function GameControlsMenu() {
+export function GameControlsMenu({
+  presentation = "button",
+}: {
+  presentation?: "button" | "sidebar";
+}) {
   const { state, forfeitGame, requestEndGame, reportIssue } = useGameWebSocket();
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [description, setDescription] = useState("");
@@ -95,12 +100,21 @@ export function GameControlsMenu() {
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button type="button" variant="ghost" size="icon" aria-label={m.game_controls()} />
+            presentation === "sidebar" ? (
+              <SidebarMenuButton tooltip={m.game_controls()} />
+            ) : (
+              <Button type="button" variant="ghost" size="icon" aria-label={m.game_controls()} />
+            )
           }
         >
           <HugeiconsIcon icon={MoreVerticalIcon} />
+          {presentation === "sidebar" ? <span>{m.game_controls()}</span> : null}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent
+          align={presentation === "sidebar" ? "start" : "end"}
+          side={presentation === "sidebar" ? "right" : "bottom"}
+          className="w-56"
+        >
           <DropdownMenuGroup>
             <DropdownMenuItem disabled={hasActiveProposal} onClick={() => setOpenDialog("end")}>
               <HugeiconsIcon icon={Agreement01Icon} />

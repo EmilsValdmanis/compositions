@@ -30,6 +30,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { SidebarMenuButton } from "#/components/ui/sidebar";
 import { useTheme } from "#/components/theme-provider";
 import { Caption, P } from "#/components/typography";
 import { authClient } from "#/lib/auth-client";
@@ -47,7 +48,7 @@ import { m } from "#/paraglide/messages.js";
 
 const rootRouteApi = getRouteApi("__root__");
 
-export function UserDropdown() {
+export function UserDropdown({ presentation = "button" }: { presentation?: "button" | "sidebar" }) {
   const { session } = rootRouteApi.useRouteContext();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
@@ -84,14 +85,32 @@ export function UserDropdown() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          render={<Button variant="ghost" size="icon" aria-label={m.account_menu()} />}
+          render={
+            presentation === "sidebar" ? (
+              <SidebarMenuButton size="lg" tooltip={m.account_menu()} />
+            ) : (
+              <Button variant="ghost" size="icon" aria-label={m.account_menu()} />
+            )
+          }
         >
           <Avatar>
             <AvatarImage src={user?.image || ""} />
             <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
+          {presentation === "sidebar" ? (
+            <span className="flex min-w-0 flex-col items-start">
+              <span className="truncate font-medium">{displayName || m.account()}</span>
+              {user?.email ? (
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+              ) : null}
+            </span>
+          ) : null}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent
+          align="end"
+          side={presentation === "sidebar" ? "right" : "bottom"}
+          className="w-56"
+        >
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex flex-col gap-0.5">
               <P size="sm" className="font-medium text-foreground">

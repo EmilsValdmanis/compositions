@@ -9,6 +9,7 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Separator } from "./ui/separator";
+import { SidebarMenuButton } from "./ui/sidebar";
 import { Spinner } from "./ui/spinner";
 import { m } from "#/paraglide/messages.js";
 
@@ -25,7 +26,11 @@ const serverVariants = {
   offline: "destructive",
 } as const;
 
-export function ServerStatusBadge() {
+export function ServerStatusBadge({
+  presentation = "button",
+}: {
+  presentation?: "button" | "sidebar";
+}) {
   const { state, connect } = useGameWebSocket();
 
   const { data, isFetching, isPending } = useQuery({
@@ -51,16 +56,25 @@ export function ServerStatusBadge() {
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="icon" className="relative" />}>
+      <PopoverTrigger
+        render={
+          presentation === "sidebar" ? (
+            <SidebarMenuButton tooltip={m.connection_status()} className="relative" />
+          ) : (
+            <Button variant="outline" size="icon" className="relative" />
+          )
+        }
+      >
         <HugeiconsIcon icon={BadgeInfoIcon} />
+        {presentation === "sidebar" ? <span>{m.connection_status()}</span> : null}
         {hasIssue && (
-          <span className="absolute right-0 top-0 flex size-2.5">
+          <span className="absolute top-0 right-0 flex size-2.5">
             <span className="bg-destructive absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" />
             <span className="bg-destructive relative inline-flex size-2.5 rounded-full" />
           </span>
         )}
       </PopoverTrigger>
-      <PopoverContent align="start">
+      <PopoverContent align="start" side={presentation === "sidebar" ? "right" : "bottom"}>
         <div className="space-y-1">
           <H6>{m.connection_status()}</H6>
           <Caption>{m.connection_diagnostics()}</Caption>

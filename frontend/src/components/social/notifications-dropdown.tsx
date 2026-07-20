@@ -36,10 +36,16 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "#/components/ui/popover";
+import { SidebarMenuButton } from "#/components/ui/sidebar";
+import { cn } from "#/lib/utils";
 import { getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
-export function NotificationsDropdown() {
+export function NotificationsDropdown({
+  presentation = "button",
+}: {
+  presentation?: "button" | "sidebar";
+}) {
   const { state, respondFriendRequest, respondGameInvite } = useGameWebSocket();
   const navigate = useNavigate();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
@@ -92,26 +98,37 @@ export function NotificationsDropdown() {
     <Popover>
       <PopoverTrigger
         render={
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label={m.notifications()}
-            className="relative"
-          />
+          presentation === "sidebar" ? (
+            <SidebarMenuButton tooltip={m.notifications()} className="relative" />
+          ) : (
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={m.notifications()}
+              className="relative"
+            />
+          )
         }
       >
         <HugeiconsIcon icon={Notification02Icon} />
+        {presentation === "sidebar" ? <span>{m.notifications()}</span> : null}
         {notificationCount > 0 ? (
           <Badge
             variant="destructive"
-            className="absolute -top-1 -right-1 h-5 min-w-5 justify-center px-1 text-[0.65rem]"
+            className={cn(
+              "h-5 min-w-5 justify-center px-1 text-[0.65rem]",
+              presentation === "sidebar"
+                ? "ml-auto group-data-[collapsible=icon]:hidden"
+                : "absolute -top-1 -right-1",
+            )}
           >
             {notificationCount > 9 ? "9+" : notificationCount}
           </Badge>
         ) : null}
       </PopoverTrigger>
       <PopoverContent
-        align="end"
+        align={presentation === "sidebar" ? "start" : "end"}
+        side={presentation === "sidebar" ? "right" : "bottom"}
         className="max-h-[min(32rem,var(--available-height))] w-88 overflow-y-auto"
       >
         <PopoverHeader>
