@@ -70,9 +70,7 @@ describe("PlayerStrip", () => {
     expect(container.querySelector('[data-slot="item"]')?.getAttribute("data-variant")).toBe(
       "primary",
     );
-    expect(container.querySelector('[data-slot="avatar-badge"]')?.className).toContain(
-      "ring-primary",
-    );
+    expect(container.querySelector('[data-slot="avatar-badge"]')?.className).toContain("ring-card");
   });
 
   it("shows a skull instead of the turn spinner for a forfeited player", () => {
