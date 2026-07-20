@@ -1,9 +1,9 @@
 import { Home01Icon, RankingIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link, getRouteApi, useMatchRoute } from "@tanstack/react-router";
+import { Link, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
-import { ServerStatusBadge } from "#/components/server-status-badge";
-import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
+import { useGameWebSocket } from "#/components/game-websocket-provider";
+import { SidebarFriendsList } from "#/components/social/friends-list";
 import {
   Sidebar,
   SidebarContent,
@@ -15,33 +15,41 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
   useSidebar,
 } from "#/components/ui/sidebar";
 import { UserDropdown } from "#/components/user-dropdown";
+import { useAppPage } from "#/lib/app-navigation";
 import { m } from "#/paraglide/messages.js";
 
 const rootRouteApi = getRouteApi("__root__");
 
 export function AppSidebar() {
   const { session } = rootRouteApi.useRouteContext();
-  const matchRoute = useMatchRoute();
+  const { state, sendGameInvite } = useGameWebSocket();
   const { setOpenMobile } = useSidebar();
-  const isLobby = Boolean(matchRoute({ to: "/", fuzzy: false }));
-  const isLeaderboard = Boolean(matchRoute({ to: "/leaderboard", fuzzy: false }));
+  const currentPage = useAppPage();
+  const players = state.room?.players ?? [];
+  const canInvite = Boolean(
+    state.room &&
+    state.room.phase === "lobby" &&
+    !state.room.pendingDealChoice &&
+    players.length < 4,
+  );
+  const unavailableUserIds = players.flatMap((player) => (player.userId ? [player.userId] : []));
 
   function closeMobileSidebar() {
     setOpenMobile(false);
   }
 
   return (
-    <Sidebar side="left" collapsible="icon">
+    <Sidebar side="left" variant="floating" collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
               tooltip={m.back_to_lobby()}
-              isActive={isLobby}
               render={<Link to="/" onClick={closeMobileSidebar} />}
             >
               <img src="/favicon.svg" alt="" className="size-8" aria-hidden="true" />
@@ -51,14 +59,14 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
+      <SidebarContent className="overflow-hidden">
+        <SidebarGroup className="shrink-0">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip={m.lobby()}
-                  isActive={isLobby}
+                  isActive={currentPage === "lobby"}
                   render={<Link to="/" onClick={closeMobileSidebar} />}
                 >
                   <HugeiconsIcon icon={Home01Icon} />
@@ -68,31 +76,34 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip={m.leaderboard()}
-                  isActive={isLeaderboard}
+                  isActive={currentPage === "leaderboard"}
                   render={<Link to="/leaderboard" onClick={closeMobileSidebar} />}
                 >
                   <HugeiconsIcon icon={RankingIcon} />
                   <span>{m.leaderboard()}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {session ? (
-                <SidebarMenuItem>
-                  <NotificationsDropdown presentation="sidebar" />
-                </SidebarMenuItem>
-              ) : null}
               <SidebarMenuItem>
                 <GameControlsMenu presentation="sidebar" />
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {session ? (
+          <>
+            <SidebarSeparator />
+            <SidebarFriendsList
+              friends={state.social.friends}
+              canInvite={canInvite}
+              unavailableUserIds={unavailableUserIds}
+              onInvite={sendGameInvite}
+            />
+          </>
+        ) : null}
       </SidebarContent>
 
       <SidebarFooter>
         <SidebarMenu>
-          <SidebarMenuItem>
-            <ServerStatusBadge presentation="sidebar" />
-          </SidebarMenuItem>
           {session ? (
             <SidebarMenuItem>
               <UserDropdown presentation="sidebar" />

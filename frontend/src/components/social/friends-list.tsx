@@ -3,8 +3,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 import { type SocialUser } from "#/components/game-websocket-provider";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
-import { Badge } from "#/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
 import {
   Empty,
   EmptyDescription,
@@ -13,17 +11,18 @@ import {
   EmptyTitle,
 } from "#/components/ui/empty";
 import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemGroup,
-  ItemMedia,
-  ItemTitle,
-} from "#/components/ui/item";
-import { getUserInitials } from "#/lib/utils";
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuAction,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "#/components/ui/sidebar";
+import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
-export function FriendsList({
+export function SidebarFriendsList({
   friends,
   canInvite,
   unavailableUserIds = [],
@@ -51,67 +50,53 @@ export function FriendsList({
   }
 
   return (
-    <Card className="min-w-0 border border-border/70 shadow-sm">
-      <CardHeader>
-        <CardTitle>{m.friends()}</CardTitle>
-        <CardDescription>{m.friends_description()}</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <SidebarGroup className="min-h-0 flex-1 overflow-hidden pt-0 group-data-[collapsible=icon]:hidden">
+      <SidebarGroupLabel>{m.friends()}</SidebarGroupLabel>
+      <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
         {sortedFriends.length === 0 ? (
-          <Empty className="p-6">
+          <Empty className="p-3">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <HugeiconsIcon icon={UserGroupIcon} />
               </EmptyMedia>
               <EmptyTitle>{m.no_friends()}</EmptyTitle>
-              <EmptyDescription>{m.no_friends_description()}</EmptyDescription>
+              <EmptyDescription className="text-xs">{m.no_friends_description()}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
-          <ItemGroup className="gap-2">
+          <SidebarMenu>
             {sortedFriends.map((friend) => {
               const inviteEnabled = canInvite && friend.online && !unavailable.has(friend.id);
               return (
-                <Item
-                  key={friend.id}
-                  variant="muted"
-                  size="sm"
-                  render={
-                    inviteEnabled ? (
-                      <button
-                        type="button"
-                        aria-label={m.invite_to_game()}
-                        onClick={() => void invite(friend)}
-                      />
-                    ) : undefined
-                  }
-                >
-                  <ItemMedia>
-                    <Avatar>
+                <SidebarMenuItem key={friend.id}>
+                  <SidebarMenuButton render={<div />}>
+                    <Avatar size="sm">
                       {friend.imageUrl ? (
                         <AvatarImage src={friend.imageUrl} alt={friend.name} />
                       ) : null}
                       <AvatarFallback>{getUserInitials(friend.name)}</AvatarFallback>
                       <AvatarBadge
-                        className={friend.online ? "bg-primary" : "bg-muted-foreground"}
+                        title={friend.online ? m.friend_online() : m.friend_offline()}
+                        className={cn(friend.online ? "bg-primary" : "bg-muted-foreground")}
                       />
                     </Avatar>
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{friend.name}</ItemTitle>
-                  </ItemContent>
-                  <ItemActions>
-                    {inviteEnabled ? <HugeiconsIcon icon={GameController03Icon} /> : null}
-                    <Badge variant={friend.online ? "secondary" : "outline"}>
-                      {friend.online ? m.friend_online() : m.friend_offline()}
-                    </Badge>
-                  </ItemActions>
-                </Item>
+                    <span>{friend.name}</span>
+                  </SidebarMenuButton>
+                  {inviteEnabled ? (
+                    <SidebarMenuAction
+                      type="button"
+                      aria-label={m.invite_to_game()}
+                      onClick={() => void invite(friend)}
+                    >
+                      <HugeiconsIcon icon={GameController03Icon} />
+                    </SidebarMenuAction>
+                  ) : null}
+                </SidebarMenuItem>
               );
             })}
-          </ItemGroup>
+          </SidebarMenu>
         )}
-      </CardContent>
-    </Card>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }

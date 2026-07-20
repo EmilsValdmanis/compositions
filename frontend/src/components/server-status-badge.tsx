@@ -61,7 +61,12 @@ export function ServerStatusBadge({
           presentation === "sidebar" ? (
             <SidebarMenuButton tooltip={m.connection_status()} className="relative" />
           ) : (
-            <Button variant="outline" size="icon" className="relative" />
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative"
+              aria-label={m.connection_status()}
+            />
           )
         }
       >
@@ -74,7 +79,10 @@ export function ServerStatusBadge({
           </span>
         )}
       </PopoverTrigger>
-      <PopoverContent align="start" side={presentation === "sidebar" ? "right" : "bottom"}>
+      <PopoverContent
+        align={presentation === "sidebar" ? "start" : "end"}
+        side={presentation === "sidebar" ? "right" : "bottom"}
+      >
         <div className="space-y-1">
           <H6>{m.connection_status()}</H6>
           <Caption>{m.connection_diagnostics()}</Caption>
