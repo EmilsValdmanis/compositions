@@ -21,7 +21,7 @@
     "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@hugeicons/core-free-icons": "4.2.2",
     "@hugeicons/react": "1.1.9",
-    "@number-flow/react": "0.6.1",
+    "@number-flow/react": "0.6.2",
     "@rexa-developer/tiks": "0.3.0",
     "@sentry/tanstackstart-react": "10.66.0",
     "@tailwindcss/vite": "4.3.3",
