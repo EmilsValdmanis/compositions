@@ -1,8 +1,14 @@
-import { ArrowLeft02Icon, ArrowRight01Icon, Share08Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowLeft02Icon,
+  ArrowRight01Icon,
+  GameController03Icon,
+  Grid2X2Icon,
+  RankingIcon,
+  ZapIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -14,6 +20,13 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "#/components/ui/empty";
 import { Separator } from "#/components/ui/separator";
 import { Spinner } from "#/components/ui/spinner";
 import {
@@ -80,18 +93,16 @@ function formatPlaytime(totalSeconds: number) {
 
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
   return (
-    <Card size="sm" className="h-full">
-      <CardHeader className="gap-2">
-        <CardDescription className="min-h-4 text-xs/4 font-medium tracking-[0.08em] text-pretty uppercase">
-          {label}
-        </CardDescription>
-        <H2 className="font-medium tracking-tight tabular-nums" data-slot="card-title">
-          {value}
-        </H2>
+    <Card size="sm" className="h-full gap-1">
+      <CardHeader>
+        <CardTitle>{label}</CardTitle>
       </CardHeader>
-      <CardContent className="mt-auto">
-        <Caption className="text-pretty">{note}</Caption>
+      <CardContent>
+        <H2 className="font-medium tracking-tight tabular-nums">{value}</H2>
       </CardContent>
+      <CardFooter>
+        <Caption className="text-pretty">{note}</Caption>
+      </CardFooter>
     </Card>
   );
 }
@@ -100,25 +111,39 @@ function formatCompletedAt(value: string) {
   return COMPLETED_AT_FORMATTERS[getLocale()].format(new Date(value));
 }
 
-async function shareProfile() {
-  try {
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success(m.profile_link_copied());
-  } catch {
-    toast.error(m.profile_link_copy_failed());
-  }
+function combineStatistics(profile: PlayerProfile): PlayerProfile["rankedFull"] {
+  const { rankedFull, quick } = profile;
+
+  return {
+    gamesPlayed: rankedFull.gamesPlayed + quick.gamesPlayed,
+    gamesWon: rankedFull.gamesWon + quick.gamesWon,
+    totalPlacement: rankedFull.totalPlacement + quick.totalPlacement,
+    totalPlaytimeSeconds: rankedFull.totalPlaytimeSeconds + quick.totalPlaytimeSeconds,
+    roundsPlayed: rankedFull.roundsPlayed + quick.roundsPlayed,
+    roundsWon: rankedFull.roundsWon + quick.roundsWon,
+    compositionsCreated: rankedFull.compositionsCreated + quick.compositionsCreated,
+    setsCreated: rankedFull.setsCreated + quick.setsCreated,
+    runsCreated: rankedFull.runsCreated + quick.runsCreated,
+    pointsInflicted: rankedFull.pointsInflicted + quick.pointsInflicted,
+    penaltyPoints: rankedFull.penaltyPoints + quick.penaltyPoints,
+    currentGameWinStreak: Math.max(rankedFull.currentGameWinStreak, quick.currentGameWinStreak),
+    longestGameWinStreak: Math.max(rankedFull.longestGameWinStreak, quick.longestGameWinStreak),
+    currentRoundWinStreak: Math.max(rankedFull.currentRoundWinStreak, quick.currentRoundWinStreak),
+    longestRoundWinStreak: Math.max(rankedFull.longestRoundWinStreak, quick.longestRoundWinStreak),
+  };
 }
 
 function GameHistory({
   playerId,
   initialHistory,
+  mode,
 }: {
   playerId: string;
   initialHistory: PlayerGameHistory;
+  mode: GameHistoryFilter;
 }) {
   const [page, setPage] = useState(1);
-  const [mode, setMode] = useState<GameHistoryFilter>("all");
-  const { data, isError, isFetching } = useQuery({
+  const { data, isError, isFetching, isPending } = useQuery({
     queryKey: ["player-game-history", playerId, mode, page],
     queryFn: () => getPlayerGameHistory({ data: { playerId, page, pageSize: 10, mode } }),
     initialData: page === 1 && mode === "all" ? initialHistory : undefined,
@@ -129,47 +154,9 @@ function GameHistory({
 
   return (
     <Card>
-      <CardHeader className="border-b">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <CardTitle>{m.game_history()}</CardTitle>
-            <CardDescription>{m.game_history_description()}</CardDescription>
-          </div>
-          <ToggleGroup
-            value={[mode]}
-            onValueChange={(value) => {
-              const nextMode = value[0];
-              if (nextMode === "all" || nextMode === "full" || nextMode === "quick") {
-                setMode(nextMode);
-                setPage(1);
-              }
-            }}
-            variant="outline"
-            spacing={0}
-            size="sm"
-            aria-label={m.game_history_filter()}
-            className="grid w-full grid-cols-3 sm:flex sm:w-fit"
-          >
-            <ToggleGroupItem
-              value="all"
-              className="h-auto min-h-8 min-w-0 px-2 text-center whitespace-normal sm:px-3 sm:whitespace-nowrap"
-            >
-              {m.all_modes()}
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="full"
-              className="h-auto min-h-8 min-w-0 px-2 text-center whitespace-normal sm:px-3 sm:whitespace-nowrap"
-            >
-              {m.ranked_full()}
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="quick"
-              className="h-auto min-h-8 min-w-0 px-2 text-center whitespace-normal sm:px-3 sm:whitespace-nowrap"
-            >
-              {m.quick_game()}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+      <CardHeader>
+        <CardTitle>{m.game_history()}</CardTitle>
+        <CardDescription>{m.game_history_description()}</CardDescription>
       </CardHeader>
 
       {isError ? (
@@ -178,6 +165,26 @@ function GameHistory({
             {m.game_history_error()}
           </P>
         </CardContent>
+      ) : isPending ? (
+        <CardContent className="flex justify-center py-12">
+          <Spinner />
+        </CardContent>
+      ) : history.games.length === 0 ? (
+        <Empty className="border-0 py-12">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={GameController03Icon} aria-hidden="true" />
+            </EmptyMedia>
+            <EmptyTitle>
+              {mode === "full"
+                ? m.no_ranked_history()
+                : mode === "quick"
+                  ? m.no_quick_history()
+                  : m.no_game_history()}
+            </EmptyTitle>
+            <EmptyDescription>{m.game_history_empty_description()}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <Table aria-label={m.game_history()} className={isFetching ? "opacity-60" : undefined}>
           <TableHeader>
@@ -226,30 +233,32 @@ function GameHistory({
         </Table>
       )}
 
-      <CardFooter className="justify-between gap-3 border-t">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page <= 1 || isFetching}
-          onClick={() => setPage((current) => Math.max(1, current - 1))}
-        >
-          <HugeiconsIcon icon={ArrowLeft02Icon} data-icon="inline-start" />
-          {m.previous()}
-        </Button>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
-          {isFetching ? <Spinner className="size-3" /> : null}
-          {m.page_of({ page: history.page, total: Math.max(history.totalPages, 1) })}
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={page >= history.totalPages || isFetching}
-          onClick={() => setPage((current) => current + 1)}
-        >
-          {m.next()}
-          <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
-        </Button>
-      </CardFooter>
+      {!isPending && history.totalPages > 1 ? (
+        <CardFooter className="justify-between gap-3 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || isFetching}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            <HugeiconsIcon icon={ArrowLeft02Icon} data-icon="inline-start" />
+            {m.previous()}
+          </Button>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+            {isFetching ? <Spinner className="size-3" /> : null}
+            {m.page_of({ page: history.page, total: history.totalPages })}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= history.totalPages || isFetching}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            {m.next()}
+            <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
+          </Button>
+        </CardFooter>
+      ) : null}
     </Card>
   );
 }
@@ -270,29 +279,49 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 export function PlayerProfilePage({
   profile,
   initialHistory,
-  isOwnProfile,
 }: {
   profile: PlayerProfile;
   initialHistory: PlayerGameHistory;
-  isOwnProfile: boolean;
 }) {
-  const [profileMode, setProfileMode] = useState<"rankedFull" | "quick">("rankedFull");
-  const statistics = profile[profileMode];
+  const [profileMode, setProfileMode] = useState<GameHistoryFilter>("all");
+  const statistics =
+    profileMode === "all"
+      ? combineStatistics(profile)
+      : profileMode === "full"
+        ? profile.rankedFull
+        : profile.quick;
   const hasGames = statistics.gamesPlayed > 0;
-  const hasAnyGames = profile.rankedFull.gamesPlayed > 0 || profile.quick.gamesPlayed > 0;
   const isQuick = profileMode === "quick";
+  const isAll = profileMode === "all";
   const compositions = statistics.compositionsCreated;
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
-      {isOwnProfile ? (
-        <div className="flex justify-end">
-          <Button variant="ghost" size="sm" onClick={() => void shareProfile()}>
-            <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
-            {m.share_profile()}
-          </Button>
-        </div>
-      ) : null}
+      <ToggleGroup
+        value={[profileMode]}
+        onValueChange={(value) => {
+          const nextMode = value[0];
+          if (nextMode === "all" || nextMode === "full" || nextMode === "quick") {
+            setProfileMode(nextMode);
+          }
+        }}
+        variant="outline"
+        spacing={0}
+        aria-label={m.profile_statistics_mode()}
+      >
+        <ToggleGroupItem value="all">
+          <HugeiconsIcon icon={Grid2X2Icon} data-icon="inline-start" />
+          {m.all()}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="full">
+          <HugeiconsIcon icon={RankingIcon} data-icon="inline-start" />
+          {m.ranked()}
+        </ToggleGroupItem>
+        <ToggleGroupItem value="quick">
+          <HugeiconsIcon icon={ZapIcon} data-icon="inline-start" />
+          {m.quick()}
+        </ToggleGroupItem>
+      </ToggleGroup>
 
       <Card className="overflow-hidden">
         <CardHeader>
@@ -309,12 +338,6 @@ export function PlayerProfilePage({
               </AvatarFallback>
             </Avatar>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <Caption
-                className="font-medium tracking-[0.18em] uppercase"
-                data-slot="card-description"
-              >
-                {m.player_profile()}
-              </Caption>
               <H1 className="truncate">{profile.name}</H1>
               <div className="mt-1 flex flex-wrap gap-2">
                 <Badge variant={profile.rankedFull.gamesPlayed > 0 ? "secondary" : "outline"}>
@@ -329,30 +352,22 @@ export function PlayerProfilePage({
         </CardHeader>
       </Card>
 
-      <ToggleGroup
-        value={[profileMode]}
-        onValueChange={(value) => {
-          const nextMode = value[0];
-          if (nextMode === "rankedFull" || nextMode === "quick") setProfileMode(nextMode);
-        }}
-        variant="outline"
-        spacing={0}
-        aria-label={m.profile_statistics_mode()}
-      >
-        <ToggleGroupItem value="rankedFull">{m.ranked_full()}</ToggleGroupItem>
-        <ToggleGroupItem value="quick">{m.quick_game()}</ToggleGroupItem>
-      </ToggleGroup>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label={m.games_played()}
           value={String(statistics.gamesPlayed)}
-          note={isQuick ? m.quick_finishes() : m.ranked_finishes()}
+          note={isAll ? m.all_finishes() : isQuick ? m.quick_finishes() : m.ranked_finishes()}
         />
         <StatCard
           label={m.total_playtime()}
           value={formatPlaytime(statistics.totalPlaytimeSeconds)}
-          note={isQuick ? m.completed_quick_games() : m.completed_ranked_games()}
+          note={
+            isAll
+              ? m.completed_games()
+              : isQuick
+                ? m.completed_quick_games()
+                : m.completed_ranked_games()
+          }
         />
         <StatCard
           label={m.win_rate()}
@@ -374,9 +389,15 @@ export function PlayerProfilePage({
       {!hasGames ? (
         <Card>
           <CardHeader>
-            <CardTitle>{isQuick ? m.no_quick_history() : m.no_ranked_history()}</CardTitle>
+            <CardTitle>
+              {isAll ? m.no_game_history() : isQuick ? m.no_quick_history() : m.no_ranked_history()}
+            </CardTitle>
             <CardDescription>
-              {isQuick ? m.quick_stats_after_first_game() : m.stats_after_first_game()}
+              {isAll
+                ? m.game_history_empty_description()
+                : isQuick
+                  ? m.quick_stats_after_first_game()
+                  : m.stats_after_first_game()}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -406,9 +427,15 @@ export function PlayerProfilePage({
 
           <Card>
             <CardHeader>
-              <CardTitle>{isQuick ? m.quick_record() : m.competitive_record()}</CardTitle>
+              <CardTitle>
+                {isAll ? m.game_record() : isQuick ? m.quick_record() : m.competitive_record()}
+              </CardTitle>
               <CardDescription>
-                {isQuick ? m.quick_record_description() : m.competitive_record_description()}
+                {isAll
+                  ? m.game_record_description()
+                  : isQuick
+                    ? m.quick_record_description()
+                    : m.competitive_record_description()}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -430,7 +457,12 @@ export function PlayerProfilePage({
         </div>
       )}
 
-      {hasAnyGames ? <GameHistory playerId={profile.id} initialHistory={initialHistory} /> : null}
+      <GameHistory
+        key={profileMode}
+        playerId={profile.id}
+        initialHistory={initialHistory}
+        mode={profileMode}
+      />
     </section>
   );
 }

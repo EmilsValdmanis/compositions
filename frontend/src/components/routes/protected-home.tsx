@@ -6,8 +6,7 @@ import { EndGameProposalAlert } from "#/components/game/end-game-proposal-alert"
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName, playersForResults } from "#/components/game/game-view-helpers";
-import { useGameWebSocket } from "#/components/game-websocket-provider";
-import { type GameMode } from "#/components/game-websocket-provider";
+import { type GameMode, useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
 import { useGameSoundEvents } from "#/lib/game-sound-events";

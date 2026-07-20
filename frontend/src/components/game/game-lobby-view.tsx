@@ -8,7 +8,14 @@ import {
   type RoomSnapshot,
   type SocialState,
 } from "#/components/game-websocket-provider";
-import { ChevronDownIcon, Copy01Icon, CopyLinkIcon, Share08Icon } from "@hugeicons/core-free-icons";
+import {
+  ChevronDownIcon,
+  Copy01Icon,
+  CopyLinkIcon,
+  RankingIcon,
+  Share08Icon,
+  ZapIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
@@ -99,6 +106,7 @@ export function GameLobbyView({
   const victorPlayerId = completedGame?.game.players[completedGame.game.roundWinnerIndex]?.playerId;
   const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
   const connectedCount = players.filter((player) => player.connected).length;
+  const isHost = Boolean(room && currentPlayerId === room.hostPlayerId);
 
   return (
     <div
@@ -160,31 +168,43 @@ export function GameLobbyView({
                   </DropdownMenu>
                 </div>
               </div>
-              <FieldSet>
-                <FieldLegend variant="label">{m.game_mode()}</FieldLegend>
-                <ToggleGroup
-                  value={[gameMode]}
-                  onValueChange={(value) => {
-                    const nextMode = value[0];
-                    if (nextMode === "quick" || nextMode === "full") onGameModeChange?.(nextMode);
-                  }}
-                  disabled={!canSelectGameMode}
-                  variant="outline"
-                  spacing={0}
-                  className="grid w-full grid-cols-2"
-                  aria-label={m.game_mode()}
-                >
-                  <ToggleGroupItem value="quick">{m.quick_game()}</ToggleGroupItem>
-                  <ToggleGroupItem value="full">{m.full_game()}</ToggleGroupItem>
-                </ToggleGroup>
-                <FieldDescription>
-                  {gameMode === "quick" ? m.quick_game_description() : m.full_game_description()}
-                </FieldDescription>
-              </FieldSet>
-              <div className="grid grid-cols-2 gap-2">
-                <Button type="button" onClick={onStartGame} disabled={!canStartGame}>
-                  {m.start_game()}
-                </Button>
+              {isHost ? (
+                <FieldSet>
+                  <FieldLegend variant="label">{m.game_mode()}</FieldLegend>
+                  <ToggleGroup
+                    value={[gameMode]}
+                    onValueChange={(value) => {
+                      const nextMode = value[0];
+                      if (nextMode === "quick" || nextMode === "full") {
+                        onGameModeChange?.(nextMode);
+                      }
+                    }}
+                    disabled={!canSelectGameMode}
+                    variant="outline"
+                    spacing={0}
+                    className="grid w-full grid-cols-2"
+                    aria-label={m.game_mode()}
+                  >
+                    <ToggleGroupItem value="full">
+                      <HugeiconsIcon icon={RankingIcon} data-icon="inline-start" />
+                      {m.ranked()}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem value="quick">
+                      <HugeiconsIcon icon={ZapIcon} data-icon="inline-start" />
+                      {m.quick()}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                  <FieldDescription>
+                    {gameMode === "quick" ? m.quick_game_description() : m.full_game_description()}
+                  </FieldDescription>
+                </FieldSet>
+              ) : null}
+              <div className={cn("grid gap-2", isHost && "grid-cols-2")}>
+                {isHost ? (
+                  <Button type="button" onClick={onStartGame} disabled={!canStartGame}>
+                    {m.start_game()}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="destructive"

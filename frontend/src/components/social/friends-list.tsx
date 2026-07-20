@@ -149,7 +149,7 @@ export function SidebarFriendsList({
                           title={friend.online ? m.friend_online() : m.friend_offline()}
                           className={cn(
                             "ring-sidebar",
-                            friend.online ? "bg-primary" : "bg-muted-foreground",
+                            friend.online ? "bg-primary" : "bg-destructive",
                           )}
                         />
                       </Avatar>

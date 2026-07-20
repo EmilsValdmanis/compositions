@@ -3,37 +3,30 @@ import { AppSidebar } from "#/components/app-sidebar";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
-import { cn } from "#/lib/utils";
 
 const rootRouteApi = getRouteApi("__root__");
 
 export function ProtectedLayout() {
   return (
-    <AppShell contentClassName="gap-2 md:gap-4 [@media(max-height:600px)]:gap-2 [@media(max-height:600px)]:p-2">
+    <AppShell>
       <Outlet />
     </AppShell>
   );
 }
 
-export function AppShell({
-  children,
-  contentClassName,
-}: {
-  children: React.ReactNode;
-  contentClassName?: string;
-}) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const { sidebarOpen } = rootRouteApi.useRouteContext();
 
   return (
     <SidebarProvider
       defaultOpen={sidebarOpen === "true"}
       className="h-full min-h-0! flex-1"
-      style={{ "--sidebar-width": "19rem" } as React.CSSProperties}
+      style={{ "--sidebar-width": "18rem" } as React.CSSProperties}
     >
       <AppSidebar />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader />
-        <div className={cn("flex min-h-0 w-full flex-1 flex-col p-2 pb-1", contentClassName)}>
+        <div className="flex min-h-0 w-full flex-1 flex-col p-2 md:pb-1 gap-2 md:gap-4 [@media(max-height:600px)]:gap-2 overflow-y-auto">
           {children}
         </div>
       </SidebarInset>
@@ -45,7 +38,7 @@ function AppHeader() {
   const { session } = rootRouteApi.useRouteContext();
 
   return (
-    <header className="flex shrink-0 items-center gap-2 h-12 md:h-16 px-2 transition-[width,height] ease-linear">
+    <header className="flex shrink-0 items-center gap-2 h-12 md:h-16 px-2">
       <SidebarTrigger />
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <ServerStatusBadge />
