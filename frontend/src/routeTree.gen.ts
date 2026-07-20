@@ -9,35 +9,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthRouteImport } from './routes/_auth'
-import { Route as ProtectedIndexRouteImport } from './routes/_protected/index'
-import { Route as PlayersPlayerIdRouteImport } from './routes/players.$playerId'
-import { Route as ProtectedLeaderboardRouteImport } from './routes/_protected/leaderboard'
-import { Route as ProtectedDevUiRouteImport } from './routes/_protected/dev-ui'
+import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
+import { Route as ProtectedIndexRouteImport } from './routes/_protected/index'
+import { Route as ProtectedDevUiRouteImport } from './routes/_protected/dev-ui'
+import { Route as ProtectedLeaderboardRouteImport } from './routes/_protected/leaderboard'
+import { Route as PlayersPlayerIdRouteImport } from './routes/players.$playerId'
 
-const ProtectedRoute = ProtectedRouteImport.update({
-  id: '/_protected',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProtectedRoute = ProtectedRouteImport.update({
+  id: '/_protected',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthSignInRoute = AuthSignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => AuthRoute,
+} as any)
 const ProtectedIndexRoute = ProtectedIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => ProtectedRoute,
-} as any)
-const PlayersPlayerIdRoute = PlayersPlayerIdRouteImport.update({
-  id: '/players/$playerId',
-  path: '/players/$playerId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProtectedLeaderboardRoute = ProtectedLeaderboardRouteImport.update({
-  id: '/leaderboard',
-  path: '/leaderboard',
   getParentRoute: () => ProtectedRoute,
 } as any)
 const ProtectedDevUiRoute = ProtectedDevUiRouteImport.update({
@@ -45,10 +40,15 @@ const ProtectedDevUiRoute = ProtectedDevUiRouteImport.update({
   path: '/dev-ui',
   getParentRoute: () => ProtectedRoute,
 } as any)
-const AuthSignInRoute = AuthSignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => AuthRoute,
+const ProtectedLeaderboardRoute = ProtectedLeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
+  getParentRoute: () => ProtectedRoute,
+} as any)
+const PlayersPlayerIdRoute = PlayersPlayerIdRouteImport.update({
+  id: '/players/$playerId',
+  path: '/players/$playerId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -104,13 +104,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/_protected': {
-      id: '/_protected'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof ProtectedRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_auth': {
       id: '/_auth'
       path: ''
@@ -118,25 +111,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_protected': {
+      id: '/_protected'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof ProtectedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_auth/sign-in': {
+      id: '/_auth/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof AuthSignInRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_protected/': {
       id: '/_protected/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof ProtectedIndexRouteImport
-      parentRoute: typeof ProtectedRoute
-    }
-    '/players/$playerId': {
-      id: '/players/$playerId'
-      path: '/players/$playerId'
-      fullPath: '/players/$playerId'
-      preLoaderRoute: typeof PlayersPlayerIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_protected/leaderboard': {
-      id: '/_protected/leaderboard'
-      path: '/leaderboard'
-      fullPath: '/leaderboard'
-      preLoaderRoute: typeof ProtectedLeaderboardRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/dev-ui': {
@@ -146,12 +139,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedDevUiRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/_auth/sign-in': {
-      id: '/_auth/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof AuthSignInRouteImport
-      parentRoute: typeof AuthRoute
+    '/_protected/leaderboard': {
+      id: '/_protected/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof ProtectedLeaderboardRouteImport
+      parentRoute: typeof ProtectedRoute
+    }
+    '/players/$playerId': {
+      id: '/players/$playerId'
+      path: '/players/$playerId'
+      fullPath: '/players/$playerId'
+      preLoaderRoute: typeof PlayersPlayerIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }

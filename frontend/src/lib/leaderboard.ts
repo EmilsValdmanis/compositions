@@ -1,13 +1,17 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { authURL } from "#/lib/auth-shared";
 
 export const LEADERBOARD_PAGE_SIZE = 50;
 export const DEFAULT_LEADERBOARD_METRIC = "wins" as const;
+export const DEFAULT_LEADERBOARD_SCOPE = "friends" as const;
 
 export const leaderboardMetricSchema = z.enum(["wins", "games", "playtime", "rounds", "points"]);
 export type LeaderboardMetric = z.infer<typeof leaderboardMetricSchema>;
+export const leaderboardScopeSchema = z.enum(["friends", "global"]);
+export type LeaderboardScope = z.infer<typeof leaderboardScopeSchema>;
 
 export const leaderboardPlayerSchema = z.object({
   rank: z.number().int().positive(),
@@ -26,6 +30,7 @@ export type LeaderboardPlayer = z.infer<typeof leaderboardPlayerSchema>;
 
 export const leaderboardPageSchema = z.object({
   metric: leaderboardMetricSchema,
+  scope: leaderboardScopeSchema,
   players: z.array(leaderboardPlayerSchema),
   nextCursor: z.string().nullable(),
   placement: leaderboardPlayerSchema.nullable(),
@@ -37,31 +42,39 @@ export const getLeaderboardPage = createServerFn({ method: "GET" })
   .validator(
     z.object({
       cursor: z.string().nullable(),
-      playerId: z.uuid(),
       metric: leaderboardMetricSchema,
+      scope: leaderboardScopeSchema,
     }),
   )
   .handler(async ({ data }) => {
+    setResponseHeader("cache-control", "private, no-store");
+    const requestHeaders = new Headers(getRequestHeaders());
+    const cookie = requestHeaders.get("cookie");
     const search = new URLSearchParams({
       limit: String(LEADERBOARD_PAGE_SIZE),
-      playerId: data.playerId,
       metric: data.metric,
+      scope: data.scope,
     });
     if (data.cursor) search.set("cursor", data.cursor);
 
     const response = await fetch(
       authURL(`/api/leaderboard?${search.toString()}`, process.env.VITE_GAME_SERVER_URL),
-      { headers: { accept: "application/json" } },
+      {
+        headers: cookie ? { accept: "application/json", cookie } : { accept: "application/json" },
+      },
     );
     if (!response.ok) throw new Error(`failed to load leaderboard: ${response.status}`);
     return leaderboardPageSchema.parse(await response.json());
   });
 
-export function leaderboardInfiniteOptions(playerId: string, metric: LeaderboardMetric) {
+export function leaderboardInfiniteOptions(
+  playerId: string,
+  metric: LeaderboardMetric,
+  scope: LeaderboardScope,
+) {
   return infiniteQueryOptions({
-    queryKey: ["leaderboard", playerId, metric],
-    queryFn: ({ pageParam }) =>
-      getLeaderboardPage({ data: { cursor: pageParam, playerId, metric } }),
+    queryKey: ["leaderboard", playerId, metric, scope],
+    queryFn: ({ pageParam }) => getLeaderboardPage({ data: { cursor: pageParam, metric, scope } }),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: 30_000,

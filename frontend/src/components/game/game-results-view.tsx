@@ -7,6 +7,7 @@ import {
   type GameSnapshot,
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
+  type SocialState,
 } from "#/components/game-websocket-provider";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { resultScoreState, type ResultScorePhase } from "#/components/game/game-results-state";
@@ -57,6 +58,8 @@ type GameResultsViewProps = {
   onReturnToLobby?: () => void;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
   onSendEmote: (emoji: string) => void;
+  social?: SocialState;
+  onSendFriendRequest?: (userId: string) => Promise<unknown>;
 };
 
 function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
@@ -202,6 +205,8 @@ export function GameResultsView({
   onReturnToLobby,
   onChooseDealing,
   onSendEmote,
+  social,
+  onSendFriendRequest,
 }: GameResultsViewProps) {
   const winner = players.find(
     (player) =>
@@ -412,6 +417,9 @@ export function GameResultsView({
         showTurnIndicator={false}
         onResetDraftCompositions={noopResetDraftCompositions}
         onSendEmote={onSendEmote}
+        currentPlayerId={playerId}
+        social={social}
+        onSendFriendRequest={onSendFriendRequest}
       />
     </div>
   );

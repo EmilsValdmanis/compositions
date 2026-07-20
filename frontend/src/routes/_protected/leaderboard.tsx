@@ -1,6 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { LeaderboardPage } from "#/components/routes/leaderboard-page";
-import { DEFAULT_LEADERBOARD_METRIC, leaderboardInfiniteOptions } from "#/lib/leaderboard";
+import {
+  DEFAULT_LEADERBOARD_METRIC,
+  DEFAULT_LEADERBOARD_SCOPE,
+  leaderboardInfiniteOptions,
+} from "#/lib/leaderboard";
 import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
 
@@ -9,7 +13,7 @@ export const Route = createFileRoute("/_protected/leaderboard")({
     const playerId = context.session?.user.id;
     if (!playerId) throw redirect({ to: "/sign-in" });
     await context.queryClient.prefetchInfiniteQuery(
-      leaderboardInfiniteOptions(playerId, DEFAULT_LEADERBOARD_METRIC),
+      leaderboardInfiniteOptions(playerId, DEFAULT_LEADERBOARD_METRIC, DEFAULT_LEADERBOARD_SCOPE),
     );
   },
   head: () => ({

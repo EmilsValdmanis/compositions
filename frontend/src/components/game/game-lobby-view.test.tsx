@@ -36,7 +36,7 @@ if (typeof globalThis.document === "undefined") {
   });
 }
 
-const { act, cleanup, fireEvent, render } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
 
 let dndContextProps: {
@@ -181,6 +181,33 @@ describe("GameLobbyView", () => {
     expect(onCreateRoom).toHaveBeenCalledTimes(1);
     expect(onRoomCodeChange).toHaveBeenCalledWith("GAME7");
     expect(onJoinRoom).toHaveBeenCalledWith("ROOM42");
+  });
+
+  it("shows friends and invites an online friend from a joinable lobby", async () => {
+    const onInviteFriend = vi.fn(async () => undefined);
+    const view = renderLobby({
+      room: makeRoom(),
+      players,
+      friends: [
+        {
+          id: "friend-1",
+          name: "Devon",
+          online: true,
+        },
+        {
+          id: "friend-2",
+          name: "Emery",
+          online: false,
+        },
+      ],
+      onInviteFriend,
+    });
+
+    expect(view.getByText("Devon")).toBeTruthy();
+    expect(view.getByText("Emery")).toBeTruthy();
+    fireEvent.click(view.getByRole("button", { name: "Invite to game" }));
+
+    await waitFor(() => expect(onInviteFriend).toHaveBeenCalledWith("friend-1"));
   });
 
   it("renders room state and non-chooser deal status", () => {

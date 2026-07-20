@@ -1549,6 +1549,41 @@ func (l *lobbyServer) requireActiveSessionConnection(sessionID string, conn *web
 	return nil
 }
 
+func (l *lobbyServer) authenticatedUserID(sessionID string) (string, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	if !session.authenticated || session.authUserID == "" {
+		return "", errAuthenticationRequired
+	}
+	return session.authUserID, nil
+}
+
+func (l *lobbyServer) joinableRoomCode(sessionID string) (string, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return "", err
+	}
+	room := l.sessionRoom(session)
+	if room == nil {
+		return "", errors.New("join a room first")
+	}
+	if room.gameState == nil || room.gameStatePhase() != game.PhaseLobby || room.pendingDealChoice != nil {
+		return "", errors.New("game already started")
+	}
+	if len(room.players) >= maxPlayersPerRoom {
+		return "", errors.New("room is full")
+	}
+	return room.code, nil
+}
+
 func (l *lobbyServer) gameStateForSession(sessionID string, roomState roomSnapshot) (*gameStateEvent, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()

@@ -1,6 +1,10 @@
 import { ChevronDownIcon, RankingIcon, UndoIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
+import {
+  type GameSnapshot,
+  type PlayerSnapshot,
+  type SocialState,
+} from "#/components/game-websocket-provider";
 import { MobilePlayerEmotes, PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { AnimatedNumber } from "#/components/ui/animated-number";
@@ -108,6 +112,9 @@ export function GameBoardPlayers({
   compactOnMobile = false,
   onResetDraftCompositions,
   onSendEmote,
+  currentPlayerId,
+  social,
+  onSendFriendRequest,
 }: {
   players: PlayerSnapshot[];
   game: GameSnapshot | null;
@@ -117,6 +124,9 @@ export function GameBoardPlayers({
   compactOnMobile?: boolean;
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
+  currentPlayerId?: string;
+  social?: SocialState;
+  onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
   const turnPlayer = players.find((player) => player.playerId === game?.turn.playerId);
   return (
@@ -159,6 +169,9 @@ export function GameBoardPlayers({
                     showHostBadges={false}
                     showTurnIndicator={showTurnIndicator}
                     emoteClassName="hidden"
+                    currentPlayerId={currentPlayerId}
+                    social={social}
+                    onSendFriendRequest={onSendFriendRequest}
                   />
 
                   {hasDraftedCompositions ? (
@@ -203,6 +216,9 @@ export function GameBoardPlayers({
             showHostBadges={false}
             showTurnIndicator={showTurnIndicator}
             emoteClassName={compactOnMobile ? "hidden xl:grid" : undefined}
+            currentPlayerId={currentPlayerId}
+            social={social}
+            onSendFriendRequest={onSendFriendRequest}
           />
 
           {hasDraftedCompositions ? (

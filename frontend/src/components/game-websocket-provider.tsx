@@ -178,6 +178,35 @@ export type ActionResult = {
   ok: boolean;
 };
 
+export type SocialUser = {
+  id: string;
+  name: string;
+  imageUrl?: string;
+  online: boolean;
+};
+
+export type FriendRequest = {
+  id: string;
+  user: SocialUser;
+  createdAt: string;
+};
+
+export type GameInvite = {
+  id: string;
+  user: SocialUser;
+  roomCode: string;
+  createdAt: string;
+  expiresAt: string;
+};
+
+export type SocialState = {
+  userId: string;
+  friends: SocialUser[];
+  incomingFriendRequests: FriendRequest[];
+  outgoingFriendRequestUserIds: string[];
+  gameInvites: GameInvite[];
+};
+
 type PendingAction = {
   expectedAction: string;
   id: number;
@@ -203,6 +232,7 @@ export type LobbyState = {
   lastErrorId: number;
   lastEvent: string | null;
   completedGame: CompletedGameSnapshot | null;
+  social: SocialState;
 };
 
 type Envelope<T = unknown> = {
@@ -215,12 +245,26 @@ type ConnectionAuth = Awaited<ReturnType<typeof getGameConnectionAuth>>;
 const reconnectBaseDelayMs = 500;
 const reconnectMaxDelayMs = 5_000;
 
+function emptySocialState(): SocialState {
+  return {
+    userId: "",
+    friends: [],
+    incomingFriendRequests: [],
+    outgoingFriendRequestUserIds: [],
+    gameInvites: [],
+  };
+}
+
 type GameWebSocketContextValue = {
   state: LobbyState;
   connect: () => Promise<void>;
   disconnect: () => void;
   createRoom: () => void;
   joinRoom: (roomCode: string) => void;
+  sendFriendRequest: (userId: string) => Promise<ActionResult>;
+  respondFriendRequest: (requestId: string, accept: boolean) => Promise<ActionResult>;
+  sendGameInvite: (userId: string) => Promise<ActionResult>;
+  respondGameInvite: (inviteId: string, accept: boolean) => Promise<ActionResult>;
   startGame: (gameMode: GameMode) => void;
   startNextRound: () => void;
   chooseDealing: (choice: DealingChoiceRequest | string) => void;
@@ -255,6 +299,7 @@ const initialState: LobbyState = {
   lastErrorId: 0,
   lastEvent: null,
   completedGame: null,
+  social: emptySocialState(),
 };
 
 const gameWebSocketStore = createStore(initialState);
@@ -289,6 +334,15 @@ function clearError(current: LobbyState, partial?: Partial<LobbyState>): LobbySt
 
 function isRejectedSessionError(code: string) {
   return code === "session_not_found" || code === "session_user_mismatch";
+}
+
+function isSocialAction(action: unknown) {
+  return (
+    action === "send_friend_request" ||
+    action === "respond_friend_request" ||
+    action === "send_game_invite" ||
+    action === "respond_game_invite"
+  );
 }
 
 const incomingMessageReducers = new Map<string, (current: LobbyState, data: any) => LobbyState>(
@@ -338,11 +392,26 @@ const incomingMessageReducers = new Map<string, (current: LobbyState, data: any)
         completedGame: null,
         lastEvent: "left_room",
       }),
+    social_state: (current, data) =>
+      clearError(current, {
+        social: {
+          userId: data?.userId ?? current.social.userId,
+          friends: Array.isArray(data?.friends) ? data.friends : [],
+          incomingFriendRequests: Array.isArray(data?.incomingFriendRequests)
+            ? data.incomingFriendRequests
+            : [],
+          outgoingFriendRequestUserIds: Array.isArray(data?.outgoingFriendRequestUserIds)
+            ? data.outgoingFriendRequestUserIds
+            : [],
+          gameInvites: Array.isArray(data?.gameInvites) ? data.gameInvites : [],
+        },
+        lastEvent: "social_state",
+      }),
     error: (current, data) => {
       const code = data?.code ?? "internal_error";
       const developerMessage =
         typeof data?.message === "string" && data.message !== "" ? data.message : code;
-      if (data?.action === "draft_update") {
+      if (data?.action === "draft_update" || isSocialAction(data?.action)) {
         return clearError(current, {
           lastEvent: "error",
         });
@@ -732,8 +801,10 @@ function useGameWebSocketController(): GameWebSocketContextValue {
 
     updateState((current) => ({
       ...current,
+      connectionStatus: "disconnected",
       room: null,
       game: null,
+      social: emptySocialState(),
       lastEvent: "manual_disconnect",
     }));
   }
@@ -744,6 +815,12 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     disconnect,
     createRoom: () => send("create_room", {}),
     joinRoom: (roomCode) => send("join_room", { roomCode }),
+    sendFriendRequest: (userId) => send("send_friend_request", { userId }, { awaitResult: true }),
+    respondFriendRequest: (requestId, accept) =>
+      send("respond_friend_request", { requestId, accept }, { awaitResult: true }),
+    sendGameInvite: (userId) => send("send_game_invite", { userId }, { awaitResult: true }),
+    respondGameInvite: (inviteId, accept) =>
+      send("respond_game_invite", { inviteId, accept }, { awaitResult: true }),
     startGame: (gameMode) =>
       send("start_game", { dealerIndex: getDealerIndex(state.room), gameMode }),
     startNextRound: () => send("start_next_round", {}),

@@ -112,6 +112,14 @@ var exactClientErrorCodes = map[string]string{
 	"invalid draft reclaim joker index":             "invalid_draft",
 	"name is required":                              "name_required",
 	"problem description is required":               "problem_required",
+	"cannot send a request to yourself":             "friend_request_self",
+	"user not found":                                "social_user_not_found",
+	"friend relationship already exists":            "friend_relationship_exists",
+	"friend request not found":                      "friend_request_not_found",
+	"game invite not found or expired":              "game_invite_not_found",
+	"players are not friends":                       "not_friends",
+	"friend is not available":                       "friend_unavailable",
+	"social features are unavailable":               "social_unavailable",
 }
 
 func clientErrorCode(err error) string {

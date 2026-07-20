@@ -21,6 +21,7 @@ import {
   type DraftCompositionSnapshot,
   type GameSnapshot,
   type PlayerSnapshot,
+  type SocialState,
   type TablePlayRequest,
   type TurnActivitySnapshot,
   useGameWebSocket,
@@ -160,6 +161,8 @@ type GameBoardViewProps = {
   ) => Promise<ActionResult> | void;
   onSendEmote: (emoji: string) => void;
   disableDraftSync?: boolean;
+  social?: SocialState;
+  onSendFriendRequest?: (userId: string) => Promise<unknown>;
 };
 
 type SubmittedCardActivity = {
@@ -291,6 +294,9 @@ function GameBoardLayout({
   invalidEntryKeys,
   onResetDraftCompositions,
   onSendEmote,
+  currentPlayerId,
+  social,
+  onSendFriendRequest,
 }: {
   boardRef: RefObject<HTMLDivElement | null>;
   game: GameSnapshot | null;
@@ -310,6 +316,9 @@ function GameBoardLayout({
   invalidEntryKeys: Set<string>;
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
+  currentPlayerId: string;
+  social?: SocialState;
+  onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
   return (
     <div
@@ -325,6 +334,9 @@ function GameBoardLayout({
           compactOnMobile
           onResetDraftCompositions={onResetDraftCompositions}
           onSendEmote={onSendEmote}
+          currentPlayerId={currentPlayerId}
+          social={social}
+          onSendFriendRequest={onSendFriendRequest}
         />
       </div>
 
@@ -1016,6 +1028,8 @@ export function GameBoardView({
   onPlayTableAndDiscard,
   onSendEmote,
   disableDraftSync,
+  social,
+  onSendFriendRequest,
 }: GameBoardViewProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(
@@ -1099,6 +1113,9 @@ export function GameBoardView({
         invalidEntryKeys={controller.invalidEntryKeys}
         onResetDraftCompositions={controller.resetDraftCompositions}
         onSendEmote={onSendEmote}
+        currentPlayerId={playerId}
+        social={social}
+        onSendFriendRequest={onSendFriendRequest}
       />
       <CardTransferAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
       <DragOverlay dropAnimation={null}>
