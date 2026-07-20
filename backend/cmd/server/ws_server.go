@@ -248,12 +248,14 @@ type playerEmoteSnapshot struct {
 }
 
 type wsServer struct {
-	lobby         *lobbyServer
-	auth          *authHandler
-	userStore     userStore
-	allowedOrigin string
-	rateLimits    *wsRateLimiters
-	upgrader      websocket.Upgrader
+	lobby          *lobbyServer
+	auth           *authHandler
+	userStore      userStore
+	socialStore    socialStore
+	socialPresence *socialPresence
+	allowedOrigin  string
+	rateLimits     *wsRateLimiters
+	upgrader       websocket.Upgrader
 }
 
 func newWSServer() *wsServer {
@@ -274,12 +276,14 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 	}
 
 	server := &wsServer{
-		lobby:         newLobbyServerWithStore(store),
-		auth:          auth,
-		userStore:     store,
-		allowedOrigin: normalizeOrigin(allowedOrigin),
-		rateLimits:    newWSRateLimiters(defaultWSRateLimitConfig()),
+		lobby:          newLobbyServerWithStore(store),
+		auth:           auth,
+		userStore:      store,
+		socialPresence: newSocialPresence(),
+		allowedOrigin:  normalizeOrigin(allowedOrigin),
+		rateLimits:     newWSRateLimiters(defaultWSRateLimitConfig()),
 	}
+	server.socialStore, _ = store.(socialStore)
 	server.upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return server.isAllowedOrigin(r.Header.Get("Origin"))
@@ -360,6 +364,7 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request) {
 	connectionEmitter := emitEvent
 	defer wsDataWriteLocks.Delete(conn)
+	defer s.socialDisconnected(conn)
 	defer conn.Close()
 	conn.SetReadLimit(defaultWSReadLimit)
 	_ = setWSReadDeadline(conn)
@@ -414,6 +419,14 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			s.handleCreateRoom(conn, sessionID, envelope)
 		case "join_room":
 			s.handleJoinRoom(conn, sessionID, envelope)
+		case "send_friend_request":
+			s.handleSendFriendRequest(conn, sessionID, envelope)
+		case "respond_friend_request":
+			s.handleRespondFriendRequest(conn, sessionID, envelope)
+		case "send_game_invite":
+			s.handleSendGameInvite(conn, sessionID, envelope)
+		case "respond_game_invite":
+			s.handleRespondGameInvite(conn, sessionID, envelope)
 		case "start_game":
 			s.handleStartGame(conn, sessionID, envelope)
 		case "choose_dealing":
@@ -483,6 +496,7 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, request *http.Request, en
 	if err := emitEvent(conn, "connected", event); err != nil {
 		return "", true
 	}
+	s.socialConnected(user.ID, conn)
 
 	slog.Info("client connected", "sessionID", event.SessionID, "playerID", event.PlayerID, "authenticated", user.isAuthenticated())
 

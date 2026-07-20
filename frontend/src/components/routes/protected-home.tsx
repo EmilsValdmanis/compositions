@@ -48,6 +48,8 @@ export function ProtectedHome() {
     startNextRound,
     chooseDealing,
     sendEmote,
+    sendGameInvite,
+    sendFriendRequest,
     drawFromDeck,
     drawFromDiscard,
     playTable,
@@ -237,6 +239,8 @@ export function ProtectedHome() {
               onReturnToLobby={handleReturnToLobby}
               onChooseDealing={chooseDealing}
               onSendEmote={sendEmote}
+              social={state.social}
+              onSendFriendRequest={sendFriendRequest}
             />
           </div>
         ) : isLobbyPhase ? (
@@ -272,6 +276,11 @@ export function ProtectedHome() {
               onSendEmote={sendEmote}
               onCopyRoomCode={copyRoomCode}
               onCopyRoomLink={copyRoomLink}
+              friends={state.social.friends}
+              onInviteFriend={sendGameInvite}
+              social={state.social}
+              currentPlayerId={state.playerId}
+              onSendFriendRequest={sendFriendRequest}
             />
           </div>
         ) : (
@@ -296,6 +305,8 @@ export function ProtectedHome() {
               onPlayTable={handlePlayTable}
               onPlayTableAndDiscard={playTableAndDiscard}
               onSendEmote={sendEmote}
+              social={state.social}
+              onSendFriendRequest={sendFriendRequest}
             />
           </div>
         )}

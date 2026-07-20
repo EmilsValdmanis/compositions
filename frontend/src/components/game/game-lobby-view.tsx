@@ -6,12 +6,15 @@ import {
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
   type RoomSnapshot,
+  type SocialUser,
+  type SocialState,
 } from "#/components/game-websocket-provider";
 import { ChevronDownIcon, Copy01Icon, CopyLinkIcon, Share08Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
+import { FriendsList } from "#/components/social/friends-list";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -65,6 +68,11 @@ type GameLobbyViewProps = {
   onSendEmote: (emoji: string) => void;
   onCopyRoomCode: AsyncAction;
   onCopyRoomLink: AsyncAction;
+  friends?: SocialUser[];
+  onInviteFriend?: (userId: string) => Promise<unknown>;
+  social?: SocialState;
+  currentPlayerId?: string;
+  onSendFriendRequest?: (userId: string) => Promise<unknown>;
 };
 
 export function GameLobbyView({
@@ -86,6 +94,11 @@ export function GameLobbyView({
   onSendEmote,
   onCopyRoomCode,
   onCopyRoomLink,
+  friends = [],
+  onInviteFriend,
+  social,
+  currentPlayerId,
+  onSendFriendRequest,
 }: GameLobbyViewProps) {
   const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame, canSelectGameMode } = roomActions;
   const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
@@ -97,7 +110,7 @@ export function GameLobbyView({
     <div
       className={cn(
         "mx-auto my-auto grid w-full gap-4 p-1",
-        room ? "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]" : "max-w-2xl",
+        "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]",
       )}
     >
       <Card className="min-w-0 border border-border/70 shadow-sm">
@@ -237,32 +250,48 @@ export function GameLobbyView({
         </CardContent>
       </Card>
 
-      {room ? (
-        <Card className="min-w-0 border border-border/70 shadow-sm">
-          <CardHeader>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <CardTitle>{m.players()}</CardTitle>
-                <CardDescription>{players.length ? m.seats() : m.no_room_yet()}</CardDescription>
-              </div>
-              {players.length ? (
-                <div className="flex items-center gap-2">
-                  <PlayerEmotePicker onSendEmote={onSendEmote} />
+      <div className="flex min-w-0 flex-col gap-4">
+        {room ? (
+          <Card className="min-w-0 border border-border/70 shadow-sm">
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <CardTitle>{m.players()}</CardTitle>
+                  <CardDescription>{players.length ? m.seats() : m.no_room_yet()}</CardDescription>
                 </div>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="min-w-0">
-            {players.length ? (
-              <PlayerStrip players={players} game={game} />
-            ) : (
-              <Caption className="rounded-2xl border border-dashed border-border/70 p-6">
-                {m.create_or_join_room()}
-              </Caption>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
+                {players.length ? (
+                  <div className="flex items-center gap-2">
+                    <PlayerEmotePicker onSendEmote={onSendEmote} />
+                  </div>
+                ) : null}
+              </div>
+            </CardHeader>
+            <CardContent className="min-w-0">
+              {players.length ? (
+                <PlayerStrip
+                  players={players}
+                  game={game}
+                  currentPlayerId={currentPlayerId}
+                  social={social}
+                  onSendFriendRequest={onSendFriendRequest}
+                />
+              ) : (
+                <Caption className="rounded-2xl border border-dashed border-border/70 p-6">
+                  {m.create_or_join_room()}
+                </Caption>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+        <FriendsList
+          friends={friends}
+          canInvite={Boolean(
+            room && room.phase === "lobby" && !pendingDealChoice && players.length < 4,
+          )}
+          unavailableUserIds={players.flatMap((player) => (player.userId ? [player.userId] : []))}
+          onInvite={onInviteFriend}
+        />
+      </div>
     </div>
   );
 }

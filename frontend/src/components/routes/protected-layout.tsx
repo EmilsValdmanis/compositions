@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, Outlet, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
+import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
 import { Button } from "#/components/ui/button";
 import { UserDropdown } from "#/components/user-dropdown";
 import { m } from "#/paraglide/messages.js";
@@ -48,6 +49,7 @@ export function AppNavigation() {
           </Button>
 
           <GameControlsMenu />
+          {session ? <NotificationsDropdown /> : null}
           {session ? <UserDropdown /> : null}
         </div>
       </div>

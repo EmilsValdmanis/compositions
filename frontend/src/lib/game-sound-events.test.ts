@@ -61,6 +61,13 @@ function makeState(overrides: Partial<LobbyState> = {}): LobbyState {
     lastErrorId: 0,
     lastEvent: "game_state",
     completedGame: null,
+    social: {
+      userId: "",
+      friends: [],
+      incomingFriendRequests: [],
+      outgoingFriendRequestUserIds: [],
+      gameInvites: [],
+    },
     ...overrides,
   };
 }

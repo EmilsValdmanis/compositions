@@ -12,12 +12,19 @@ import (
 
 type LeaderboardMetric string
 
+type LeaderboardScope string
+
 const (
 	LeaderboardMetricWins     LeaderboardMetric = "wins"
 	LeaderboardMetricGames    LeaderboardMetric = "games"
 	LeaderboardMetricPlaytime LeaderboardMetric = "playtime"
 	LeaderboardMetricRounds   LeaderboardMetric = "rounds"
 	LeaderboardMetricPoints   LeaderboardMetric = "points"
+)
+
+const (
+	LeaderboardScopeFriends LeaderboardScope = "friends"
+	LeaderboardScopeGlobal  LeaderboardScope = "global"
 )
 
 func ParseLeaderboardMetric(value string) (LeaderboardMetric, bool) {
@@ -29,6 +36,19 @@ func ParseLeaderboardMetric(value string) (LeaderboardMetric, bool) {
 	case LeaderboardMetricWins, LeaderboardMetricGames, LeaderboardMetricPlaytime,
 		LeaderboardMetricRounds, LeaderboardMetricPoints:
 		return metric, true
+	default:
+		return "", false
+	}
+}
+
+func ParseLeaderboardScope(value string) (LeaderboardScope, bool) {
+	scope := LeaderboardScope(strings.TrimSpace(value))
+	if scope == "" {
+		return LeaderboardScopeFriends, true
+	}
+	switch scope {
+	case LeaderboardScopeFriends, LeaderboardScopeGlobal:
+		return scope, true
 	default:
 		return "", false
 	}
@@ -104,18 +124,43 @@ func leaderboardRankedPlayers(metric LeaderboardMetric) (string, error) {
 		JOIN users u ON u.id = ps.user_id
 		LEFT JOIN playtimes ON playtimes.user_id = ps.user_id
 		WHERE ps.games_played > 0 AND ps.game_mode = 'full' AND ps.ranked
+			AND (
+				$1::text = 'global'
+				OR ps.user_id = $2
+				OR EXISTS (
+					SELECT 1
+					FROM friendships f
+					WHERE (f.user_a_id = $2 AND f.user_b_id = ps.user_id)
+						OR (f.user_b_id = $2 AND f.user_a_id = ps.user_id)
+				)
+			)
 	)
 `, score), nil
 }
 
 // GetLeaderboard ranks players by the selected all-time statistic. The UUID
 // tie-breaker makes every cursor boundary deterministic even when scores match.
-func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCursor, limit int, viewerUserID string, metric LeaderboardMetric) (LeaderboardPage, error) {
+func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCursor, limit int, viewerUserID string, metric LeaderboardMetric, scope LeaderboardScope) (LeaderboardPage, error) {
 	if s == nil || s.pool == nil {
 		return LeaderboardPage{}, errors.New("user store is not configured")
 	}
 	if limit <= 0 || limit > 50 {
 		return LeaderboardPage{}, errors.New("leaderboard limit must be between 1 and 50")
+	}
+	viewerUserID = strings.TrimSpace(viewerUserID)
+	viewerID := pgtype.UUID{}
+	if viewerUserID != "" {
+		var err error
+		viewerID, err = parseUUID(viewerUserID)
+		if err != nil {
+			return LeaderboardPage{}, err
+		}
+	}
+	if scope == LeaderboardScopeFriends && !viewerID.Valid {
+		return LeaderboardPage{}, errors.New("viewer user id is required for friends leaderboard")
+	}
+	if scope != LeaderboardScopeFriends && scope != LeaderboardScopeGlobal {
+		return LeaderboardPage{}, errors.New("invalid leaderboard scope")
 	}
 	rankedPlayers, err := leaderboardRankedPlayers(metric)
 	if err != nil {
@@ -141,12 +186,12 @@ func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCurso
 		SELECT rank, score, player_id::text, name, image_url, wins, games_played,
 			rounds_won, points_inflicted, total_playtime_seconds
 		FROM ranked
-		WHERE NOT $1::boolean
-			OR score < $2
-			OR (score = $2 AND player_id > $3)
+		WHERE NOT $3::boolean
+			OR score < $4
+			OR (score = $4 AND player_id > $5)
 		ORDER BY score DESC, player_id ASC
-		LIMIT $4
-	`, hasCursor, cursorScore, cursorPlayerID, limit+1)
+		LIMIT $6
+	`, string(scope), viewerID, hasCursor, cursorScore, cursorPlayerID, limit+1)
 	if err != nil {
 		return LeaderboardPage{}, err
 	}
@@ -170,20 +215,15 @@ func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCurso
 		page.NextCursor = &LeaderboardCursor{Score: last.Score, PlayerID: last.PlayerID}
 	}
 
-	viewerUserID = strings.TrimSpace(viewerUserID)
 	if viewerUserID == "" {
 		return page, nil
-	}
-	viewerID, err := parseUUID(viewerUserID)
-	if err != nil {
-		return LeaderboardPage{}, err
 	}
 	placement, err := scanLeaderboardPlayer(s.pool.QueryRow(ctx, rankedPlayers+`
 		SELECT rank, score, player_id::text, name, image_url, wins, games_played,
 			rounds_won, points_inflicted, total_playtime_seconds
 		FROM ranked
-		WHERE player_id = $1
-	`, viewerID))
+		WHERE player_id = $2
+	`, string(scope), viewerID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return page, nil
 	}

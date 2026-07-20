@@ -35,9 +35,13 @@ const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-p
 vi.mock("#/lib/game-auth", () => ({
   getGameConnectionAuth: vi.fn().mockResolvedValue({ playerId: "player-1" }),
 }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+}));
 
 const { GameWebSocketProvider, useGameWebSocket } =
   await import("#/components/game-websocket-provider");
+const { NotificationsDropdown } = await import("#/components/social/notifications-dropdown");
 
 const sockets: FakeWebSocket[] = [];
 
@@ -90,6 +94,10 @@ function Harness({ children }: { children?: ReactNode }) {
       <p data-testid="last-error-code">{state.lastErrorCode}</p>
       <p data-testid="last-error-message">{state.lastErrorMessage}</p>
       <p data-testid="completed-game-phase">{state.completedGame?.room.phase}</p>
+      <p data-testid="social-user-id">{state.social.userId}</p>
+      <p data-testid="social-notification-count">
+        {state.social.incomingFriendRequests.length + state.social.gameInvites.length}
+      </p>
       <button type="button" onClick={() => void connect()}>
         Connect
       </button>
@@ -200,6 +208,109 @@ describe("GameWebSocketProvider", () => {
       type: "connect",
       data: { sessionId: "session-1" },
     });
+  });
+
+  it("clears social data on a manual disconnect", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+    await act(async () => {
+      sockets[0]!.message({
+        type: "social_state",
+        data: {
+          userId: "user-1",
+          friends: [{ id: "friend-1", name: "Avery", online: true }],
+          incomingFriendRequests: [
+            {
+              id: "request-1",
+              user: { id: "friend-2", name: "Blake", online: true },
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          outgoingFriendRequestUserIds: [],
+          gameInvites: [
+            {
+              id: "invite-1",
+              user: { id: "friend-3", name: "Casey", online: true },
+              roomCode: "ROOM42",
+              createdAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 60_000).toISOString(),
+            },
+          ],
+        },
+      });
+    });
+
+    expect(screen.getByTestId("social-user-id").textContent).toBe("user-1");
+    expect(screen.getByTestId("social-notification-count").textContent).toBe("2");
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+    });
+
+    expect(screen.getByTestId("connection-status").textContent).toBe("disconnected");
+    expect(screen.getByTestId("social-user-id").textContent).toBe("");
+    expect(screen.getByTestId("social-notification-count").textContent).toBe("0");
+  });
+
+  it("removes an invitation notification when it expires", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness>
+          <NotificationsDropdown />
+        </Harness>
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    const now = Date.now();
+    vi.useFakeTimers();
+    vi.setSystemTime(now);
+    try {
+      await act(async () => {
+        sockets[0]!.message({
+          type: "social_state",
+          data: {
+            userId: "user-1",
+            friends: [],
+            incomingFriendRequests: [],
+            outgoingFriendRequestUserIds: [],
+            gameInvites: [
+              {
+                id: "invite-1",
+                user: { id: "friend-1", name: "Avery", online: true },
+                roomCode: "ROOM42",
+                createdAt: new Date(now).toISOString(),
+                expiresAt: new Date(now + 1_000).toISOString(),
+              },
+            ],
+          },
+        });
+      });
+
+      expect(screen.getByRole("button", { name: "Notifications" }).textContent).toContain("1");
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_001);
+      });
+
+      expect(screen.getByRole("button", { name: "Notifications" }).textContent).not.toContain("1");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps quick-game results when the final game snapshot broadcast is missed", async () => {

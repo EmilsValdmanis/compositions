@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/EmilsValdmanis/compositions/internal/database"
 )
@@ -20,13 +21,28 @@ type leaderboardTestStore struct {
 	limit    int
 	viewerID string
 	metric   database.LeaderboardMetric
+	scope    database.LeaderboardScope
 }
 
-func (s *leaderboardTestStore) GetLeaderboard(_ context.Context, cursor *database.LeaderboardCursor, limit int, viewerID string, metric database.LeaderboardMetric) (database.LeaderboardPage, error) {
+func newAuthenticatedLeaderboardServer(store userStore, userID string) *wsServer {
+	authStore := &stubAuthStore{sessionUser: database.SessionUserRecord{
+		ID: userID, Name: "Leaderboard Viewer", Email: "viewer@example.com",
+	}}
+	return newWSServerWithDependencies(&authHandler{store: authStore, now: time.Now}, store, "")
+}
+
+func authenticatedLeaderboardRequest(method, path string) *http.Request {
+	request := httptest.NewRequest(method, path, nil)
+	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "leaderboard-session"})
+	return request
+}
+
+func (s *leaderboardTestStore) GetLeaderboard(_ context.Context, cursor *database.LeaderboardCursor, limit int, viewerID string, metric database.LeaderboardMetric, scope database.LeaderboardScope) (database.LeaderboardPage, error) {
 	s.cursor = cursor
 	s.limit = limit
 	s.viewerID = viewerID
 	s.metric = metric
+	s.scope = scope
 	return s.page, s.err
 }
 
@@ -46,16 +62,16 @@ func TestHandleLeaderboard(t *testing.T) {
 			},
 		},
 	}
-	server := newWSServerWithDependencies(nil, store, "")
+	server := newAuthenticatedLeaderboardServer(store, secondID)
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/leaderboard?playerId="+secondID, nil)
+	request := authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard?playerId="+firstID)
 	server.routes().ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d; want %d", response.Code, http.StatusOK)
 	}
-	if store.limit != leaderboardPageSize || store.viewerID != secondID || store.cursor != nil || store.metric != database.LeaderboardMetricWins {
-		t.Fatalf("request = limit:%d viewer:%q cursor:%+v metric:%q", store.limit, store.viewerID, store.cursor, store.metric)
+	if store.limit != leaderboardPageSize || store.viewerID != secondID || store.cursor != nil || store.metric != database.LeaderboardMetricWins || store.scope != database.LeaderboardScopeFriends {
+		t.Fatalf("request = limit:%d viewer:%q cursor:%+v metric:%q scope:%q", store.limit, store.viewerID, store.cursor, store.metric, store.scope)
 	}
 	var payload leaderboardResponse
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
@@ -64,43 +80,58 @@ func TestHandleLeaderboard(t *testing.T) {
 	if len(payload.Players) != 1 || payload.Players[0].Wins != 12 || payload.Placement == nil || payload.Placement.Rank != 8 || payload.NextCursor == nil {
 		t.Fatalf("payload = %+v", payload)
 	}
+	if payload.Scope != database.LeaderboardScopeFriends {
+		t.Fatalf("payload scope = %q; want %q", payload.Scope, database.LeaderboardScopeFriends)
+	}
 
 	nextResponse := httptest.NewRecorder()
 	nextURL := "/api/leaderboard?limit=25&metric=wins&cursor=" + url.QueryEscape(*payload.NextCursor)
-	server.routes().ServeHTTP(nextResponse, httptest.NewRequest(http.MethodGet, nextURL, nil))
+	server.routes().ServeHTTP(nextResponse, authenticatedLeaderboardRequest(http.MethodGet, nextURL))
 	if nextResponse.Code != http.StatusOK || store.limit != 25 || store.cursor == nil || store.cursor.Score != 12 || store.cursor.PlayerID != firstID {
 		t.Fatalf("next page status:%d limit:%d cursor:%+v", nextResponse.Code, store.limit, store.cursor)
 	}
 }
 
 func TestHandleLeaderboardRejectsInvalidRequests(t *testing.T) {
-	server := newWSServerWithDependencies(nil, &leaderboardTestStore{userStore: noopUserStore{}}, "")
+	viewerID := "00000000-0000-0000-0000-000000000001"
+	server := newAuthenticatedLeaderboardServer(&leaderboardTestStore{userStore: noopUserStore{}}, viewerID)
 	for _, path := range []string{
 		"/api/leaderboard?limit=0",
 		"/api/leaderboard?limit=51",
 		"/api/leaderboard?cursor=not-a-cursor",
-		"/api/leaderboard?playerId=not-a-player",
 		"/api/leaderboard?metric=unknown",
+		"/api/leaderboard?scope=unknown",
 	} {
 		response := httptest.NewRecorder()
-		server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodGet, path))
 		if response.Code != http.StatusBadRequest {
 			t.Fatalf("path %q status = %d; want %d", path, response.Code, http.StatusBadRequest)
 		}
 	}
 
 	response := httptest.NewRecorder()
-	server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/leaderboard", nil))
+	server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodPost, "/api/leaderboard"))
 	if response.Code != http.StatusMethodNotAllowed || response.Header().Get("Allow") != http.MethodGet {
 		t.Fatalf("post status = %d allow = %q", response.Code, response.Header().Get("Allow"))
 	}
 }
 
 func TestHandleLeaderboardUnavailableAndFailure(t *testing.T) {
-	t.Run("unavailable", func(t *testing.T) {
-		server := newWSServerWithDependencies(nil, noopUserStore{}, "")
+	viewerID := "00000000-0000-0000-0000-000000000001"
+
+	t.Run("requires authentication", func(t *testing.T) {
+		server := newAuthenticatedLeaderboardServer(&leaderboardTestStore{userStore: noopUserStore{}}, viewerID)
 		response := httptest.NewRecorder()
 		server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/leaderboard", nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("unavailable", func(t *testing.T) {
+		server := newAuthenticatedLeaderboardServer(noopUserStore{}, viewerID)
+		response := httptest.NewRecorder()
+		server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard?scope=global"))
 		if response.Code != http.StatusServiceUnavailable {
 			t.Fatalf("status = %d; want %d", response.Code, http.StatusServiceUnavailable)
 		}
@@ -108,9 +139,9 @@ func TestHandleLeaderboardUnavailableAndFailure(t *testing.T) {
 
 	t.Run("store failure", func(t *testing.T) {
 		store := &leaderboardTestStore{userStore: noopUserStore{}, err: errors.New("database failed")}
-		server := newWSServerWithDependencies(nil, store, "")
+		server := newAuthenticatedLeaderboardServer(store, viewerID)
 		response := httptest.NewRecorder()
-		server.routes().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/leaderboard", nil))
+		server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard?scope=global"))
 		if response.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
 		}
@@ -123,18 +154,21 @@ func TestLeaderboardCursorValidation(t *testing.T) {
 		"eyJzY29yZSI6MSwicGxheWVySWQiOiJub3QtYS11dWlkIn0",
 		"eyJzY29yZSI6MSwicGxheWVySWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJleHRyYSI6dHJ1ZX0",
 	} {
-		if _, err := decodeLeaderboardCursor(raw, database.LeaderboardMetricWins); err == nil {
+		if _, err := decodeLeaderboardCursor(raw, database.LeaderboardMetricWins, database.LeaderboardScopeFriends); err == nil {
 			t.Fatalf("decodeLeaderboardCursor(%q) succeeded; want error", raw)
 		}
 	}
 
 	cursor, err := encodeLeaderboardCursor(database.LeaderboardCursor{
 		Score: 9, PlayerID: "00000000-0000-0000-0000-000000000001",
-	}, database.LeaderboardMetricGames)
+	}, database.LeaderboardMetricGames, database.LeaderboardScopeFriends)
 	if err != nil {
 		t.Fatalf("encode cursor: %v", err)
 	}
-	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricWins); err == nil {
+	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricWins, database.LeaderboardScopeFriends); err == nil {
 		t.Fatal("cursor for a different metric succeeded; want error")
+	}
+	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricGames, database.LeaderboardScopeGlobal); err == nil {
+		t.Fatal("cursor for a different scope succeeded; want error")
 	}
 }

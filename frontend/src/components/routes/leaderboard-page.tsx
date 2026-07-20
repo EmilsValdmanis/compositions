@@ -33,13 +33,17 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { H1, P } from "#/components/typography";
 import {
   DEFAULT_LEADERBOARD_METRIC,
+  DEFAULT_LEADERBOARD_SCOPE,
   leaderboardInfiniteOptions,
   leaderboardMetricSchema,
+  leaderboardScopeSchema,
   type LeaderboardMetric,
   type LeaderboardPlayer,
+  type LeaderboardScope,
 } from "#/lib/leaderboard";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -188,9 +192,10 @@ function PlacementFooter({
 export function LeaderboardPage({ playerId }: { playerId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [metric, setMetric] = useState<LeaderboardMetric>(DEFAULT_LEADERBOARD_METRIC);
+  const [scope, setScope] = useState<LeaderboardScope>(DEFAULT_LEADERBOARD_SCOPE);
   // Query refetching is the intended response to changing the selected metric.
   // react-doctor-disable-next-line react-hooks-js/no-event-handler, react-doctor/no-event-handler
-  const queryOptions = leaderboardInfiniteOptions(playerId, metric);
+  const queryOptions = leaderboardInfiniteOptions(playerId, metric, scope);
   const {
     data,
     fetchNextPage,
@@ -252,6 +257,13 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
     setMetric(parsed.data);
   }
 
+  function handleScopeChange(value: string[]) {
+    const parsed = leaderboardScopeSchema.safeParse(value[0]);
+    if (!parsed.success) return;
+    scrollRef.current?.scrollTo({ top: 0 });
+    setScope(parsed.data);
+  }
+
   return (
     <section className="mx-auto w-full max-w-6xl space-y-4">
       <header className="px-2 pt-2 md:px-0">
@@ -265,13 +277,28 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
           <HugeiconsIcon icon={ArrowLeft02Icon} data-icon="inline-start" />
           {m.back_to_lobby()}
         </Button>
-        <div className="flex items-center gap-2 text-primary">
-          <HugeiconsIcon icon={ChampionIcon} aria-hidden="true" />
-          <P size="sm" className="font-medium tracking-[0.16em] uppercase">
-            {m.all_time_rankings()}
-          </P>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-primary">
+              <HugeiconsIcon icon={ChampionIcon} aria-hidden="true" />
+              <P size="sm" className="font-medium tracking-[0.16em] uppercase">
+                {m.all_time_rankings()}
+              </P>
+            </div>
+            <H1 className="mt-1">{m.leaderboard()}</H1>
+          </div>
+          <ToggleGroup
+            value={[scope]}
+            onValueChange={handleScopeChange}
+            variant="outline"
+            spacing={0}
+            size="sm"
+            aria-label={m.leaderboard_scope()}
+          >
+            <ToggleGroupItem value="friends">{m.friends()}</ToggleGroupItem>
+            <ToggleGroupItem value="global">{m.global()}</ToggleGroupItem>
+          </ToggleGroup>
         </div>
-        <H1 className="mt-1">{m.leaderboard()}</H1>
       </header>
 
       <Card className="gap-0 overflow-hidden py-0">
@@ -317,8 +344,16 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
                 <EmptyMedia variant="icon">
                   <HugeiconsIcon icon={RankingIcon} />
                 </EmptyMedia>
-                <EmptyTitle>{m.leaderboard_empty_title()}</EmptyTitle>
-                <EmptyDescription>{m.leaderboard_empty_description()}</EmptyDescription>
+                <EmptyTitle>
+                  {scope === "friends"
+                    ? m.friends_leaderboard_empty_title()
+                    : m.leaderboard_empty_title()}
+                </EmptyTitle>
+                <EmptyDescription>
+                  {scope === "friends"
+                    ? m.friends_leaderboard_empty_description()
+                    : m.leaderboard_empty_description()}
+                </EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -327,7 +362,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
                 containerRef={scrollRef}
                 className="min-w-[32rem]"
                 containerClassName="max-h-[min(62dvh,42rem)] touch-auto overflow-auto overscroll-contain"
-                aria-label={`${m.leaderboard()}: ${getMetricLabel(metric)}`}
+                aria-label={`${m.leaderboard()}: ${scope === "friends" ? m.friends() : m.global()}, ${getMetricLabel(metric)}`}
               >
                 <colgroup>
                   <col className="w-20" />
