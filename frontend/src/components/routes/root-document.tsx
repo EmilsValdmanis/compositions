@@ -31,7 +31,7 @@ export function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <div className="flex h-dvh w-full flex-col">
-          <ThemeProvider defaultTheme="system" storageKey="theme">
+          <ThemeProvider>
             <MotionProvider>
               <TooltipProvider>
                 <GameWebSocketProvider>

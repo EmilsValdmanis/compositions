@@ -291,75 +291,77 @@ function isRejectedSessionError(code: string) {
   return code === "session_not_found" || code === "session_user_mismatch";
 }
 
-const incomingMessageReducers: Record<string, (current: LobbyState, data: any) => LobbyState> = {
-  connected: (current, data) =>
-    clearError(current, {
-      connectionStatus: "connected",
-      sessionId: data?.sessionId ?? current.sessionId,
-      playerId: data?.playerId ?? current.playerId,
-      lastEvent: "connected",
-    }),
-  room_state: (current, data) => {
-    const room = data?.room ?? null;
-    const completedGame =
-      room?.phase === "game_over" && current.game
-        ? { room, game: current.game }
-        : current.completedGame;
+const incomingMessageReducers = new Map<string, (current: LobbyState, data: any) => LobbyState>(
+  Object.entries({
+    connected: (current, data) =>
+      clearError(current, {
+        connectionStatus: "connected",
+        sessionId: data?.sessionId ?? current.sessionId,
+        playerId: data?.playerId ?? current.playerId,
+        lastEvent: "connected",
+      }),
+    room_state: (current, data) => {
+      const room = data?.room ?? null;
+      const completedGame =
+        room?.phase === "game_over" && current.game
+          ? { room, game: current.game }
+          : current.completedGame;
 
-    return clearError(current, {
-      room,
-      game: room?.phase === "lobby" ? null : current.game,
-      completedGame,
-      lastEvent: "room_state",
-    });
-  },
-  game_state: (current, data) =>
-    clearError(current, {
-      room: data?.room ?? current.room,
-      game: data?.game ?? null,
-      completedGame:
-        data?.room?.phase === "game_over" && data?.game
-          ? { room: data.room, game: data.game }
-          : data?.room?.phase === "in_progress" || data?.room?.phase === "round_over"
-            ? null
-            : current.completedGame,
-      lastEvent: "game_state",
-    }),
-  action_result: (current, data) =>
-    clearError(current, {
-      lastActionResult: data ?? null,
-      lastEvent: "action_result",
-    }),
-  left_room: (current) =>
-    clearError(current, {
-      room: null,
-      game: null,
-      completedGame: null,
-      lastEvent: "left_room",
-    }),
-  error: (current, data) => {
-    const code = data?.code ?? "internal_error";
-    const developerMessage =
-      typeof data?.message === "string" && data.message !== "" ? data.message : code;
-    if (data?.action === "draft_update") {
       return clearError(current, {
-        lastEvent: "error",
+        room,
+        game: room?.phase === "lobby" ? null : current.game,
+        completedGame,
+        lastEvent: "room_state",
       });
-    }
+    },
+    game_state: (current, data) =>
+      clearError(current, {
+        room: data?.room ?? current.room,
+        game: data?.game ?? null,
+        completedGame:
+          data?.room?.phase === "game_over" && data?.game
+            ? { room: data.room, game: data.game }
+            : data?.room?.phase === "in_progress" || data?.room?.phase === "round_over"
+              ? null
+              : current.completedGame,
+        lastEvent: "game_state",
+      }),
+    action_result: (current, data) =>
+      clearError(current, {
+        lastActionResult: data ?? null,
+        lastEvent: "action_result",
+      }),
+    left_room: (current) =>
+      clearError(current, {
+        room: null,
+        game: null,
+        completedGame: null,
+        lastEvent: "left_room",
+      }),
+    error: (current, data) => {
+      const code = data?.code ?? "internal_error";
+      const developerMessage =
+        typeof data?.message === "string" && data.message !== "" ? data.message : code;
+      if (data?.action === "draft_update") {
+        return clearError(current, {
+          lastEvent: "error",
+        });
+      }
 
-    return withError(
-      current,
-      code,
-      {
-        connectionStatus:
-          current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
-        sessionId: isRejectedSessionError(code) ? "" : current.sessionId,
-        lastEvent: "error",
-      },
-      developerMessage,
-    );
-  },
-};
+      return withError(
+        current,
+        code,
+        {
+          connectionStatus:
+            current.connectionStatus === "connecting" ? "disconnected" : current.connectionStatus,
+          sessionId: isRejectedSessionError(code) ? "" : current.sessionId,
+          lastEvent: "error",
+        },
+        developerMessage,
+      );
+    },
+  }),
+);
 
 function getDealerIndex(room: RoomSnapshot | null) {
   if (!room || room.players.length === 0) {
@@ -522,7 +524,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       );
     }
 
-    const reducer = incomingMessageReducers[message.type];
+    const reducer = incomingMessageReducers.get(message.type);
     if (!reducer) {
       updateState((current) => withError(current, "unknown_message_type"));
       return;

@@ -2,6 +2,7 @@
 import { createRequire } from "node:module";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
+  getReducedMotionScript,
   isReducedMotionPreferenceEnabled,
   setReducedMotionPreferenceEnabled,
   shouldReduceMotion,
@@ -77,5 +78,11 @@ describe("reduced motion preference", () => {
 
     expect(listener).toHaveBeenCalledOnce();
     unsubscribe();
+  });
+
+  it("uses a fixed bootstrap script with no interpolated input", () => {
+    expect(getReducedMotionScript()).toBe(
+      "(function(){try{if(localStorage.getItem('compositions.reduce-motion-enabled')==='true'){document.documentElement.setAttribute('data-reduce-motion','')}}catch(e){}})();",
+    );
   });
 });
