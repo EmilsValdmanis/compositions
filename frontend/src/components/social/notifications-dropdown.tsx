@@ -31,7 +31,6 @@ import {
 import {
   Popover,
   PopoverContent,
-  PopoverDescription,
   PopoverHeader,
   PopoverTitle,
   PopoverTrigger,
@@ -116,7 +115,7 @@ export function NotificationsDropdown({
           <Badge
             variant="destructive"
             className={cn(
-              "h-5 min-w-5 justify-center px-1 text-[0.65rem]",
+              "h-4 min-w-4 justify-center px-1 text-[0.65rem]",
               presentation === "sidebar"
                 ? "ml-auto group-data-[collapsible=icon]:hidden"
                 : "absolute -top-1 -right-1",
@@ -129,11 +128,10 @@ export function NotificationsDropdown({
       <PopoverContent
         align={presentation === "sidebar" ? "start" : "end"}
         side={presentation === "sidebar" ? "right" : "bottom"}
-        className="max-h-[min(32rem,var(--available-height))] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto"
+        className="max-h-[min(32rem,var(--available-height))] w-[min(24rem,calc(100vw-1rem))] overflow-y-auto"
       >
         <PopoverHeader>
           <PopoverTitle>{m.notifications()}</PopoverTitle>
-          <PopoverDescription>{m.notifications_description()}</PopoverDescription>
         </PopoverHeader>
 
         {notificationCount === 0 ? (
@@ -151,7 +149,7 @@ export function NotificationsDropdown({
             {friendRequests.map((request) => {
               const pending = pendingIds.has(request.id);
               return (
-                <Item key={request.id} variant="muted" size="sm">
+                <Item key={request.id} variant="muted" size="xs">
                   <ItemMedia>
                     <Avatar>
                       {request.user.imageUrl ? (
@@ -206,7 +204,7 @@ export function NotificationsDropdown({
             {gameInvites.map((invite) => {
               const pending = pendingIds.has(invite.id);
               return (
-                <Item key={invite.id} variant="muted" size="sm">
+                <Item key={invite.id} variant="muted" size="xs">
                   <ItemMedia>
                     <Avatar>
                       {invite.user.imageUrl ? (

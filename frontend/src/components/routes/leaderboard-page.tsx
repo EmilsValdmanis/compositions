@@ -1,4 +1,15 @@
-import { Alert02Icon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  ChampionIcon,
+  Clock01Icon,
+  GameController03Icon,
+  Globe02Icon,
+  RankingIcon,
+  Refresh01Icon,
+  RepeatIcon,
+  Target01Icon,
+  UserGroupIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -70,11 +81,26 @@ function getMetricLabel(metric: LeaderboardMetric) {
     case "games":
       return m.games_label();
     case "playtime":
-      return m.total_playtime();
+      return m.playtime_label();
     case "rounds":
       return m.round_wins_label();
     case "points":
       return m.points_inflicted();
+  }
+}
+
+function getMetricIcon(metric: LeaderboardMetric) {
+  switch (metric) {
+    case "wins":
+      return ChampionIcon;
+    case "games":
+      return GameController03Icon;
+    case "playtime":
+      return Clock01Icon;
+    case "rounds":
+      return RepeatIcon;
+    case "points":
+      return Target01Icon;
   }
 }
 
@@ -262,7 +288,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
     <section className="mx-auto w-full max-w-6xl space-y-4">
       <header className="px-2 pt-2 md:px-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <H1 className="mt-1">{m.leaderboard()}</H1>
+          <H1>{m.leaderboard()}</H1>
           <ToggleGroup
             value={[scope]}
             onValueChange={handleScopeChange}
@@ -271,18 +297,25 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
             size="sm"
             aria-label={m.leaderboard_scope()}
           >
-            <ToggleGroupItem value="friends">{m.friends()}</ToggleGroupItem>
-            <ToggleGroupItem value="global">{m.global()}</ToggleGroupItem>
+            <ToggleGroupItem value="friends">
+              <HugeiconsIcon icon={UserGroupIcon} data-icon="inline-start" />
+              {m.friends()}
+            </ToggleGroupItem>
+            <ToggleGroupItem value="global">
+              <HugeiconsIcon icon={Globe02Icon} data-icon="inline-start" />
+              {m.global()}
+            </ToggleGroupItem>
           </ToggleGroup>
         </div>
       </header>
 
       <Card className="gap-0 overflow-hidden py-0">
         <Tabs value={metric} onValueChange={handleMetricChange} className="gap-0">
-          <div className="overflow-x-auto border-b p-3">
+          <div className="overflow-x-auto scroll-fade-r border-b p-3">
             <TabsList aria-label={m.leaderboard_statistic()}>
               {LEADERBOARD_METRICS.map((item) => (
                 <TabsTrigger key={item} value={item}>
+                  <HugeiconsIcon icon={getMetricIcon(item)} data-icon="inline-start" />
                   {getMetricLabel(item)}
                 </TabsTrigger>
               ))}

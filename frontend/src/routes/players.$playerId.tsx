@@ -58,15 +58,10 @@ export const Route = createFileRoute("/players/$playerId")({
 
 function PlayerProfileRoute() {
   const { profile, history } = Route.useLoaderData();
-  const { session } = Route.useRouteContext();
 
   return (
-    <AppShell contentClassName="p-4 pt-0 md:p-6 md:pt-0">
-      <PlayerProfilePage
-        profile={profile}
-        initialHistory={history}
-        isOwnProfile={session?.user.id === profile.id}
-      />
+    <AppShell>
+      <PlayerProfilePage profile={profile} initialHistory={history} />
     </AppShell>
   );
 }

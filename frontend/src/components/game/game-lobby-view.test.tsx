@@ -256,6 +256,7 @@ describe("GameLobbyView", () => {
     const view = renderLobby({
       room: makeRoom(),
       players,
+      currentPlayerId: "player-1",
       gameMode: "full",
       roomActions: {
         canCreateRoom: false,
@@ -267,9 +268,28 @@ describe("GameLobbyView", () => {
       onGameModeChange,
     });
 
-    fireEvent.click(view.getByRole("button", { name: "Quick game" }));
+    fireEvent.click(view.getByRole("button", { name: "Quick" }));
 
     expect(onGameModeChange).toHaveBeenCalledWith("quick");
+  });
+
+  it("hides game setup controls from non-hosts", () => {
+    const view = renderLobby({
+      room: makeRoom(),
+      players,
+      currentPlayerId: "player-2",
+      roomActions: {
+        canCreateRoom: false,
+        canJoinRoom: false,
+        canLeaveRoom: true,
+        canStartGame: false,
+        canSelectGameMode: false,
+      },
+    });
+
+    expect(view.queryByRole("group", { name: "Game mode" })).toBeNull();
+    expect(view.queryByRole("button", { name: "Start game" })).toBeNull();
+    expect(view.getByRole("button", { name: "Leave room" })).toBeTruthy();
   });
 
   it("keeps the chooser on the deal step when an emote updates the players", () => {

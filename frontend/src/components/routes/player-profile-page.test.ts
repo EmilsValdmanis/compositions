@@ -2,7 +2,7 @@
 
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   playerGameHistorySchema,
@@ -80,13 +80,13 @@ const history: PlayerGameHistory = {
   totalPages: 1,
 };
 
-function renderProfile(isOwnProfile: boolean) {
+function renderProfile(initialHistory = history) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(PlayerProfilePage, { profile, initialHistory: history, isOwnProfile }),
+      createElement(PlayerProfilePage, { profile, initialHistory }),
     ),
   );
 }
@@ -108,47 +108,48 @@ describe("PlayerProfilePage", () => {
     );
   });
 
-  it("shows sharing on the signed-in player's own profile", () => {
-    renderProfile(true);
-
-    expect(screen.getByRole("button", { name: "Share profile" })).toBeTruthy();
-  });
-
-  it("hides sharing on another player's profile", () => {
-    renderProfile(false);
-
-    expect(screen.queryByRole("button", { name: "Share profile" })).toBeNull();
-  });
-
-  it("copies only the profile URL", async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    renderProfile(true);
-
-    fireEvent.click(screen.getByRole("button", { name: "Share profile" }));
-
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(window.location.href));
-  });
-
-  it("shows the first server-paginated game-history page", () => {
-    renderProfile(false);
+  it("shows game history without pagination when there is only one page", () => {
+    renderProfile();
 
     expect(screen.getByRole("table", { name: "Game history" })).toBeTruthy();
     expect(screen.getByText("Victory")).toBeTruthy();
     expect(screen.getByText("42")).toBeTruthy();
-    expect(screen.getByText("Page 1 of 1")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Previous" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Next" })).toHaveProperty("disabled", true);
+    expect(screen.queryByText("Page 1 of 1")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Previous" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
   });
 
-  it("switches between ranked-full and quick statistics", () => {
-    renderProfile(false);
+  it("shows the empty component when game history has no games", () => {
+    renderProfile({
+      games: [],
+      page: 1,
+      pageSize: 10,
+      totalItems: 0,
+      totalPages: 0,
+    });
 
-    const quickButtons = screen.getAllByRole("button", { name: "Quick game" });
-    fireEvent.click(quickButtons[0]!);
+    expect(screen.getByText("No games yet")).toBeTruthy();
+    expect(screen.getByText("Completed games will appear here.")).toBeTruthy();
+    expect(screen.queryByRole("table", { name: "Game history" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Previous" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+  });
+
+  it("shows pagination when game history has multiple pages", () => {
+    renderProfile({ ...history, totalItems: 11, totalPages: 2 });
+
+    expect(screen.getByText("Page 1 of 2")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Previous" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Next" })).toHaveProperty("disabled", false);
+  });
+
+  it("uses one compact mode toggle for the whole profile", () => {
+    renderProfile();
+
+    expect(screen.getByRole("button", { name: "All" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Ranked" })).toBeTruthy();
+    const quickButton = screen.getByRole("button", { name: "Quick" });
+    fireEvent.click(quickButton);
 
     expect(screen.getByText("Quick record")).toBeTruthy();
     expect(screen.getByText("Casual quick finishes")).toBeTruthy();
