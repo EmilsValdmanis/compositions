@@ -9,6 +9,13 @@ updates:
           time: "06:00"
           timezone: Europe/Riga
       open-pull-requests-limit: 5
+      groups:
+          non-major-updates:
+              patterns:
+                  - "*"
+              update-types:
+                  - minor
+                  - patch
 
     - package-ecosystem: bun
       directory: /frontend
@@ -18,6 +25,13 @@ updates:
           time: "06:15"
           timezone: Europe/Riga
       open-pull-requests-limit: 5
+      groups:
+          non-major-updates:
+              patterns:
+                  - "*"
+              update-types:
+                  - minor
+                  - patch
 
     - package-ecosystem: github-actions
       directory: /
@@ -27,3 +41,10 @@ updates:
           time: "06:30"
           timezone: Europe/Riga
       open-pull-requests-limit: 5
+      groups:
+          non-major-updates:
+              patterns:
+                  - "*"
+              update-types:
+                  - minor
+                  - patch
