@@ -466,7 +466,6 @@ export function DevGameUi() {
                 isDealChooser: false,
               }}
               onStartNextRound={handleStartNextRound}
-              onReturnToLobby={() => setViewMode("board")}
               onChooseDealing={handleChooseDealing}
               onSendEmote={() => {}}
             />

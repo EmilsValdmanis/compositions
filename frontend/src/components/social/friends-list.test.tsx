@@ -14,6 +14,18 @@ Object.defineProperty(window, "matchMedia", {
 });
 
 describe("SidebarFriendsList", () => {
+  it("shows skeleton rows while friends are loading", () => {
+    const view = render(
+      <SidebarProvider>
+        <SidebarFriendsList friends={[]} isLoading canInvite={false} />
+      </SidebarProvider>,
+    );
+
+    expect(view.container.querySelector('[aria-busy="true"]')).toBeTruthy();
+    expect(view.container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(6);
+    expect(view.queryByText("No friends yet")).toBeNull();
+  });
+
   it("shows friends and invites an available online friend", async () => {
     const onInvite = vi.fn(async () => undefined);
     const view = render(

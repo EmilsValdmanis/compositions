@@ -19,16 +19,19 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "#/components/ui/sidebar";
+import { Skeleton } from "#/components/ui/skeleton";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
 export function SidebarFriendsList({
   friends,
+  isLoading = false,
   canInvite,
   unavailableUserIds = [],
   onInvite,
 }: {
   friends: SocialUser[];
+  isLoading?: boolean;
   canInvite: boolean;
   unavailableUserIds?: string[];
   onInvite?: (userId: string) => Promise<unknown>;
@@ -52,8 +55,19 @@ export function SidebarFriendsList({
   return (
     <SidebarGroup className="min-h-0 flex-1 overflow-hidden pt-0 group-data-[collapsible=icon]:hidden">
       <SidebarGroupLabel>{m.friends()}</SidebarGroupLabel>
-      <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1">
-        {sortedFriends.length === 0 ? (
+      <SidebarGroupContent className="min-h-0 flex-1 overflow-y-auto pr-1" aria-busy={isLoading}>
+        {isLoading ? (
+          <SidebarMenu aria-hidden="true">
+            {["w-20", "w-28", "w-24"].map((nameWidth) => (
+              <SidebarMenuItem key={nameWidth}>
+                <SidebarMenuButton render={<div />}>
+                  <Skeleton className="size-6 shrink-0 rounded-full" />
+                  <Skeleton className={cn("h-3", nameWidth)} />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        ) : sortedFriends.length === 0 ? (
           <Empty className="p-3">
             <EmptyHeader>
               <EmptyMedia variant="icon">
