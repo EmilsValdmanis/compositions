@@ -30,7 +30,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
-import { SidebarMenuButton } from "#/components/ui/sidebar";
+import { SidebarMenuButton, useSidebar } from "#/components/ui/sidebar";
 import { useTheme } from "#/components/theme-provider";
 import { Caption, P } from "#/components/typography";
 import { authClient } from "#/lib/auth-client";
@@ -50,6 +50,7 @@ const rootRouteApi = getRouteApi("__root__");
 
 export function UserDropdown({ presentation = "button" }: { presentation?: "button" | "sidebar" }) {
   const { session } = rootRouteApi.useRouteContext();
+  const { isMobile } = useSidebar();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -108,7 +109,8 @@ export function UserDropdown({ presentation = "button" }: { presentation?: "butt
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          side={presentation === "sidebar" ? "right" : "bottom"}
+          side={presentation === "sidebar" && !isMobile ? "right" : "bottom"}
+          sideOffset={4}
           className="w-56"
         >
           <DropdownMenuGroup>

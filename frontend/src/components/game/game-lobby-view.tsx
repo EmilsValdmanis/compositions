@@ -6,7 +6,6 @@ import {
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
   type RoomSnapshot,
-  type SocialUser,
   type SocialState,
 } from "#/components/game-websocket-provider";
 import { ChevronDownIcon, Copy01Icon, CopyLinkIcon, Share08Icon } from "@hugeicons/core-free-icons";
@@ -14,7 +13,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
-import { FriendsList } from "#/components/social/friends-list";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -68,8 +66,6 @@ type GameLobbyViewProps = {
   onSendEmote: (emoji: string) => void;
   onCopyRoomCode: AsyncAction;
   onCopyRoomLink: AsyncAction;
-  friends?: SocialUser[];
-  onInviteFriend?: (userId: string) => Promise<unknown>;
   social?: SocialState;
   currentPlayerId?: string;
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
@@ -94,8 +90,6 @@ export function GameLobbyView({
   onSendEmote,
   onCopyRoomCode,
   onCopyRoomLink,
-  friends = [],
-  onInviteFriend,
   social,
   currentPlayerId,
   onSendFriendRequest,
@@ -110,7 +104,7 @@ export function GameLobbyView({
     <div
       className={cn(
         "mx-auto my-auto grid w-full gap-4 p-1",
-        "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]",
+        room ? "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]" : "max-w-3xl",
       )}
     >
       <Card className="min-w-0 border border-border/70 shadow-sm">
@@ -250,8 +244,8 @@ export function GameLobbyView({
         </CardContent>
       </Card>
 
-      <div className="flex min-w-0 flex-col gap-4">
-        {room ? (
+      {room ? (
+        <div className="flex min-w-0 flex-col gap-4">
           <Card className="min-w-0 border border-border/70 shadow-sm">
             <CardHeader>
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -282,16 +276,8 @@ export function GameLobbyView({
               )}
             </CardContent>
           </Card>
-        ) : null}
-        <FriendsList
-          friends={friends}
-          canInvite={Boolean(
-            room && room.phase === "lobby" && !pendingDealChoice && players.length < 4,
-          )}
-          unavailableUserIds={players.flatMap((player) => (player.userId ? [player.userId] : []))}
-          onInvite={onInviteFriend}
-        />
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

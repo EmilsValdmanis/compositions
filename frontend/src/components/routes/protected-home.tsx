@@ -48,7 +48,6 @@ export function ProtectedHome() {
     startNextRound,
     chooseDealing,
     sendEmote,
-    sendGameInvite,
     sendFriendRequest,
     drawFromDeck,
     drawFromDiscard,
@@ -276,8 +275,6 @@ export function ProtectedHome() {
               onSendEmote={sendEmote}
               onCopyRoomCode={copyRoomCode}
               onCopyRoomLink={copyRoomLink}
-              friends={state.social.friends}
-              onInviteFriend={sendGameInvite}
               social={state.social}
               currentPlayerId={state.playerId}
               onSendFriendRequest={sendFriendRequest}

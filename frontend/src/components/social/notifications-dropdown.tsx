@@ -129,7 +129,7 @@ export function NotificationsDropdown({
       <PopoverContent
         align={presentation === "sidebar" ? "start" : "end"}
         side={presentation === "sidebar" ? "right" : "bottom"}
-        className="max-h-[min(32rem,var(--available-height))] w-88 overflow-y-auto"
+        className="max-h-[min(32rem,var(--available-height))] w-[min(22rem,calc(100vw-1rem))] overflow-y-auto"
       >
         <PopoverHeader>
           <PopoverTitle>{m.notifications()}</PopoverTitle>

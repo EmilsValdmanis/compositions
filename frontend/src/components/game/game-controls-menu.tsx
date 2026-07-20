@@ -37,7 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field";
-import { SidebarMenuButton } from "#/components/ui/sidebar";
+import { SidebarMenuButton, useSidebar } from "#/components/ui/sidebar";
 import { Textarea } from "#/components/ui/textarea";
 import { m } from "#/paraglide/messages.js";
 
@@ -49,6 +49,7 @@ export function GameControlsMenu({
   presentation?: "button" | "sidebar";
 }) {
   const { state, forfeitGame, requestEndGame, reportIssue } = useGameWebSocket();
+  const { isMobile } = useSidebar();
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -111,8 +112,8 @@ export function GameControlsMenu({
           {presentation === "sidebar" ? <span>{m.game_controls()}</span> : null}
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          align={presentation === "sidebar" ? "start" : "end"}
-          side={presentation === "sidebar" ? "right" : "bottom"}
+          align={presentation === "sidebar" && !isMobile ? "start" : "end"}
+          side={presentation === "sidebar" && !isMobile ? "right" : "bottom"}
           className="w-56"
         >
           <DropdownMenuGroup>

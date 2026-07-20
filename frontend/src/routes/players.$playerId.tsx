@@ -61,7 +61,7 @@ function PlayerProfileRoute() {
   const { session } = Route.useRouteContext();
 
   return (
-    <AppShell contentClassName="p-4 pt-12 md:p-6">
+    <AppShell contentClassName="p-4 pt-0 md:p-6 md:pt-0">
       <PlayerProfilePage
         profile={profile}
         initialHistory={history}
