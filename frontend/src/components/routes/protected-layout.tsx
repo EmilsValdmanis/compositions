@@ -22,8 +22,11 @@ export function AppShell({
   children: React.ReactNode;
   contentClassName?: string;
 }) {
+  const { sidebarOpen } = rootRouteApi.useRouteContext();
+
   return (
     <SidebarProvider
+      defaultOpen={sidebarOpen === "true"}
       className="h-full min-h-0! flex-1"
       style={{ "--sidebar-width": "19rem" } as React.CSSProperties}
     >
@@ -42,7 +45,7 @@ function AppHeader() {
   const { session } = rootRouteApi.useRouteContext();
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-2 px-2 md:pb-1 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+    <header className="flex shrink-0 items-center gap-2 h-12 md:h-16 px-2 transition-[width,height] ease-linear">
       <SidebarTrigger />
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <ServerStatusBadge />

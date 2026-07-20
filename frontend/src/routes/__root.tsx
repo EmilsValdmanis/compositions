@@ -1,6 +1,6 @@
 import { HeadContent, createRootRouteWithContext } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeaders, getRequestUrl } from "@tanstack/react-start/server";
+import { getCookie, getRequestHeaders, getRequestUrl } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
@@ -24,6 +24,7 @@ const getAppContext = createServerFn({ method: "GET" })
 
     return {
       session: await loadVerifiedSession(headers, auth.api.getSession),
+      sidebarOpen: getCookie("sidebar_state"),
       siteOrigin: getRequestUrl({ xForwardedHost: true }).origin,
     };
   });
