@@ -1,4 +1,4 @@
-import { Home01Icon, RankingIcon } from "@hugeicons/core-free-icons";
+import { CodeXmlIcon, Home01Icon, JokerIcon, RankingIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
@@ -14,8 +14,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
-  SidebarSeparator,
   useSidebar,
 } from "#/components/ui/sidebar";
 import { UserDropdown } from "#/components/user-dropdown";
@@ -26,7 +24,7 @@ const rootRouteApi = getRouteApi("__root__");
 
 export function AppSidebar() {
   const { session } = rootRouteApi.useRouteContext();
-  const { state, dismissCompletedGame, sendGameInvite } = useGameWebSocket();
+  const { state, dismissCompletedGame, removeFriend, sendGameInvite } = useGameWebSocket();
   const { setOpenMobile } = useSidebar();
   const currentPage = useAppPage();
   const players = state.room?.players ?? [];
@@ -52,12 +50,8 @@ export function AppSidebar() {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip={m.back_to_lobby()}
-              render={<Link to="/" onClick={goToLobby} />}
-            >
-              <img src="/favicon.svg" alt="" className="size-8" aria-hidden="true" />
+            <SidebarMenuButton className="pointer-events-none">
+              <HugeiconsIcon icon={JokerIcon} className="text-primary" />
               <span className="font-heading font-semibold">{m.app_name()}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -88,6 +82,18 @@ export function AppSidebar() {
                   <span>{m.leaderboard()}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {import.meta.env.DEV ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip={m.dev_ui()}
+                    isActive={currentPage === "dev-ui"}
+                    render={<Link to="/dev-ui" onClick={closeMobileSidebar} />}
+                  >
+                    <HugeiconsIcon icon={CodeXmlIcon} />
+                    <span>{m.dev_ui()}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
               <SidebarMenuItem>
                 <GameControlsMenu presentation="sidebar" />
               </SidebarMenuItem>
@@ -96,15 +102,13 @@ export function AppSidebar() {
         </SidebarGroup>
         {session ? (
           <>
-            <SidebarSeparator />
             <SidebarFriendsList
               friends={state.social.friends}
-              isLoading={
-                state.connectionStatus === "idle" || state.connectionStatus === "connecting"
-              }
+              isLoading={state.connectionStatus !== "connected" || state.social.userId === ""}
               canInvite={canInvite}
               unavailableUserIds={unavailableUserIds}
               onInvite={sendGameInvite}
+              onUnfriend={removeFriend}
             />
           </>
         ) : null}
@@ -119,7 +123,6 @@ export function AppSidebar() {
           ) : null}
         </SidebarMenu>
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   );
 }

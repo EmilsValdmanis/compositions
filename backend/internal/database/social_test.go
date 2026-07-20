@@ -75,6 +75,28 @@ func TestUserStoreSocialWorkflow(t *testing.T) {
 	if len(blakeSocial.IncomingFriendRequests) != 0 {
 		t.Fatalf("incoming requests after accept = %#v; want none", blakeSocial.IncomingFriendRequests)
 	}
+	if err := store.RemoveFriend(ctx, blake.ID, avery.ID); err != nil {
+		t.Fatalf("RemoveFriend() error = %v", err)
+	}
+	if err := store.RemoveFriend(ctx, blake.ID, avery.ID); !errors.Is(err, ErrUsersNotFriends) {
+		t.Fatalf("RemoveFriend(already removed) error = %v; want %v", err, ErrUsersNotFriends)
+	}
+	if _, err := store.SendFriendRequest(ctx, avery.ID, blake.ID); err != nil {
+		t.Fatalf("SendFriendRequest(after remove) error = %v", err)
+	}
+	if _, err := store.RespondFriendRequest(ctx, blake.ID, request.ID, true); err == nil {
+		t.Fatal("RespondFriendRequest(stale request) error = nil; want not found")
+	}
+	refriendRequest, err := store.ListSocialSnapshot(ctx, blake.ID)
+	if err != nil {
+		t.Fatalf("ListSocialSnapshot(Blake refriend request) error = %v", err)
+	}
+	if len(refriendRequest.IncomingFriendRequests) != 1 {
+		t.Fatalf("incoming requests after remove = %#v; want one", refriendRequest.IncomingFriendRequests)
+	}
+	if _, err := store.RespondFriendRequest(ctx, blake.ID, refriendRequest.IncomingFriendRequests[0].ID, true); err != nil {
+		t.Fatalf("RespondFriendRequest(refriend) error = %v", err)
+	}
 
 	for _, player := range []struct {
 		id   string

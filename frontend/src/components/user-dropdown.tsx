@@ -1,7 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 import {
   BookOpen01Icon,
-  CodeXmlIcon,
   Logout02FreeIcons,
   Motion01Icon,
   UserIcon,
@@ -151,12 +150,6 @@ export function UserDropdown({ presentation = "button" }: { presentation?: "butt
               <HugeiconsIcon icon={Motion01Icon} />
               {m.reduce_motion()}
             </DropdownMenuCheckboxItem>
-            {import.meta.env.DEV ? (
-              <DropdownMenuItem render={<Link to="/dev-ui" />}>
-                <HugeiconsIcon icon={CodeXmlIcon} />
-                {m.dev_ui()}
-              </DropdownMenuItem>
-            ) : null}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>{m.theme()}</DropdownMenuSubTrigger>
               <DropdownMenuSubContent>

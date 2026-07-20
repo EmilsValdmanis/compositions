@@ -259,6 +259,29 @@ func (s *UserStore) RespondFriendRequest(ctx context.Context, recipientID, reque
 	return nullableUUIDString(sender), nil
 }
 
+func (s *UserStore) RemoveFriend(ctx context.Context, userID, friendID string) error {
+	if s == nil || s.pool == nil {
+		return errors.New("user store is not configured")
+	}
+	user, friend, err := parseSocialUserPair(userID, friendID)
+	if err != nil {
+		return err
+	}
+
+	command, err := s.pool.Exec(ctx, `
+		DELETE FROM friendships
+		WHERE user_a_id = LEAST($1::uuid, $2::uuid)
+			AND user_b_id = GREATEST($1::uuid, $2::uuid)
+	`, user, friend)
+	if err != nil {
+		return err
+	}
+	if command.RowsAffected() == 0 {
+		return ErrUsersNotFriends
+	}
+	return nil
+}
+
 func (s *UserStore) SendGameInvite(ctx context.Context, senderID, recipientID, roomCode string, expiresAt time.Time) (GameInviteRecord, error) {
 	if s == nil || s.pool == nil {
 		return GameInviteRecord{}, errors.New("user store is not configured")

@@ -28,6 +28,53 @@ const { PlayerStrip } = await import("#/components/game/player-strip");
 afterEach(cleanup);
 
 describe("PlayerStrip", () => {
+  it("composes player rows from item primitives", () => {
+    const players: PlayerSnapshot[] = [
+      {
+        playerId: "player-1",
+        name: "Avery",
+        connected: true,
+        seat: 0,
+        isHost: false,
+        canReconnect: false,
+      },
+    ];
+
+    const { container } = render(<PlayerStrip players={players} game={null} />);
+
+    expect(container.querySelector('[data-slot="item-group"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="item"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="item-media"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="item-content"]')).toBeTruthy();
+    expect(container.querySelector('[data-slot="item-actions"]')).toBeTruthy();
+  });
+
+  it("uses the primary item treatment and matching avatar badge ring for the active turn", () => {
+    const players: PlayerSnapshot[] = [
+      {
+        playerId: "player-1",
+        name: "Avery",
+        connected: true,
+        seat: 0,
+        isHost: false,
+        canReconnect: false,
+      },
+    ];
+    const game = {
+      turn: { playerId: "player-1" },
+      players: [{ playerId: "player-1", handCount: 9 }],
+    } as GameSnapshot;
+
+    const { container } = render(<PlayerStrip players={players} game={game} />);
+
+    expect(container.querySelector('[data-slot="item"]')?.getAttribute("data-variant")).toBe(
+      "primary",
+    );
+    expect(container.querySelector('[data-slot="avatar-badge"]')?.className).toContain(
+      "ring-primary",
+    );
+  });
+
   it("shows a skull instead of the turn spinner for a forfeited player", () => {
     const players: PlayerSnapshot[] = [
       {

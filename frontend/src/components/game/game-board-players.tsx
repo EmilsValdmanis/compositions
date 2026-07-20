@@ -75,7 +75,6 @@ function GameScoreboard({
               <TableRow>
                 <TableHead>#</TableHead>
                 <TableHead>{m.player()}</TableHead>
-                <TableHead className="text-right">{m.cards()}</TableHead>
                 <TableHead className="text-right">{m.score()}</TableHead>
               </TableRow>
             </TableHeader>
@@ -87,9 +86,6 @@ function GameScoreboard({
                     <P size="sm" className="max-w-36 truncate font-medium" title={player?.name}>
                       {player?.name ?? m.unknown_player()}
                     </P>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    <AnimatedNumber value={playerState.handCount} />
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     <AnimatedNumber value={playerState.totalPoints} />
@@ -189,7 +185,7 @@ export function GameBoardPlayers({
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <GameScoreboard game={game} players={players} />
+              {game ? <GameScoreboard game={game} players={players} /> : null}
               <PlayerEmotePicker onSendEmote={onSendEmote} />
             </div>
           </CardHeader>
@@ -200,7 +196,7 @@ export function GameBoardPlayers({
           <CardAction>
             <div className="flex items-center gap-2">
               <PlayerEmotePicker onSendEmote={onSendEmote} />
-              <GameScoreboard game={game} players={players} />
+              {game ? <GameScoreboard game={game} players={players} /> : null}
             </div>
           </CardAction>
         </CardHeader>

@@ -175,6 +175,13 @@ func (s *postgresUserStore) RespondFriendRequest(ctx context.Context, recipientI
 	return s.store.RespondFriendRequest(ctx, strings.TrimSpace(recipientID), strings.TrimSpace(requestID), accept)
 }
 
+func (s *postgresUserStore) RemoveFriend(ctx context.Context, userID, friendID string) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.RemoveFriend(ctx, strings.TrimSpace(userID), strings.TrimSpace(friendID))
+}
+
 func (s *postgresUserStore) SendGameInvite(ctx context.Context, senderID, recipientID, roomCode string, expiresAt time.Time) (database.GameInviteRecord, error) {
 	if s == nil || s.store == nil {
 		return database.GameInviteRecord{}, errors.New("user store is not configured")

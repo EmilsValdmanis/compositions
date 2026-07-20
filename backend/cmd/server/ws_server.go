@@ -423,6 +423,8 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			s.handleSendFriendRequest(conn, sessionID, envelope)
 		case "respond_friend_request":
 			s.handleRespondFriendRequest(conn, sessionID, envelope)
+		case "remove_friend":
+			s.handleRemoveFriend(conn, sessionID, envelope)
 		case "send_game_invite":
 			s.handleSendGameInvite(conn, sessionID, envelope)
 		case "respond_game_invite":
