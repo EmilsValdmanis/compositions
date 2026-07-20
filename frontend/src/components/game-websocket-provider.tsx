@@ -264,6 +264,7 @@ type GameWebSocketContextValue = {
   joinRoom: (roomCode: string) => void;
   sendFriendRequest: (userId: string) => Promise<ActionResult>;
   respondFriendRequest: (requestId: string, accept: boolean) => Promise<ActionResult>;
+  removeFriend: (userId: string) => Promise<ActionResult>;
   sendGameInvite: (userId: string) => Promise<ActionResult>;
   respondGameInvite: (inviteId: string, accept: boolean) => Promise<ActionResult>;
   startGame: (gameMode: GameMode) => void;
@@ -341,6 +342,7 @@ function isSocialAction(action: unknown) {
   return (
     action === "send_friend_request" ||
     action === "respond_friend_request" ||
+    action === "remove_friend" ||
     action === "send_game_invite" ||
     action === "respond_game_invite"
   );
@@ -824,6 +826,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     sendFriendRequest: (userId) => send("send_friend_request", { userId }, { awaitResult: true }),
     respondFriendRequest: (requestId, accept) =>
       send("respond_friend_request", { requestId, accept }, { awaitResult: true }),
+    removeFriend: (userId) => send("remove_friend", { userId }, { awaitResult: true }),
     sendGameInvite: (userId) => send("send_game_invite", { userId }, { awaitResult: true }),
     respondGameInvite: (inviteId, accept) =>
       send("respond_game_invite", { inviteId, accept }, { awaitResult: true }),

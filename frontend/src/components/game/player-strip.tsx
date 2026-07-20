@@ -25,9 +25,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "#/components/ui/item";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Spinner } from "#/components/ui/spinner";
-import { P } from "#/components/typography";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -65,7 +72,7 @@ function PlayerAvatar({
       {player.imageUrl ? <AvatarImage src={player.imageUrl} alt={player.name} /> : null}
       <AvatarFallback>{getUserInitials(player.name)}</AvatarFallback>
       <AvatarBadge
-        className={cn("ring-border", player.connected ? "bg-primary" : "bg-destructive")}
+        className={cn("ring-card", player.connected ? "bg-primary" : "bg-destructive")}
       />
     </Avatar>
   );
@@ -140,9 +147,9 @@ export function PlayerStrip({
 }) {
   const playerStates = game?.players ?? [];
   return (
-    <div
+    <ItemGroup
       className={cn(
-        "grid w-full min-w-0 max-w-full gap-2",
+        "grid min-w-0 max-w-full gap-2 has-data-[size=sm]:gap-2",
         mobileHorizontal
           ? "grid-flow-col auto-cols-[minmax(9rem,1fr)] overflow-x-auto overscroll-x-contain pb-1 xl:grid-flow-row xl:auto-cols-auto xl:overflow-visible xl:pb-0"
           : "min-h-0 flex-1 content-start overflow-y-auto overscroll-y-contain pr-1",
@@ -153,32 +160,34 @@ export function PlayerStrip({
         const isTurn = game?.turn.playerId === player.playerId;
         const showActiveTurn = showTurnIndicator && isTurn && !player.forfeited;
         return (
-          <div
+          <Item
             key={player.playerId}
+            role="listitem"
+            variant={showActiveTurn ? "primary" : "outline"}
+            size="xs"
             className={cn(
-              "relative grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-3xl border px-3 py-2",
+              "relative min-w-0 max-w-full flex-nowrap",
               mobileHorizontal ? "gap-2 px-2 py-1.5 xl:gap-3 xl:px-3 xl:py-2" : null,
-              showActiveTurn ? "border-primary/40 bg-primary/10" : "border-border/60 bg-muted/20",
             )}
           >
             {player.activeEmote ? (
               <PlayerEmoteBubble emote={player.activeEmote} className={emoteClassName} />
             ) : null}
-            <PlayerAvatar
-              player={player}
-              compactOnMobile={mobileHorizontal}
-              currentPlayerId={currentPlayerId}
-              social={social}
-              onSendFriendRequest={onSendFriendRequest}
-            />
-            <P
-              size="sm"
-              className="block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap font-medium"
-              title={player.name}
-            >
-              {player.name}
-            </P>
-            <div className="flex min-w-max shrink-0 flex-nowrap items-center justify-end gap-1.5">
+            <ItemMedia>
+              <PlayerAvatar
+                player={player}
+                compactOnMobile={mobileHorizontal}
+                currentPlayerId={currentPlayerId}
+                social={social}
+                onSendFriendRequest={onSendFriendRequest}
+              />
+            </ItemMedia>
+            <ItemContent className="min-w-0">
+              <ItemTitle className="w-full" title={player.name}>
+                {player.name}
+              </ItemTitle>
+            </ItemContent>
+            <ItemActions className="min-w-max shrink-0 flex-nowrap justify-end gap-1.5">
               {player.forfeited ? (
                 <HugeiconsIcon
                   icon={SkullIcon}
@@ -196,7 +205,7 @@ export function PlayerStrip({
               ) : null}
               {gamePlayer ? (
                 <Badge
-                  variant="outline"
+                  variant={showActiveTurn ? "default" : "outline"}
                   aria-label={m.cards_count({ count: gamePlayer.handCount })}
                   data-card-motion-player={player.playerId}
                 >
@@ -204,10 +213,10 @@ export function PlayerStrip({
                   <HugeiconsIcon icon={Cards02Icon} aria-hidden="true" />
                 </Badge>
               ) : null}
-            </div>
-          </div>
+            </ItemActions>
+          </Item>
         );
       })}
-    </div>
+    </ItemGroup>
   );
 }

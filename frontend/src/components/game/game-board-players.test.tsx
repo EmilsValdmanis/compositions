@@ -8,6 +8,22 @@ import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websoc
 afterEach(cleanup);
 
 describe("GameBoardPlayers", () => {
+  it("hides the current results table when not in a game", () => {
+    render(
+      <GameBoardPlayers
+        players={[]}
+        game={null}
+        connectedPlayers={0}
+        hasDraftedCompositions={false}
+        compactOnMobile
+        onResetDraftCompositions={() => {}}
+        onSendEmote={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Results" })).toBeNull();
+  });
+
   it("opens the current results table from the icon button", () => {
     const players: PlayerSnapshot[] = [
       {
@@ -51,6 +67,9 @@ describe("GameBoardPlayers", () => {
     const table = screen.getByRole("table");
     expect(within(table).getByText("Blair")).toBeTruthy();
     expect(within(table).getByText("18")).toBeTruthy();
+    expect(within(table).queryByRole("columnheader", { name: "Cards" })).toBeNull();
+    expect(within(table).queryByText("6")).toBeNull();
+    expect(within(table).queryByText("9")).toBeNull();
     expect(screen.queryByText("online")).toBeNull();
   });
 });

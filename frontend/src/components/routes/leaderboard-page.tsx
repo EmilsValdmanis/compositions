@@ -1,4 +1,4 @@
-import { Alert02Icon, ChampionIcon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
+import { Alert02Icon, RankingIcon, Refresh01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -262,15 +262,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
     <section className="mx-auto w-full max-w-6xl space-y-4">
       <header className="px-2 pt-2 md:px-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-primary">
-              <HugeiconsIcon icon={ChampionIcon} aria-hidden="true" />
-              <P size="sm" className="font-medium tracking-[0.16em] uppercase">
-                {m.all_time_rankings()}
-              </P>
-            </div>
-            <H1 className="mt-1">{m.leaderboard()}</H1>
-          </div>
+          <H1 className="mt-1">{m.leaderboard()}</H1>
           <ToggleGroup
             value={[scope]}
             onValueChange={handleScopeChange}
@@ -344,7 +336,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
             <>
               <Table
                 containerRef={scrollRef}
-                className="min-w-[32rem]"
+                className="min-w-lg"
                 containerClassName="max-h-[min(62dvh,42rem)] touch-auto overflow-auto overscroll-contain"
                 aria-label={`${m.leaderboard()}: ${scope === "friends" ? m.friends() : m.global()}, ${getMetricLabel(metric)}`}
               >

@@ -18,6 +18,7 @@ type socialStore interface {
 	ListSocialSnapshot(ctx context.Context, userID string) (database.SocialSnapshotRecord, error)
 	SendFriendRequest(ctx context.Context, senderID, recipientID string) (database.FriendRequestRecord, error)
 	RespondFriendRequest(ctx context.Context, recipientID, requestID string, accept bool) (string, error)
+	RemoveFriend(ctx context.Context, userID, friendID string) error
 	SendGameInvite(ctx context.Context, senderID, recipientID, roomCode string, expiresAt time.Time) (database.GameInviteRecord, error)
 	GetGameInvite(ctx context.Context, recipientID, inviteID string) (database.GameInviteRecord, error)
 	DeleteGameInvite(ctx context.Context, recipientID, inviteID string) (string, error)
@@ -59,6 +60,10 @@ type sendFriendRequestRequest struct {
 type respondFriendRequestRequest struct {
 	RequestID string `json:"requestId"`
 	Accept    bool   `json:"accept"`
+}
+
+type removeFriendRequest struct {
+	UserID string `json:"userId"`
 }
 
 type sendGameInviteRequest struct {
@@ -267,6 +272,21 @@ func (s *wsServer) handleRespondFriendRequest(conn *websocket.Conn, sessionID st
 		return
 	}
 	s.refreshSocialUsers(userID, senderID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+}
+
+func (s *wsServer) handleRemoveFriend(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, userID, ok := decodeSocialRequest[removeFriendRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+	if err := s.socialStore.RemoveFriend(ctx, userID, req.UserID); err != nil {
+		s.writeActionError(conn, envelope.Type, err)
+		return
+	}
+	s.refreshSocialUsers(userID, req.UserID)
 	s.writeSocialActionSuccess(conn, envelope.Type, userID)
 }
 
