@@ -82,6 +82,5 @@ export function useShouldReduceMotion() {
 }
 
 export function getReducedMotionScript() {
-  const key = JSON.stringify(REDUCED_MOTION_PREFERENCE_KEY);
-  return `(function(){try{if(localStorage.getItem(${key})==='true'){document.documentElement.setAttribute('data-reduce-motion','')}}catch(e){}})();`;
+  return "(function(){try{if(localStorage.getItem('compositions.reduce-motion-enabled')==='true'){document.documentElement.setAttribute('data-reduce-motion','')}}catch(e){}})();";
 }

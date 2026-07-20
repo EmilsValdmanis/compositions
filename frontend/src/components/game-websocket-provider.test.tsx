@@ -315,6 +315,26 @@ describe("GameWebSocketProvider", () => {
     expect(screen.getByTestId("last-error-message").textContent).toBe("room is full");
   });
 
+  it("rejects inherited object property names as message types", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    });
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+
+    await act(async () => {
+      sockets[0]!.message({ type: "toString", data: null });
+    });
+
+    expect(screen.getByTestId("last-error-code").textContent).toBe("unknown_message_type");
+  });
+
   it("sends the selected card value with discard actions", async () => {
     render(
       <GameWebSocketProvider>

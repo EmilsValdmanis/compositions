@@ -5,9 +5,12 @@ type Theme = "dark" | "light" | "system";
 
 type ThemeProviderProps = {
   children: React.ReactNode;
-  defaultTheme?: Theme;
-  storageKey?: string;
 };
+
+const DEFAULT_THEME: Theme = "system";
+const THEME_STORAGE_KEY = "theme";
+const THEME_SCRIPT =
+  "(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'&&t!=='system'){t='system'}var d=matchMedia('(prefers-color-scheme: dark)').matches;var r=t==='system'?(d?'dark':'light'):t;var e=document.documentElement;e.classList.add(r);e.style.colorScheme=r}catch(e){}})();";
 
 type ThemeProviderState = {
   theme: Theme;
@@ -21,13 +24,6 @@ function resolveTheme(storageKey: string, fallbackTheme: Theme): Theme {
 
   const stored = localStorage.getItem(storageKey);
   return stored === "light" || stored === "dark" || stored === "system" ? stored : fallbackTheme;
-}
-
-function getThemeScript(storageKey: string, defaultTheme: Theme) {
-  const key = JSON.stringify(storageKey);
-  const fallback = JSON.stringify(defaultTheme);
-
-  return `(function(){try{var t=localStorage.getItem(${key});if(t!=='light'&&t!=='dark'&&t!=='system'){t=${fallback}}var d=matchMedia('(prefers-color-scheme: dark)').matches;var r=t==='system'?(d?'dark':'light'):t;var e=document.documentElement;e.classList.add(r);e.style.colorScheme=r}catch(e){}})();`;
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState | null>(null);
@@ -47,12 +43,10 @@ function applyTheme(theme: Theme) {
   root.style.colorScheme = resolved;
 }
 
-export function ThemeProvider({
-  children,
-  defaultTheme = "system",
-  storageKey = "theme",
-}: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(() => resolveTheme(storageKey, defaultTheme));
+export function ThemeProvider({ children }: ThemeProviderProps) {
+  const [theme, setThemeState] = useState<Theme>(() =>
+    resolveTheme(THEME_STORAGE_KEY, DEFAULT_THEME),
+  );
 
   useEffect(() => {
     applyTheme(theme);
@@ -68,13 +62,13 @@ export function ThemeProvider({
   }, [theme]);
 
   const setTheme = (next: Theme) => {
-    localStorage.setItem(storageKey, next);
+    localStorage.setItem(THEME_STORAGE_KEY, next);
     setThemeState(next);
   };
 
   return (
     <ThemeProviderContext value={{ theme, setTheme }}>
-      <ScriptOnce>{getThemeScript(storageKey, defaultTheme)}</ScriptOnce>
+      <ScriptOnce>{THEME_SCRIPT}</ScriptOnce>
       {children}
     </ThemeProviderContext>
   );
