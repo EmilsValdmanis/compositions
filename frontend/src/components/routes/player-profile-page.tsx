@@ -48,6 +48,7 @@ import {
 import { getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 import { getLocale, type Locale } from "#/paraglide/runtime.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 const PERCENT_FORMATTERS: Record<Locale, Intl.NumberFormat> = {
   en: new Intl.NumberFormat("en", { style: "percent", maximumFractionDigits: 0 }),
@@ -92,8 +93,9 @@ function formatPlaytime(totalSeconds: number) {
 }
 
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {
+  const isMobile = useIsMobile();
   return (
-    <Card size="sm" className="h-full gap-1">
+    <Card size={isMobile ? "sm" : "default"} className="h-full gap-1">
       <CardHeader>
         <CardTitle>{label}</CardTitle>
       </CardHeader>
@@ -151,9 +153,10 @@ function GameHistory({
     staleTime: 30_000,
   });
   const history = data ?? initialHistory;
+  const isMobile = useIsMobile();
 
   return (
-    <Card>
+    <Card size={isMobile ? "sm" : "default"}>
       <CardHeader>
         <CardTitle>{m.game_history()}</CardTitle>
         <CardDescription>{m.game_history_description()}</CardDescription>
@@ -294,6 +297,7 @@ export function PlayerProfilePage({
   const isQuick = profileMode === "quick";
   const isAll = profileMode === "all";
   const compositions = statistics.compositionsCreated;
+  const isMobile = useIsMobile();
 
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-4">
@@ -323,7 +327,7 @@ export function PlayerProfilePage({
         </ToggleGroupItem>
       </ToggleGroup>
 
-      <Card className="overflow-hidden">
+      <Card size={isMobile ? "sm" : "default"} className="overflow-hidden">
         <CardHeader>
           <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-4">
             <Avatar className="size-16 sm:size-20">
@@ -387,7 +391,7 @@ export function PlayerProfilePage({
       </div>
 
       {!hasGames ? (
-        <Card>
+        <Card size={isMobile ? "sm" : "default"}>
           <CardHeader>
             <CardTitle>
               {isAll ? m.no_game_history() : isQuick ? m.no_quick_history() : m.no_ranked_history()}
@@ -403,7 +407,7 @@ export function PlayerProfilePage({
         </Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
+          <Card size={isMobile ? "sm" : "default"}>
             <CardHeader>
               <CardTitle>{m.round_craft()}</CardTitle>
               <CardDescription>{m.round_craft_description()}</CardDescription>
@@ -425,7 +429,7 @@ export function PlayerProfilePage({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card size={isMobile ? "sm" : "default"}>
             <CardHeader>
               <CardTitle>
                 {isAll ? m.game_record() : isQuick ? m.quick_record() : m.competitive_record()}

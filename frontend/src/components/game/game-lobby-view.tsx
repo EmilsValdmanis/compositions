@@ -37,6 +37,7 @@ import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { Caption, H2 } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 type AsyncAction = () => Promise<void> | void;
 
@@ -107,6 +108,7 @@ export function GameLobbyView({
   const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
   const connectedCount = players.filter((player) => player.connected).length;
   const isHost = Boolean(room && currentPlayerId === room.hostPlayerId);
+  const isMobile = useIsMobile();
 
   return (
     <div
@@ -115,7 +117,7 @@ export function GameLobbyView({
         room ? "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]" : "max-w-3xl",
       )}
     >
-      <Card className="min-w-0 border border-border/70 shadow-sm">
+      <Card size={isMobile ? "sm" : "default"} className="min-w-0">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

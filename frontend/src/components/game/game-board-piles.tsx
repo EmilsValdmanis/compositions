@@ -5,6 +5,7 @@ import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 function TableCardPile({
   count,
@@ -74,8 +75,9 @@ export function GameBoardPiles({
   canDrawDiscard: boolean;
   canDiscard: boolean;
 }) {
+  const isMobile = useIsMobile();
   return (
-    <Card size="sm" className="[--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(4)]">
+    <Card size={isMobile ? "sm" : "default"}>
       <CardContent className="grid grid-cols-2 items-center gap-2">
         <TableCardPile
           count={drawPileCount}

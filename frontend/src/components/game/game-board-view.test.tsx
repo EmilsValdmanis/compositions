@@ -201,7 +201,7 @@ describe("GameBoardView drag sensors", () => {
       activationConstraint: { distance: 4 },
     });
     expect(dndContextProps.sensors?.[1]?.options).toEqual({
-      activationConstraint: { delay: 180, tolerance: 8 },
+      activationConstraint: { delay: 100, tolerance: 8 },
     });
     expect(dndContextProps.sensors?.[2]?.options).toHaveProperty("coordinateGetter");
   });

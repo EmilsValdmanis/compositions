@@ -38,7 +38,7 @@ function AppHeader() {
   const { session } = rootRouteApi.useRouteContext();
 
   return (
-    <header className="flex shrink-0 items-center gap-2 h-12 md:h-16 px-2">
+    <header className="flex shrink-0 items-center gap-2 h-12 border-b md:border-none md:h-16 px-2">
       <SidebarTrigger />
       <div className="ml-auto flex shrink-0 items-center gap-1">
         <ServerStatusBadge />

@@ -10,6 +10,7 @@ import { Card, CardContent } from "#/components/ui/card";
 import { Caption } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 type HandStatus = {
   hasGame: boolean;
@@ -38,8 +39,9 @@ export function GameBoardHand({
 }: GameBoardHandProps) {
   const { hasGame } = status;
   const { hasDraftedCompositions } = tablePlayState;
+  const isMobile = useIsMobile();
   return (
-    <Card className="min-h-0 shrink-0 pb-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]">
+    <Card size={isMobile ? "sm" : "default"} className="min-h-0 shrink-0 pb-0">
       <CardContent className="min-h-0 px-0">
         {hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>

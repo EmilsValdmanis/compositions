@@ -10,6 +10,7 @@ import { Item, ItemContent, ItemGroup, ItemMedia } from "#/components/ui/item";
 import { Caption, H4, H6, P } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 type GameRulesGuideProps = {
   className?: string;
@@ -30,8 +31,9 @@ function joker(): CardSnapshot {
 }
 
 function RuleSection({ eyebrow, title, children }: RuleSectionProps) {
+  const isMobile = useIsMobile();
   return (
-    <Card size="sm" className="shadow-none">
+    <Card size={isMobile ? "sm" : "default"} className="shadow-none">
       <CardHeader>
         <Caption className="uppercase">{eyebrow}</Caption>
         <H6>{title}</H6>

@@ -56,6 +56,7 @@ import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { cn } from "#/lib/utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 const GAME_DECK_CARD_COUNT = 108;
 const DECK_VISUAL_CARD_COUNT = 18;
@@ -444,9 +445,10 @@ function DealChoicePanelContent({
       cutSize: clampedCutSize,
     });
   }
+  const isMobile = useIsMobile();
 
   return (
-    <Card size="sm" className="w-full">
+    <Card size={isMobile ? "sm" : "default"} className="w-full">
       <CardHeader>
         <CardTitle>{m.prepare_deal()}</CardTitle>
         <CardDescription>

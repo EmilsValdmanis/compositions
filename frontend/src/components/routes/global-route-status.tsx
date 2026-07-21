@@ -6,6 +6,7 @@ import { Card, CardDescription, CardFooter, CardHeader } from "#/components/ui/c
 import { Caption, H2 } from "#/components/typography";
 import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 function errorMessage(error: unknown) {
   void error;
@@ -23,11 +24,15 @@ function RouteStatusFrame({
   description: string;
   children?: React.ReactNode;
 }) {
+  const isMobile = useIsMobile();
   return (
     <>
       <title>{pageTitle(title)}</title>
       <div className="flex min-h-full flex-1 items-center justify-center p-6 sm:p-8">
-        <Card className="w-full max-w-lg border border-border/70 bg-card/95 shadow-xl backdrop-blur-sm">
+        <Card
+          size={isMobile ? "sm" : "default"}
+          className="w-full max-w-lg bg-card/95 shadow-xl backdrop-blur-sm"
+        >
           <CardHeader className="gap-3">
             <Caption className="font-medium tracking-[0.24em] uppercase">{eyebrow}</Caption>
             <div className="space-y-1">

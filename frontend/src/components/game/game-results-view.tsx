@@ -40,6 +40,7 @@ import { fireCelebrationConfetti } from "#/lib/confetti";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 type DealChoiceState = {
   pendingDealChoice: PendingDealChoiceSnapshot | null;
@@ -248,6 +249,7 @@ export function GameResultsView({
     key: string;
     phase: ResultScorePhase;
   }>(() => ({ key: scoreRevealKey, phase: "previous" }));
+  const isMobile = useIsMobile();
   const scorePhase = shouldReduceMotion
     ? "adjusted"
     : scoreReveal.key === scoreRevealKey
@@ -283,7 +285,7 @@ export function GameResultsView({
 
   return (
     <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 p-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="min-h-0 border border-border/70 shadow-sm">
+      <Card size={isMobile ? "sm" : "default"} className="min-h-0">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

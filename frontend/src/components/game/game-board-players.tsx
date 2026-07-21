@@ -34,6 +34,7 @@ import {
 import { P } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 function GameScoreboard({
   game,
@@ -125,13 +126,14 @@ export function GameBoardPlayers({
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
   const turnPlayer = players.find((player) => player.playerId === game?.turn.playerId);
+  const isMobile = useIsMobile();
   return (
     <>
       {compactOnMobile ? <MobilePlayerEmotes players={players} /> : null}
       <Card
-        size="sm"
+        size={isMobile ? "sm" : "default"}
         className={cn(
-          "min-w-0 shrink-0 overflow-hidden [--card-spacing:--spacing(2)] xl:grow xl:[--card-spacing:--spacing(4)]",
+          "min-w-0 shrink-0 overflow-hidden xl:grow",
           compactOnMobile ? "py-2! xl:py-4!" : "[@media(max-height:600px)]:h-full",
         )}
       >

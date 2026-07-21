@@ -53,6 +53,7 @@ import {
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 import { getLocale, type Locale } from "#/paraglide/runtime.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 const NUMBER_FORMATTERS: Record<Locale, Intl.NumberFormat> = {
   en: new Intl.NumberFormat("en"),
@@ -230,6 +231,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
   // react-doctor-disable-next-line react-hooks-js/react-compiler-no-manual-memoization, react-doctor/react-compiler-no-manual-memoization
   const players = useMemo(() => data?.pages.flatMap((page) => page.players) ?? [], [data]);
   const placement = data?.pages[0]?.placement ?? null;
+  const isMobile = useIsMobile();
 
   // TanStack Virtual returns intentionally mutable functions.
   // react-doctor-disable-next-line react-hooks-js/incompatible-library
@@ -309,9 +311,9 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
         </div>
       </header>
 
-      <Card className="gap-0 overflow-hidden py-0">
+      <Card size={isMobile ? "sm" : "default"} className="gap-0 overflow-hidden py-0">
         <Tabs value={metric} onValueChange={handleMetricChange} className="gap-0">
-          <div className="overflow-x-auto scroll-fade-r border-b p-3">
+          <div className="overflow-x-auto scroll-fade-r p-3">
             <TabsList aria-label={m.leaderboard_statistic()}>
               {LEADERBOARD_METRICS.map((item) => (
                 <TabsTrigger key={item} value={item}>
