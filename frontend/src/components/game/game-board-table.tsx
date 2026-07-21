@@ -29,6 +29,7 @@ import { Caption } from "#/components/typography";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+import { useIsMobile } from "#/hooks/use-mobile";
 
 function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
   return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
@@ -425,13 +426,15 @@ export function GameBoardTable({
   )
     ? visibleDraftPointTotals.reduce((total, points) => total + points, 0)
     : null;
+  const isMobile = useIsMobile();
 
   return (
     <Card
+      size={isMobile ? "sm" : "default"}
       ref={setNodeRef}
       data-over={isOverNewCompositionBoard || undefined}
       className={cn(
-        "h-full min-h-0 min-w-0 max-w-full overflow-hidden transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
+        "h-full min-h-0 min-w-0 max-w-full overflow-hidden transition-colors xl:flex-1",
         canCompose && isDraggingHandCard && isOverNewCompositionBoard
           ? "bg-primary/5 ring-2 ring-primary/70"
           : null,
