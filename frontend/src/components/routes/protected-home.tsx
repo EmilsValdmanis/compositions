@@ -45,6 +45,7 @@ export function ProtectedHome() {
     leaveRoom,
     startGame,
     startNextRound,
+    dismissCompletedGame,
     chooseDealing,
     sendEmote,
     sendFriendRequest,
@@ -219,6 +220,7 @@ export function ProtectedHome() {
                 isDealChooser: Boolean(isDealChooser),
               }}
               onStartNextRound={startNextRound}
+              onBackToLobby={dismissCompletedGame}
               onChooseDealing={chooseDealing}
               onSendEmote={sendEmote}
               social={state.social}

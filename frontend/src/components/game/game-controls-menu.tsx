@@ -37,19 +37,13 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "#/components/ui/field";
-import { SidebarMenuButton, useSidebar } from "#/components/ui/sidebar";
 import { Textarea } from "#/components/ui/textarea";
 import { m } from "#/paraglide/messages.js";
 
 type OpenDialog = "forfeit" | "end" | "report" | null;
 
-export function GameControlsMenu({
-  presentation = "button",
-}: {
-  presentation?: "button" | "sidebar";
-}) {
+export function GameControlsMenu() {
   const { state, forfeitGame, requestEndGame, reportIssue } = useGameWebSocket();
-  const { isMobile } = useSidebar();
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -101,21 +95,18 @@ export function GameControlsMenu({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            presentation === "sidebar" ? (
-              <SidebarMenuButton tooltip={m.game_controls()} />
-            ) : (
-              <Button type="button" variant="ghost" size="icon" aria-label={m.game_controls()} />
-            )
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label={m.game_controls()}
+              title={m.game_controls()}
+            />
           }
         >
           <HugeiconsIcon icon={MoreVerticalIcon} />
-          {presentation === "sidebar" ? <span>{m.game_controls()}</span> : null}
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align={presentation === "sidebar" && !isMobile ? "start" : "end"}
-          side={presentation === "sidebar" && !isMobile ? "right" : "bottom"}
-          className="w-56"
-        >
+        <DropdownMenuContent align="end" side="bottom" className="w-56">
           <DropdownMenuGroup>
             <DropdownMenuItem disabled={hasActiveProposal} onClick={() => setOpenDialog("end")}>
               <HugeiconsIcon icon={Agreement01Icon} />

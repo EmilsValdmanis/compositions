@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cards01Icon, SentIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { Cards01Icon, Home01Icon, SentIcon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type CompletedGameSnapshot,
@@ -55,6 +55,7 @@ type GameResultsViewProps = {
   connectedPlayers: number;
   dealChoice: DealChoiceState;
   onStartNextRound?: () => void;
+  onBackToLobby?: () => void;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
   onSendEmote: (emoji: string) => void;
   social?: SocialState;
@@ -201,6 +202,7 @@ export function GameResultsView({
   connectedPlayers,
   dealChoice,
   onStartNextRound,
+  onBackToLobby,
   onChooseDealing,
   onSendEmote,
   social,
@@ -387,7 +389,14 @@ export function GameResultsView({
             />
           ) : null}
         </CardContent>
-        {!isGameOver && !dealChoice.pendingDealChoice ? (
+        {isGameOver ? (
+          <CardFooter className="shrink-0 justify-end">
+            <Button type="button" onClick={onBackToLobby}>
+              <HugeiconsIcon icon={Home01Icon} data-icon="inline-start" />
+              {m.back_to_lobby()}
+            </Button>
+          </CardFooter>
+        ) : !dealChoice.pendingDealChoice ? (
           <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
             {!isHost ? (
               <P size="sm" className="text-muted-foreground">

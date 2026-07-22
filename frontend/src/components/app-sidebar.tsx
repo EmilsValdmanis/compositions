@@ -1,7 +1,6 @@
 import { CodeXmlIcon, Home01Icon, JokerIcon, RankingIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, getRouteApi } from "@tanstack/react-router";
-import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { SidebarFriendsList } from "#/components/social/friends-list";
 import {
@@ -94,9 +93,6 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ) : null}
-              <SidebarMenuItem>
-                <GameControlsMenu presentation="sidebar" />
-              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

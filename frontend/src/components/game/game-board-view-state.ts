@@ -28,6 +28,7 @@ export type ActiveDrag =
       handKey: string;
       baselineHandOrder: string[];
       baselineDraftCompositions: DraftComposition[];
+      hasReorderedHand: boolean;
     };
 
 export type DraftComposition = {
