@@ -1,0 +1,33 @@
+// @vitest-environment jsdom
+
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+
+import { GameCard } from "#/components/game/game-card";
+
+afterEach(cleanup);
+
+describe("GameCard", () => {
+  it.each([
+    ["hearts", 0],
+    ["diamonds", 1],
+    ["clubs", 2],
+    ["spades", 3],
+  ])("uses the same centered %s icon for number and face cards", (_name, suit) => {
+    const numberCard = render(<GameCard card={{ rank: 7, suit }} />);
+    const faceCard = render(<GameCard card={{ rank: 12, suit }} />);
+
+    const numberIcon = numberCard.container.querySelector("svg");
+    const faceIcon = faceCard.container.querySelector("svg");
+
+    expect(numberIcon).not.toBeNull();
+    expect(faceIcon?.innerHTML).toBe(numberIcon?.innerHTML);
+    expect(faceCard.container.querySelectorAll("svg")).toHaveLength(1);
+  });
+
+  it("keeps a single centered icon on jokers", () => {
+    const view = render(<GameCard card={{ isJoker: true }} />);
+
+    expect(view.container.querySelectorAll("svg")).toHaveLength(1);
+  });
+});
