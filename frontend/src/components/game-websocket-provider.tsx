@@ -35,6 +35,7 @@ export type CompositionActivitySnapshot = {
 };
 
 export type DraftCompositionSnapshot = {
+  id: string;
   tableIndex?: number;
   insertIndex?: number;
   cardPlacements?: Array<{

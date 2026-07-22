@@ -89,6 +89,7 @@ export function buildDraftCompositionSnapshot(
   );
 
   return {
+    id: composition.id,
     tableIndex: composition.tableIndex ?? undefined,
     insertIndex: composition.insertIndex,
     cardPlacements: hasCardPlacements ? cardPlacements : undefined,

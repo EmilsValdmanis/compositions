@@ -111,6 +111,7 @@ export function CardTransferAnimation({
     if (!element || !flight) return;
 
     const reducedMotion = shouldReduceMotion();
+    element.style.willChange = "transform, opacity";
     const animation = element.animate(
       reducedMotion
         ? [{ opacity: 0 }, { opacity: 1 }, { opacity: 0 }]
@@ -124,8 +125,14 @@ export function CardTransferAnimation({
       },
     );
 
-    animation.onfinish = () => setFlight((current) => (current?.id === flight.id ? null : current));
-    return () => animation.cancel();
+    animation.onfinish = () => {
+      element.style.willChange = "";
+      setFlight((current) => (current?.id === flight.id ? null : current));
+    };
+    return () => {
+      element.style.willChange = "";
+      animation.cancel();
+    };
   }, [flight]);
 
   if (!flight || typeof document === "undefined") return null;
@@ -133,7 +140,7 @@ export function CardTransferAnimation({
   return createPortal(
     <div
       ref={cardRef}
-      className="pointer-events-none fixed z-50 will-change-transform"
+      className="pointer-events-none fixed z-50"
       style={{ left: flight.startLeft, top: flight.startTop }}
       aria-hidden="true"
       data-card-transfer={flight.source === "player" ? "discard-place" : `${flight.source}-draw`}

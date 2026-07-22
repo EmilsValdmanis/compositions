@@ -57,7 +57,7 @@ export function SidebarFriendsList({
   const { isMobile, setOpenMobile } = useSidebar();
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set());
   const unavailable = new Set(unavailableUserIds);
-  const sortedFriends = [...friends].sort(
+  const sortedFriends = friends.toSorted(
     (left, right) =>
       Number(right.online) - Number(left.online) || left.name.localeCompare(right.name),
   );
@@ -70,13 +70,12 @@ export function SidebarFriendsList({
       toast.success(m.game_invite_sent());
     } catch {
       toast.error(m.social_action_failed());
-    } finally {
-      setPendingUserIds((current) => {
-        const next = new Set(current);
-        next.delete(friend.id);
-        return next;
-      });
     }
+    setPendingUserIds((current) => {
+      const next = new Set(current);
+      next.delete(friend.id);
+      return next;
+    });
   }
 
   async function unfriend(friend: SocialUser) {
@@ -87,13 +86,12 @@ export function SidebarFriendsList({
       toast.success(m.friend_removed());
     } catch {
       toast.error(m.social_action_failed());
-    } finally {
-      setPendingUserIds((current) => {
-        const next = new Set(current);
-        next.delete(friend.id);
-        return next;
-      });
     }
+    setPendingUserIds((current) => {
+      const next = new Set(current);
+      next.delete(friend.id);
+      return next;
+    });
   }
 
   return (

@@ -32,6 +32,7 @@ type DraftCardPlacementSnapshot struct {
 }
 
 type DraftCompositionSnapshot struct {
+	ID             string                       `json:"id,omitempty"`
 	TableIndex     *int                         `json:"tableIndex,omitempty"`
 	InsertIndex    *int                         `json:"insertIndex,omitempty"`
 	CardPlacements []DraftCardPlacementSnapshot `json:"cardPlacements,omitempty"`

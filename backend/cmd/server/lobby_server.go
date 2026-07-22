@@ -1967,14 +1967,17 @@ func (r *room) applySubmittedTurnActivity(playerID string, comps []*game.Composi
 
 func buildDraftSnapshotsFromSubmitted(comps []*game.Composition, additions []game.CompositionAddition) []game.DraftCompositionSnapshot {
 	drafts := make([]game.DraftCompositionSnapshot, 0, len(comps)+len(additions))
-	for _, comp := range comps {
+	for index, comp := range comps {
 		if comp == nil {
 			continue
 		}
 		snapshot := comp.Snapshot()
 		cards := make([]game.CardSnapshot, len(snapshot.Cards))
 		copy(cards, snapshot.Cards)
-		drafts = append(drafts, game.DraftCompositionSnapshot{Cards: cards})
+		drafts = append(drafts, game.DraftCompositionSnapshot{
+			ID:    fmt.Sprintf("submitted-new-%d", index),
+			Cards: cards,
+		})
 	}
 	for _, addition := range additions {
 		cards := make([]game.CardSnapshot, 0, len(addition.Cards))
@@ -1982,7 +1985,12 @@ func buildDraftSnapshotsFromSubmitted(comps []*game.Composition, additions []gam
 			cards = append(cards, card.Snapshot())
 		}
 		index := addition.CompositionIndex
-		drafts = append(drafts, game.DraftCompositionSnapshot{TableIndex: &index, InsertIndex: addition.InsertIndex, Cards: cards})
+		drafts = append(drafts, game.DraftCompositionSnapshot{
+			ID:          fmt.Sprintf("submitted-table-%d", index),
+			TableIndex:  &index,
+			InsertIndex: addition.InsertIndex,
+			Cards:       cards,
+		})
 	}
 	return drafts
 }

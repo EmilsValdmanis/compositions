@@ -661,6 +661,7 @@ describe("GameBoardView spectator turn drafts", () => {
             ],
             draftCompositions: [
               {
+                id: "draft-table-0",
                 tableIndex: 0,
                 cards: [{ rank: 3, suit: 1 }],
                 cardPlacements: [{ reclaimJokerIndex: 0 }],
