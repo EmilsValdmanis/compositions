@@ -62,7 +62,7 @@ export function ServerStatusBadge({
             <SidebarMenuButton tooltip={m.connection_status()} className="relative" />
           ) : (
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               className="relative"
               aria-label={m.connection_status()}

@@ -3,6 +3,7 @@ import { AppSidebar } from "#/components/app-sidebar";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
+import { ThemeSwitcher } from "#/components/theme-switcher";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
 
 const rootRouteApi = getRouteApi("__root__");
@@ -27,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader />
-        <div className="flex min-h-0 w-full flex-1 flex-col p-2 md:pb-1 gap-2 md:gap-4 [@media(max-height:600px)]:gap-2 overflow-y-auto">
+        <div className="flex min-h-0 w-full flex-1 flex-col p-2 gap-2 md:gap-4 [@media(max-height:600px)]:gap-2 overflow-y-auto">
           {children}
         </div>
       </SidebarInset>
@@ -45,6 +46,7 @@ function AppHeader() {
         <GameControlsMenu />
         <ServerStatusBadge />
         {session ? <NotificationsDropdown /> : null}
+        <ThemeSwitcher />
       </div>
     </header>
   );

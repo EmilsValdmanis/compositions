@@ -202,11 +202,13 @@ type gameStateRecipient struct {
 }
 
 type lobbyServer struct {
-	mu       sync.Mutex
-	rng      *rand.Rand
-	store    userStore
-	sessions map[string]*playerSession
-	rooms    map[string]*room
+	mu                   sync.Mutex
+	rng                  *rand.Rand
+	store                userStore
+	sessions             map[string]*playerSession
+	rooms                map[string]*room
+	spectatorsByRoom     map[string]map[*websocket.Conn]struct{}
+	spectatingRoomByConn map[*websocket.Conn]string
 }
 
 var makeGameState = game.NewGameState
@@ -223,10 +225,12 @@ func newLobbyServerWithStore(store userStore) *lobbyServer {
 		store = noopUserStore{}
 	}
 	return &lobbyServer{
-		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
-		store:    store,
-		sessions: make(map[string]*playerSession),
-		rooms:    make(map[string]*room),
+		rng:                  rand.New(rand.NewSource(time.Now().UnixNano())),
+		store:                store,
+		sessions:             make(map[string]*playerSession),
+		rooms:                make(map[string]*room),
+		spectatorsByRoom:     make(map[string]map[*websocket.Conn]struct{}),
+		spectatingRoomByConn: make(map[*websocket.Conn]string),
 	}
 }
 
@@ -1107,7 +1111,8 @@ func (l *lobbyServer) disconnectWithEmitter(sessionID string, conn *websocket.Co
 	l.persistLocked("session disconnected")
 
 	roomState = room.snapshot()
-	recipients = room.connectedConns(l.sessions)
+	roomState.SpectatorCount = len(l.spectatorsByRoom[room.code])
+	recipients = append(room.connectedConns(l.sessions), l.spectatorConnectionsLocked(room.code)...)
 	shouldBroadcast = len(recipients) > 0
 	l.mu.Unlock()
 
@@ -1582,6 +1587,174 @@ func (l *lobbyServer) joinableRoomCode(sessionID string) (string, error) {
 		return "", errors.New("room is full")
 	}
 	return room.code, nil
+}
+
+func (l *lobbyServer) activeGameForUser(userID string) (time.Time, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	for _, room := range l.rooms {
+		if room == nil || room.gameState == nil || !isSpectatablePhase(room.gameStatePhase()) {
+			continue
+		}
+		for _, player := range room.players {
+			if player != nil && player.authUserID == userID && player.connected && !player.forfeited {
+				startedAt := room.statisticsStartedAt
+				if startedAt.IsZero() {
+					startedAt = time.Now().UTC()
+				}
+				return startedAt, true
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+func (l *lobbyServer) spectateGame(sessionID, friendUserID string, conn *websocket.Conn) (gameStateEvent, roomSnapshot, []*websocket.Conn, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	session, err := l.requireSession(sessionID)
+	if err != nil {
+		return gameStateEvent{}, roomSnapshot{}, nil, err
+	}
+	if !session.authenticated || session.authUserID == "" {
+		return gameStateEvent{}, roomSnapshot{}, nil, errAuthenticationRequired
+	}
+	if session.authUserID == friendUserID {
+		return gameStateEvent{}, roomSnapshot{}, nil, errors.New("cannot spectate yourself")
+	}
+	if l.sessionRoom(session) != nil {
+		return gameStateEvent{}, roomSnapshot{}, nil, errors.New("leave your room before spectating")
+	}
+
+	var target *room
+	for _, candidate := range l.rooms {
+		if candidate == nil || candidate.gameState == nil || !isSpectatablePhase(candidate.gameStatePhase()) {
+			continue
+		}
+		for _, player := range candidate.players {
+			if player != nil && player.authUserID == friendUserID && player.connected && !player.forfeited {
+				target = candidate
+				break
+			}
+		}
+		if target != nil {
+			break
+		}
+	}
+	if target == nil {
+		return gameStateEvent{}, roomSnapshot{}, nil, errors.New("friend is not in an active game")
+	}
+
+	l.removeSpectatorLocked(conn)
+	if l.spectatorsByRoom[target.code] == nil {
+		l.spectatorsByRoom[target.code] = make(map[*websocket.Conn]struct{})
+	}
+	l.spectatorsByRoom[target.code][conn] = struct{}{}
+	l.spectatingRoomByConn[conn] = target.code
+
+	state, ok := target.gameState.SnapshotForSpectator()
+	if !ok {
+		l.removeSpectatorLocked(conn)
+		return gameStateEvent{}, roomSnapshot{}, nil, errors.New("game state snapshot failed")
+	}
+	if _, activity := target.turnContextForPlayer(""); activity != nil {
+		state.TurnActivity = activity
+	}
+	snapshot := target.snapshot()
+	snapshot.SpectatorCount = len(l.spectatorsByRoom[target.code])
+	recipients := append(target.connectedConns(l.sessions), l.spectatorConnectionsLocked(target.code)...)
+	return gameStateEvent{Room: snapshot, Game: state, Spectating: true}, snapshot, recipients, nil
+}
+
+func (l *lobbyServer) stopSpectating(conn *websocket.Conn) (*roomSnapshot, []*websocket.Conn) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	roomCode := l.removeSpectatorLocked(conn)
+	room := l.rooms[roomCode]
+	if room == nil {
+		return nil, nil
+	}
+	snapshot := room.snapshot()
+	snapshot.SpectatorCount = len(l.spectatorsByRoom[roomCode])
+	recipients := append(room.connectedConns(l.sessions), l.spectatorConnectionsLocked(roomCode)...)
+	return &snapshot, recipients
+}
+
+func (l *lobbyServer) withSpectatorCount(snapshot roomSnapshot) roomSnapshot {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	snapshot.SpectatorCount = len(l.spectatorsByRoom[snapshot.Code])
+	return snapshot
+}
+
+func (l *lobbyServer) spectatorConnections(roomCode string) []*websocket.Conn {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.spectatorConnectionsLocked(roomCode)
+}
+
+func (l *lobbyServer) spectatorGameRecipients(roomCode string) []gameStateRecipient {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	room := l.rooms[roomCode]
+	if room == nil || room.gameState == nil || len(l.spectatorsByRoom[roomCode]) == 0 {
+		return nil
+	}
+	state, ok := room.gameState.SnapshotForSpectator()
+	if !ok {
+		return nil
+	}
+	if _, activity := room.turnContextForPlayer(""); activity != nil {
+		state.TurnActivity = activity
+	}
+	snapshot := room.snapshot()
+	snapshot.SpectatorCount = len(l.spectatorsByRoom[roomCode])
+	event := gameStateEvent{Room: snapshot, Game: state, Spectating: true}
+	recipients := make([]gameStateRecipient, 0, len(l.spectatorsByRoom[roomCode]))
+	for conn := range l.spectatorsByRoom[roomCode] {
+		recipients = append(recipients, gameStateRecipient{conn: conn, event: event})
+	}
+	return recipients
+}
+
+func (l *lobbyServer) endSpectatingRoom(roomCode string) []*websocket.Conn {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	connections := l.spectatorConnectionsLocked(roomCode)
+	for _, conn := range connections {
+		delete(l.spectatingRoomByConn, conn)
+	}
+	delete(l.spectatorsByRoom, roomCode)
+	return connections
+}
+
+func (l *lobbyServer) spectatorConnectionsLocked(roomCode string) []*websocket.Conn {
+	connections := make([]*websocket.Conn, 0, len(l.spectatorsByRoom[roomCode]))
+	for conn := range l.spectatorsByRoom[roomCode] {
+		connections = append(connections, conn)
+	}
+	return connections
+}
+
+func (l *lobbyServer) removeSpectatorLocked(conn *websocket.Conn) string {
+	roomCode := l.spectatingRoomByConn[conn]
+	if roomCode == "" {
+		return ""
+	}
+	delete(l.spectatingRoomByConn, conn)
+	delete(l.spectatorsByRoom[roomCode], conn)
+	if len(l.spectatorsByRoom[roomCode]) == 0 {
+		delete(l.spectatorsByRoom, roomCode)
+	}
+	return roomCode
+}
+
+func isSpectatablePhase(phase game.GamePhase) bool {
+	return phase == game.PhaseInProgress || phase == game.PhaseRoundOver
 }
 
 func (l *lobbyServer) gameStateForSession(sessionID string, roomState roomSnapshot) (*gameStateEvent, error) {

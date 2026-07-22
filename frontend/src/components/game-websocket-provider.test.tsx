@@ -94,6 +94,7 @@ function Harness({ children }: { children?: ReactNode }) {
       <p data-testid="last-error-code">{state.lastErrorCode}</p>
       <p data-testid="last-error-message">{state.lastErrorMessage}</p>
       <p data-testid="completed-game-phase">{state.completedGame?.room.phase}</p>
+      <p data-testid="is-spectating">{String(state.isSpectating)}</p>
       <p data-testid="social-user-id">{state.social.userId}</p>
       <p data-testid="social-notification-count">
         {state.social.incomingFriendRequests.length + state.social.gameInvites.length}
@@ -259,6 +260,32 @@ describe("GameWebSocketProvider", () => {
     expect(screen.getByTestId("connection-status").textContent).toBe("disconnected");
     expect(screen.getByTestId("social-user-id").textContent).toBe("");
     expect(screen.getByTestId("social-notification-count").textContent).toBe("0");
+  });
+
+  it("tracks spectator game state and clears it when watching ends", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    await waitFor(() => expect(sockets).toHaveLength(1));
+    await act(async () => sockets[0]!.open());
+    await act(async () => {
+      sockets[0]!.message({
+        type: "game_state",
+        data: {
+          spectating: true,
+          room: { code: "WATCH1", phase: "in_progress", players: [], spectatorCount: 1 },
+          game: { hand: [], players: [] },
+        },
+      });
+    });
+    expect(screen.getByTestId("is-spectating").textContent).toBe("true");
+
+    await act(async () => sockets[0]!.message({ type: "spectating_ended", data: {} }));
+    expect(screen.getByTestId("is-spectating").textContent).toBe("false");
   });
 
   it("removes an invitation notification when it expires", async () => {

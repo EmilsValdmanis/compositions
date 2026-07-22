@@ -1,10 +1,5 @@
 import { useState } from "react";
-import {
-  Agreement01Icon,
-  Bug01Icon,
-  Logout02Icon,
-  MoreVerticalIcon,
-} from "@hugeicons/core-free-icons";
+import { Agreement01Icon, Bug01Icon, Flag02Icon, Logout02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
@@ -104,7 +99,7 @@ export function GameControlsMenu() {
             />
           }
         >
-          <HugeiconsIcon icon={MoreVerticalIcon} />
+          <HugeiconsIcon icon={Flag02Icon} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" side="bottom" className="w-56">
           <DropdownMenuGroup>

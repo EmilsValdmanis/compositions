@@ -21,16 +21,10 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { SidebarMenuButton, useSidebar } from "#/components/ui/sidebar";
-import { useTheme } from "#/components/theme-provider";
 import { Caption, P } from "#/components/typography";
 import { authClient } from "#/lib/auth-client";
 import {
@@ -51,7 +45,6 @@ export function UserDropdown({ presentation = "button" }: { presentation?: "butt
   const { session } = rootRouteApi.useRouteContext();
   const { isMobile } = useSidebar();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
   const [rulesOpen, setRulesOpen] = useState(false);
   const soundsEnabled = useSyncExternalStore(
     subscribeToGameSoundPreference,
@@ -150,21 +143,6 @@ export function UserDropdown({ presentation = "button" }: { presentation?: "butt
               <HugeiconsIcon icon={Motion01Icon} />
               {m.reduce_motion()}
             </DropdownMenuCheckboxItem>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>{m.theme()}</DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuGroup>
-                  <DropdownMenuRadioGroup
-                    value={theme}
-                    onValueChange={(value) => setTheme(value as typeof theme)}
-                  >
-                    <DropdownMenuRadioItem value="light">{m.theme_light()}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="dark">{m.theme_dark()}</DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem value="system">{m.theme_system()}</DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
             <LanguageSubmenu />
           </DropdownMenuGroup>
           <DropdownMenuSeparator />

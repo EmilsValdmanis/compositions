@@ -3,10 +3,11 @@ import {
   UserGroupIcon,
   UserIcon,
   UserRemove01Icon,
+  ViewIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { type SocialUser } from "#/components/game-websocket-provider";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
@@ -39,28 +40,54 @@ import { Skeleton } from "#/components/ui/skeleton";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
+export function formatGameDuration(startedAt: string, now = Date.now()) {
+  const startedAtMs = Date.parse(startedAt);
+  const totalMinutes = Number.isFinite(startedAtMs)
+    ? Math.max(0, Math.floor((now - startedAtMs) / 60_000))
+    : 0;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
 export function SidebarFriendsList({
   friends,
   isLoading = false,
   canInvite,
+  canSpectate = true,
   unavailableUserIds = [],
   onInvite,
+  onSpectate,
   onUnfriend,
 }: {
   friends: SocialUser[];
   isLoading?: boolean;
   canInvite: boolean;
+  canSpectate?: boolean;
   unavailableUserIds?: string[];
   onInvite?: (userId: string) => Promise<unknown>;
+  onSpectate?: (userId: string) => Promise<unknown>;
   onUnfriend?: (userId: string) => Promise<unknown>;
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
+  const navigate = useNavigate();
   const [pendingUserIds, setPendingUserIds] = useState<Set<string>>(new Set());
+  const [now, setNow] = useState(() => Date.now());
   const unavailable = new Set(unavailableUserIds);
   const sortedFriends = friends.toSorted(
     (left, right) =>
-      Number(right.online) - Number(left.online) || left.name.localeCompare(right.name),
+      Number(Boolean(right.activeGame)) - Number(Boolean(left.activeGame)) ||
+      Number(right.online) - Number(left.online) ||
+      left.name.localeCompare(right.name),
   );
+
+  useEffect(() => {
+    if (!friends.some((friend) => friend.activeGame)) {
+      return;
+    }
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, [friends]);
 
   async function invite(friend: SocialUser) {
     if (!onInvite) return;
@@ -84,6 +111,23 @@ export function SidebarFriendsList({
     try {
       await onUnfriend(friend.id);
       toast.success(m.friend_removed());
+    } catch {
+      toast.error(m.social_action_failed());
+    }
+    setPendingUserIds((current) => {
+      const next = new Set(current);
+      next.delete(friend.id);
+      return next;
+    });
+  }
+
+  async function spectate(friend: SocialUser) {
+    if (!onSpectate || !friend.activeGame) return;
+    setPendingUserIds((current) => new Set(current).add(friend.id));
+    try {
+      await onSpectate(friend.id);
+      setOpenMobile(false);
+      await navigate({ to: "/" });
     } catch {
       toast.error(m.social_action_failed());
     }
@@ -124,7 +168,11 @@ export function SidebarFriendsList({
             {sortedFriends.map((friend) => {
               const pending = pendingUserIds.has(friend.id);
               const inviteEnabled =
-                Boolean(onInvite) && canInvite && friend.online && !unavailable.has(friend.id);
+                Boolean(onInvite) &&
+                canInvite &&
+                friend.online &&
+                !friend.activeGame &&
+                !unavailable.has(friend.id);
               return (
                 <SidebarMenuItem key={friend.id}>
                   <DropdownMenu>
@@ -151,7 +199,25 @@ export function SidebarFriendsList({
                           )}
                         />
                       </Avatar>
-                      <span>{friend.name}</span>
+                      <div className="flex min-w-0 flex-1 items-center justify-between gap-1.5 group-data-[collapsible=icon]:hidden">
+                        <span className="min-w-0 truncate">{friend.name}</span>
+                        {friend.activeGame ? (
+                          <span
+                            className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground tabular-nums"
+                            aria-label={m.friend_in_game_duration({
+                              duration: formatGameDuration(friend.activeGame.startedAt, now),
+                            })}
+                          >
+                            <span aria-hidden="true">{m.friend_in_game()}</span>
+                            <span aria-hidden="true" className="opacity-50">
+                              ·
+                            </span>
+                            <span aria-hidden="true">
+                              {formatGameDuration(friend.activeGame.startedAt, now)}
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
                       align="start"
@@ -160,6 +226,15 @@ export function SidebarFriendsList({
                     >
                       <DropdownMenuGroup>
                         <DropdownMenuLabel>{friend.name}</DropdownMenuLabel>
+                        {friend.activeGame ? (
+                          <DropdownMenuItem
+                            disabled={!onSpectate || !canSpectate || pending}
+                            onClick={() => void spectate(friend)}
+                          >
+                            <HugeiconsIcon icon={ViewIcon} />
+                            {m.watch_game()}
+                          </DropdownMenuItem>
+                        ) : null}
                         <DropdownMenuItem
                           disabled={!inviteEnabled || pending}
                           onClick={() => void invite(friend)}

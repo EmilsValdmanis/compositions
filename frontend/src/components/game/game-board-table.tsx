@@ -1,3 +1,5 @@
+import { Cards01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useRef, type RefObject } from "react";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
@@ -25,7 +27,7 @@ import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
-import { Caption } from "#/components/typography";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "#/components/ui/empty";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -117,9 +119,14 @@ function TableCompositionsSection({
   if (tableCompositions.length === 0) {
     return (
       <div className="w-full shrink-0 overflow-visible">
-        <Caption className="mx-auto grid min-h-32 w-fit max-w-full place-items-center rounded-3xl border border-dashed border-border/70 px-4 text-center">
-          {m.no_compositions()}
-        </Caption>
+        <Empty className="p-6 xl:p-12">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <HugeiconsIcon icon={Cards01Icon} />
+            </EmptyMedia>
+            <EmptyTitle className="text-sm">{m.no_compositions()}</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   }

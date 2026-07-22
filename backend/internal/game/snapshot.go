@@ -112,6 +112,29 @@ func (gs *GameState) SnapshotForPlayer(playerID string) (GameSnapshot, bool) {
 	return GameSnapshot{}, false
 }
 
+// SnapshotForSpectator returns the public game state without exposing any
+// player's private hand while a round is in progress.
+func (gs *GameState) SnapshotForSpectator() (GameSnapshot, bool) {
+	if gs == nil {
+		return GameSnapshot{}, false
+	}
+
+	revealHands := gs.phase == PhaseRoundOver || gs.phase == PhaseGameOver
+	return GameSnapshot{
+		GameMode:           gs.GameMode(),
+		Phase:              gs.phase,
+		Round:              gs.round,
+		DealerIndex:        gs.dealerIndex,
+		RoundWinnerIndex:   gs.roundWinnerIndex,
+		Turn:               gs.turn.snapshot(gs.players),
+		Players:            playerStateSnapshots(gs.players, revealHands),
+		Hand:               []CardSnapshot{},
+		DrawPileCount:      len(gs.drawPile.cards),
+		DiscardPile:        cardSnapshots(gs.discardPile.cards),
+		ActiveCompositions: compositionSnapshots(gs.activeCompositions),
+	}, true
+}
+
 func (gs *GameState) GameMode() GameMode {
 	if gs == nil || !gs.gameMode.Valid() {
 		return GameModeFull

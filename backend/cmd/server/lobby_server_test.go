@@ -147,6 +147,48 @@ func TestLobbyStartsQuickGameWithSelectedMode(t *testing.T) {
 	}
 }
 
+func TestLobbySpectatorGetsPublicSnapshotAndUpdatesCount(t *testing.T) {
+	lobby, events, roomCode := newActiveLobbyForExitTests(t, 2)
+	friendSession := lobby.sessions[events[0].SessionID]
+	friendSession.authenticated = true
+	friendSession.authUserID = "friend-user"
+	lobby.rooms[roomCode].players[0].authUserID = "friend-user"
+
+	viewer, _, _, err := lobby.connect("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viewerSession := lobby.sessions[viewer.SessionID]
+	viewerSession.authenticated = true
+	viewerSession.authUserID = "viewer-user"
+	viewerConn := &websocket.Conn{}
+	viewerSession.conn = viewerConn
+
+	event, roomState, _, err := lobby.spectateGame(viewer.SessionID, "friend-user", viewerConn)
+	if err != nil {
+		t.Fatalf("spectateGame() error = %v", err)
+	}
+	if !event.Spectating || roomState.SpectatorCount != 1 {
+		t.Fatalf("spectator event = %#v room = %#v; want active spectator count 1", event, roomState)
+	}
+	if len(event.Game.Hand) != 0 {
+		t.Fatalf("spectator private hand = %d cards; want 0", len(event.Game.Hand))
+	}
+	for _, player := range event.Game.Players {
+		if len(player.Hand) != 0 {
+			t.Fatalf("spectator saw player %q hand", player.PlayerID)
+		}
+	}
+	if startedAt, ok := lobby.activeGameForUser("friend-user"); !ok || startedAt.IsZero() {
+		t.Fatalf("activeGameForUser() = %v, %t; want started game", startedAt, ok)
+	}
+
+	stoppedRoom, _ := lobby.stopSpectating(viewerConn)
+	if stoppedRoom == nil || stoppedRoom.SpectatorCount != 0 {
+		t.Fatalf("stopSpectating() room = %#v; want spectator count 0", stoppedRoom)
+	}
+}
+
 func TestLobbyForfeitGameKeepsCardsAvailableAndTransfersHost(t *testing.T) {
 	lobby, events, roomCode := newActiveLobbyForExitTests(t, 3)
 	room := lobby.rooms[roomCode]

@@ -41,6 +41,25 @@ function renderDraftTable(
   );
 }
 
+describe("GameBoardTable empty state", () => {
+  it("uses the Empty component when the table has no compositions", () => {
+    const view = render(
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[]}
+          newCompositions={[]}
+          players={[]}
+          canCompose={false}
+          showDraftTotal={false}
+        />
+      </DndContext>,
+    );
+
+    expect(view.container.querySelector('[data-slot="empty"]')).toBeTruthy();
+    expect(view.getByText("No compositions on the table.")).toBeTruthy();
+  });
+});
+
 describe("draftPreviewForComposition", () => {
   it("keeps a reclaimed joker with later additions on the same edge for spectators", () => {
     const view = render(

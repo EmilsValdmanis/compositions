@@ -148,6 +148,8 @@ type GameBoardViewProps = {
   playerId: string;
   players: PlayerSnapshot[];
   connectedPlayers: number;
+  spectatorCount?: number;
+  isSpectating?: boolean;
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
   onDiscardCard: (cardIndex: number, card: CardSnapshot) => Promise<ActionResult> | void;
@@ -285,6 +287,8 @@ function GameBoardLayout({
   topDiscardCard,
   players,
   connectedPlayers,
+  spectatorCount,
+  isSpectating,
   availableHandEntries,
   sortableIds,
   activeDrag,
@@ -307,6 +311,8 @@ function GameBoardLayout({
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
   players: PlayerSnapshot[];
   connectedPlayers: number;
+  spectatorCount: number;
+  isSpectating: boolean;
   availableHandEntries: ReturnType<typeof buildHandEntries>;
   sortableIds: string[];
   activeDrag: ActiveDrag | null;
@@ -320,6 +326,8 @@ function GameBoardLayout({
   social?: SocialState;
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
+  const currentPlayer = players.find((player) => player.playerId === currentPlayerId);
+
   return (
     <div
       ref={boardRef}
@@ -330,6 +338,8 @@ function GameBoardLayout({
           players={players}
           game={game}
           connectedPlayers={connectedPlayers}
+          spectatorCount={spectatorCount}
+          canSendEmote={!isSpectating}
           hasDraftedCompositions={draftedCompositionsCount > 0}
           compactOnMobile
           onResetDraftCompositions={onResetDraftCompositions}
@@ -340,7 +350,20 @@ function GameBoardLayout({
         />
       </div>
 
-      <div className="col-start-1 row-start-2 min-h-0 min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 [@media(max-height:600px)]:col-start-1 [@media(max-height:600px)]:row-span-2 [@media(max-height:600px)]:row-start-2">
+      <div
+        data-slot="game-board-table-region"
+        className="relative col-start-1 row-start-2 min-h-0 min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 [@media(max-height:600px)]:col-start-1 [@media(max-height:600px)]:row-span-2 [@media(max-height:600px)]:row-start-2"
+      >
+        {turnState.isMyTurn && game ? (
+          <TurnStartCue
+            key={`${game.round}:${game.turn.number}`}
+            round={game.round}
+            turnNumber={game.turn.number}
+            playerName={currentPlayer?.name ?? turnState.turnPlayerName}
+            playerImageUrl={currentPlayer?.imageUrl}
+          />
+        ) : null}
+
         <GameBoardTable
           tableCompositions={tableCompositions}
           newCompositions={newCompositions}
@@ -387,6 +410,7 @@ function GameBoardLayout({
             hasGame: Boolean(game),
             isMyTurn: turnState.isMyTurn,
             turnPlayerName: turnState.turnPlayerName,
+            isSpectating,
           }}
           availableHandEntries={availableHandEntries}
           sortableIds={sortableIds}
@@ -1033,6 +1057,8 @@ export function GameBoardView({
   playerId,
   players,
   connectedPlayers,
+  spectatorCount = 0,
+  isSpectating = false,
   turnState,
   topDiscardCard,
   onDiscardCard,
@@ -1088,8 +1114,6 @@ export function GameBoardView({
   const collisionDetection = createBoardCollisionDetection(
     new Set(controller.availableHandEntries.map((entry) => entry.key)),
   );
-  const currentPlayer = players.find((player) => player.playerId === playerId);
-
   return (
     <DndContext
       sensors={sensors}
@@ -1099,15 +1123,6 @@ export function GameBoardView({
       onDragEnd={controller.handleDragEnd}
       onDragCancel={controller.handleDragCancel}
     >
-      {turnState.isMyTurn && game ? (
-        <TurnStartCue
-          key={`${game.round}:${game.turn.number}`}
-          round={game.round}
-          turnNumber={game.turn.number}
-          playerName={currentPlayer?.name ?? turnState.turnPlayerName}
-          playerImageUrl={currentPlayer?.imageUrl}
-        />
-      ) : null}
       <GameBoardLayout
         boardRef={boardRef}
         game={game}
@@ -1118,6 +1133,8 @@ export function GameBoardView({
         topDiscardCard={topDiscardCard}
         players={players}
         connectedPlayers={connectedPlayers}
+        spectatorCount={spectatorCount}
+        isSpectating={isSpectating}
         availableHandEntries={controller.availableHandEntries}
         sortableIds={controller.sortableIds}
         activeDrag={controller.activeDrag}

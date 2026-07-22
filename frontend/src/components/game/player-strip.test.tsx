@@ -73,6 +73,33 @@ describe("PlayerStrip", () => {
     expect(container.querySelector('[data-slot="avatar-badge"]')?.className).toContain("ring-card");
   });
 
+  it("uses compact, borderless rows in a menu presentation", () => {
+    const players: PlayerSnapshot[] = [
+      {
+        playerId: "player-1",
+        name: "Avery",
+        connected: true,
+        seat: 0,
+        isHost: false,
+        canReconnect: false,
+      },
+    ];
+    const game = {
+      turn: { playerId: "player-1" },
+      players: [{ playerId: "player-1", handCount: 9 }],
+    } as GameSnapshot;
+
+    const { container } = render(<PlayerStrip players={players} game={game} presentation="menu" />);
+
+    expect(
+      container.querySelector('[data-slot="item-group"]')?.getAttribute("data-presentation"),
+    ).toBe("menu");
+    expect(container.querySelector('[data-slot="item"]')?.getAttribute("data-variant")).toBe(
+      "default",
+    );
+    expect(container.querySelector('[data-slot="avatar"]')?.className).toContain("size-8");
+  });
+
   it("shows a skull instead of the turn spinner for a forfeited player", () => {
     const players: PlayerSnapshot[] = [
       {

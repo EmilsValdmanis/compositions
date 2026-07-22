@@ -130,6 +130,7 @@ export function PlayerStrip({
   showHostBadges = true,
   showTurnIndicator = true,
   mobileHorizontal = false,
+  presentation = "default",
   emoteClassName,
   currentPlayerId,
   social,
@@ -140,19 +141,24 @@ export function PlayerStrip({
   showHostBadges?: boolean;
   showTurnIndicator?: boolean;
   mobileHorizontal?: boolean;
+  presentation?: "default" | "menu";
   emoteClassName?: string;
   currentPlayerId?: string;
   social?: SocialState;
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
   const playerStates = game?.players ?? [];
+  const isMenu = presentation === "menu";
   return (
     <ItemGroup
+      data-presentation={presentation}
       className={cn(
         "grid min-w-0 max-w-full gap-2 has-data-[size=sm]:gap-2",
-        mobileHorizontal
-          ? "grid-flow-col auto-cols-[minmax(9rem,1fr)] overflow-x-auto overscroll-x-contain pb-1 xl:grid-flow-row xl:auto-cols-auto xl:overflow-visible xl:pb-0"
-          : "min-h-0 flex-1 content-start overflow-y-auto overscroll-y-contain pr-1",
+        isMenu
+          ? "gap-0.5 overflow-visible p-0"
+          : mobileHorizontal
+            ? "grid-flow-col auto-cols-[minmax(9rem,1fr)] overflow-x-auto overscroll-x-contain pb-1 xl:grid-flow-row xl:auto-cols-auto xl:overflow-visible xl:pb-0"
+            : "min-h-0 flex-1 content-start overflow-y-auto overscroll-y-contain pr-1",
       )}
     >
       {players.map((player) => {
@@ -163,11 +169,15 @@ export function PlayerStrip({
           <Item
             key={player.playerId}
             role="listitem"
-            variant={showActiveTurn ? "primary" : "outline"}
+            variant={isMenu ? "default" : showActiveTurn ? "primary" : "outline"}
             size="xs"
             className={cn(
               "relative min-w-0 max-w-full flex-nowrap",
-              mobileHorizontal ? "gap-2 px-2 py-1.5 xl:gap-3 xl:px-3 xl:py-2" : null,
+              isMenu
+                ? "gap-2 rounded-xl in-data-[slot=dropdown-menu-content]:px-1.5 in-data-[slot=dropdown-menu-content]:py-1"
+                : mobileHorizontal
+                  ? "gap-2 px-2 py-1.5 xl:gap-3 xl:px-3 xl:py-2"
+                  : null,
             )}
           >
             {player.activeEmote ? (
@@ -176,7 +186,7 @@ export function PlayerStrip({
             <ItemMedia>
               <PlayerAvatar
                 player={player}
-                compactOnMobile={mobileHorizontal}
+                compactOnMobile={mobileHorizontal || isMenu}
                 currentPlayerId={currentPlayerId}
                 social={social}
                 onSendFriendRequest={onSendFriendRequest}

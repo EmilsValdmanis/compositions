@@ -170,6 +170,7 @@ export type RoomSnapshot = {
   pendingDealChoice?: PendingDealChoiceSnapshot;
   endProposal?: EndGameProposalSnapshot;
   conclusion?: GameConclusionSnapshot;
+  spectatorCount?: number;
   players: PlayerSnapshot[];
 };
 
@@ -184,6 +185,9 @@ export type SocialUser = {
   name: string;
   imageUrl?: string;
   online: boolean;
+  activeGame?: {
+    startedAt: string;
+  };
 };
 
 export type FriendRequest = {
@@ -233,6 +237,7 @@ export type LobbyState = {
   lastErrorId: number;
   lastEvent: string | null;
   completedGame: CompletedGameSnapshot | null;
+  isSpectating: boolean;
   social: SocialState;
 };
 
@@ -268,6 +273,8 @@ type GameWebSocketContextValue = {
   removeFriend: (userId: string) => Promise<ActionResult>;
   sendGameInvite: (userId: string) => Promise<ActionResult>;
   respondGameInvite: (inviteId: string, accept: boolean) => Promise<ActionResult>;
+  spectateGame: (userId: string) => Promise<ActionResult>;
+  stopSpectating: () => Promise<ActionResult>;
   startGame: (gameMode: GameMode) => void;
   startNextRound: () => void;
   chooseDealing: (choice: DealingChoiceRequest | string) => void;
@@ -302,6 +309,7 @@ const initialState: LobbyState = {
   lastErrorId: 0,
   lastEvent: null,
   completedGame: null,
+  isSpectating: false,
   social: emptySocialState(),
 };
 
@@ -345,7 +353,9 @@ function isSocialAction(action: unknown) {
     action === "respond_friend_request" ||
     action === "remove_friend" ||
     action === "send_game_invite" ||
-    action === "respond_game_invite"
+    action === "respond_game_invite" ||
+    action === "spectate_game" ||
+    action === "stop_spectating"
   );
 }
 
@@ -356,6 +366,7 @@ function reduceIncomingMessage(current: LobbyState, type: string, data: any): Lo
         connectionStatus: "connected",
         sessionId: data?.sessionId ?? current.sessionId,
         playerId: data?.playerId ?? current.playerId,
+        isSpectating: false,
         lastEvent: "connected",
       });
     case "room_state": {
@@ -376,6 +387,7 @@ function reduceIncomingMessage(current: LobbyState, type: string, data: any): Lo
       return clearError(current, {
         room: data?.room ?? current.room,
         game: data?.game ?? null,
+        isSpectating: data?.spectating === true,
         completedGame:
           data?.room?.phase === "game_over" && data?.game
             ? { room: data.room, game: data.game }
@@ -383,6 +395,13 @@ function reduceIncomingMessage(current: LobbyState, type: string, data: any): Lo
               ? null
               : current.completedGame,
         lastEvent: "game_state",
+      });
+    case "spectating_ended":
+      return clearError(current, {
+        room: null,
+        game: null,
+        isSpectating: false,
+        lastEvent: "spectating_ended",
       });
     case "action_result":
       return clearError(current, {
@@ -394,6 +413,7 @@ function reduceIncomingMessage(current: LobbyState, type: string, data: any): Lo
         room: null,
         game: null,
         completedGame: null,
+        isSpectating: false,
         lastEvent: "left_room",
       });
     case "social_state":
@@ -804,6 +824,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       connectionStatus: "disconnected",
       room: null,
       game: null,
+      isSpectating: false,
       social: emptySocialState(),
       lastEvent: "manual_disconnect",
     }));
@@ -827,6 +848,8 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     sendGameInvite: (userId) => send("send_game_invite", { userId }, { awaitResult: true }),
     respondGameInvite: (inviteId, accept) =>
       send("respond_game_invite", { inviteId, accept }, { awaitResult: true }),
+    spectateGame: (userId) => send("spectate_game", { userId }, { awaitResult: true }),
+    stopSpectating: () => send("stop_spectating", {}, { awaitResult: true }),
     startGame: (gameMode) =>
       send("start_game", { dealerIndex: getDealerIndex(state.room), gameMode }),
     startNextRound: () => send("start_next_round", {}),
