@@ -100,7 +100,7 @@ export function NotificationsDropdown({
             <SidebarMenuButton tooltip={m.notifications()} className="relative" />
           ) : (
             <Button
-              variant="outline"
+              variant="ghost"
               size="icon"
               aria-label={m.notifications()}
               className="relative"
