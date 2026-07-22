@@ -2,13 +2,16 @@ import { type CSSProperties, type ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import {
+  ChessKingIcon,
+  ChessKnightIcon,
+  ChessQueenIcon,
   Clubs02Icon,
   Diamond01Icon,
   FavouriteIcon,
   JokerIcon,
   SpadesIcon,
 } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { cardName } from "#/components/game/game-card-utils";
@@ -39,6 +42,12 @@ const suitIcons = {
   3: SpadesIcon,
 };
 
+const faceIcons = {
+  11: ChessKnightIcon,
+  12: ChessQueenIcon,
+  13: ChessKingIcon,
+};
+
 function cardRankLabel(card: CardSnapshot) {
   if (card.isJoker) {
     return "J";
@@ -57,14 +66,14 @@ function cardSuitIcon(card: CardSnapshot) {
 
 function cardAccentClass(card: CardSnapshot) {
   if (card.isJoker) {
-    return "border-primary/40 bg-primary/10 text-primary";
+    return "border-primary/40 bg-card text-primary";
   }
 
   if (card.suit === 0 || card.suit === 1) {
-    return "border-destructive/30 bg-destructive/5 text-destructive";
+    return "border-border bg-card text-destructive";
   }
 
-  return "border-foreground/15 bg-foreground/5 text-foreground";
+  return "border-border bg-card text-foreground";
 }
 
 type GameCardSize = "hand" | "default" | "compact";
@@ -72,7 +81,7 @@ type GameCardSize = "hand" | "default" | "compact";
 const gameCardSizeClassNames: Record<GameCardSize, string> = {
   hand: "h-20 w-14 p-1.5 xl:h-32 xl:w-20 xl:p-2.5",
   default: "h-20 w-14 p-1.5 xl:h-24 xl:w-16 xl:p-2",
-  compact: "h-16 w-11 rounded-xl p-1.5",
+  compact: "h-16 w-11 rounded-lg p-1.5",
 };
 
 const cardCornerTextClassNames: Record<GameCardSize, string> = {
@@ -81,7 +90,7 @@ const cardCornerTextClassNames: Record<GameCardSize, string> = {
   compact: "text-[0.65rem]/none",
 };
 
-const cardCornerInsetClassNames: Record<GameCardSize, string> = {
+const cardCornerStartInsetClassNames: Record<GameCardSize, string> = {
   hand: "left-1.5 top-1.5 xl:left-2.5 xl:top-2.5",
   default: "left-1.5 top-1.5 xl:left-2 xl:top-2",
   compact: "left-1.5 top-1.5",
@@ -93,15 +102,21 @@ const cardCornerEndInsetClassNames: Record<GameCardSize, string> = {
   compact: "bottom-1.5 right-1.5",
 };
 
-const cardSymbolClassNames: Record<GameCardSize, string> = {
-  hand: "size-5 xl:size-8",
-  default: "size-5 xl:size-6",
-  compact: "size-4",
+const cardCenterSuitClassNames: Record<GameCardSize, string> = {
+  hand: "size-7 xl:size-10",
+  default: "size-7 xl:size-8",
+  compact: "size-5",
+};
+
+const cardFaceSymbolClassNames: Record<GameCardSize, string> = {
+  hand: "size-7 xl:size-10",
+  default: "size-7 xl:size-8",
+  compact: "size-5",
 };
 
 function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center rounded-2xl border shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+    "relative grid shrink-0 select-none place-items-center overflow-hidden rounded-xl border shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     cardAccentClass(card),
     gameCardSizeClassNames[size],
     className,
@@ -110,53 +125,82 @@ function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: s
 
 function faceDownGameCardClassName(size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center rounded-2xl border border-border bg-card shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+    "relative grid shrink-0 select-none place-items-center overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     gameCardSizeClassNames[size],
     className,
   );
 }
 
+function OutlinedCardIcon({ icon, className }: { icon: IconSvgElement; className?: string }) {
+  return (
+    <HugeiconsIcon
+      icon={icon}
+      className={cn("pointer-events-none", className)}
+      strokeWidth={1.5}
+      aria-hidden="true"
+    />
+  );
+}
+
+function CardCorner({ rank, size, end }: { rank: string; size: GameCardSize; end?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "absolute z-10 font-semibold tracking-[-0.04em]",
+        cardCornerTextClassNames[size],
+        end ? cardCornerEndInsetClassNames[size] : cardCornerStartInsetClassNames[size],
+        end && "rotate-180",
+      )}
+    >
+      {rank}
+    </span>
+  );
+}
+
+function FaceCardArt({ rank, size }: { rank: number; size: GameCardSize }) {
+  const faceIcon = faceIcons[rank as keyof typeof faceIcons];
+
+  if (!faceIcon) return null;
+
+  return (
+    <span className="pointer-events-none absolute inset-[18%] grid place-items-center">
+      <OutlinedCardIcon icon={faceIcon} className={cardFaceSymbolClassNames[size]} />
+    </span>
+  );
+}
+
+function JokerCardArt({ size }: { size: GameCardSize }) {
+  return (
+    <span className="pointer-events-none absolute inset-[18%] grid place-items-center">
+      <OutlinedCardIcon icon={JokerIcon} className={cardFaceSymbolClassNames[size]} />
+    </span>
+  );
+}
+
 function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
-  const rank = cardRankLabel(card);
-  const icon = cardSuitIcon(card);
+  const rankLabel = cardRankLabel(card);
+  const suitIcon = cardSuitIcon(card);
 
   return (
     <>
-      <span
-        className={cn(
-          "absolute font-semibold",
-          cardCornerTextClassNames[size],
-          cardCornerInsetClassNames[size],
-        )}
-      >
-        {rank}
-      </span>
-      {icon ? (
-        <HugeiconsIcon
-          icon={icon}
-          className={cn("pointer-events-none", cardSymbolClassNames[size])}
-          aria-hidden="true"
-        />
+      <CardCorner rank={rankLabel} size={size} />
+      {card.isJoker ? (
+        <JokerCardArt size={size} />
+      ) : suitIcon && card.rank && card.rank <= 10 ? (
+        <OutlinedCardIcon icon={suitIcon} className={cardCenterSuitClassNames[size]} />
+      ) : suitIcon && card.rank ? (
+        <FaceCardArt rank={card.rank} size={size} />
       ) : (
         <span
           className={cn(
-            "pointer-events-none font-semibold",
+            "pointer-events-none text-center font-semibold",
             cardCornerTextClassNames[size],
-            cardSymbolClassNames[size],
           )}
         >
           ?
         </span>
       )}
-      <span
-        className={cn(
-          "absolute font-semibold",
-          cardCornerTextClassNames[size],
-          cardCornerEndInsetClassNames[size],
-        )}
-      >
-        {rank}
-      </span>
+      <CardCorner rank={rankLabel} size={size} end />
     </>
   );
 }
