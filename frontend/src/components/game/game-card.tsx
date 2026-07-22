@@ -2,9 +2,6 @@ import { type CSSProperties, type ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
 import {
-  ChessKingIcon,
-  ChessKnightIcon,
-  ChessQueenIcon,
   Clubs02Icon,
   Diamond01Icon,
   FavouriteIcon,
@@ -40,12 +37,6 @@ const suitIcons = {
   1: Diamond01Icon,
   2: Clubs02Icon,
   3: SpadesIcon,
-};
-
-const faceIcons = {
-  11: ChessKnightIcon,
-  12: ChessQueenIcon,
-  13: ChessKingIcon,
 };
 
 function cardRankLabel(card: CardSnapshot) {
@@ -103,15 +94,9 @@ const cardCornerEndInsetClassNames: Record<GameCardSize, string> = {
 };
 
 const cardCenterSuitClassNames: Record<GameCardSize, string> = {
-  hand: "size-7 xl:size-10",
-  default: "size-7 xl:size-8",
-  compact: "size-5",
-};
-
-const cardFaceSymbolClassNames: Record<GameCardSize, string> = {
-  hand: "size-7 xl:size-10",
-  default: "size-7 xl:size-8",
-  compact: "size-5",
+  hand: "size-6 xl:size-8",
+  default: "size-6 xl:size-7",
+  compact: "size-[1.125rem]",
 };
 
 function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: string) {
@@ -156,22 +141,10 @@ function CardCorner({ rank, size, end }: { rank: string; size: GameCardSize; end
   );
 }
 
-function FaceCardArt({ rank, size }: { rank: number; size: GameCardSize }) {
-  const faceIcon = faceIcons[rank as keyof typeof faceIcons];
-
-  if (!faceIcon) return null;
-
-  return (
-    <span className="pointer-events-none absolute inset-[18%] grid place-items-center">
-      <OutlinedCardIcon icon={faceIcon} className={cardFaceSymbolClassNames[size]} />
-    </span>
-  );
-}
-
 function JokerCardArt({ size }: { size: GameCardSize }) {
   return (
     <span className="pointer-events-none absolute inset-[18%] grid place-items-center">
-      <OutlinedCardIcon icon={JokerIcon} className={cardFaceSymbolClassNames[size]} />
+      <OutlinedCardIcon icon={JokerIcon} className={cardCenterSuitClassNames[size]} />
     </span>
   );
 }
@@ -185,10 +158,8 @@ function renderGameCardFace(card: CardSnapshot, size: GameCardSize) {
       <CardCorner rank={rankLabel} size={size} />
       {card.isJoker ? (
         <JokerCardArt size={size} />
-      ) : suitIcon && card.rank && card.rank <= 10 ? (
-        <OutlinedCardIcon icon={suitIcon} className={cardCenterSuitClassNames[size]} />
       ) : suitIcon && card.rank ? (
-        <FaceCardArt rank={card.rank} size={size} />
+        <OutlinedCardIcon icon={suitIcon} className={cardCenterSuitClassNames[size]} />
       ) : (
         <span
           className={cn(
