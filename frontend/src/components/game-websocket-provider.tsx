@@ -349,16 +349,16 @@ function isSocialAction(action: unknown) {
   );
 }
 
-const incomingMessageReducers = new Map<string, (current: LobbyState, data: any) => LobbyState>(
-  Object.entries({
-    connected: (current, data) =>
-      clearError(current, {
+function reduceIncomingMessage(current: LobbyState, type: string, data: any): LobbyState {
+  switch (type) {
+    case "connected":
+      return clearError(current, {
         connectionStatus: "connected",
         sessionId: data?.sessionId ?? current.sessionId,
         playerId: data?.playerId ?? current.playerId,
         lastEvent: "connected",
-      }),
-    room_state: (current, data) => {
+      });
+    case "room_state": {
       const room = data?.room ?? null;
       const completedGame =
         room?.phase === "game_over" && current.game
@@ -371,9 +371,9 @@ const incomingMessageReducers = new Map<string, (current: LobbyState, data: any)
         completedGame,
         lastEvent: "room_state",
       });
-    },
-    game_state: (current, data) =>
-      clearError(current, {
+    }
+    case "game_state":
+      return clearError(current, {
         room: data?.room ?? current.room,
         game: data?.game ?? null,
         completedGame:
@@ -383,21 +383,21 @@ const incomingMessageReducers = new Map<string, (current: LobbyState, data: any)
               ? null
               : current.completedGame,
         lastEvent: "game_state",
-      }),
-    action_result: (current, data) =>
-      clearError(current, {
+      });
+    case "action_result":
+      return clearError(current, {
         lastActionResult: data ?? null,
         lastEvent: "action_result",
-      }),
-    left_room: (current) =>
-      clearError(current, {
+      });
+    case "left_room":
+      return clearError(current, {
         room: null,
         game: null,
         completedGame: null,
         lastEvent: "left_room",
-      }),
-    social_state: (current, data) =>
-      clearError(current, {
+      });
+    case "social_state":
+      return clearError(current, {
         social: {
           userId: data?.userId ?? current.social.userId,
           friends: Array.isArray(data?.friends) ? data.friends : [],
@@ -410,8 +410,8 @@ const incomingMessageReducers = new Map<string, (current: LobbyState, data: any)
           gameInvites: Array.isArray(data?.gameInvites) ? data.gameInvites : [],
         },
         lastEvent: "social_state",
-      }),
-    error: (current, data) => {
+      });
+    case "error": {
       const code = data?.code ?? "internal_error";
       const developerMessage =
         typeof data?.message === "string" && data.message !== "" ? data.message : code;
@@ -432,9 +432,11 @@ const incomingMessageReducers = new Map<string, (current: LobbyState, data: any)
         },
         developerMessage,
       );
-    },
-  }),
-);
+    }
+    default:
+      return withError(current, "unknown_message_type");
+  }
+}
 
 function getDealerIndex(room: RoomSnapshot | null) {
   if (!room || room.players.length === 0) {
@@ -597,13 +599,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       );
     }
 
-    const reducer = incomingMessageReducers.get(message.type);
-    if (!reducer) {
-      updateState((current) => withError(current, "unknown_message_type"));
-      return;
-    }
-
-    updateState((current) => reducer(current, message.data));
+    updateState((current) => reduceIncomingMessage(current, message.type, message.data));
   }
 
   function send(type: string, data: unknown): void;
