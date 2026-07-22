@@ -42,6 +42,7 @@ describe("buildDraftCompositionSnapshot", () => {
       reclaimTargets: { "13-0-1": 1 },
     });
 
+    expect(snapshot.id).toBe("table-0");
     expect(snapshot.cards).toEqual([
       { rank: 13, suit: 0 },
       { isJoker: true },

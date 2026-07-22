@@ -1,5 +1,6 @@
 import { Outlet, getRouteApi } from "@tanstack/react-router";
 import { AppSidebar } from "#/components/app-sidebar";
+import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
@@ -41,6 +42,7 @@ function AppHeader() {
     <header className="flex shrink-0 items-center border-b md:border-none gap-2 h-12 md:h-16 px-2">
       <SidebarTrigger />
       <div className="ml-auto flex shrink-0 items-center  gap-1">
+        <GameControlsMenu />
         <ServerStatusBadge />
         {session ? <NotificationsDropdown /> : null}
       </div>

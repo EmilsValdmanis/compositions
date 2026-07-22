@@ -312,6 +312,40 @@ describe("GameBoardView draft returns", () => {
   });
 });
 
+describe("GameBoardView hand ordering", () => {
+  it("reorders a joker while it is dragged across the hand", async () => {
+    render(
+      <GameBoardView
+        game={makeGame([{ rank: 4, suit: 0 }, { isJoker: true }, { rank: 6, suit: 0 }])}
+        roomCode="JOKER-ORDER"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 7, suit: 0 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        disableDraftSync
+      />,
+    );
+
+    await act(async () => dragStart("joker-1", 1));
+    await act(async () => dragOver("joker-1", "6-0-1"));
+
+    expect(sortableContextItems.at(-1)).toEqual(["4-0-1", "6-0-1", "joker-1"]);
+  });
+});
+
 describe("GameBoardView discard drops", () => {
   it("shows the turn-start cue only for the active player", () => {
     const sharedProps = {
@@ -627,6 +661,7 @@ describe("GameBoardView spectator turn drafts", () => {
             ],
             draftCompositions: [
               {
+                id: "draft-table-0",
                 tableIndex: 0,
                 cards: [{ rank: 3, suit: 1 }],
                 cardPlacements: [{ reclaimJokerIndex: 0 }],

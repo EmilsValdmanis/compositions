@@ -1833,6 +1833,7 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	startIndex := 0
 	reclaimJokerIndex := 1
 	drafts, err := draftCompositionsFromRequest([]draftCompositionRequest{{
+		ID: "draft-new-1",
 		CardPlacements: []draftCardPlacementRequest{
 			{ReclaimJokerIndex: &reclaimJokerIndex},
 			{InsertIndex: &startIndex},
@@ -1845,6 +1846,12 @@ func TestWebSocketActionDecodeAndConversionErrors(t *testing.T) {
 	}
 	if drafts[0].CardPlacements[0].ReclaimJokerIndex == nil || *drafts[0].CardPlacements[0].ReclaimJokerIndex != 1 || drafts[0].CardPlacements[1].InsertIndex == nil || *drafts[0].CardPlacements[1].InsertIndex != 0 {
 		t.Fatalf("draft card placements = %#v; want preserved reclaim and insert indices", drafts[0].CardPlacements)
+	}
+	if drafts[0].ID != "draft-new-1" {
+		t.Fatalf("draft composition id = %q; want draft-new-1", drafts[0].ID)
+	}
+	if _, err := draftCompositionsFromRequest([]draftCompositionRequest{{Cards: []cardRequest{cardReq(game.Ace, game.Hearts)}}}); err == nil || err.Error() != "draft composition id is required" {
+		t.Fatalf("draftCompositionsFromRequest(missing id) error = %v; want required id error", err)
 	}
 	if _, err := draftCompositionsFromRequest([]draftCompositionRequest{{
 		CardPlacements: []draftCardPlacementRequest{{InsertIndex: &startIndex}},
@@ -1910,6 +1917,7 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 	insertIndex := 0
 	reclaimJokerIndex := 1
 	mustSendEnvelope(t, hostConn, "draft_update", draftUpdateRequest{Compositions: []draftCompositionRequest{{
+		ID:             "draft-new-1",
 		TableIndex:     nil,
 		InsertIndex:    &insertIndex,
 		CardPlacements: []draftCardPlacementRequest{{InsertIndex: &insertIndex}, {ReclaimJokerIndex: &reclaimJokerIndex}, {}},
@@ -1945,6 +1953,9 @@ func TestWebSocketDraftUpdateBroadcastsTurnActivity(t *testing.T) {
 	}
 	if updatedGuestGame.Game.TurnActivity.DraftCompositions[0].TableIndex != nil {
 		t.Fatalf("draft composition tableIndex = %#v; want nil new composition", updatedGuestGame.Game.TurnActivity.DraftCompositions[0].TableIndex)
+	}
+	if updatedGuestGame.Game.TurnActivity.DraftCompositions[0].ID != "draft-new-1" {
+		t.Fatalf("draft composition id = %q; want draft-new-1", updatedGuestGame.Game.TurnActivity.DraftCompositions[0].ID)
 	}
 	if len(updatedGuestGame.Game.TurnActivity.DraftCompositions[0].Cards) != 3 {
 		t.Fatalf("draft composition cards = %d; want 3", len(updatedGuestGame.Game.TurnActivity.DraftCompositions[0].Cards))

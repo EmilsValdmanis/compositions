@@ -130,6 +130,7 @@ type draftCardPlacementRequest struct {
 }
 
 type draftCompositionRequest struct {
+	ID             string                      `json:"id"`
 	TableIndex     *int                        `json:"tableIndex,omitempty"`
 	InsertIndex    *int                        `json:"insertIndex,omitempty"`
 	CardPlacements []draftCardPlacementRequest `json:"cardPlacements,omitempty"`
@@ -1078,7 +1079,11 @@ func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.Dr
 		for _, card := range cards {
 			snapshots = append(snapshots, card.Snapshot())
 		}
+		if strings.TrimSpace(req.ID) == "" {
+			return nil, errors.New("draft composition id is required")
+		}
 		drafts = append(drafts, game.DraftCompositionSnapshot{
+			ID:             req.ID,
 			TableIndex:     req.TableIndex,
 			InsertIndex:    req.InsertIndex,
 			CardPlacements: cardPlacements,

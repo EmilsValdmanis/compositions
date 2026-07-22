@@ -28,6 +28,7 @@ export type ActiveDrag =
       handKey: string;
       baselineHandOrder: string[];
       baselineDraftCompositions: DraftComposition[];
+      hasReorderedHand: boolean;
     };
 
 export type DraftComposition = {
@@ -88,6 +89,7 @@ export function buildDraftCompositionSnapshot(
   );
 
   return {
+    id: composition.id,
     tableIndex: composition.tableIndex ?? undefined,
     insertIndex: composition.insertIndex,
     cardPlacements: hasCardPlacements ? cardPlacements : undefined,

@@ -276,9 +276,9 @@ function DraftCompositionsSection({
         <DraftTotal points={visibleDraftPointsTotal} />
       ) : null}
 
-      {stagedNewDrafts.map((composition, index) => (
+      {stagedNewDrafts.map((composition) => (
         <SpectatorNewDraft
-          key={`turn-draft-${composition.tableIndex ?? `new-${index}`}`}
+          key={composition.id}
           composition={composition}
           players={players}
           playerId={turnPlayerId}

@@ -292,6 +292,7 @@ export const mockScenarios: MockScenario[] = [
         ],
         draftCompositions: [
           {
+            id: "draft-new-avery",
             cards: [
               { rank: 4, suit: 1 },
               { rank: 5, suit: 1 },
@@ -299,6 +300,7 @@ export const mockScenarios: MockScenario[] = [
             ],
           },
           {
+            id: "draft-table-2-avery",
             tableIndex: 2,
             cards: [{ rank: 5, suit: 2 }],
           },
@@ -520,6 +522,7 @@ export const mockScenarios: MockScenario[] = [
         ],
         draftCompositions: [
           {
+            id: "draft-new-casey",
             cards: [
               { rank: 2, suit: 1 },
               { rank: 3, suit: 1 },
@@ -527,6 +530,7 @@ export const mockScenarios: MockScenario[] = [
             ],
           },
           {
+            id: "draft-table-0-casey",
             tableIndex: 0,
             cards: [{ rank: 13, suit: 0 }],
           },

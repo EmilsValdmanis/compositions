@@ -1,5 +1,4 @@
 import { useRouterState } from "@tanstack/react-router";
-import { m } from "#/paraglide/messages.js";
 
 export type AppPage = "lobby" | "leaderboard" | "dev-ui" | "profile" | "unknown";
 
@@ -24,19 +23,4 @@ export function useAppPage() {
   });
 
   return appPageFromRouteId(routeId);
-}
-
-export function appPageLabel(page: AppPage) {
-  switch (page) {
-    case "lobby":
-      return m.lobby();
-    case "leaderboard":
-      return m.leaderboard();
-    case "dev-ui":
-      return m.dev_ui();
-    case "profile":
-      return m.profile();
-    default:
-      return m.app_name();
-  }
 }

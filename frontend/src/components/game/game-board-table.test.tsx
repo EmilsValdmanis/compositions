@@ -29,6 +29,7 @@ function renderDraftTable(
           turnNumber: 1,
           draftCompositions: [
             {
+              id: "draft-new-1",
               cards,
             },
           ],
@@ -69,6 +70,7 @@ describe("draftPreviewForComposition", () => {
             turnNumber: 1,
             draftCompositions: [
               {
+                id: "draft-table-0",
                 tableIndex: 0,
                 insertIndex: 3,
                 cardPlacements: [{ reclaimJokerIndex: 1 }, { insertIndex: 0 }, { insertIndex: 0 }],
@@ -108,6 +110,7 @@ describe("draftPreviewForComposition", () => {
         insertIndex: 3,
       },
       {
+        id: "draft-table-0",
         tableIndex: 0,
         insertIndex: 3,
         cardPlacements: [
@@ -155,6 +158,7 @@ describe("draftPreviewForComposition", () => {
         insertIndex: 3,
       },
       {
+        id: "draft-table-0",
         tableIndex: 0,
         insertIndex: 3,
         cardPlacements: [{ insertIndex: 0 }, { insertIndex: 3 }],
@@ -195,6 +199,7 @@ describe("draftPreviewForComposition", () => {
         insertIndex: 3,
       },
       {
+        id: "draft-table-0",
         tableIndex: 0,
         insertIndex: 0,
         cardPlacements: [{ insertIndex: 0 }, { insertIndex: 0 }],
@@ -234,6 +239,7 @@ describe("draftPreviewForComposition", () => {
         insertIndex: 3,
       },
       {
+        id: "draft-table-0",
         tableIndex: 0,
         cardPlacements: [{}, { reclaimJokerIndex: 2 }],
         cards: [

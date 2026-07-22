@@ -665,6 +665,7 @@ function useGameBoardController({
             handKey,
             baselineHandOrder: handEntryOrder(handEntries),
             baselineDraftCompositions: draftCompositions,
+            hasReorderedHand: false,
           }
         : null,
     );
@@ -687,7 +688,7 @@ function useGameBoardController({
       return;
     }
 
-    if (activeDrag?.type !== "hand" || !canCompose) {
+    if (activeDrag?.type !== "hand") {
       return;
     }
 
@@ -700,6 +701,19 @@ function useGameBoardController({
       composition.handKeys.includes(activeDrag.handKey),
     );
     const droppedOnHandCard = availableHandEntries.some((entry) => entry.key === overId);
+
+    if (!startedInDraft && droppedOnHandCard && activeDrag.handKey !== overId) {
+      updateHandOrder(handEntryOrder(moveHandEntry(handEntries, activeDrag.handKey, overId)));
+      setActiveDrag((current) =>
+        current?.type === "hand" ? { ...current, hasReorderedHand: true } : current,
+      );
+      return;
+    }
+
+    if (!canCompose) {
+      return;
+    }
+
     if (startedInDraft && (overId === HAND_DROP_ID || droppedOnHandCard)) {
       updateDraftCompositions((current) => removeHandKeyFromDrafts(current, activeDrag.handKey));
 
@@ -840,7 +854,7 @@ function useGameBoardController({
     }
 
     if (!canCompose) {
-      if (droppedOnHandCard && draggedHandKey !== overId) {
+      if (droppedOnHandCard && draggedHandKey !== overId && !currentDrag.hasReorderedHand) {
         updateHandOrder(handEntryOrder(moveHandEntry(handEntries, draggedHandKey, overId)));
         playGameSound("card-place");
       }
@@ -967,7 +981,7 @@ function useGameBoardController({
       playGameSound("card-place");
       finishReturningHandKey(draggedHandKey);
 
-      if (draggedHandKey !== overId && !returnedToHandDuringDrag) {
+      if (draggedHandKey !== overId && !returnedToHandDuringDrag && !currentDrag.hasReorderedHand) {
         updateHandOrder(handEntryOrder(moveHandEntry(handEntries, draggedHandKey, overId)));
       }
     }

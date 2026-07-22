@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Alert } from "#/components/ui/alert";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
@@ -20,6 +20,7 @@ export function TurnStartCue({
   playerImageUrl?: string;
 }) {
   const [visible, setVisible] = useState(true);
+  const cueRef = useRef<HTMLDivElement>(null);
   const shouldReduceMotion = useShouldReduceMotion();
 
   useEffect(() => {
@@ -32,7 +33,14 @@ export function TurnStartCue({
     <AnimatePresence>
       {visible ? (
         <motion.div
-          className="pointer-events-none fixed top-[clamp(4.5rem,12vh,8rem)] left-1/2 z-50 w-[min(22rem,calc(100vw-2rem))] will-change-[transform,opacity]"
+          ref={cueRef}
+          className="pointer-events-none fixed top-[clamp(4.5rem,12vh,8rem)] left-1/2 z-50 w-[min(22rem,calc(100vw-2rem))]"
+          onAnimationStart={() => {
+            if (cueRef.current) cueRef.current.style.willChange = "transform, opacity";
+          }}
+          onAnimationComplete={() => {
+            if (cueRef.current) cueRef.current.style.willChange = "";
+          }}
           initial={{
             opacity: 0,
             clipPath: shouldReduceMotion ? "inset(0 0 0 0)" : "inset(0 100% 0 0)",

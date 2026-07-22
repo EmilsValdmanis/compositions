@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
   type GameSnapshot,
@@ -132,5 +132,53 @@ describe("GameResultsView flying score reveal", () => {
       flyingScore?.querySelector('[title="Over 100: adjusted from 107 to 89 points"]'),
     ).not.toBeNull();
     expect(flyingScore?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("returns to the lobby from final results", () => {
+    const onBackToLobby = vi.fn();
+    const view = render(
+      <GameResultsView
+        room={{ ...room, phase: "game_over" }}
+        game={game}
+        players={players}
+        playerId="winner"
+        connectedPlayers={2}
+        dealChoice={{
+          pendingDealChoice: null,
+          dealChooserName: null,
+          isDealChooser: false,
+        }}
+        onBackToLobby={onBackToLobby}
+        onChooseDealing={() => {}}
+        onSendEmote={() => {}}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Back to lobby" }));
+
+    expect(onBackToLobby).toHaveBeenCalledOnce();
+  });
+
+  it("does not show the lobby action after a completed round", () => {
+    const view = render(
+      <GameResultsView
+        room={room}
+        game={game}
+        players={players}
+        playerId="winner"
+        connectedPlayers={2}
+        dealChoice={{
+          pendingDealChoice: null,
+          dealChooserName: null,
+          isDealChooser: false,
+        }}
+        onBackToLobby={vi.fn()}
+        onChooseDealing={() => {}}
+        onSendEmote={() => {}}
+      />,
+    );
+
+    expect(view.queryByRole("button", { name: "Back to lobby" })).toBeNull();
+    expect(view.getByRole("button", { name: "Start next round" })).not.toBeNull();
   });
 });

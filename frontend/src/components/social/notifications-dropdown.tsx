@@ -78,13 +78,12 @@ export function NotificationsDropdown({
       toast.success(successMessage);
     } catch {
       toast.error(m.social_action_failed());
-    } finally {
-      setPendingIds((current) => {
-        const next = new Set(current);
-        next.delete(id);
-        return next;
-      });
     }
+    setPendingIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
   }
 
   async function acceptGameInvite(inviteId: string) {
