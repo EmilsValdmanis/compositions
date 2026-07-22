@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
+import { GameCard } from "#/components/game/game-card";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
@@ -18,7 +19,30 @@ import {
 import { m } from "#/paraglide/messages.js";
 
 const scenarios = mockScenarios;
-type DevViewMode = "start" | "board" | "deal" | "results";
+type DevViewMode = "start" | "board" | "deal" | "results" | "cards";
+
+const deckRanks = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1] as const;
+const deckSuits = [3, 0, 2, 1] as const;
+
+function CardDeckGallery() {
+  return (
+    <div className="flex overflow-auto p-3 md:p-5">
+      <div className="m-auto flex w-max min-w-full flex-col gap-2.5">
+        {deckSuits.map((suit) => (
+          <div key={suit} className="flex w-max gap-2">
+            {deckRanks.map((rank) => (
+              <GameCard key={`${rank}-${suit}`} card={{ rank, suit }} />
+            ))}
+          </div>
+        ))}
+        <div className="flex w-max gap-2 ">
+          <GameCard card={{ isJoker: true }} />
+          <GameCard card={{ isJoker: true }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function handleChooseDealing(_choice: DealingChoiceRequest | string) {}
 
@@ -296,7 +320,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
 export function DevGameUi() {
   const scenario = scenarios[0];
   const [gameOverride, setGameOverride] = useState<GameSnapshot | null>(null);
-  const [viewMode, setViewMode] = useState<DevViewMode>("start");
+  const [viewMode, setViewMode] = useState<DevViewMode>("cards");
   const [lobbyRoom, setLobbyRoom] = useState<RoomSnapshot | null>(null);
   const [lobbyRoomCode, setLobbyRoomCode] = useState("");
 
@@ -403,12 +427,15 @@ export function DevGameUi() {
             <TabsTrigger value="board">{m.board()}</TabsTrigger>
             <TabsTrigger value="deal">{m.deal()}</TabsTrigger>
             <TabsTrigger value="results">{m.results()}</TabsTrigger>
+            <TabsTrigger value="cards">{m.cards()}</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:overflow-visible [@media(max-height:600px)]:overflow-hidden">
-        {viewMode === "start" ? (
+        {viewMode === "cards" ? (
+          <CardDeckGallery />
+        ) : viewMode === "start" ? (
           <div className="flex min-h-0 flex-1 overflow-auto">
             <GameLobbyView
               room={lobbyRoom}

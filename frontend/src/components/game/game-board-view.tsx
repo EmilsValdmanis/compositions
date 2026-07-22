@@ -1146,13 +1146,13 @@ export function GameBoardView({
             }
             faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
             size="hand"
-            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
+            className="rotate-3 opacity-75 shadow-xl ring-1 ring-foreground/10"
           />
         ) : controller.activeEntry ? (
           <GameCard
             card={controller.activeEntry.card}
             size="hand"
-            className="rotate-3 shadow-xl ring-1 ring-foreground/10"
+            className="rotate-3 opacity-75 shadow-xl ring-1 ring-foreground/10"
           />
         ) : null}
       </DragOverlay>
