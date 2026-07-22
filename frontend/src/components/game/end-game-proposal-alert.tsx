@@ -24,7 +24,7 @@ export function EndGameProposalAlert() {
     return () => window.clearTimeout(timeout);
   }, [proposal]);
 
-  if (!proposal || proposal.id === expiredProposalId) {
+  if (state.isSpectating || !proposal || proposal.id === expiredProposalId) {
     return null;
   }
 

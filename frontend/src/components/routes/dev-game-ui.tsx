@@ -320,7 +320,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
 export function DevGameUi() {
   const scenario = scenarios[0];
   const [gameOverride, setGameOverride] = useState<GameSnapshot | null>(null);
-  const [viewMode, setViewMode] = useState<DevViewMode>("cards");
+  const [viewMode, setViewMode] = useState<DevViewMode>("board");
   const [lobbyRoom, setLobbyRoom] = useState<RoomSnapshot | null>(null);
   const [lobbyRoomCode, setLobbyRoomCode] = useState("");
 

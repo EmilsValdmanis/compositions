@@ -119,6 +119,9 @@ var exactClientErrorCodes = map[string]string{
 	"game invite not found or expired":              "game_invite_not_found",
 	"players are not friends":                       "not_friends",
 	"friend is not available":                       "friend_unavailable",
+	"friend is not in an active game":               "friend_not_in_game",
+	"cannot spectate yourself":                      "cannot_spectate_self",
+	"leave your room before spectating":             "spectate_while_in_room",
 	"social features are unavailable":               "social_unavailable",
 }
 

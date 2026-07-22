@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { ViewIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { ClientOnly, getRouteApi } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
@@ -8,6 +10,8 @@ import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName, playersForResults } from "#/components/game/game-view-helpers";
 import { type GameMode, useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
+import { Alert, AlertAction, AlertDescription, AlertTitle } from "#/components/ui/alert";
+import { Button } from "#/components/ui/button";
 import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
 import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
@@ -49,6 +53,7 @@ export function ProtectedHome() {
     chooseDealing,
     sendEmote,
     sendFriendRequest,
+    stopSpectating,
     drawFromDeck,
     drawFromDiscard,
     playTable,
@@ -206,6 +211,25 @@ export function ProtectedHome() {
       <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
         <title>{pageTitle(currentPageTitle)}</title>
         <EndGameProposalAlert />
+        {state.isSpectating ? (
+          <Alert className="pr-36">
+            <HugeiconsIcon icon={ViewIcon} />
+            <AlertTitle>{m.watching_game()}</AlertTitle>
+            <AlertDescription>{m.spectator_hand_hidden()}</AlertDescription>
+            <AlertAction>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void stopSpectating().catch(() => toast.error(m.social_action_failed()))
+                }
+              >
+                {m.stop_watching()}
+              </Button>
+            </AlertAction>
+          </Alert>
+        ) : null}
         {roundResults ? (
           <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
@@ -273,6 +297,8 @@ export function ProtectedHome() {
               playerId={state.playerId}
               players={players}
               connectedPlayers={connectedPlayers}
+              spectatorCount={state.room?.spectatorCount ?? 0}
+              isSpectating={state.isSpectating}
               turnState={{
                 canDrawDeck,
                 canDrawDiscard,

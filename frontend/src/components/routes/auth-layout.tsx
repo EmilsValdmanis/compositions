@@ -1,11 +1,13 @@
 import { Outlet } from "@tanstack/react-router";
-import { H1, P } from "#/components/typography";
 import { LanguageSwitcher } from "#/components/language-switcher";
+import { ThemeSwitcher } from "#/components/theme-switcher";
+import { H1, P } from "#/components/typography";
 import { m } from "#/paraglide/messages.js";
 
 export function AuthLayout() {
   return (
     <>
+      <ThemeSwitcher className="absolute top-4 left-4 z-10" align="start" />
       <LanguageSwitcher className="absolute top-4 right-4 z-10" />
       <div
         className="absolute inset-0 -z-1 bg-size-[20px_20px]"

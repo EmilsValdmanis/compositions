@@ -2,10 +2,11 @@
 import { createElement, type ReactNode } from "react";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { SidebarFriendsList } from "#/components/social/friends-list";
+import { SidebarFriendsList, formatGameDuration } from "#/components/social/friends-list";
 import { SidebarProvider } from "#/components/ui/sidebar";
 
 vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(async () => undefined),
   Link: ({
     children,
     to: _to,
@@ -31,6 +32,15 @@ Object.defineProperty(window, "matchMedia", {
 afterEach(cleanup);
 
 describe("SidebarFriendsList", () => {
+  it("formats active game time without leading zeroes", () => {
+    expect(
+      formatGameDuration("2026-07-22T10:00:00.000Z", Date.parse("2026-07-22T10:04:00.000Z")),
+    ).toBe("4m");
+    expect(
+      formatGameDuration("2026-07-22T10:00:00.000Z", Date.parse("2026-07-22T11:24:00.000Z")),
+    ).toBe("1h 24m");
+  });
+
   it("shows skeleton rows while friends are loading", () => {
     const view = render(
       <SidebarProvider>
@@ -113,5 +123,32 @@ describe("SidebarFriendsList", () => {
     expect(
       (await view.findByRole("menuitem", { name: "Invite to game" })).getAttribute("aria-disabled"),
     ).toBe("true");
+  });
+
+  it("shows active game duration and lets the viewer spectate", async () => {
+    const onSpectate = vi.fn(async () => undefined);
+    const view = render(
+      <SidebarProvider>
+        <SidebarFriendsList
+          friends={[
+            {
+              id: "friend-1",
+              name: "Devon",
+              online: true,
+              activeGame: { startedAt: new Date(Date.now() - 84 * 60_000).toISOString() },
+            },
+          ]}
+          canInvite={false}
+          onSpectate={onSpectate}
+        />
+      </SidebarProvider>,
+    );
+
+    expect(view.container.querySelector('[aria-label="In game · 1h 24m"]')).toBeTruthy();
+    const friendButton = view.getByRole("button", { name: "Open menu for Devon" });
+    expect(friendButton.getAttribute("data-size")).toBe("default");
+    fireEvent.click(friendButton);
+    fireEvent.click(await view.findByRole("menuitem", { name: "Watch game" }));
+    await waitFor(() => expect(onSpectate).toHaveBeenCalledWith("friend-1"));
   });
 });

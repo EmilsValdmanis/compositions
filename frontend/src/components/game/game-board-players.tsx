@@ -1,4 +1,4 @@
-import { ChevronDownIcon, RankingIcon, UndoIcon } from "@hugeicons/core-free-icons";
+import { ChevronDownIcon, RankingIcon, UndoIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type GameSnapshot,
@@ -8,6 +8,8 @@ import {
 import { MobilePlayerEmotes, PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
+import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import {
@@ -32,8 +34,19 @@ import {
   TableRow,
 } from "#/components/ui/table";
 import { P } from "#/components/typography";
-import { cn } from "#/lib/utils";
+import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
+
+function SpectatorCount({ count }: { count: number }) {
+  if (count <= 0) return null;
+
+  return (
+    <Badge variant="outline" aria-label={`${m.spectators()}: ${count}`}>
+      <HugeiconsIcon icon={ViewIcon} data-icon="inline-start" />
+      <AnimatedNumber value={count} />
+    </Badge>
+  );
+}
 
 function GameScoreboard({
   game,
@@ -67,7 +80,15 @@ function GameScoreboard({
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[min(24rem,calc(100vw-2rem))] p-0">
         <PopoverHeader className="px-4 pt-4">
-          <PopoverTitle>{m.results()}</PopoverTitle>
+          <PopoverTitle className="flex items-center gap-2">
+            <HugeiconsIcon
+              icon={RankingIcon}
+              className="size-4 text-muted-foreground"
+              data-slot="scoreboard-title-icon"
+              aria-hidden="true"
+            />
+            {m.results()}
+          </PopoverTitle>
         </PopoverHeader>
         <div className="overflow-hidden rounded-b-3xl border-t border-border/70">
           <Table>
@@ -83,9 +104,27 @@ function GameScoreboard({
                 <TableRow key={playerState.playerId}>
                   <TableCell className="tabular-nums">{rank}</TableCell>
                   <TableCell>
-                    <P size="sm" className="max-w-36 truncate font-medium" title={player?.name}>
-                      {player?.name ?? m.unknown_player()}
-                    </P>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Avatar size="sm">
+                        {player?.imageUrl ? (
+                          <AvatarImage src={player.imageUrl} alt={player.name} />
+                        ) : null}
+                        <AvatarFallback>
+                          {getUserInitials(player?.name ?? m.unknown_player())}
+                        </AvatarFallback>
+                        {player ? (
+                          <AvatarBadge
+                            className={cn(
+                              "ring-popover",
+                              player.connected ? "bg-primary" : "bg-destructive",
+                            )}
+                          />
+                        ) : null}
+                      </Avatar>
+                      <P size="sm" className="max-w-36 truncate font-medium" title={player?.name}>
+                        {player?.name ?? m.unknown_player()}
+                      </P>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
                     <AnimatedNumber value={playerState.totalPoints} />
@@ -109,6 +148,8 @@ export function GameBoardPlayers({
   onResetDraftCompositions,
   onSendEmote,
   currentPlayerId,
+  spectatorCount = 0,
+  canSendEmote = true,
   social,
   onSendFriendRequest,
 }: {
@@ -121,13 +162,15 @@ export function GameBoardPlayers({
   onResetDraftCompositions: () => void;
   onSendEmote: (emoji: string) => void;
   currentPlayerId?: string;
+  spectatorCount?: number;
+  canSendEmote?: boolean;
   social?: SocialState;
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
   const turnPlayer = players.find((player) => player.playerId === game?.turn.playerId);
   return (
     <>
-      {compactOnMobile ? <MobilePlayerEmotes players={players} /> : null}
+      {compactOnMobile && canSendEmote ? <MobilePlayerEmotes players={players} /> : null}
       <Card
         size="sm"
         className={cn(
@@ -162,6 +205,7 @@ export function GameBoardPlayers({
                   <PlayerStrip
                     players={players}
                     game={game}
+                    presentation="menu"
                     showHostBadges={false}
                     showTurnIndicator={showTurnIndicator}
                     emoteClassName="hidden"
@@ -185,17 +229,19 @@ export function GameBoardPlayers({
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              <SpectatorCount count={spectatorCount} />
               {game ? <GameScoreboard game={game} players={players} /> : null}
-              <PlayerEmotePicker onSendEmote={onSendEmote} />
+              {canSendEmote ? <PlayerEmotePicker onSendEmote={onSendEmote} /> : null}
             </div>
           </CardHeader>
         ) : null}
 
-        <CardHeader className={compactOnMobile ? "hidden xl:grid" : undefined}>
+        <CardHeader className={cn("items-center", compactOnMobile && "hidden xl:flex")}>
           <CardTitle>{m.players()}</CardTitle>
-          <CardAction>
+          <CardAction className="ml-auto">
             <div className="flex items-center gap-2">
-              <PlayerEmotePicker onSendEmote={onSendEmote} />
+              <SpectatorCount count={spectatorCount} />
+              {canSendEmote ? <PlayerEmotePicker onSendEmote={onSendEmote} /> : null}
               {game ? <GameScoreboard game={game} players={players} /> : null}
             </div>
           </CardAction>

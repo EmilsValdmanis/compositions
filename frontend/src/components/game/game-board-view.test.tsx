@@ -172,7 +172,7 @@ const players: PlayerSnapshot[] = [
 
 describe("GameBoardView drag sensors", () => {
   it("keeps touch scrolling available until a deliberate hold starts dragging", () => {
-    render(
+    const view = render(
       <GameBoardView
         game={makeGame([{ rank: 1, suit: 0 }])}
         roomCode="ROOM"
@@ -204,6 +204,9 @@ describe("GameBoardView drag sensors", () => {
       activationConstraint: { delay: 180, tolerance: 8 },
     });
     expect(dndContextProps.sensors?.[2]?.options).toHaveProperty("coordinateGetter");
+    expect(
+      view.container.querySelector('[data-slot="turn-start-cue"]')?.parentElement?.dataset.slot,
+    ).toBe("game-board-table-region");
   });
 });
 

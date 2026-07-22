@@ -3,6 +3,7 @@ import { AppSidebar } from "#/components/app-sidebar";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
 import { ServerStatusBadge } from "#/components/server-status-badge";
 import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
+import { ThemeSwitcher } from "#/components/theme-switcher";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
 
 const rootRouteApi = getRouteApi("__root__");
@@ -45,6 +46,7 @@ function AppHeader() {
         <GameControlsMenu />
         <ServerStatusBadge />
         {session ? <NotificationsDropdown /> : null}
+        <ThemeSwitcher />
       </div>
     </header>
   );

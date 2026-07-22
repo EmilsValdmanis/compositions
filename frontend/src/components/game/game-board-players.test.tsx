@@ -8,6 +8,38 @@ import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websoc
 afterEach(cleanup);
 
 describe("GameBoardPlayers", () => {
+  it("hides the spectator badge when nobody is watching", () => {
+    render(
+      <GameBoardPlayers
+        players={[]}
+        game={null}
+        connectedPlayers={0}
+        spectatorCount={0}
+        hasDraftedCompositions={false}
+        onResetDraftCompositions={() => {}}
+        onSendEmote={() => {}}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Spectators: 0")).toBeNull();
+  });
+
+  it("shows the spectator badge when somebody is watching", () => {
+    render(
+      <GameBoardPlayers
+        players={[]}
+        game={null}
+        connectedPlayers={0}
+        spectatorCount={2}
+        hasDraftedCompositions={false}
+        onResetDraftCompositions={() => {}}
+        onSendEmote={() => {}}
+      />,
+    );
+
+    expect(screen.getByLabelText("Spectators: 2")).toBeTruthy();
+  });
+
   it("hides the current results table when not in a game", () => {
     render(
       <GameBoardPlayers
@@ -71,5 +103,14 @@ describe("GameBoardPlayers", () => {
     expect(within(table).queryByText("6")).toBeNull();
     expect(within(table).queryByText("9")).toBeNull();
     expect(screen.queryByText("online")).toBeNull();
+    expect(table.querySelectorAll('[data-slot="avatar"]')).toHaveLength(2);
+    expect(within(table).getByText("A")).toBeTruthy();
+    expect(within(table).getByText("B")).toBeTruthy();
+    expect(table.querySelectorAll('[data-slot="avatar-badge"]')).toHaveLength(2);
+    expect(
+      screen
+        .getByRole("heading", { name: "Results" })
+        .querySelector('[data-slot="scoreboard-title-icon"]'),
+    ).toBeTruthy();
   });
 });

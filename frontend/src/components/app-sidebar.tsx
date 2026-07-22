@@ -23,7 +23,8 @@ const rootRouteApi = getRouteApi("__root__");
 
 export function AppSidebar() {
   const { session } = rootRouteApi.useRouteContext();
-  const { state, dismissCompletedGame, removeFriend, sendGameInvite } = useGameWebSocket();
+  const { state, dismissCompletedGame, removeFriend, sendGameInvite, spectateGame } =
+    useGameWebSocket();
   const { setOpenMobile } = useSidebar();
   const currentPage = useAppPage();
   const players = state.room?.players ?? [];
@@ -102,8 +103,10 @@ export function AppSidebar() {
               friends={state.social.friends}
               isLoading={state.connectionStatus !== "connected" || state.social.userId === ""}
               canInvite={canInvite}
+              canSpectate={!state.room || state.isSpectating}
               unavailableUserIds={unavailableUserIds}
               onInvite={sendGameInvite}
+              onSpectate={spectateGame}
               onUnfriend={removeFriend}
             />
           </>

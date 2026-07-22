@@ -123,6 +123,34 @@ func TestGameStateSnapshotForPlayer(t *testing.T) {
 	}
 }
 
+func TestGameStateSnapshotForSpectatorHidesPrivateHands(t *testing.T) {
+	state := NewGameState()
+	first := NewPlayer()
+	second := NewPlayer()
+	first.ID = "first"
+	second.ID = "second"
+	first.hand.cards = make([]Card, InitialHandSize)
+	second.hand.cards = make([]Card, InitialHandSize)
+	state.players = []*Player{first, second}
+	state.phase = PhaseInProgress
+
+	snapshot, ok := state.SnapshotForSpectator()
+	if !ok {
+		t.Fatal("SnapshotForSpectator() ok = false; want true")
+	}
+	if len(snapshot.Hand) != 0 {
+		t.Fatalf("spectator hand = %d cards; want 0", len(snapshot.Hand))
+	}
+	for _, player := range snapshot.Players {
+		if len(player.Hand) != 0 {
+			t.Fatalf("spectator player %q hand = %d cards; want 0", player.PlayerID, len(player.Hand))
+		}
+		if player.HandCount != InitialHandSize {
+			t.Fatalf("spectator player %q hand count = %d; want %d", player.PlayerID, player.HandCount, InitialHandSize)
+		}
+	}
+}
+
 func TestGameStateSnapshotForPlayerFailuresAndInvalidTurn(t *testing.T) {
 	if snapshot, ok := (*GameState)(nil).SnapshotForPlayer("missing"); ok || snapshot.Round != 0 {
 		t.Fatalf("nil SnapshotForPlayer() = %#v, %v; want zero false", snapshot, ok)

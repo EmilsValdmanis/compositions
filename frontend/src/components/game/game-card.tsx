@@ -149,7 +149,6 @@ function CardCorner({ rank, size, end }: { rank: string; size: GameCardSize; end
         "absolute z-10 font-semibold tracking-[-0.04em]",
         cardCornerTextClassNames[size],
         end ? cardCornerEndInsetClassNames[size] : cardCornerStartInsetClassNames[size],
-        end && "rotate-180",
       )}
     >
       {rank}

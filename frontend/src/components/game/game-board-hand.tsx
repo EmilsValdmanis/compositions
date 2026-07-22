@@ -15,6 +15,7 @@ type HandStatus = {
   hasGame: boolean;
   isMyTurn: boolean;
   turnPlayerName: string;
+  isSpectating?: boolean;
 };
 
 type TablePlayState = {
@@ -41,7 +42,11 @@ export function GameBoardHand({
   return (
     <Card className="min-h-0 shrink-0 pb-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]">
       <CardContent className="min-h-0 px-0">
-        {hasGame ? (
+        {status.isSpectating ? (
+          <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
+            {m.spectator_hand_hidden()}
+          </Caption>
+        ) : hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
             <GameBoardDraftDropZone
               id={HAND_DROP_ID}

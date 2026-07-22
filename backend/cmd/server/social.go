@@ -25,10 +25,15 @@ type socialStore interface {
 }
 
 type socialUserSnapshot struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	ImageURL string `json:"imageUrl,omitempty"`
-	Online   bool   `json:"online"`
+	ID         string              `json:"id"`
+	Name       string              `json:"name"`
+	ImageURL   string              `json:"imageUrl,omitempty"`
+	Online     bool                `json:"online"`
+	ActiveGame *activeGameSnapshot `json:"activeGame,omitempty"`
+}
+
+type activeGameSnapshot struct {
+	StartedAt time.Time `json:"startedAt"`
 }
 
 type friendRequestSnapshot struct {
@@ -74,6 +79,12 @@ type respondGameInviteRequest struct {
 	InviteID string `json:"inviteId"`
 	Accept   bool   `json:"accept"`
 }
+
+type spectateGameRequest struct {
+	UserID string `json:"userId"`
+}
+
+type stopSpectatingRequest struct{}
 
 type socialPresence struct {
 	mu          sync.RWMutex
@@ -224,7 +235,7 @@ func (s *wsServer) socialEventFromRecord(userID string, record database.SocialSn
 		GameInvites:                  make([]gameInviteSnapshot, 0, len(record.GameInvites)),
 	}
 	for _, friend := range record.Friends {
-		event.Friends = append(event.Friends, s.socialUserFromRecord(friend))
+		event.Friends = append(event.Friends, s.socialFriendFromRecord(friend))
 	}
 	for _, request := range record.IncomingFriendRequests {
 		event.IncomingFriendRequests = append(event.IncomingFriendRequests, friendRequestSnapshot{
@@ -242,6 +253,99 @@ func (s *wsServer) socialEventFromRecord(userID string, record database.SocialSn
 
 func (s *wsServer) socialUserFromRecord(user database.SocialUserRecord) socialUserSnapshot {
 	return socialUserSnapshot{ID: user.ID, Name: user.Name, ImageURL: user.ImageURL, Online: s.socialPresence.isOnline(user.ID)}
+}
+
+func (s *wsServer) socialFriendFromRecord(user database.SocialUserRecord) socialUserSnapshot {
+	snapshot := s.socialUserFromRecord(user)
+	if s.lobby != nil {
+		if startedAt, ok := s.lobby.activeGameForUser(user.ID); ok {
+			snapshot.ActiveGame = &activeGameSnapshot{StartedAt: startedAt}
+		}
+	}
+	return snapshot
+}
+
+func (s *wsServer) handleSpectateGame(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	req, userID, ok := decodeSocialRequest[spectateGameRequest](s, conn, sessionID, envelope)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+	record, err := s.socialStore.ListSocialSnapshot(ctx, userID)
+	if err != nil {
+		s.writeActionError(conn, envelope.Type, err)
+		return
+	}
+	isFriend := false
+	for _, friend := range record.Friends {
+		if friend.ID == req.UserID {
+			isFriend = true
+			break
+		}
+	}
+	if !isFriend {
+		s.writeActionError(conn, envelope.Type, database.ErrUsersNotFriends)
+		return
+	}
+	if _, active := s.lobby.activeGameForUser(req.UserID); !active {
+		s.writeActionError(conn, envelope.Type, errors.New("friend is not in an active game"))
+		return
+	}
+
+	if oldRoomState, oldRecipients := s.lobby.stopSpectating(conn); oldRoomState != nil {
+		s.broadcastRoomState(*oldRoomState, oldRecipients)
+	}
+	event, roomState, recipients, err := s.lobby.spectateGame(sessionID, req.UserID, conn)
+	if err != nil {
+		s.writeActionError(conn, envelope.Type, err)
+		return
+	}
+	s.broadcastRoomState(roomState, recipients)
+	logEmitFailure(conn, "game_state", event, "write spectator game state failed", "roomCode", roomState.Code, "userID", userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+}
+
+func (s *wsServer) handleStopSpectating(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
+	if _, _, ok := decodeSocialRequest[stopSpectatingRequest](s, conn, sessionID, envelope); !ok {
+		return
+	}
+	roomState, recipients := s.lobby.stopSpectating(conn)
+	logEmitFailure(conn, "spectating_ended", struct{}{}, "write spectating ended failed")
+	if roomState != nil {
+		s.broadcastRoomState(*roomState, recipients)
+	}
+	s.writeSocialActionSuccess(conn, envelope.Type, "")
+}
+
+func (s *wsServer) spectatorDisconnected(conn *websocket.Conn) {
+	roomState, recipients := s.lobby.stopSpectating(conn)
+	if roomState != nil {
+		s.broadcastRoomState(*roomState, recipients)
+	}
+}
+
+func (s *wsServer) refreshFriendsOfPlayers(players []playerSnapshot) {
+	if s == nil || s.socialStore == nil {
+		return
+	}
+	friendIDs := make([]string, 0)
+	for _, player := range players {
+		if player.UserID == "" {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+		record, err := s.socialStore.ListSocialSnapshot(ctx, player.UserID)
+		cancel()
+		if err != nil {
+			slog.Warn("load friends after game state change failed", "userID", player.UserID, "error", err)
+			continue
+		}
+		for _, friend := range record.Friends {
+			friendIDs = append(friendIDs, friend.ID)
+		}
+	}
+	s.refreshSocialUsers(friendIDs...)
 }
 
 func (s *wsServer) handleSendFriendRequest(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {

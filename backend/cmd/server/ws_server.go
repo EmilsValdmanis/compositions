@@ -176,8 +176,9 @@ type roomStateEvent struct {
 }
 
 type gameStateEvent struct {
-	Room roomSnapshot      `json:"room"`
-	Game game.GameSnapshot `json:"game"`
+	Room       roomSnapshot      `json:"room"`
+	Game       game.GameSnapshot `json:"game"`
+	Spectating bool              `json:"spectating,omitempty"`
 }
 
 type actionResultEvent struct {
@@ -204,6 +205,7 @@ type roomSnapshot struct {
 	Players           []playerSnapshot           `json:"players"`
 	EndProposal       *endGameProposalSnapshot   `json:"endProposal,omitempty"`
 	Conclusion        *gameConclusionSnapshot    `json:"conclusion,omitempty"`
+	SpectatorCount    int                        `json:"spectatorCount"`
 }
 
 type pendingDealChoiceSnapshot struct {
@@ -366,6 +368,7 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 	connectionEmitter := emitEvent
 	defer wsDataWriteLocks.Delete(conn)
 	defer s.socialDisconnected(conn)
+	defer s.spectatorDisconnected(conn)
 	defer conn.Close()
 	conn.SetReadLimit(defaultWSReadLimit)
 	_ = setWSReadDeadline(conn)
@@ -430,6 +433,10 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 			s.handleSendGameInvite(conn, sessionID, envelope)
 		case "respond_game_invite":
 			s.handleRespondGameInvite(conn, sessionID, envelope)
+		case "spectate_game":
+			s.handleSpectateGame(conn, sessionID, envelope)
+		case "stop_spectating":
+			s.handleStopSpectating(conn, sessionID, envelope)
 		case "start_game":
 			s.handleStartGame(conn, sessionID, envelope)
 		case "choose_dealing":
@@ -618,6 +625,7 @@ func (s *wsServer) handleChooseDealing(conn *websocket.Conn, sessionID string, e
 	conns := gameRecipientConns(recipients)
 	s.broadcastRoomState(roomState, conns)
 	s.broadcastGameState(recipients)
+	s.refreshFriendsOfPlayers(roomState.Players)
 }
 
 func (s *wsServer) handleStartNextRound(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -669,6 +677,9 @@ func (s *wsServer) handleForfeitGame(conn *websocket.Conn, sessionID string, env
 	}
 	logEmitFailure(conn, "action_result", result, "write forfeit result failed", "sessionID", sessionID)
 	s.broadcastActionSuccess(result, roomState, recipients)
+	if roomState.Phase != "game_over" {
+		s.refreshFriendsOfPlayers(roomState.Players)
+	}
 	logEmitFailure(conn, "left_room", leftRoomEvent{RoomCode: roomCode}, "write forfeit left-room event failed", "sessionID", sessionID)
 }
 
@@ -877,14 +888,24 @@ func (s *wsServer) writeActionError(conn *websocket.Conn, action string, err err
 }
 
 func (s *wsServer) broadcastRoomState(roomState roomSnapshot, recipients []*websocket.Conn) {
+	roomState = s.lobby.withSpectatorCount(roomState)
+	recipients = uniqueConnections(append(recipients, s.lobby.spectatorConnections(roomState.Code)...))
 	for _, conn := range recipients {
 		logEmitFailure(conn, "room_state", roomStateEvent{Room: roomState}, "broadcast room_state failed", "roomCode", roomState.Code)
 	}
 }
 
 func (s *wsServer) broadcastGameState(recipients []gameStateRecipient) {
+	roomCode := ""
 	for _, recipient := range recipients {
+		if roomCode == "" {
+			roomCode = recipient.event.Room.Code
+		}
+		recipient.event.Room = s.lobby.withSpectatorCount(recipient.event.Room)
 		logEmitFailure(recipient.conn, "game_state", recipient.event, "broadcast game_state failed", "roomCode", recipient.event.Room.Code)
+	}
+	for _, recipient := range s.lobby.spectatorGameRecipients(roomCode) {
+		logEmitFailure(recipient.conn, "game_state", recipient.event, "broadcast spectator game_state failed", "roomCode", recipient.event.Room.Code)
 	}
 }
 
@@ -901,12 +922,32 @@ func (s *wsServer) broadcastActionSuccess(result actionResultEvent, roomState ro
 	s.broadcastGameState(recipients)
 
 	if roomState.Phase == "game_over" {
+		s.refreshFriendsOfPlayers(roomState.Players)
+		for _, conn := range s.lobby.endSpectatingRoom(roomState.Code) {
+			logEmitFailure(conn, "spectating_ended", struct{}{}, "write completed spectating event failed", "roomCode", roomState.Code)
+		}
 		if resetRoomState, resetRecipients, err := s.lobby.resetRoomAfterGameOver(roomState.Code); err != nil {
 			slog.Error("reset room after game over failed", "roomCode", roomState.Code, "error", err)
 		} else if resetRoomState != nil {
 			s.broadcastRoomState(*resetRoomState, resetRecipients)
 		}
 	}
+}
+
+func uniqueConnections(connections []*websocket.Conn) []*websocket.Conn {
+	seen := make(map[*websocket.Conn]struct{}, len(connections))
+	unique := make([]*websocket.Conn, 0, len(connections))
+	for _, conn := range connections {
+		if conn == nil {
+			continue
+		}
+		if _, ok := seen[conn]; ok {
+			continue
+		}
+		seen[conn] = struct{}{}
+		unique = append(unique, conn)
+	}
+	return unique
 }
 
 func gameRecipientConns(recipients []gameStateRecipient) []*websocket.Conn {
