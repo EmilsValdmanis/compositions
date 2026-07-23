@@ -1,5 +1,6 @@
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { AnimatePresence, motion } from "motion/react";
 import {
   canReclaimJokerWithCard,
   type HandEntry,
@@ -19,6 +20,13 @@ import {
   NewActivityLabel,
   ReclaimActivityLabel,
 } from "#/components/game/game-view-utils";
+import {
+  spectatorCardEnter,
+  spectatorCardExit,
+  spectatorCardExitTransition,
+  spectatorCardTransition,
+  spectatorCardVisible,
+} from "#/components/game/spectator-card-motion";
 import { cn } from "#/lib/utils";
 
 const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
@@ -65,33 +73,64 @@ function CompositionEdgeDraftZone({
       strategy={horizontalListSortingStrategy}
     >
       <div className="flex shrink-0 items-center gap-2">
-        {entries.map((entry) => (
-          <GameCard
-            key={entry.key}
-            card={entry.card}
-            size="default"
-            draggable={
-              interactive
-                ? {
-                    id: entry.key,
-                    cardIndex: entry.sourceIndex,
-                    isVirtual: entry.isVirtual,
-                  }
-                : undefined
-            }
-            decoration={{
-              highlight: "addition",
-              label: (
-                <AddActivityLabel
-                  players={players}
-                  playerId={playerId}
-                  offsetClassName="translate-y-[2px]"
+        {interactive ? (
+          entries.map((entry) => (
+            <GameCard
+              key={entry.key}
+              card={entry.card}
+              size="default"
+              draggable={{
+                id: entry.key,
+                cardIndex: entry.sourceIndex,
+                isVirtual: entry.isVirtual,
+              }}
+              decoration={{
+                highlight: "addition",
+                label: (
+                  <AddActivityLabel
+                    players={players}
+                    playerId={playerId}
+                    offsetClassName="translate-y-[2px]"
+                  />
+                ),
+              }}
+              invalid={invalidEntryKeys.has(entry.key)}
+            />
+          ))
+        ) : (
+          <AnimatePresence initial={false} mode="popLayout">
+            {entries.map((entry) => (
+              <motion.div
+                key={entry.key}
+                layout="position"
+                initial={spectatorCardEnter}
+                animate={spectatorCardVisible}
+                exit={{
+                  ...spectatorCardExit,
+                  transition: spectatorCardExitTransition,
+                }}
+                transition={spectatorCardTransition}
+                data-spectator-card-motion="addition"
+              >
+                <GameCard
+                  card={entry.card}
+                  size="default"
+                  decoration={{
+                    highlight: "addition",
+                    label: (
+                      <AddActivityLabel
+                        players={players}
+                        playerId={playerId}
+                        offsetClassName="translate-y-[2px]"
+                      />
+                    ),
+                  }}
+                  invalid={invalidEntryKeys.has(entry.key)}
                 />
-              ),
-            }}
-            invalid={invalidEntryKeys.has(entry.key)}
-          />
-        ))}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
       </div>
     </SortableContext>
   );
@@ -274,7 +313,7 @@ export function CompositionRow({
           active={highlightStartEdgeDropTarget}
         />
 
-        {additionsAtStart.length > 0 ? (
+        {additionsAtStart.length > 0 || !stagedEntriesInteractive ? (
           <CompositionEdgeDraftZone
             entries={additionsAtStart}
             interactive={stagedEntriesInteractive}
@@ -295,10 +334,47 @@ export function CompositionRow({
               : undefined;
           const previewPlayerId = cardActivity?.playerId ?? stagedEntryPlayerId;
           const previewCard = reclaim ? reclaim.replacementEntry.card : card;
+          const renderedCard = (
+            <GameCard
+              card={previewCard}
+              size="default"
+              draggable={
+                reclaim && stagedEntriesInteractive
+                  ? {
+                      id: reclaim.replacementEntry.key,
+                      cardIndex: reclaim.replacementEntry.sourceIndex,
+                      isVirtual: reclaim.replacementEntry.isVirtual,
+                    }
+                  : undefined
+              }
+              decoration={
+                submittedHighlight || reclaim
+                  ? {
+                      highlight: submittedHighlight ?? "joker_reclaim",
+                      label:
+                        (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
+                          <ReclaimActivityLabel
+                            players={players}
+                            playerId={previewPlayerId}
+                            offsetClassName="translate-y-[2px]"
+                          />
+                        ) : (
+                          <AddActivityLabel
+                            players={players}
+                            playerId={previewPlayerId}
+                            offsetClassName="translate-y-[2px]"
+                          />
+                        ),
+                    }
+                  : undefined
+              }
+              invalid={Boolean(reclaim && invalidEntryKeys.has(reclaim.replacementEntry.key))}
+            />
+          );
 
           return (
             <div key={key} className="flex flex-col items-center gap-1">
-              <div className="relative">
+              <div className={cn("relative", stagedEntriesInteractive ? null : "grid")}>
                 {card.isJoker && dropTargetsEnabled && isDraggingCompositionCard
                   ? (() => {
                       const draggedCard = active?.data.current?.card as
@@ -321,47 +397,32 @@ export function CompositionRow({
                     })()
                   : null}
 
-                <GameCard
-                  card={previewCard}
-                  size="default"
-                  draggable={
-                    reclaim && stagedEntriesInteractive
-                      ? {
-                          id: reclaim.replacementEntry.key,
-                          cardIndex: reclaim.replacementEntry.sourceIndex,
-                          isVirtual: reclaim.replacementEntry.isVirtual,
-                        }
-                      : undefined
-                  }
-                  decoration={
-                    submittedHighlight || reclaim
-                      ? {
-                          highlight: submittedHighlight ?? "joker_reclaim",
-                          label:
-                            (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
-                              <ReclaimActivityLabel
-                                players={players}
-                                playerId={previewPlayerId}
-                                offsetClassName="translate-y-[2px]"
-                              />
-                            ) : (
-                              <AddActivityLabel
-                                players={players}
-                                playerId={previewPlayerId}
-                                offsetClassName="translate-y-[2px]"
-                              />
-                            ),
-                        }
-                      : undefined
-                  }
-                  invalid={Boolean(reclaim && invalidEntryKeys.has(reclaim.replacementEntry.key))}
-                />
+                {stagedEntriesInteractive ? (
+                  renderedCard
+                ) : (
+                  <AnimatePresence initial={false}>
+                    <motion.div
+                      key={reclaim ? `reclaim-${reclaim.replacementEntry.key}` : `table-${key}`}
+                      className="col-start-1 row-start-1"
+                      initial={spectatorCardEnter}
+                      animate={spectatorCardVisible}
+                      exit={{
+                        ...spectatorCardExit,
+                        transition: spectatorCardExitTransition,
+                      }}
+                      transition={spectatorCardTransition}
+                      data-spectator-card-motion={reclaim ? "joker-reclaim" : undefined}
+                    >
+                      {renderedCard}
+                    </motion.div>
+                  </AnimatePresence>
+                )}
               </div>
             </div>
           );
         })}
 
-        {additionsAtEnd.length > 0 ? (
+        {additionsAtEnd.length > 0 || !stagedEntriesInteractive ? (
           <CompositionEdgeDraftZone
             entries={additionsAtEnd}
             interactive={stagedEntriesInteractive}

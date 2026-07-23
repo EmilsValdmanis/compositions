@@ -1,5 +1,6 @@
 import { Cards01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, type RefObject } from "react";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
@@ -23,6 +24,15 @@ import {
   draftCompositionPointTotal,
   draftCompositionPreviewPointTotal,
 } from "#/components/game/game-card-utils";
+import {
+  spectatorCardEnter,
+  spectatorCardExit,
+  spectatorCardExitTransition,
+  spectatorCardTransition,
+  spectatorCardVisible,
+  spectatorCompositionEnter,
+  spectatorCompositionExit,
+} from "#/components/game/spectator-card-motion";
 import { NewActivityLabel } from "#/components/game/game-view-utils";
 import { Badge } from "#/components/ui/badge";
 import { AnimatedNumber } from "#/components/ui/animated-number";
@@ -191,9 +201,24 @@ function SpectatorNewDraft({
         </Badge>
       </div>
       <div className="flex items-start gap-2">
-        {draftCardInstances(composition.cards).map(({ card, key }) => (
-          <GameCard key={`${composition.tableIndex ?? "new"}-${key}`} card={card} size="default" />
-        ))}
+        <AnimatePresence initial={false} mode="popLayout">
+          {draftCardInstances(composition.cards).map(({ card, key }) => (
+            <motion.div
+              key={key}
+              layout="position"
+              initial={spectatorCardEnter}
+              animate={spectatorCardVisible}
+              exit={{
+                ...spectatorCardExit,
+                transition: spectatorCardExitTransition,
+              }}
+              transition={spectatorCardTransition}
+              data-spectator-card-motion="draft"
+            >
+              <GameCard card={card} size="default" />
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -283,14 +308,28 @@ function DraftCompositionsSection({
         <DraftTotal points={visibleDraftPointsTotal} />
       ) : null}
 
-      {stagedNewDrafts.map((composition) => (
-        <SpectatorNewDraft
-          key={composition.id}
-          composition={composition}
-          players={players}
-          playerId={turnPlayerId}
-        />
-      ))}
+      <AnimatePresence initial={false} mode="popLayout">
+        {stagedNewDrafts.map((composition) => (
+          <motion.div
+            key={composition.id}
+            layout="position"
+            initial={spectatorCompositionEnter}
+            animate={spectatorCardVisible}
+            exit={{
+              ...spectatorCompositionExit,
+              transition: spectatorCardExitTransition,
+            }}
+            transition={spectatorCardTransition}
+            data-spectator-composition-motion="draft"
+          >
+            <SpectatorNewDraft
+              composition={composition}
+              players={players}
+              playerId={turnPlayerId}
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
 
       {newCompositions.map((composition) => (
         <EditableNewDraft

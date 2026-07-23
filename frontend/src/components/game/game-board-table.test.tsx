@@ -110,6 +110,12 @@ describe("draftPreviewForComposition", () => {
     ).toEqual(["10 of Hearts", "Joker", "Q of Hearts", "K of Hearts", "A of Hearts"]);
     expect(view.queryByText("#1")).toBeNull();
     expect(view.queryByText("30 pts")).toBeNull();
+    expect(view.container.querySelectorAll('[data-spectator-card-motion="addition"]')).toHaveLength(
+      2,
+    );
+    expect(
+      view.container.querySelectorAll('[data-spectator-card-motion="joker-reclaim"]'),
+    ).toHaveLength(1);
   });
 
   it("keeps two identical jokers on their independently assigned edges", () => {
@@ -279,6 +285,15 @@ describe("draftPreviewForComposition", () => {
 });
 
 describe("GameBoardTable draft total", () => {
+  it("marks remote draft compositions and cards for spectator motion", () => {
+    const view = renderDraftTable(false);
+
+    expect(
+      view.container.querySelectorAll('[data-spectator-composition-motion="draft"]'),
+    ).toHaveLength(1);
+    expect(view.container.querySelectorAll('[data-spectator-card-motion="draft"]')).toHaveLength(3);
+  });
+
   it("shows the total before the player has opened", () => {
     const view = renderDraftTable(true);
 
