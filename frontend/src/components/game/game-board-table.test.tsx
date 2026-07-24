@@ -61,6 +61,46 @@ describe("GameBoardTable empty state", () => {
 });
 
 describe("draftPreviewForComposition", () => {
+  it("does not reserve flex gaps for empty composition edge drafts", () => {
+    const view = render(
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[
+            {
+              tableIndex: 0,
+              key: "table-0",
+              snapshot: {
+                type: "run",
+                cards: [
+                  { rank: 5, suit: 0 },
+                  { rank: 6, suit: 0 },
+                  { rank: 7, suit: 0 },
+                ],
+                jokerRepresentations: {},
+                points: 18,
+                complete: false,
+              },
+              stagedEntries: [],
+              reclaims: [],
+              insertIndex: 3,
+            },
+          ]}
+          newCompositions={[]}
+          players={[]}
+          canCompose={false}
+          showDraftTotal={false}
+        />
+      </DndContext>,
+    );
+
+    const edgeDraftZones = view.container.querySelectorAll(
+      '[data-slot="composition-edge-draft-zone"]',
+    );
+
+    expect(edgeDraftZones).toHaveLength(2);
+    expect([...edgeDraftZones].every((zone) => zone.classList.contains("contents"))).toBe(true);
+  });
+
   it("keeps a reclaimed joker with later additions on the same edge for spectators", () => {
     const view = render(
       <DndContext>

@@ -72,7 +72,10 @@ function CompositionEdgeDraftZone({
       items={entries.map((entry) => entry.key)}
       strategy={horizontalListSortingStrategy}
     >
-      <div className="flex shrink-0 items-center gap-2">
+      <div
+        data-slot="composition-edge-draft-zone"
+        className={cn(entries.length === 0 ? "contents" : "flex shrink-0 items-center gap-2")}
+      >
         {interactive ? (
           entries.map((entry) => (
             <GameCard
