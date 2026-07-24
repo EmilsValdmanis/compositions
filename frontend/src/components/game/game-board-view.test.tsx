@@ -46,6 +46,9 @@ let dndContextProps: {
   onDragOver?: (event: any) => void;
   onDragEnd?: (event: any) => void;
 } = {};
+let dragOverlayProps: {
+  modifiers?: Array<(args: Record<string, unknown>) => Record<string, unknown>>;
+} = {};
 let sortableContextItems: string[][] = [];
 
 vi.mock("#/components/game-websocket-provider", () => ({
@@ -62,7 +65,16 @@ vi.mock("@dnd-kit/core", () => ({
     dndContextProps = props;
     return <>{children}</>;
   },
-  DragOverlay: ({ children }: { children: ReactNode }) => <>{children}</>,
+  DragOverlay: ({
+    children,
+    ...props
+  }: {
+    children: ReactNode;
+    modifiers?: Array<(args: Record<string, unknown>) => Record<string, unknown>>;
+  }) => {
+    dragOverlayProps = props;
+    return <>{children}</>;
+  },
   closestCenter: () => [],
   pointerWithin: () => [],
   useDndContext: () => ({ active: null, over: null }),
@@ -113,12 +125,14 @@ const { GameBoardView } = await import("#/components/game/game-board-view");
 beforeEach(() => {
   cleanup();
   dndContextProps = {};
+  dragOverlayProps = {};
   sortableContextItems = [];
 });
 
 afterEach(() => {
   cleanup();
   dndContextProps = {};
+  dragOverlayProps = {};
   sortableContextItems = [];
 });
 
@@ -204,6 +218,13 @@ describe("GameBoardView drag sensors", () => {
       activationConstraint: { delay: 180, tolerance: 8 },
     });
     expect(dndContextProps.sensors?.[2]?.options).toHaveProperty("coordinateGetter");
+    expect(
+      dragOverlayProps.modifiers?.[0]?.({
+        overlayNodeRect: { left: -4, right: 52, top: -6, bottom: 74 },
+        transform: { x: 0, y: 0, scaleX: 1, scaleY: 1 },
+        windowRect: { left: 0, right: 800, top: 0, bottom: 600 },
+      }),
+    ).toMatchObject({ x: 12, y: 14 });
     expect(
       view.container.querySelector('[data-slot="turn-start-cue"]')?.parentElement?.dataset.slot,
     ).toBe("game-board-table-region");
