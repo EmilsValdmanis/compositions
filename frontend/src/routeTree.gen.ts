@@ -15,7 +15,7 @@ import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as ProtectedIndexRouteImport } from './routes/_protected/index'
 import { Route as ProtectedDevUiRouteImport } from './routes/_protected/dev-ui'
 import { Route as ProtectedLeaderboardRouteImport } from './routes/_protected/leaderboard'
-import { Route as PlayersPlayerIdRouteImport } from './routes/players.$playerId'
+import { Route as ProtectedPlayersPlayerIdRouteImport } from './routes/_protected/players.$playerId'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
@@ -45,25 +45,26 @@ const ProtectedLeaderboardRoute = ProtectedLeaderboardRouteImport.update({
   path: '/leaderboard',
   getParentRoute: () => ProtectedRoute,
 } as any)
-const PlayersPlayerIdRoute = PlayersPlayerIdRouteImport.update({
-  id: '/players/$playerId',
-  path: '/players/$playerId',
-  getParentRoute: () => rootRouteImport,
-} as any)
+const ProtectedPlayersPlayerIdRoute =
+  ProtectedPlayersPlayerIdRouteImport.update({
+    id: '/players/$playerId',
+    path: '/players/$playerId',
+    getParentRoute: () => ProtectedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof ProtectedIndexRoute
   '/sign-in': typeof AuthSignInRoute
   '/dev-ui': typeof ProtectedDevUiRoute
   '/leaderboard': typeof ProtectedLeaderboardRoute
-  '/players/$playerId': typeof PlayersPlayerIdRoute
+  '/players/$playerId': typeof ProtectedPlayersPlayerIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof ProtectedIndexRoute
   '/sign-in': typeof AuthSignInRoute
   '/dev-ui': typeof ProtectedDevUiRoute
   '/leaderboard': typeof ProtectedLeaderboardRoute
-  '/players/$playerId': typeof PlayersPlayerIdRoute
+  '/players/$playerId': typeof ProtectedPlayersPlayerIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -72,8 +73,8 @@ export interface FileRoutesById {
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_protected/dev-ui': typeof ProtectedDevUiRoute
   '/_protected/leaderboard': typeof ProtectedLeaderboardRoute
-  '/players/$playerId': typeof PlayersPlayerIdRoute
   '/_protected/': typeof ProtectedIndexRoute
+  '/_protected/players/$playerId': typeof ProtectedPlayersPlayerIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -92,14 +93,13 @@ export interface FileRouteTypes {
     | '/_auth/sign-in'
     | '/_protected/dev-ui'
     | '/_protected/leaderboard'
-    | '/players/$playerId'
     | '/_protected/'
+    | '/_protected/players/$playerId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   ProtectedRoute: typeof ProtectedRouteWithChildren
-  PlayersPlayerIdRoute: typeof PlayersPlayerIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -146,12 +146,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedLeaderboardRouteImport
       parentRoute: typeof ProtectedRoute
     }
-    '/players/$playerId': {
-      id: '/players/$playerId'
+    '/_protected/players/$playerId': {
+      id: '/_protected/players/$playerId'
       path: '/players/$playerId'
       fullPath: '/players/$playerId'
-      preLoaderRoute: typeof PlayersPlayerIdRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof ProtectedPlayersPlayerIdRouteImport
+      parentRoute: typeof ProtectedRoute
     }
   }
 }
@@ -170,12 +170,14 @@ interface ProtectedRouteChildren {
   ProtectedDevUiRoute: typeof ProtectedDevUiRoute
   ProtectedLeaderboardRoute: typeof ProtectedLeaderboardRoute
   ProtectedIndexRoute: typeof ProtectedIndexRoute
+  ProtectedPlayersPlayerIdRoute: typeof ProtectedPlayersPlayerIdRoute
 }
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedDevUiRoute: ProtectedDevUiRoute,
   ProtectedLeaderboardRoute: ProtectedLeaderboardRoute,
   ProtectedIndexRoute: ProtectedIndexRoute,
+  ProtectedPlayersPlayerIdRoute: ProtectedPlayersPlayerIdRoute,
 }
 
 const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
@@ -185,7 +187,6 @@ const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   ProtectedRoute: ProtectedRouteWithChildren,
-  PlayersPlayerIdRoute: PlayersPlayerIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
