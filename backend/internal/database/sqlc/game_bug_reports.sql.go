@@ -11,8 +11,23 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const completeGameBugReport = `-- name: CompleteGameBugReport :one
+UPDATE game_bug_reports
+SET completed_at = NOW()
+WHERE id = $1::uuid
+  AND completed_at IS NULL
+RETURNING id::text AS completed_id
+`
+
+func (q *Queries) CompleteGameBugReport(ctx context.Context, id pgtype.UUID) (string, error) {
+	row := q.db.QueryRow(ctx, completeGameBugReport, id)
+	var completed_id string
+	err := row.Scan(&completed_id)
+	return completed_id, err
+}
+
 const countGameBugReports = `-- name: CountGameBugReports :one
-SELECT COUNT(*) FROM game_bug_reports
+SELECT COUNT(*) FROM game_bug_reports WHERE completed_at IS NULL
 `
 
 func (q *Queries) CountGameBugReports(ctx context.Context) (int64, error) {
@@ -129,6 +144,7 @@ SELECT
     created_at
 FROM game_bug_reports
 WHERE id = $1::uuid
+  AND completed_at IS NULL
 `
 
 type GetGameBugReportRow struct {
@@ -175,6 +191,7 @@ SELECT
     requested_abort,
     created_at
 FROM game_bug_reports
+WHERE completed_at IS NULL
 ORDER BY created_at DESC
 LIMIT $1
 `
@@ -234,6 +251,7 @@ SELECT
     requested_abort,
     created_at
 FROM game_bug_reports
+WHERE completed_at IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT $2
 OFFSET $1

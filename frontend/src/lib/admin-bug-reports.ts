@@ -122,6 +122,20 @@ export const getAdminBugReport = createServerFn({ method: "GET" })
     return adminBugReportDetailSchema.parse(await response.json());
   });
 
+export const completeAdminBugReport = createServerFn({ method: "POST" })
+  .validator(z.uuid())
+  .handler(async ({ data: reportId }) => {
+    const response = await fetch(
+      authURL(
+        `/api/admin/bug-reports/${encodeURIComponent(reportId)}/complete`,
+        process.env.VITE_GAME_SERVER_URL,
+      ),
+      { method: "POST", headers: adminRequestHeaders() },
+    );
+    if (!response.ok) throw new Error(`failed to complete admin bug report: ${response.status}`);
+    return reportId;
+  });
+
 export function adminBugReportPageOptions(page: number) {
   return queryOptions({
     queryKey: ["admin", "bug-reports", page],

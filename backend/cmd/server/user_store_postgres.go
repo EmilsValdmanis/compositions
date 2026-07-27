@@ -134,6 +134,13 @@ func (s *postgresUserStore) GetGameBugReport(ctx context.Context, reportID strin
 	return s.store.GetGameBugReport(ctx, strings.TrimSpace(reportID))
 }
 
+func (s *postgresUserStore) CompleteGameBugReport(ctx context.Context, reportID string) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.CompleteGameBugReport(ctx, strings.TrimSpace(reportID))
+}
+
 func (s *postgresUserStore) GetPlayerProfile(ctx context.Context, userID string) (database.PlayerProfileRecord, error) {
 	if s == nil || s.store == nil {
 		return database.PlayerProfileRecord{}, errors.New("user store is not configured")

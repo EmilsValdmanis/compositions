@@ -22,6 +22,7 @@ type adminBugReportStore interface {
 	ListGameBugReportsPage(ctx context.Context, limit, offset int) ([]database.GameBugReportRecord, error)
 	CountGameBugReports(ctx context.Context) (int64, error)
 	GetGameBugReport(ctx context.Context, reportID string) (database.GameBugReportRecord, error)
+	CompleteGameBugReport(ctx context.Context, reportID string) error
 }
 
 type adminBugReportSummaryResponse struct {
@@ -62,11 +63,6 @@ func (s *wsServer) handleAdminBugReports(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	setNoStore(w)
-	if r.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
-		return
-	}
 	if !s.requireAdmin(w, r) {
 		return
 	}
@@ -79,11 +75,31 @@ func (s *wsServer) handleAdminBugReports(w http.ResponseWriter, r *http.Request)
 
 	reportPath := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/admin/bug-reports"), "/")
 	if reportPath == "" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
 		s.handleAdminBugReportList(w, r, store)
 		return
 	}
-	if strings.Contains(reportPath, "/") {
+	pathParts := strings.Split(reportPath, "/")
+	if len(pathParts) == 2 && pathParts[1] == "complete" {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		s.handleAdminBugReportComplete(w, r, store, pathParts[0])
+		return
+	}
+	if len(pathParts) != 1 {
 		writeHTTPError(w, http.StatusNotFound, "not_found", "bug report not found")
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
 		return
 	}
 	s.handleAdminBugReportDetail(w, r, store, reportPath)
@@ -182,4 +198,20 @@ func (s *wsServer) handleAdminBugReportDetail(w http.ResponseWriter, r *http.Req
 	}); err != nil {
 		slog.Error("write admin bug report detail failed", "error", err)
 	}
+}
+
+func (s *wsServer) handleAdminBugReportComplete(w http.ResponseWriter, r *http.Request, store adminBugReportStore, reportID string) {
+	if _, err := uuid.Parse(reportID); err != nil {
+		writeHTTPError(w, http.StatusNotFound, "not_found", "bug report not found")
+		return
+	}
+	if err := store.CompleteGameBugReport(r.Context(), reportID); errors.Is(err, database.ErrGameBugReportNotFound) {
+		writeHTTPError(w, http.StatusNotFound, "not_found", "bug report not found")
+		return
+	} else if err != nil {
+		slog.Error("complete admin bug report failed", "reportID", reportID, "error", err)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to complete bug report")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

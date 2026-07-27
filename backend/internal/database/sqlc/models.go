@@ -55,6 +55,7 @@ type GameBugReport struct {
 	Turn             int32              `json:"turn"`
 	RequestedAbort   bool               `json:"requested_abort"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	CompletedAt      pgtype.Timestamptz `json:"completed_at"`
 }
 
 type GameInvite struct {

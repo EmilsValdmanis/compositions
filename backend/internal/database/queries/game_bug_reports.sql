@@ -48,6 +48,7 @@ SELECT
     requested_abort,
     created_at
 FROM game_bug_reports
+WHERE completed_at IS NULL
 ORDER BY created_at DESC
 LIMIT sqlc.arg(result_limit);
 
@@ -62,12 +63,13 @@ SELECT
     requested_abort,
     created_at
 FROM game_bug_reports
+WHERE completed_at IS NULL
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(result_limit)
 OFFSET sqlc.arg(result_offset);
 
 -- name: CountGameBugReports :one
-SELECT COUNT(*) FROM game_bug_reports;
+SELECT COUNT(*) FROM game_bug_reports WHERE completed_at IS NULL;
 
 -- name: GetGameBugReport :one
 SELECT
@@ -82,4 +84,12 @@ SELECT
     requested_abort,
     created_at
 FROM game_bug_reports
-WHERE id = sqlc.arg(id)::uuid;
+WHERE id = sqlc.arg(id)::uuid
+  AND completed_at IS NULL;
+
+-- name: CompleteGameBugReport :one
+UPDATE game_bug_reports
+SET completed_at = NOW()
+WHERE id = sqlc.arg(id)::uuid
+  AND completed_at IS NULL
+RETURNING id::text AS completed_id;

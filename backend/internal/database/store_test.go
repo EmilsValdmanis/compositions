@@ -630,6 +630,26 @@ func TestUserStoreGameBugReports(t *testing.T) {
 	if total != 1 {
 		t.Fatalf("CountGameBugReports() = %d; want 1", total)
 	}
+	if err := store.CompleteGameBugReport(ctx, report.ID); err != nil {
+		t.Fatalf("CompleteGameBugReport() error = %v", err)
+	}
+	if _, err := store.GetGameBugReport(ctx, report.ID); !errors.Is(err, ErrGameBugReportNotFound) {
+		t.Fatalf("GetGameBugReport(completed) error = %v; want not found", err)
+	}
+	page, err = store.ListGameBugReportsPage(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("ListGameBugReportsPage(completed) error = %v", err)
+	}
+	if len(page) != 0 {
+		t.Fatalf("completed bug report still listed = %#v", page)
+	}
+	total, err = store.CountGameBugReports(ctx)
+	if err != nil || total != 0 {
+		t.Fatalf("CountGameBugReports(completed) = %d, %v; want 0, nil", total, err)
+	}
+	if err := store.CompleteGameBugReport(ctx, report.ID); !errors.Is(err, ErrGameBugReportNotFound) {
+		t.Fatalf("CompleteGameBugReport(completed) error = %v; want not found", err)
+	}
 }
 
 func TestUserEmailUniquenessMigrationDeduplicatesExistingRows(t *testing.T) {
