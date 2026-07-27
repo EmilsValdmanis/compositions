@@ -1,4 +1,10 @@
-import { CodeXmlIcon, Home01Icon, JokerIcon, RankingIcon } from "@hugeicons/core-free-icons";
+import {
+  CodeXmlIcon,
+  Home01Icon,
+  JokerIcon,
+  RankingIcon,
+  ShieldUserIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, getRouteApi } from "@tanstack/react-router";
 import { useGameWebSocket } from "#/components/game-websocket-provider";
@@ -16,7 +22,6 @@ import {
   useSidebar,
 } from "#/components/ui/sidebar";
 import { UserDropdown } from "#/components/user-dropdown";
-import { useAppPage } from "#/lib/app-navigation";
 import { m } from "#/paraglide/messages.js";
 
 const rootRouteApi = getRouteApi("__root__");
@@ -26,7 +31,6 @@ export function AppSidebar() {
   const { state, dismissCompletedGame, removeFriend, sendGameInvite, spectateGame } =
     useGameWebSocket();
   const { setOpenMobile } = useSidebar();
-  const currentPage = useAppPage();
   const players = state.room?.players ?? [];
   const canInvite = Boolean(
     state.room &&
@@ -65,8 +69,14 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip={m.lobby()}
-                  isActive={currentPage === "lobby"}
-                  render={<Link to="/" onClick={goToLobby} />}
+                  render={
+                    <Link
+                      to="/"
+                      activeOptions={{ exact: true }}
+                      activeProps={{ "data-active": true }}
+                      onClick={goToLobby}
+                    />
+                  }
                 >
                   <HugeiconsIcon icon={Home01Icon} />
                   <span>{m.lobby()}</span>
@@ -75,19 +85,49 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip={m.leaderboard()}
-                  isActive={currentPage === "leaderboard"}
-                  render={<Link to="/leaderboard" onClick={closeMobileSidebar} />}
+                  render={
+                    <Link
+                      to="/leaderboard"
+                      activeOptions={{ exact: true }}
+                      activeProps={{ "data-active": true }}
+                      onClick={closeMobileSidebar}
+                    />
+                  }
                 >
                   <HugeiconsIcon icon={RankingIcon} />
                   <span>{m.leaderboard()}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+              {session?.user.isAdmin ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip={m.admin()}
+                    render={
+                      <Link
+                        to="/admin"
+                        activeOptions={{ exact: true }}
+                        activeProps={{ "data-active": true }}
+                        onClick={closeMobileSidebar}
+                      />
+                    }
+                  >
+                    <HugeiconsIcon icon={ShieldUserIcon} />
+                    <span>{m.admin()}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
               {import.meta.env.DEV ? (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     tooltip={m.dev_ui()}
-                    isActive={currentPage === "dev-ui"}
-                    render={<Link to="/dev-ui" onClick={closeMobileSidebar} />}
+                    render={
+                      <Link
+                        to="/dev-ui"
+                        activeOptions={{ exact: true }}
+                        activeProps={{ "data-active": true }}
+                        onClick={closeMobileSidebar}
+                      />
+                    }
                   >
                     <HugeiconsIcon icon={CodeXmlIcon} />
                     <span>{m.dev_ui()}</span>

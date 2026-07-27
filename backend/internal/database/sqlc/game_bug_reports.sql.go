@@ -11,6 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countGameBugReports = `-- name: CountGameBugReports :one
+SELECT COUNT(*) FROM game_bug_reports
+`
+
+func (q *Queries) CountGameBugReports(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countGameBugReports)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGameBugReport = `-- name: CreateGameBugReport :one
 INSERT INTO game_bug_reports (
     id,
@@ -197,6 +208,67 @@ func (q *Queries) ListGameBugReports(ctx context.Context, resultLimit int32) ([]
 			&i.ReporterUserID,
 			&i.Description,
 			&i.GameState,
+			&i.Round,
+			&i.Turn,
+			&i.RequestedAbort,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGameBugReportsPage = `-- name: ListGameBugReportsPage :many
+SELECT
+    id::text AS id,
+    room_code,
+    reporter_player_id,
+    description,
+    round,
+    turn,
+    requested_abort,
+    created_at
+FROM game_bug_reports
+ORDER BY created_at DESC, id DESC
+LIMIT $2
+OFFSET $1
+`
+
+type ListGameBugReportsPageParams struct {
+	ResultOffset int32 `json:"result_offset"`
+	ResultLimit  int32 `json:"result_limit"`
+}
+
+type ListGameBugReportsPageRow struct {
+	ID               string             `json:"id"`
+	RoomCode         string             `json:"room_code"`
+	ReporterPlayerID string             `json:"reporter_player_id"`
+	Description      string             `json:"description"`
+	Round            int32              `json:"round"`
+	Turn             int32              `json:"turn"`
+	RequestedAbort   bool               `json:"requested_abort"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListGameBugReportsPage(ctx context.Context, arg ListGameBugReportsPageParams) ([]ListGameBugReportsPageRow, error) {
+	rows, err := q.db.Query(ctx, listGameBugReportsPage, arg.ResultOffset, arg.ResultLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListGameBugReportsPageRow
+	for rows.Next() {
+		var i ListGameBugReportsPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoomCode,
+			&i.ReporterPlayerID,
+			&i.Description,
 			&i.Round,
 			&i.Turn,
 			&i.RequestedAbort,

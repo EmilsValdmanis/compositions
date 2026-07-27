@@ -139,8 +139,12 @@ describe("PlayerProfilePage", () => {
     renderProfile({ ...history, totalItems: 11, totalPages: 2 });
 
     expect(screen.getByText("Page 1 of 2")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Previous" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Next" })).toHaveProperty("disabled", false);
+    const previous = screen.getByRole("button", { name: "Previous" });
+    const next = screen.getByRole("button", { name: "Next" });
+    expect(previous.getAttribute("aria-disabled")).toBe("true");
+    expect(previous).toHaveProperty("tabIndex", -1);
+    expect(next.getAttribute("aria-disabled")).toBe("false");
+    expect(next).toHaveProperty("tabIndex", 0);
   });
 
   it("uses one compact mode toggle for the whole profile", () => {

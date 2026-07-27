@@ -51,6 +51,24 @@ FROM game_bug_reports
 ORDER BY created_at DESC
 LIMIT sqlc.arg(result_limit);
 
+-- name: ListGameBugReportsPage :many
+SELECT
+    id::text AS id,
+    room_code,
+    reporter_player_id,
+    description,
+    round,
+    turn,
+    requested_abort,
+    created_at
+FROM game_bug_reports
+ORDER BY created_at DESC, id DESC
+LIMIT sqlc.arg(result_limit)
+OFFSET sqlc.arg(result_offset);
+
+-- name: CountGameBugReports :one
+SELECT COUNT(*) FROM game_bug_reports;
+
 -- name: GetGameBugReport :one
 SELECT
     id::text AS id,

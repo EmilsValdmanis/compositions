@@ -121,6 +121,7 @@ func TestSessionFromRequest(t *testing.T) {
 			Name:      "Player One",
 			Email:     "player@example.com",
 			ImageURL:  "https://cdn.example.com/player.png",
+			IsAdmin:   true,
 			ExpiresAt: now.Add(time.Hour),
 		}}
 		handler := &authHandler{store: store, now: func() time.Time { return now }}
@@ -131,7 +132,7 @@ func TestSessionFromRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("sessionFromRequest() error = %v", err)
 		}
-		if !session.valid || session.user.ID != "user-123" || session.token != "session-token" {
+		if !session.valid || session.user.ID != "user-123" || !session.user.IsAdmin || session.token != "session-token" {
 			t.Fatalf("session = %#v; want valid authenticated session", session)
 		}
 	})
@@ -232,6 +233,7 @@ func TestHandleSession(t *testing.T) {
 			Name:      "Player One",
 			Email:     "player@example.com",
 			ImageURL:  "https://cdn.example.com/player.png",
+			IsAdmin:   true,
 			ExpiresAt: now.Add(time.Hour),
 		}}
 		handler := &authHandler{store: store, now: func() time.Time { return now }}
@@ -245,7 +247,7 @@ func TestHandleSession(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("json.Unmarshal() error = %v", err)
 		}
-		if payload.User.ID != "user-123" || payload.User.Email != "player@example.com" {
+		if payload.User.ID != "user-123" || payload.User.Email != "player@example.com" || !payload.User.IsAdmin {
 			t.Fatalf("payload = %#v; want authenticated session payload", payload)
 		}
 	})

@@ -91,10 +91,11 @@ type googleUserInfo struct {
 
 type sessionResponse struct {
 	User struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		Image string `json:"image"`
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Email   string `json:"email"`
+		Image   string `json:"image"`
+		IsAdmin bool   `json:"isAdmin"`
 	} `json:"user"`
 }
 
@@ -415,6 +416,7 @@ func (h *authHandler) handleSession(w http.ResponseWriter, r *http.Request) {
 	payload.User.Name = session.user.Name
 	payload.User.Email = session.user.Email
 	payload.User.Image = session.user.Image
+	payload.User.IsAdmin = session.user.IsAdmin
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		slog.Error("write session response failed", "error", err)
@@ -452,10 +454,11 @@ func (h *authHandler) sessionFromRequest(r *http.Request) (authSession, error) {
 	}
 
 	user := authenticatedUser{
-		ID:    record.ID,
-		Name:  record.Name,
-		Email: record.Email,
-		Image: record.ImageURL,
+		ID:      record.ID,
+		Name:    record.Name,
+		Email:   record.Email,
+		Image:   record.ImageURL,
+		IsAdmin: record.IsAdmin,
 	}
 	if !user.isAuthenticated() {
 		return authSession{}, errAuthenticationRequired

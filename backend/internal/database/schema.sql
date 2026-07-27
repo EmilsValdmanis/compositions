@@ -3,6 +3,7 @@ CREATE TABLE users (
     name TEXT NOT NULL DEFAULT '',
     email TEXT NOT NULL DEFAULT '',
     image_url TEXT NOT NULL DEFAULT '',
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

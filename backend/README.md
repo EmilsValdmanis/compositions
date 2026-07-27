@@ -22,6 +22,15 @@ Required auth configuration:
 - `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
 - `COOKIE_SECURE`: set to `true` when serving over HTTPS
 
+Admin access is controlled solely by `users.is_admin` in every environment. Promote a user directly
+in Postgres:
+
+```sql
+UPDATE users
+SET is_admin = TRUE
+WHERE email = 'admin@example.com';
+```
+
 Authenticated websocket users are persisted to Postgres on connect. The backend uses:
 
 - `pgx/v5` for the connection pool and driver

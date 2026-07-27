@@ -17,6 +17,19 @@ type Account struct {
 	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }
 
+type FriendRequest struct {
+	ID          pgtype.UUID        `json:"id"`
+	SenderID    pgtype.UUID        `json:"sender_id"`
+	RecipientID pgtype.UUID        `json:"recipient_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type Friendship struct {
+	UserAID   pgtype.UUID        `json:"user_a_id"`
+	UserBID   pgtype.UUID        `json:"user_b_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Game struct {
 	ID                    pgtype.UUID        `json:"id"`
 	RoomCode              string             `json:"room_code"`
@@ -42,6 +55,15 @@ type GameBugReport struct {
 	Turn             int32              `json:"turn"`
 	RequestedAbort   bool               `json:"requested_abort"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type GameInvite struct {
+	ID          pgtype.UUID        `json:"id"`
+	SenderID    pgtype.UUID        `json:"sender_id"`
+	RecipientID pgtype.UUID        `json:"recipient_id"`
+	RoomCode    string             `json:"room_code"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt   pgtype.Timestamptz `json:"expires_at"`
 }
 
 type GamePlayerStatistic struct {
@@ -145,6 +167,7 @@ type User struct {
 	Name      string             `json:"name"`
 	Email     string             `json:"email"`
 	ImageUrl  string             `json:"image_url"`
+	IsAdmin   bool               `json:"is_admin"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
 }

@@ -4,6 +4,7 @@ export type AuthSession = {
     name: string;
     email: string;
     image: string;
+    isAdmin: boolean;
   };
 };
 
