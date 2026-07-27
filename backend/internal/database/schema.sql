@@ -92,6 +92,7 @@ CREATE TABLE game_bug_reports (
     turn INTEGER NOT NULL,
     requested_abort BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
     CONSTRAINT game_bug_reports_room_code_not_blank CHECK (BTRIM(room_code) <> ''),
     CONSTRAINT game_bug_reports_reporter_not_blank CHECK (BTRIM(reporter_player_id) <> ''),
     CONSTRAINT game_bug_reports_description_length CHECK (
@@ -103,6 +104,9 @@ CREATE TABLE game_bug_reports (
 
 CREATE INDEX game_bug_reports_created_at_idx ON game_bug_reports (created_at DESC);
 CREATE INDEX game_bug_reports_room_code_idx ON game_bug_reports (room_code, created_at DESC);
+CREATE INDEX game_bug_reports_open_created_at_idx
+ON game_bug_reports (created_at DESC)
+WHERE completed_at IS NULL;
 
 CREATE TABLE games (
     id UUID PRIMARY KEY,

@@ -21,9 +21,11 @@ type stubAdminBugReportStore struct {
 	listErr      error
 	countErr     error
 	getErr       error
+	completeErr  error
 	limit        int
 	offset       int
 	loadedReport string
+	completedID  string
 }
 
 func (s *stubAdminBugReportStore) ListGameBugReportsPage(_ context.Context, limit, offset int) ([]database.GameBugReportRecord, error) {
@@ -39,6 +41,11 @@ func (s *stubAdminBugReportStore) CountGameBugReports(context.Context) (int64, e
 func (s *stubAdminBugReportStore) GetGameBugReport(_ context.Context, reportID string) (database.GameBugReportRecord, error) {
 	s.loadedReport = reportID
 	return s.report, s.getErr
+}
+
+func (s *stubAdminBugReportStore) CompleteGameBugReport(_ context.Context, reportID string) error {
+	s.completedID = reportID
+	return s.completeErr
 }
 
 func TestHandleAdminBugReports(t *testing.T) {
@@ -174,6 +181,52 @@ func TestHandleAdminBugReports(t *testing.T) {
 		}
 	})
 
+	t.Run("completes a report", func(t *testing.T) {
+		store := &stubAdminBugReportStore{}
+		server := newServer(true, store)
+		request := httptest.NewRequest(http.MethodPost, "/api/admin/bug-reports/"+reportID+"/complete", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+		response := httptest.NewRecorder()
+		server.handleAdminBugReports(response, request)
+
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNoContent)
+		}
+		if store.completedID != reportID {
+			t.Fatalf("completed report = %q; want %q", store.completedID, reportID)
+		}
+	})
+
+	t.Run("requires post when completing a report", func(t *testing.T) {
+		store := &stubAdminBugReportStore{}
+		server := newServer(true, store)
+		response := httptest.NewRecorder()
+		server.handleAdminBugReports(response, newRequest("/api/admin/bug-reports/"+reportID+"/complete"))
+
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusMethodNotAllowed)
+		}
+		if allow := response.Header().Get("Allow"); allow != http.MethodPost {
+			t.Fatalf("Allow = %q; want %q", allow, http.MethodPost)
+		}
+		if store.completedID != "" {
+			t.Fatal("unsupported method reached the bug report store")
+		}
+	})
+
+	t.Run("maps a missing report on completion to not found", func(t *testing.T) {
+		store := &stubAdminBugReportStore{completeErr: database.ErrGameBugReportNotFound}
+		server := newServer(true, store)
+		request := httptest.NewRequest(http.MethodPost, "/api/admin/bug-reports/"+reportID+"/complete", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+		response := httptest.NewRecorder()
+		server.handleAdminBugReports(response, request)
+
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNotFound)
+		}
+	})
+
 	t.Run("maps a missing report to not found", func(t *testing.T) {
 		store := &stubAdminBugReportStore{getErr: database.ErrGameBugReportNotFound}
 		server := newServer(true, store)
@@ -222,6 +275,19 @@ func TestHandleAdminBugReports(t *testing.T) {
 		server := newServer(true, store)
 		response := httptest.NewRecorder()
 		server.handleAdminBugReports(response, newRequest("/api/admin/bug-reports/"+reportID))
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("handles completion storage errors", func(t *testing.T) {
+		store := &stubAdminBugReportStore{completeErr: errors.New("database unavailable")}
+		server := newServer(true, store)
+		request := httptest.NewRequest(http.MethodPost, "/api/admin/bug-reports/"+reportID+"/complete", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+		response := httptest.NewRecorder()
+		server.handleAdminBugReports(response, request)
+
 		if response.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
 		}

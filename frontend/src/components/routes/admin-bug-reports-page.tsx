@@ -1,8 +1,9 @@
 import {
   Alert02Icon,
   Bug01Icon,
+  CheckmarkCircle02Icon,
   CodeIcon,
-  Database01Icon,
+  Copy01Icon,
   EyeIcon,
   GameController03Icon,
   Layers01Icon,
@@ -10,8 +11,9 @@ import {
   UserIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { toast } from "sonner";
 import { GameCard } from "#/components/game/game-card";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
@@ -58,10 +60,11 @@ import {
   TableHeader,
   TableRow,
 } from "#/components/ui/table";
-import { Caption, H1, H3, P } from "#/components/typography";
+import { Caption, H3, P } from "#/components/typography";
 import {
   adminBugReportDetailOptions,
   adminBugReportPageOptions,
+  completeAdminBugReport,
   persistedGameStateSchema,
   type AdminBugReportDetail,
   type AdminBugReportPage,
@@ -327,6 +330,16 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
 
 function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
   const parsedState = persistedGameStateSchema.safeParse(report.gameState);
+  const json = JSON.stringify(report.gameState, null, 2);
+
+  async function copyJson() {
+    try {
+      await navigator.clipboard.writeText(json);
+      toast.success(m.admin_json_copied());
+    } catch {
+      toast.error(m.admin_json_copy_error());
+    }
+  }
 
   return (
     <Tabs defaultValue="visual" className="min-h-0">
@@ -352,9 +365,22 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
         )}
       </TabsContent>
       <TabsContent value="json" className="pt-2">
-        <pre className="overflow-x-auto rounded-2xl bg-muted p-4 font-mono text-xs/5 whitespace-pre-wrap break-all">
-          {JSON.stringify(report.gameState, null, 2)}
-        </pre>
+        <div className="relative overflow-hidden rounded-2xl bg-muted">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="absolute top-3 right-5"
+            onClick={() => void copyJson()}
+          >
+            <HugeiconsIcon icon={Copy01Icon} data-icon="inline-start" />
+            {m.admin_copy_json()}
+          </Button>
+          <ScrollArea className="h-96">
+            <pre className="p-4 pr-32 font-mono text-xs/5 whitespace-pre-wrap break-all">
+              {json}
+            </pre>
+          </ScrollArea>
+        </div>
       </TabsContent>
     </Tabs>
   );
@@ -373,26 +399,59 @@ function ReportDetailSkeleton() {
 function ReportDetailSheet({
   reportId,
   onOpenChange,
+  onCompleted,
 }: {
   reportId: string | null;
   onOpenChange: (open: boolean) => void;
+  onCompleted: () => void;
 }) {
+  const queryClient = useQueryClient();
   const { data, isError, isPending, refetch } = useQuery(adminBugReportDetailOptions(reportId));
+  const completeReport = useMutation({
+    mutationFn: (id: string) => completeAdminBugReport({ data: id }),
+    onSuccess: async (_, completedReportId) => {
+      queryClient.removeQueries({ queryKey: ["admin", "bug-report", completedReportId] });
+      await queryClient.invalidateQueries({ queryKey: ["admin", "bug-reports"] });
+      toast.success(m.admin_report_completed());
+      onCompleted();
+    },
+    onError: () => {
+      toast.error(m.admin_report_complete_error());
+    },
+  });
 
   return (
     <Sheet open={reportId !== null} onOpenChange={onOpenChange}>
       <SheetContent className="w-[min(100vw,58rem)]! max-w-none!">
-        <SheetHeader className="border-b pr-16">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={data?.requestedAbort ? "destructive" : "secondary"}>
-              {data?.requestedAbort ? m.admin_abort_requested() : m.admin_report_only()}
-            </Badge>
-            {data ? <Badge variant="outline">{data.roomCode}</Badge> : null}
+        <SheetHeader className="shrink-0 border-b pr-16">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={data?.requestedAbort ? "destructive" : "secondary"}>
+                  {data?.requestedAbort ? m.admin_abort_requested() : m.admin_report_only()}
+                </Badge>
+                {data ? <Badge variant="outline">{data.roomCode}</Badge> : null}
+              </div>
+              <SheetTitle>{m.admin_bug_report_detail()}</SheetTitle>
+              <SheetDescription>
+                {data ? formatCreatedAt(data.createdAt) : m.admin_loading_report()}
+              </SheetDescription>
+            </div>
+            <Button
+              size="sm"
+              disabled={!data || completeReport.isPending}
+              onClick={() => {
+                if (data) completeReport.mutate(data.id);
+              }}
+            >
+              {completeReport.isPending ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <HugeiconsIcon icon={CheckmarkCircle02Icon} data-icon="inline-start" />
+              )}
+              {m.complete()}
+            </Button>
           </div>
-          <SheetTitle>{m.admin_bug_report_detail()}</SheetTitle>
-          <SheetDescription>
-            {data ? formatCreatedAt(data.createdAt) : m.admin_loading_report()}
-          </SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="min-h-0 flex-1">
@@ -460,7 +519,6 @@ function ReportsTable({
           <TableHead>{m.admin_description()}</TableHead>
           <TableHead>{m.admin_position()}</TableHead>
           <TableHead>{m.admin_kind()}</TableHead>
-          <TableHead className="text-right">{m.admin_view()}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -481,19 +539,6 @@ function ReportsTable({
                 {report.requestedAbort ? m.admin_abort() : m.admin_report_only()}
               </Badge>
             </TableCell>
-            <TableCell className="text-right">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={m.admin_view_report({ roomCode: report.roomCode })}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onSelect(report.id);
-                }}
-              >
-                <HugeiconsIcon icon={EyeIcon} />
-              </Button>
-            </TableCell>
           </TableRow>
         ))}
       </TableBody>
@@ -512,34 +557,7 @@ export function AdminBugReportsPage({ initialPage }: { initialPage: AdminBugRepo
   const reports = data ?? initialPage;
 
   return (
-    <section className="mx-auto flex w-full max-w-7xl flex-col gap-4">
-      <header className="relative overflow-hidden rounded-4xl bg-card p-6 shadow-md ring-1 ring-foreground/5 md:p-8">
-        <div className="pointer-events-none absolute -top-24 right-0 size-72 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex max-w-2xl flex-col gap-2">
-            <div className="flex items-center gap-2 text-primary">
-              <HugeiconsIcon icon={Bug01Icon} aria-hidden="true" />
-              <Caption className="font-medium uppercase tracking-[0.16em] text-current">
-                {m.admin_operations()}
-              </Caption>
-            </div>
-            <H1>{m.admin_bug_reports()}</H1>
-            <P className="max-w-xl text-muted-foreground">{m.admin_bug_reports_description()}</P>
-          </div>
-          <div className="flex items-center gap-3 rounded-2xl bg-muted/60 px-4 py-3">
-            <span className="grid size-10 place-items-center rounded-xl bg-background text-primary shadow-sm">
-              <HugeiconsIcon icon={Database01Icon} aria-hidden="true" />
-            </span>
-            <div>
-              <Caption>{m.admin_total_reports()}</Caption>
-              <P className="font-heading text-xl/6 font-semibold tabular-nums">
-                {reports.totalItems}
-              </P>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <section className="mx-auto w-full max-w-7xl">
       <Card className="min-h-96">
         <CardHeader>
           <CardTitle>{m.admin_incident_archive()}</CardTitle>
@@ -623,6 +641,12 @@ export function AdminBugReportsPage({ initialPage }: { initialPage: AdminBugRepo
         reportId={selectedReportId}
         onOpenChange={(open) => {
           if (!open) setSelectedReportId(null);
+        }}
+        onCompleted={() => {
+          setSelectedReportId(null);
+          if (reports.reports.length === 1 && page > 1) {
+            setPage((current) => current - 1);
+          }
         }}
       />
     </section>

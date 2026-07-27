@@ -425,6 +425,22 @@ func (s *UserStore) GetGameBugReport(ctx context.Context, reportID string) (Game
 	), nil
 }
 
+func (s *UserStore) CompleteGameBugReport(ctx context.Context, reportID string) error {
+	if s == nil || s.queries == nil {
+		return errors.New("user store is not configured")
+	}
+	var id pgtype.UUID
+	if err := id.Scan(strings.TrimSpace(reportID)); err != nil {
+		return fmt.Errorf("invalid bug report id: %w", err)
+	}
+	if _, err := s.queries.CompleteGameBugReport(ctx, id); errors.Is(err, pgx.ErrNoRows) {
+		return ErrGameBugReportNotFound
+	} else if err != nil {
+		return err
+	}
+	return nil
+}
+
 func nullableUUIDString(value pgtype.UUID) string {
 	if !value.Valid {
 		return ""
