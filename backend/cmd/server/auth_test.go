@@ -349,23 +349,31 @@ func TestOAuthReturnPath(t *testing.T) {
 
 func TestHandleGoogleSignInStoresReturnPath(t *testing.T) {
 	now := time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC)
-	handler := &authHandler{
-		config: authConfig{oauthConfig: &oauth2.Config{Endpoint: oauth2.Endpoint{AuthURL: "https://oauth.test/auth"}}},
-		now:    func() time.Time { return now },
-		state:  func() (string, error) { return "state-token", nil },
-	}
-	request := httptest.NewRequest(http.MethodGet, "/auth/google?returnTo=%2F%3Froom%3DROOM42", nil)
-	response := httptest.NewRecorder()
 
-	handler.handleGoogleSignIn(response, request)
+	for name, returnPath := range map[string]string{
+		"room invitation": "/?room=ROOM42",
+		"player profile":  "/players/player-123?tab=history",
+	} {
+		t.Run(name, func(t *testing.T) {
+			handler := &authHandler{
+				config: authConfig{oauthConfig: &oauth2.Config{Endpoint: oauth2.Endpoint{AuthURL: "https://oauth.test/auth"}}},
+				now:    func() time.Time { return now },
+				state:  func() (string, error) { return "state-token", nil },
+			}
+			request := httptest.NewRequest(http.MethodGet, "/auth/google?returnTo="+url.QueryEscape(returnPath), nil)
+			response := httptest.NewRecorder()
 
-	encoded := cookieValue(response.Result().Cookies(), oauthReturnToCookieName)
-	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
-	if err != nil {
-		t.Fatalf("decode return path cookie: %v", err)
-	}
-	if got := string(decoded); got != "/?room=ROOM42" {
-		t.Fatalf("return path cookie = %q; want /?room=ROOM42", got)
+			handler.handleGoogleSignIn(response, request)
+
+			encoded := cookieValue(response.Result().Cookies(), oauthReturnToCookieName)
+			decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+			if err != nil {
+				t.Fatalf("decode return path cookie: %v", err)
+			}
+			if got := string(decoded); got != returnPath {
+				t.Fatalf("return path cookie = %q; want %q", got, returnPath)
+			}
+		})
 	}
 }
 
@@ -968,35 +976,42 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 			}
 		})
 
-		t.Run("success", func(t *testing.T) {
-			store := &stubAuthStore{upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
-			handler := newOAuthCallbackHandler(store, now)
-			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
-			request := newOAuthCallbackRequest("state=state-token&code=code", client)
-			request.AddCookie(&http.Cookie{
-				Name:  oauthReturnToCookieName,
-				Value: base64.RawURLEncoding.EncodeToString([]byte("/?room=ROOM42")),
-			})
-			response := httptest.NewRecorder()
-			handler.handleGoogleCallback(response, request)
-			if response.Code != http.StatusFound {
-				t.Fatalf("status = %d; want 302", response.Code)
-			}
-			if got := response.Header().Get("Location"); got != "http://frontend.test/?room=ROOM42" {
-				t.Fatalf("redirect location = %q; want room URL", got)
-			}
-			if len(store.upsertedUsers) != 1 || len(store.createdSessions) != 1 {
-				t.Fatalf("persisted records = users:%d sessions:%d; want 1 each", len(store.upsertedUsers), len(store.createdSessions))
-			}
-			if store.createdSessions[0].UserID != "user-123" {
-				t.Fatalf("session user id = %q; want user-123", store.createdSessions[0].UserID)
-			}
-			cookies := response.Result().Cookies()
-			if len(cookies) == 0 {
-				t.Fatal("cookies = 0; want session cookie")
-			}
-			if cookies[0].Domain != "" {
-				t.Fatalf("session cookie domain = %q; want empty by default", cookies[0].Domain)
+		t.Run("success redirects to return path", func(t *testing.T) {
+			for name, returnPath := range map[string]string{
+				"room invitation": "/?room=ROOM42",
+				"player profile":  "/players/player-123?tab=history",
+			} {
+				t.Run(name, func(t *testing.T) {
+					store := &stubAuthStore{upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
+					handler := newOAuthCallbackHandler(store, now)
+					client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
+					request := newOAuthCallbackRequest("state=state-token&code=code", client)
+					request.AddCookie(&http.Cookie{
+						Name:  oauthReturnToCookieName,
+						Value: base64.RawURLEncoding.EncodeToString([]byte(returnPath)),
+					})
+					response := httptest.NewRecorder()
+					handler.handleGoogleCallback(response, request)
+					if response.Code != http.StatusFound {
+						t.Fatalf("status = %d; want 302", response.Code)
+					}
+					if got, want := response.Header().Get("Location"), "http://frontend.test"+returnPath; got != want {
+						t.Fatalf("redirect location = %q; want %q", got, want)
+					}
+					if len(store.upsertedUsers) != 1 || len(store.createdSessions) != 1 {
+						t.Fatalf("persisted records = users:%d sessions:%d; want 1 each", len(store.upsertedUsers), len(store.createdSessions))
+					}
+					if store.createdSessions[0].UserID != "user-123" {
+						t.Fatalf("session user id = %q; want user-123", store.createdSessions[0].UserID)
+					}
+					cookies := response.Result().Cookies()
+					if len(cookies) == 0 {
+						t.Fatal("cookies = 0; want session cookie")
+					}
+					if cookies[0].Domain != "" {
+						t.Fatalf("session cookie domain = %q; want empty by default", cookies[0].Domain)
+					}
+				})
 			}
 		})
 

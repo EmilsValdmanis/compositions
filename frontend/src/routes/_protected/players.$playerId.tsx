@@ -1,6 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { PlayerProfilePage } from "#/components/routes/player-profile-page";
-import { AppShell } from "#/components/routes/protected-layout";
 import { getPlayerGameHistory, getPlayerProfile } from "#/lib/player-profile";
 import { pageTitle } from "#/lib/page-title";
 import { createSocialMeta } from "#/lib/social-meta";
@@ -25,7 +24,7 @@ function profileDescription(profile: Awaited<ReturnType<typeof getPlayerProfile>
   });
 }
 
-export const Route = createFileRoute("/players/$playerId")({
+export const Route = createFileRoute("/_protected/players/$playerId")({
   loader: async ({ params }) => {
     const [profileResult, historyResult] = await Promise.allSettled([
       getPlayerProfile({ data: params.playerId }),
@@ -59,9 +58,5 @@ export const Route = createFileRoute("/players/$playerId")({
 function PlayerProfileRoute() {
   const { profile, history } = Route.useLoaderData();
 
-  return (
-    <AppShell>
-      <PlayerProfilePage profile={profile} initialHistory={history} />
-    </AppShell>
-  );
+  return <PlayerProfilePage profile={profile} initialHistory={history} />;
 }
