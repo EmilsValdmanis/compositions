@@ -133,6 +133,24 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	if _, err := store.GetUserByID(ctx, strings.TrimSpace(conflictingUser.ID)); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("GetUserByID(conflicting id) error = %v; want %v", err, pgx.ErrNoRows)
 	}
+
+	if _, err := pool.Exec(ctx, `UPDATE users SET is_admin = TRUE WHERE id = $1`, createdUser.ID); err != nil {
+		t.Fatalf("promote admin user error = %v", err)
+	}
+	sessionToken := "admin-session-token"
+	expiresAt := time.Now().UTC().Add(time.Hour)
+	if err := store.CreateSession(ctx, SessionRecord{
+		Token: sessionToken, UserID: createdUser.ID, ExpiresAt: expiresAt,
+	}); err != nil {
+		t.Fatalf("CreateSession(admin) error = %v", err)
+	}
+	sessionUser, err := store.GetSessionUserByToken(ctx, sessionToken, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("GetSessionUserByToken(admin) error = %v", err)
+	}
+	if !sessionUser.IsAdmin || sessionUser.ID != createdUser.ID {
+		t.Fatalf("admin session user = %#v", sessionUser)
+	}
 }
 
 func TestUserStoreUpsertUserByAccount(t *testing.T) {
@@ -168,6 +186,9 @@ func TestUserStoreUpsertUserByAccount(t *testing.T) {
 	if _, err := uuid.Parse(createdUser.ID); err != nil {
 		t.Fatalf("created user id = %q; want uuid: %v", createdUser.ID, err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET is_admin = TRUE WHERE id = $1`, createdUser.ID); err != nil {
+		t.Fatalf("promote account user error = %v", err)
+	}
 
 	updatedUser, err := store.UpsertUser(ctx, UserRecord{
 		Name:              "Updated Player",
@@ -181,6 +202,13 @@ func TestUserStoreUpsertUserByAccount(t *testing.T) {
 	}
 	if updatedUser.ID != createdUser.ID {
 		t.Fatalf("updated user id = %q; want %q", updatedUser.ID, createdUser.ID)
+	}
+	var isAdmin bool
+	if err := pool.QueryRow(ctx, `SELECT is_admin FROM users WHERE id = $1`, createdUser.ID).Scan(&isAdmin); err != nil {
+		t.Fatalf("load account user admin flag error = %v", err)
+	}
+	if !isAdmin {
+		t.Fatal("account user admin flag was cleared by sign-in upsert")
 	}
 
 	record, err := store.GetUserByID(ctx, createdUser.ID)
@@ -587,6 +615,20 @@ func TestUserStoreGameBugReports(t *testing.T) {
 	}
 	if len(reports) != 1 || reports[0].ID != report.ID {
 		t.Fatalf("listed bug reports = %#v", reports)
+	}
+	page, err := store.ListGameBugReportsPage(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("ListGameBugReportsPage() error = %v", err)
+	}
+	if len(page) != 1 || page[0].ID != report.ID || len(page[0].GameState) != 0 {
+		t.Fatalf("paginated bug report summaries = %#v", page)
+	}
+	total, err := store.CountGameBugReports(ctx)
+	if err != nil {
+		t.Fatalf("CountGameBugReports() error = %v", err)
+	}
+	if total != 1 {
+		t.Fatalf("CountGameBugReports() = %d; want 1", total)
 	}
 }
 

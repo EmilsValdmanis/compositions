@@ -11,13 +11,18 @@ const internalReturnTo = z
     "returnTo must be an internal path",
   );
 
+function safeRedirectOptions(returnTo?: string) {
+  const parsedReturnTo = internalReturnTo.safeParse(returnTo);
+  return { to: parsedReturnTo.success ? parsedReturnTo.data : "/" };
+}
+
 export const Route = createFileRoute("/_auth/sign-in")({
   validateSearch: z.object({
     returnTo: internalReturnTo.optional(),
   }),
   beforeLoad: ({ context, search }) => {
     if (context.session) {
-      throw redirect({ href: search.returnTo ?? "/" });
+      throw redirect(safeRedirectOptions(search.returnTo));
     }
   },
   head: () => ({

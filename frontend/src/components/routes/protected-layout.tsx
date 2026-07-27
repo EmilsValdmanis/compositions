@@ -16,7 +16,7 @@ export function ProtectedLayout() {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+function AppShell({ children }: { children: React.ReactNode }) {
   const { sidebarOpen } = rootRouteApi.useRouteContext();
 
   return (

@@ -15,6 +15,7 @@ type postgresUserStore struct {
 }
 
 var _ leaderboardStore = (*postgresUserStore)(nil)
+var _ adminBugReportStore = (*postgresUserStore)(nil)
 
 func newConfiguredUserStore() (userStore, error) {
 	databaseURL, err := databaseURLFromEnv()
@@ -110,6 +111,27 @@ func (s *postgresUserStore) CreateGameBugReport(ctx context.Context, report data
 		return database.GameBugReportRecord{}, errors.New("user store is not configured")
 	}
 	return createStoredGameBugReport(ctx, s.store, report)
+}
+
+func (s *postgresUserStore) ListGameBugReportsPage(ctx context.Context, limit, offset int) ([]database.GameBugReportRecord, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("user store is not configured")
+	}
+	return s.store.ListGameBugReportsPage(ctx, limit, offset)
+}
+
+func (s *postgresUserStore) CountGameBugReports(ctx context.Context) (int64, error) {
+	if s == nil || s.store == nil {
+		return 0, errors.New("user store is not configured")
+	}
+	return s.store.CountGameBugReports(ctx)
+}
+
+func (s *postgresUserStore) GetGameBugReport(ctx context.Context, reportID string) (database.GameBugReportRecord, error) {
+	if s == nil || s.store == nil {
+		return database.GameBugReportRecord{}, errors.New("user store is not configured")
+	}
+	return s.store.GetGameBugReport(ctx, strings.TrimSpace(reportID))
 }
 
 func (s *postgresUserStore) GetPlayerProfile(ctx context.Context, userID string) (database.PlayerProfileRecord, error) {

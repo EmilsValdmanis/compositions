@@ -22,6 +22,7 @@ var ErrSessionNotFound = errors.New("session not found")
 var ErrUserConflict = errors.New("user conflict")
 var ErrLobbyStateNotFound = errors.New("lobby state not found")
 var ErrPlayerProfileNotFound = errors.New("player profile not found")
+var ErrGameBugReportNotFound = errors.New("game bug report not found")
 
 const postgresUniqueViolation = "23505"
 
@@ -50,6 +51,7 @@ type SessionUserRecord struct {
 	Name      string
 	Email     string
 	ImageURL  string
+	IsAdmin   bool
 	ExpiresAt time.Time
 }
 
@@ -359,6 +361,41 @@ func (s *UserStore) ListGameBugReports(ctx context.Context, limit int) ([]GameBu
 	return reports, nil
 }
 
+func (s *UserStore) ListGameBugReportsPage(ctx context.Context, limit, offset int) ([]GameBugReportRecord, error) {
+	if s == nil || s.queries == nil {
+		return nil, errors.New("user store is not configured")
+	}
+	if limit <= 0 || limit > 100 {
+		return nil, errors.New("bug report page size must be between 1 and 100")
+	}
+	if offset < 0 {
+		return nil, errors.New("bug report offset must not be negative")
+	}
+	rows, err := s.queries.ListGameBugReportsPage(ctx, dbsqlc.ListGameBugReportsPageParams{
+		ResultLimit:  int32(limit),
+		ResultOffset: int32(offset),
+	})
+	if err != nil {
+		return nil, err
+	}
+	reports := make([]GameBugReportRecord, 0, len(rows))
+	for _, row := range rows {
+		reports = append(reports, GameBugReportRecord{
+			ID: row.ID, RoomCode: row.RoomCode, ReporterPlayerID: row.ReporterPlayerID,
+			Description: row.Description, Round: int(row.Round), Turn: int(row.Turn),
+			RequestedAbort: row.RequestedAbort, CreatedAt: row.CreatedAt.Time.UTC(),
+		})
+	}
+	return reports, nil
+}
+
+func (s *UserStore) CountGameBugReports(ctx context.Context) (int64, error) {
+	if s == nil || s.queries == nil {
+		return 0, errors.New("user store is not configured")
+	}
+	return s.queries.CountGameBugReports(ctx)
+}
+
 func (s *UserStore) GetGameBugReport(ctx context.Context, reportID string) (GameBugReportRecord, error) {
 	if s == nil || s.queries == nil {
 		return GameBugReportRecord{}, errors.New("user store is not configured")
@@ -368,6 +405,9 @@ func (s *UserStore) GetGameBugReport(ctx context.Context, reportID string) (Game
 		return GameBugReportRecord{}, fmt.Errorf("invalid bug report id: %w", err)
 	}
 	row, err := s.queries.GetGameBugReport(ctx, id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return GameBugReportRecord{}, ErrGameBugReportNotFound
+	}
 	if err != nil {
 		return GameBugReportRecord{}, err
 	}
@@ -634,7 +674,7 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 
 	var record SessionUserRecord
 	err = s.pool.QueryRow(ctx, `
-		SELECT u.id::text, u.name, u.email, u.image_url, s.expires_at
+		SELECT u.id::text, u.name, u.email, u.image_url, u.is_admin, s.expires_at
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1
@@ -644,6 +684,7 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 		&record.Name,
 		&record.Email,
 		&record.ImageURL,
+		&record.IsAdmin,
 		&record.ExpiresAt,
 	)
 	if err != nil {

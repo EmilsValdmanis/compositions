@@ -1,6 +1,4 @@
 import {
-  ArrowLeft02Icon,
-  ArrowRight01Icon,
   GameController03Icon,
   Grid2X2Icon,
   RankingIcon,
@@ -11,7 +9,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";
-import { Button } from "#/components/ui/button";
 import {
   Card,
   CardContent,
@@ -27,6 +24,13 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "#/components/ui/empty";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "#/components/ui/pagination";
 import { Separator } from "#/components/ui/separator";
 import { Spinner } from "#/components/ui/spinner";
 import {
@@ -234,29 +238,43 @@ function GameHistory({
       )}
 
       {!isPending && history.totalPages > 1 ? (
-        <CardFooter className="justify-between gap-3 border-t">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1 || isFetching}
-            onClick={() => setPage((current) => Math.max(1, current - 1))}
-          >
-            <HugeiconsIcon icon={ArrowLeft02Icon} data-icon="inline-start" />
-            {m.previous()}
-          </Button>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground tabular-nums">
+        <CardFooter className="flex-col justify-between gap-3 border-t sm:flex-row">
+          <Caption className="flex items-center gap-2 tabular-nums">
             {isFetching ? <Spinner className="size-3" /> : null}
             {m.page_of({ page: history.page, total: history.totalPages })}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= history.totalPages || isFetching}
-            onClick={() => setPage((current) => current + 1)}
-          >
-            {m.next()}
-            <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
-          </Button>
+          </Caption>
+          <Pagination className="mx-0 w-auto">
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  href="#"
+                  text={m.previous()}
+                  aria-label={m.previous()}
+                  aria-disabled={page <= 1 || isFetching}
+                  tabIndex={page <= 1 || isFetching ? -1 : undefined}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (page > 1 && !isFetching) setPage((current) => current - 1);
+                  }}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  href="#"
+                  text={m.next()}
+                  aria-label={m.next()}
+                  aria-disabled={page >= history.totalPages || isFetching}
+                  tabIndex={page >= history.totalPages || isFetching ? -1 : undefined}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (page < history.totalPages && !isFetching) {
+                      setPage((current) => current + 1);
+                    }
+                  }}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         </CardFooter>
       ) : null}
     </Card>

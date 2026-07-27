@@ -9,6 +9,7 @@ type authenticatedUser struct {
 	Name              string
 	Email             string
 	Image             string
+	IsAdmin           bool
 	Provider          string
 	ProviderAccountID string
 }
