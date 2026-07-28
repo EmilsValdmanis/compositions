@@ -20,6 +20,7 @@ import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -40,7 +41,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "#/components/ui/pagination";
-import { ScrollArea } from "#/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "#/components/ui/scroll-area";
 import { Separator } from "#/components/ui/separator";
 import {
   Sheet,
@@ -70,6 +71,7 @@ import {
   type AdminBugReportPage,
   type PersistedGameState,
 } from "#/lib/admin-bug-reports";
+import { copyTextToClipboard } from "#/lib/clipboard";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 import { getLocale, type Locale } from "#/paraglide/runtime.js";
@@ -334,7 +336,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
 
   async function copyJson() {
     try {
-      await navigator.clipboard.writeText(json);
+      await copyTextToClipboard(json);
       toast.success(m.admin_json_copied());
     } catch {
       toast.error(m.admin_json_copy_error());
@@ -365,22 +367,24 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
         )}
       </TabsContent>
       <TabsContent value="json" className="pt-2">
-        <div className="relative overflow-hidden rounded-2xl bg-muted">
-          <Button
-            variant="secondary"
-            size="sm"
-            className="absolute top-3 right-5"
-            onClick={() => void copyJson()}
-          >
-            <HugeiconsIcon icon={Copy01Icon} data-icon="inline-start" />
-            {m.admin_copy_json()}
-          </Button>
-          <ScrollArea className="h-96">
-            <pre className="p-4 pr-32 font-mono text-xs/5 whitespace-pre-wrap break-all">
-              {json}
-            </pre>
-          </ScrollArea>
-        </div>
+        <Card size="sm">
+          <CardHeader className="border-b">
+            <CardTitle>{m.admin_raw_json()}</CardTitle>
+            <CardDescription>application/json</CardDescription>
+            <CardAction>
+              <Button type="button" variant="outline" size="sm" onClick={() => void copyJson()}>
+                <HugeiconsIcon icon={Copy01Icon} data-icon="inline-start" />
+                {m.admin_copy_json()}
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-96 rounded-2xl bg-muted/50">
+              <pre className="min-w-max p-4 font-mono text-xs/5">{json}</pre>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </CardContent>
+        </Card>
       </TabsContent>
     </Tabs>
   );
@@ -388,7 +392,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
 
 function ReportDetailSkeleton() {
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="flex flex-col gap-4 p-4 sm:p-6">
       <Skeleton className="h-24 w-full rounded-2xl" />
       <Skeleton className="h-40 w-full rounded-2xl" />
       <Skeleton className="h-72 w-full rounded-2xl" />
@@ -422,8 +426,8 @@ function ReportDetailSheet({
 
   return (
     <Sheet open={reportId !== null} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[min(100vw,58rem)]! max-w-none!">
-        <SheetHeader className="shrink-0 border-b pr-16">
+      <SheetContent className="w-full! max-w-[58rem]! min-w-0 overflow-hidden">
+        <SheetHeader className="shrink-0 border-b p-4 pr-14 sm:p-6 sm:pr-16">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-col gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
@@ -454,11 +458,11 @@ function ReportDetailSheet({
           </div>
         </SheetHeader>
 
-        <ScrollArea className="min-h-0 flex-1">
+        <ScrollArea className="min-h-0 min-w-0 flex-1 overscroll-contain">
           {isPending ? (
             <ReportDetailSkeleton />
           ) : isError || !data ? (
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <Alert variant="destructive">
                 <HugeiconsIcon icon={Alert02Icon} aria-hidden="true" />
                 <AlertTitle>{m.admin_report_load_error()}</AlertTitle>
@@ -472,7 +476,7 @@ function ReportDetailSheet({
               </Alert>
             </div>
           ) : (
-            <div className="flex flex-col gap-6 p-6">
+            <div className="flex min-w-0 flex-col gap-6 p-4 sm:p-6">
               <section className="flex flex-col gap-3">
                 <Caption className="uppercase tracking-[0.16em]">{m.admin_report()}</Caption>
                 <P size="lg" className="text-pretty">
@@ -492,6 +496,7 @@ function ReportDetailSheet({
               </section>
             </div>
           )}
+          <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </SheetContent>
     </Sheet>
@@ -511,6 +516,7 @@ function ReportsTable({
     <Table
       aria-label={m.admin_bug_reports()}
       className={cn("min-w-4xl", isFetching && "opacity-60")}
+      containerClassName="max-w-full overscroll-x-contain"
     >
       <TableHeader>
         <TableRow className="hover:bg-transparent">
@@ -557,8 +563,8 @@ export function AdminBugReportsPage({ initialPage }: { initialPage: AdminBugRepo
   const reports = data ?? initialPage;
 
   return (
-    <section className="mx-auto w-full max-w-7xl">
-      <Card className="min-h-96">
+    <section className="mx-auto w-full min-w-0 max-w-7xl">
+      <Card className="min-h-96 min-w-0">
         <CardHeader>
           <CardTitle>{m.admin_incident_archive()}</CardTitle>
           <CardDescription>{m.admin_incident_archive_description()}</CardDescription>
