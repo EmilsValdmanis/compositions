@@ -189,24 +189,28 @@ function CardCollection({
   description?: string;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border bg-background/60 p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <H3 className="text-base/6 md:text-base/6">{title}</H3>
-        <Badge variant="outline">{cards.length}</Badge>
-      </div>
-      {description ? <Caption>{description}</Caption> : null}
-      {cards.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {withOccurrenceKeys(cards, cardIdentity).map(({ item: card, key }) => (
-            <GameCard key={key} card={card} size="compact" />
-          ))}
-        </div>
-      ) : (
-        <P size="sm" className="text-muted-foreground">
-          {m.admin_no_cards()}
-        </P>
-      )}
-    </div>
+    <Card size="sm" className="w-full min-w-0 max-w-full">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+        <CardAction>
+          <Badge variant="outline">{cards.length}</Badge>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="min-w-0">
+        {cards.length > 0 ? (
+          <div className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1">
+            {withOccurrenceKeys(cards, cardIdentity).map(({ item: card, key }) => (
+              <GameCard key={key} card={card} size="compact" />
+            ))}
+          </div>
+        ) : (
+          <P size="sm" className="text-muted-foreground">
+            {m.admin_no_cards()}
+          </P>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -215,8 +219,8 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
   const topDiscard = state.discardPile[0];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="flex w-full min-w-0 max-w-full flex-col gap-4">
+      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <StateMetric
           label={m.admin_game_phase()}
           value={phaseLabel(state.phase)}
@@ -239,7 +243,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
         />
       </div>
 
-      <Card>
+      <Card className="min-w-0">
         <CardHeader>
           <CardTitle>{m.admin_table_compositions()}</CardTitle>
           <CardDescription>
@@ -248,7 +252,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
             })}
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex min-w-0 flex-col gap-3">
           {state.activeCompositions.length > 0 ? (
             withOccurrenceKeys(state.activeCompositions, compositionIdentity).map(
               ({ item: composition, key }, index) => (
@@ -268,9 +272,9 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
         </CardContent>
       </Card>
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="grid min-w-0 gap-3 xl:grid-cols-2">
         {state.players.map((player, index) => (
-          <Card key={player.id} size="sm">
+          <Card key={player.id} size="sm" className="min-w-0">
             <CardHeader>
               <CardTitle className="flex flex-wrap items-center gap-2">
                 <span>{player.id}</span>
@@ -285,7 +289,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1">
                 {withOccurrenceKeys(player.hand, cardIdentity).map(({ item: card, key }) => (
                   <GameCard key={key} card={card} size="compact" />
                 ))}
@@ -301,30 +305,34 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
         ))}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         <CardCollection
           title={m.admin_discard_pile()}
           cards={state.discardPile}
           description={topDiscard ? m.admin_top_card_visible() : m.admin_no_discard_card()}
         />
-        <div className="flex flex-col gap-3 rounded-2xl border bg-background/60 p-4">
-          <H3 className="text-base/6 md:text-base/6">{m.admin_state_flags()}</H3>
-          <div className="flex flex-wrap gap-2">
-            <Badge variant={state.turn.hasDrawn ? "default" : "outline"}>
-              {state.turn.hasDrawn ? m.admin_has_drawn() : m.admin_has_not_drawn()}
-            </Badge>
-            <Badge variant={state.turn.mustUseDiscardDraw ? "destructive" : "secondary"}>
-              {state.turn.mustUseDiscardDraw ? m.admin_must_use_discard() : m.admin_free_play()}
-            </Badge>
-            <Badge variant="outline">
-              {state.gameMode === "quick" ? m.quick_game() : m.ranked_full()}
-            </Badge>
-          </div>
-          <Separator />
-          <DetailItem label={m.admin_snapshot_version()} value={state.version} />
-          <DetailItem label={m.admin_dealer_index()} value={state.dealerIndex} />
-          <DetailItem label={m.admin_round_winner_index()} value={state.roundWinnerIndex} />
-        </div>
+        <Card size="sm" className="min-w-0">
+          <CardHeader>
+            <CardTitle>{m.admin_state_flags()}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 flex-wrap gap-2">
+              <Badge variant={state.turn.hasDrawn ? "default" : "outline"}>
+                {state.turn.hasDrawn ? m.admin_has_drawn() : m.admin_has_not_drawn()}
+              </Badge>
+              <Badge variant={state.turn.mustUseDiscardDraw ? "destructive" : "secondary"}>
+                {state.turn.mustUseDiscardDraw ? m.admin_must_use_discard() : m.admin_free_play()}
+              </Badge>
+              <Badge variant="outline">
+                {state.gameMode === "quick" ? m.quick_game() : m.ranked_full()}
+              </Badge>
+            </div>
+            <Separator />
+            <DetailItem label={m.admin_snapshot_version()} value={state.version} />
+            <DetailItem label={m.admin_dealer_index()} value={state.dealerIndex} />
+            <DetailItem label={m.admin_round_winner_index()} value={state.roundWinnerIndex} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -344,7 +352,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
   }
 
   return (
-    <Tabs defaultValue="visual" className="min-h-0">
+    <Tabs defaultValue="visual" className="min-h-0 min-w-0 max-w-full">
       <TabsList>
         <TabsTrigger value="visual">
           <HugeiconsIcon icon={EyeIcon} data-icon="inline-start" />
@@ -355,7 +363,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
           {m.admin_raw_json()}
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="visual" className="pt-2">
+      <TabsContent value="visual" className="min-w-0 pt-2">
         {parsedState.success ? (
           <VisualGameState state={parsedState.data} />
         ) : (
@@ -366,8 +374,8 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
           </Alert>
         )}
       </TabsContent>
-      <TabsContent value="json" className="pt-2">
-        <Card size="sm">
+      <TabsContent value="json" className="min-w-0 pt-2">
+        <Card size="sm" className="min-w-0">
           <CardHeader className="border-b">
             <CardTitle>{m.admin_raw_json()}</CardTitle>
             <CardDescription>application/json</CardDescription>
@@ -379,7 +387,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
             </CardAction>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-96 rounded-2xl bg-muted/50">
+            <ScrollArea className="h-96 min-w-0 max-w-full rounded-2xl bg-muted/50">
               <pre className="min-w-max p-4 font-mono text-xs/5">{json}</pre>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
@@ -476,8 +484,8 @@ function ReportDetailSheet({
               </Alert>
             </div>
           ) : (
-            <div className="flex min-w-0 flex-col gap-6 p-4 sm:p-6">
-              <section className="flex flex-col gap-3">
+            <div className="flex w-full min-w-0 max-w-full flex-col gap-6 overflow-x-hidden p-4 sm:p-6">
+              <section className="flex min-w-0 flex-col gap-3">
                 <Caption className="uppercase tracking-[0.16em]">{m.admin_report()}</Caption>
                 <P size="lg" className="text-pretty">
                   {data.description}
@@ -485,7 +493,7 @@ function ReportDetailSheet({
               </section>
               <ReportMetadata report={data} />
               <Separator />
-              <section className="flex flex-col gap-3">
+              <section className="flex min-w-0 flex-col gap-3">
                 <div>
                   <H3>{m.admin_game_state()}</H3>
                   <P size="sm" className="text-muted-foreground">
@@ -496,7 +504,6 @@ function ReportDetailSheet({
               </section>
             </div>
           )}
-          <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </SheetContent>
     </Sheet>
