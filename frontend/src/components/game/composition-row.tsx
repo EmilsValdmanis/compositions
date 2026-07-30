@@ -57,12 +57,14 @@ function buildCompositionCardViews(cards: CompositionSnapshot["cards"]) {
 function CompositionEdgeDraftZone({
   entries,
   interactive,
+  animate,
   players,
   playerId,
   invalidEntryKeys,
 }: {
   entries: HandEntry[];
   interactive: boolean;
+  animate: boolean;
   players: PlayerSnapshot[];
   playerId?: string;
   invalidEntryKeys: Set<string>;
@@ -101,40 +103,61 @@ function CompositionEdgeDraftZone({
               />
             ))
           : null}
-        <AnimatePresence initial={false} mode="popLayout">
-          {!interactive
-            ? entries.map((entry) => (
-                <motion.div
-                  key={entry.key}
-                  layout="position"
-                  initial={spectatorCardEnter}
-                  animate={spectatorCardVisible}
-                  exit={{
-                    ...spectatorCardExit,
-                    transition: spectatorCardExitTransition,
-                  }}
-                  transition={spectatorCardTransition}
-                  data-spectator-card-motion="addition"
-                >
-                  <GameCard
-                    card={entry.card}
-                    size="default"
-                    decoration={{
-                      highlight: "addition",
-                      label: (
-                        <AddActivityLabel
-                          players={players}
-                          playerId={playerId}
-                          offsetClassName="translate-y-[2px]"
-                        />
-                      ),
+        {animate ? (
+          <AnimatePresence initial={false} mode="popLayout">
+            {!interactive
+              ? entries.map((entry) => (
+                  <motion.div
+                    key={entry.key}
+                    layout="position"
+                    initial={spectatorCardEnter}
+                    animate={spectatorCardVisible}
+                    exit={{
+                      ...spectatorCardExit,
+                      transition: spectatorCardExitTransition,
                     }}
-                    invalid={invalidEntryKeys.has(entry.key)}
+                    transition={spectatorCardTransition}
+                    data-spectator-card-motion="addition"
+                  >
+                    <GameCard
+                      card={entry.card}
+                      size="default"
+                      decoration={{
+                        highlight: "addition",
+                        label: (
+                          <AddActivityLabel
+                            players={players}
+                            playerId={playerId}
+                            offsetClassName="translate-y-[2px]"
+                          />
+                        ),
+                      }}
+                      invalid={invalidEntryKeys.has(entry.key)}
+                    />
+                  </motion.div>
+                ))
+              : null}
+          </AnimatePresence>
+        ) : !interactive ? (
+          entries.map((entry) => (
+            <GameCard
+              key={entry.key}
+              card={entry.card}
+              size="default"
+              decoration={{
+                highlight: "addition",
+                label: (
+                  <AddActivityLabel
+                    players={players}
+                    playerId={playerId}
+                    offsetClassName="translate-y-[2px]"
                   />
-                </motion.div>
-              ))
-            : null}
-        </AnimatePresence>
+                ),
+              }}
+              invalid={invalidEntryKeys.has(entry.key)}
+            />
+          ))
+        ) : null}
       </div>
     </SortableContext>
   );
@@ -233,6 +256,7 @@ export function CompositionRow({
   players,
   stagedEntryPlayerId,
   stagedEntriesInteractive = true,
+  animateStagedEntries = !stagedEntriesInteractive,
   dropTargetsEnabled = false,
   activity,
   invalidEntryKeys = new Set<string>(),
@@ -246,6 +270,7 @@ export function CompositionRow({
   players: PlayerSnapshot[];
   stagedEntryPlayerId?: string;
   stagedEntriesInteractive?: boolean;
+  animateStagedEntries?: boolean;
   dropTargetsEnabled?: boolean;
   activity?: {
     kind?: string;
@@ -321,6 +346,7 @@ export function CompositionRow({
           <CompositionEdgeDraftZone
             entries={additionsAtStart}
             interactive={stagedEntriesInteractive}
+            animate={animateStagedEntries}
             players={players}
             playerId={stagedEntryPlayerId}
             invalidEntryKeys={invalidEntryKeys}
@@ -401,9 +427,9 @@ export function CompositionRow({
                     })()
                   : null}
 
-                {stagedEntriesInteractive ? renderedCard : null}
-                <AnimatePresence initial={false}>
-                  {!stagedEntriesInteractive ? (
+                {stagedEntriesInteractive || !animateStagedEntries ? renderedCard : null}
+                {animateStagedEntries ? (
+                  <AnimatePresence initial={false}>
                     <motion.div
                       key={reclaim ? `reclaim-${reclaim.replacementEntry.key}` : `table-${key}`}
                       className="col-start-1 row-start-1"
@@ -418,8 +444,8 @@ export function CompositionRow({
                     >
                       {renderedCard}
                     </motion.div>
-                  ) : null}
-                </AnimatePresence>
+                  </AnimatePresence>
+                ) : null}
               </div>
             </div>
           );
@@ -429,6 +455,7 @@ export function CompositionRow({
           <CompositionEdgeDraftZone
             entries={additionsAtEnd}
             interactive={stagedEntriesInteractive}
+            animate={animateStagedEntries}
             players={players}
             playerId={stagedEntryPlayerId}
             invalidEntryKeys={invalidEntryKeys}

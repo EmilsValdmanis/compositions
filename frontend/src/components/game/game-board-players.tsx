@@ -24,7 +24,6 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "#/components/ui/popover";
-import { Spinner } from "#/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -168,6 +167,7 @@ export function GameBoardPlayers({
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
 }) {
   const turnPlayer = players.find((player) => player.playerId === game?.turn.playerId);
+  const showActiveTurnSummary = Boolean(showTurnIndicator && turnPlayer && !turnPlayer.forfeited);
   return (
     <>
       {compactOnMobile && canSendEmote ? <MobilePlayerEmotes players={players} /> : null}
@@ -187,15 +187,15 @@ export function GameBoardPlayers({
                     <Button
                       type="button"
                       variant="ghost"
-                      className="h-10 min-w-0 flex-1 justify-start px-2"
+                      className={cn(
+                        "player-turn-surface h-10 min-w-0 flex-1 justify-start px-2",
+                        showActiveTurnSummary && "player-turn-surface-active",
+                      )}
                     />
                   }
                 >
                   {turnPlayer ? (
-                    <>
-                      <Spinner className="size-4 shrink-0 text-primary" aria-hidden="true" />
-                      <span className="truncate font-medium">{turnPlayer.name}</span>
-                    </>
+                    <span className="truncate font-medium">{turnPlayer.name}</span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}

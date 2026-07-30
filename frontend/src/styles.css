@@ -25,6 +25,54 @@ body {
   }
 }
 
+@keyframes active-player-shader {
+  0%,
+  58% {
+    transform: translateX(-190%) skewX(-16deg);
+  }
+  80%,
+  100% {
+    transform: translateX(460%) skewX(-16deg);
+  }
+}
+
+.player-turn-surface {
+  position: relative;
+  isolation: isolate;
+  transition:
+    border-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 180ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 180ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.player-turn-surface-active {
+  overflow: hidden;
+  border-color: color-mix(in oklab, var(--primary) 28%, var(--border));
+  background-color: color-mix(in oklab, var(--primary) 6%, transparent);
+  background-image: radial-gradient(
+    circle at 18% 50%,
+    color-mix(in oklab, var(--primary) 9%, transparent),
+    transparent 58%
+  );
+  box-shadow: 0 0 16px -10px color-mix(in oklab, var(--primary) 65%, transparent);
+}
+
+.player-turn-surface-active::before {
+  position: absolute;
+  inset-block: -40%;
+  left: -30%;
+  width: 28%;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(
+    110deg,
+    transparent 20%,
+    color-mix(in oklab, var(--primary) 13%, transparent) 50%,
+    transparent 80%
+  );
+  animation: active-player-shader 4.2s ease-in-out infinite;
+}
+
 html[data-reduce-motion] {
   scroll-behavior: auto;
 
@@ -39,6 +87,11 @@ html[data-reduce-motion] {
 
   .animate-spin {
     animation: reduced-motion-pulse 1.5s ease-in-out infinite !important;
+  }
+
+  .player-turn-surface-active::before {
+    animation: none !important;
+    opacity: 0;
   }
 }
 
@@ -58,6 +111,11 @@ html[data-reduce-motion] {
 
   .animate-spin {
     animation: reduced-motion-pulse 1.5s ease-in-out infinite !important;
+  }
+
+  .player-turn-surface-active::before {
+    animation: none !important;
+    opacity: 0;
   }
 }
 

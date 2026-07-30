@@ -49,7 +49,7 @@ describe("PlayerStrip", () => {
     expect(container.querySelector('[data-slot="item-actions"]')).toBeTruthy();
   });
 
-  it("uses the primary item treatment and matching avatar badge ring for the active turn", () => {
+  it("uses a subtle shaded surface and glow for the active turn", () => {
     const players: PlayerSnapshot[] = [
       {
         playerId: "player-1",
@@ -67,10 +67,15 @@ describe("PlayerStrip", () => {
 
     const { container } = render(<PlayerStrip players={players} game={game} />);
 
-    expect(container.querySelector('[data-slot="item"]')?.getAttribute("data-variant")).toBe(
-      "primary",
-    );
+    const activePlayer = container.querySelector('[data-slot="item"]');
+
+    expect(activePlayer?.getAttribute("data-variant")).toBe("outline");
+    expect(activePlayer?.getAttribute("data-active-turn")).toBe("true");
+    expect(activePlayer?.getAttribute("aria-current")).toBe("true");
+    expect(activePlayer?.className).toContain("player-turn-surface-active");
     expect(container.querySelector('[data-slot="avatar-badge"]')?.className).toContain("ring-card");
+    expect(screen.getByLabelText("Avery's turn")).toBeTruthy();
+    expect(container.querySelector('[data-slot="turn-token"]')).toBeNull();
   });
 
   it("uses compact, borderless rows in a menu presentation", () => {
@@ -100,7 +105,7 @@ describe("PlayerStrip", () => {
     expect(container.querySelector('[data-slot="avatar"]')?.className).toContain("size-8");
   });
 
-  it("shows a skull instead of the turn spinner for a forfeited player", () => {
+  it("shows a skull instead of the active-turn treatment for a forfeited player", () => {
     const players: PlayerSnapshot[] = [
       {
         playerId: "player-1",

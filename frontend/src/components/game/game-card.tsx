@@ -1,7 +1,6 @@
 import { type CSSProperties, type ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
-import { motion, type Variants } from "motion/react";
 import {
   Clubs02Icon,
   Diamond01Icon,
@@ -13,8 +12,8 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
 import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { cardName } from "#/components/game/game-card-utils";
-import { cn } from "#/lib/utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
+import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
 const rankLabels: Record<number, string> = {
@@ -74,39 +73,6 @@ const gameCardSizeClassNames: Record<GameCardSize, string> = {
   hand: "h-20 w-14 p-1.5 xl:h-32 xl:w-20 xl:p-2.5",
   default: "h-20 w-14 p-1.5 xl:h-24 xl:w-16 xl:p-2",
   compact: "h-16 w-11 rounded-lg p-1.5",
-};
-
-const gameCardFrameSizeClassNames: Record<GameCardSize, string> = {
-  hand: "h-20 w-14 xl:h-32 xl:w-20",
-  default: "h-20 w-14 xl:h-24 xl:w-16",
-  compact: "h-16 w-11",
-};
-
-const cardMotionVariants: Variants = {
-  rest: (shouldReduceMotion: boolean) => ({
-    transform: shouldReduceMotion ? "none" : "translateY(0px) scale(1)",
-    filter: "drop-shadow(0 0 0 rgb(0 0 0 / 0))",
-    transition: {
-      transform: { type: "spring", duration: 0.32, bounce: 0.22 },
-      filter: { duration: 0.14, ease: [0.23, 1, 0.32, 1] },
-    },
-  }),
-  hover: (shouldReduceMotion: boolean) => ({
-    transform: shouldReduceMotion ? "none" : "translateY(-5px) scale(1)",
-    filter: "drop-shadow(0 8px 7px rgb(0 0 0 / 0.22))",
-    transition: {
-      transform: { type: "spring", stiffness: 500, damping: 26, mass: 0.65 },
-      filter: { duration: 0.16, ease: [0.23, 1, 0.32, 1] },
-    },
-  }),
-  pressed: (shouldReduceMotion: boolean) => ({
-    transform: shouldReduceMotion ? "none" : "translateY(-8px) scale(1.015)",
-    filter: "drop-shadow(0 16px 12px rgb(0 0 0 / 0.32))",
-    transition: {
-      transform: { type: "spring", stiffness: 700, damping: 32, mass: 0.55 },
-      filter: { duration: 0.12, ease: [0.23, 1, 0.32, 1] },
-    },
-  }),
 };
 
 const cardCornerTextClassNames: Record<GameCardSize, string> = {
@@ -297,39 +263,26 @@ function SortableGameCard({
   };
 
   return (
-    <motion.button
+    <button
       ref={setNodeRef}
       type="button"
       style={style}
       className={cn(
-        "relative grid shrink-0 place-items-center border-0 bg-transparent p-0 touch-pan-x cursor-grab active:cursor-grabbing xl:touch-none",
-        gameCardFrameSizeClassNames[size],
+        faceDown
+          ? faceDownGameCardClassName(size, className)
+          : gameCardClassName(card, size, className),
+        decorationRingClassName(decoration?.highlight),
+        invalidRingClassName(invalid),
+        "touch-pan-x cursor-grab active:scale-[0.98] active:cursor-grabbing xl:touch-none",
       )}
-      initial="rest"
-      animate="rest"
-      whileHover="hover"
-      whileTap="pressed"
       title={accessibleName}
       aria-label={accessibleName}
       {...listeners}
       {...attributes}
     >
-      <motion.span
-        className={cn(
-          faceDown
-            ? faceDownGameCardClassName(size, className)
-            : gameCardClassName(card, size, className),
-          decorationRingClassName(decoration?.highlight),
-          invalidRingClassName(invalid),
-          "transition-none",
-        )}
-        custom={shouldReduceMotion}
-        variants={cardMotionVariants}
-      >
-        {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-        <GameCardDecorationLayer decoration={decoration} />
-      </motion.span>
-    </motion.button>
+      {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
+      <GameCardDecorationLayer decoration={decoration} />
+    </button>
   );
 }
 
@@ -354,7 +307,6 @@ function DraggableGameCard({
   decoration?: GameCardDecoration;
   invalid?: boolean;
 }) {
-  const shouldReduceMotion = useShouldReduceMotion();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id,
     disabled,
@@ -369,43 +321,29 @@ function DraggableGameCard({
   };
 
   return (
-    <motion.button
+    <button
       ref={setNodeRef}
       type="button"
       style={style}
       disabled={disabled}
       className={cn(
-        "relative grid shrink-0 place-items-center border-0 bg-transparent p-0",
-        gameCardFrameSizeClassNames[size],
+        faceDown
+          ? faceDownGameCardClassName(size, className)
+          : gameCardClassName(card, size, className),
+        decorationRingClassName(decoration?.highlight),
+        invalidRingClassName(invalid),
         disabled
           ? "cursor-default opacity-50"
-          : "touch-pan-x cursor-grab active:cursor-grabbing xl:touch-none",
+          : "touch-pan-x cursor-grab active:scale-[0.98] active:cursor-grabbing xl:touch-none",
       )}
-      initial="rest"
-      animate="rest"
-      whileHover={disabled ? undefined : "hover"}
-      whileTap={disabled ? undefined : "pressed"}
       title={accessibleName}
       aria-label={accessibleName}
       {...listeners}
       {...attributes}
     >
-      <motion.span
-        className={cn(
-          faceDown
-            ? faceDownGameCardClassName(size, className)
-            : gameCardClassName(card, size, className),
-          decorationRingClassName(decoration?.highlight),
-          invalidRingClassName(invalid),
-          "transition-none",
-        )}
-        custom={shouldReduceMotion}
-        variants={cardMotionVariants}
-      >
-        {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
-        <GameCardDecorationLayer decoration={decoration} />
-      </motion.span>
-    </motion.button>
+      {faceDown ? renderGameCardBack() : renderGameCardFace(card, size)}
+      <GameCardDecorationLayer decoration={decoration} />
+    </button>
   );
 }
 

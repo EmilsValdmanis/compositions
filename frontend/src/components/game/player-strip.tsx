@@ -34,7 +34,6 @@ import {
   ItemTitle,
 } from "#/components/ui/item";
 import { AnimatedNumber } from "#/components/ui/animated-number";
-import { Spinner } from "#/components/ui/spinner";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -169,10 +168,13 @@ export function PlayerStrip({
           <Item
             key={player.playerId}
             role="listitem"
-            variant={isMenu ? "default" : showActiveTurn ? "primary" : "outline"}
+            aria-current={showActiveTurn ? "true" : undefined}
+            data-active-turn={showActiveTurn ? "true" : undefined}
+            variant={isMenu ? "default" : "outline"}
             size="xs"
             className={cn(
-              "relative min-w-0 max-w-full flex-nowrap",
+              "player-turn-surface relative min-w-0 max-w-full flex-nowrap",
+              showActiveTurn && "player-turn-surface-active",
               isMenu
                 ? "gap-2 rounded-xl in-data-[slot=dropdown-menu-content]:px-1.5 in-data-[slot=dropdown-menu-content]:py-1"
                 : mobileHorizontal
@@ -195,6 +197,13 @@ export function PlayerStrip({
             <ItemContent className="min-w-0">
               <ItemTitle className="w-full" title={player.name}>
                 {player.name}
+                {showActiveTurn ? (
+                  <span
+                    role="status"
+                    aria-label={m.player_turn({ name: player.name })}
+                    className="sr-only"
+                  />
+                ) : null}
               </ItemTitle>
             </ItemContent>
             <ItemActions className="min-w-max shrink-0 flex-nowrap justify-end gap-1.5">
@@ -203,11 +212,6 @@ export function PlayerStrip({
                   icon={SkullIcon}
                   className="size-5 shrink-0 text-destructive"
                   aria-label={m.player_forfeited({ name: player.name })}
-                />
-              ) : showActiveTurn ? (
-                <Spinner
-                  className="size-5 shrink-0 text-primary"
-                  aria-label={m.player_turn({ name: player.name })}
                 />
               ) : null}
               {showHostBadges && player.isHost ? (
