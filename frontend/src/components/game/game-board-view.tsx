@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 import {
   closestCenter,
   DndContext,
@@ -16,7 +16,6 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { motion } from "motion/react";
 import {
   type ActionResult,
   type CardSnapshot,
@@ -70,12 +69,6 @@ import {
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
 import { playGameSound } from "#/lib/game-sounds";
-import { useShouldReduceMotion } from "#/lib/reduced-motion";
-
-const cardDropAnimation = {
-  duration: 360,
-  easing: "cubic-bezier(0.22, 1.32, 0.36, 1)",
-};
 
 const CARD_OVERLAY_VIEWPORT_MARGIN = 8;
 
@@ -95,37 +88,6 @@ const keepCardOverlayInViewport: Modifier = ({ overlayNodeRect, transform, windo
     y: Math.min(Math.max(transform.y, minY), maxY),
   };
 };
-
-function HeldCardMotion({
-  children,
-  shouldReduceMotion,
-}: {
-  children: ReactNode;
-  shouldReduceMotion: boolean;
-}) {
-  return (
-    <motion.div
-      initial={
-        shouldReduceMotion
-          ? false
-          : {
-              transform: "scale(0.98)",
-              filter: "drop-shadow(0 8px 7px rgb(0 0 0 / 0.2))",
-            }
-      }
-      animate={{
-        transform: shouldReduceMotion ? "none" : "scale(1)",
-        filter: "drop-shadow(0 18px 14px rgb(0 0 0 / 0.38))",
-      }}
-      transition={{
-        transform: { type: "spring", stiffness: 550, damping: 28, mass: 0.65 },
-        filter: { duration: 0.14, ease: [0.23, 1, 0.32, 1] },
-      }}
-    >
-      {children}
-    </motion.div>
-  );
-}
 
 type GameBoardTurnState = {
   canDrawDeck: boolean;
@@ -443,6 +405,7 @@ function GameBoardLayout({
               : undefined
           }
           canCompose={turnState.canDiscard}
+          viewerPlayerId={currentPlayerId}
           showDraftTotal={
             !game?.players.find((player) => player.playerId === game.turn.playerId)?.hasOpened
           }
@@ -1130,7 +1093,6 @@ export function GameBoardView({
   onSendFriendRequest,
 }: GameBoardViewProps) {
   const boardRef = useRef<HTMLDivElement>(null);
-  const shouldReduceMotion = useShouldReduceMotion();
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: { distance: 4 },
@@ -1208,35 +1170,28 @@ export function GameBoardView({
         onSendFriendRequest={onSendFriendRequest}
       />
       <CardTransferAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
-      <DragOverlay
-        dropAnimation={shouldReduceMotion ? null : cardDropAnimation}
-        modifiers={[keepCardOverlayInViewport]}
-      >
+      <DragOverlay dropAnimation={null} modifiers={[keepCardOverlayInViewport]}>
         {activeDraw ? (
-          <HeldCardMotion shouldReduceMotion={shouldReduceMotion}>
-            <GameCard
-              card={
-                (activeDraw.revealedHandKey
-                  ? controller.availableHandEntries.find(
-                      (entry) => entry.key === activeDraw.revealedHandKey,
-                    )?.card
-                  : null) ??
-                activeDraw.card ??
-                FACE_DOWN_CARD
-              }
-              faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
-              size="hand"
-              className="rotate-3 opacity-90 ring-1 ring-foreground/10"
-            />
-          </HeldCardMotion>
+          <GameCard
+            card={
+              (activeDraw.revealedHandKey
+                ? controller.availableHandEntries.find(
+                    (entry) => entry.key === activeDraw.revealedHandKey,
+                  )?.card
+                : null) ??
+              activeDraw.card ??
+              FACE_DOWN_CARD
+            }
+            faceDown={activeDraw.revealedHandKey === null && activeDraw.card === null}
+            size="hand"
+            className="rotate-3 opacity-75 shadow-xl ring-1 ring-foreground/10"
+          />
         ) : controller.activeEntry ? (
-          <HeldCardMotion shouldReduceMotion={shouldReduceMotion}>
-            <GameCard
-              card={controller.activeEntry.card}
-              size="hand"
-              className="rotate-3 opacity-90 ring-1 ring-foreground/10"
-            />
-          </HeldCardMotion>
+          <GameCard
+            card={controller.activeEntry.card}
+            size="hand"
+            className="rotate-3 opacity-75 shadow-xl ring-1 ring-foreground/10"
+          />
         ) : null}
       </DragOverlay>
     </DndContext>

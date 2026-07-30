@@ -16,6 +16,7 @@ function renderDraftTable(
     { rank: 4, suit: 0 },
     { rank: 5, suit: 0 },
   ],
+  viewerPlayerId?: string,
 ) {
   return render(
     <DndContext>
@@ -35,6 +36,7 @@ function renderDraftTable(
           ],
         }}
         canCompose={false}
+        viewerPlayerId={viewerPlayerId}
         showDraftTotal={showDraftTotal}
       />
     </DndContext>,
@@ -101,47 +103,54 @@ describe("draftPreviewForComposition", () => {
     expect([...edgeDraftZones].every((zone) => zone.classList.contains("contents"))).toBe(true);
   });
 
-  it("keeps a reclaimed joker with later additions on the same edge for spectators", () => {
-    const view = render(
-      <DndContext>
-        <GameBoardTable
-          tableCompositions={[
-            {
-              tableIndex: 0,
-              key: "table-0",
-              snapshot: {
-                type: "run",
-                cards: [{ rank: 12, suit: 0 }, { isJoker: true }, { rank: 1, suit: 0 }],
-                jokerRepresentations: { 1: [{ rank: 13, suit: 0 }] },
-                points: 30,
-                complete: false,
-              },
-              stagedEntries: [],
-              reclaims: [],
-              insertIndex: 3,
-            },
-          ]}
-          newCompositions={[]}
-          players={[]}
-          turnActivity={{
-            playerId: "player-1",
-            round: 1,
-            turnNumber: 1,
-            draftCompositions: [
+  it("animates additions and joker reclaims for spectators, not the acting player", () => {
+    const renderPreview = (viewerPlayerId: string) =>
+      render(
+        <DndContext>
+          <GameBoardTable
+            tableCompositions={[
               {
-                id: "draft-table-0",
                 tableIndex: 0,
+                key: "table-0",
+                snapshot: {
+                  type: "run",
+                  cards: [{ rank: 12, suit: 0 }, { isJoker: true }, { rank: 1, suit: 0 }],
+                  jokerRepresentations: { 1: [{ rank: 13, suit: 0 }] },
+                  points: 30,
+                  complete: false,
+                },
+                stagedEntries: [],
+                reclaims: [],
                 insertIndex: 3,
-                cardPlacements: [{ reclaimJokerIndex: 1 }, { insertIndex: 0 }, { insertIndex: 0 }],
-                cards: [{ rank: 13, suit: 0 }, { isJoker: true }, { rank: 10, suit: 0 }],
               },
-            ],
-          }}
-          canCompose={false}
-          showDraftTotal={false}
-        />
-      </DndContext>,
-    );
+            ]}
+            newCompositions={[]}
+            players={[]}
+            turnActivity={{
+              playerId: "player-1",
+              round: 1,
+              turnNumber: 1,
+              draftCompositions: [
+                {
+                  id: "draft-table-0",
+                  tableIndex: 0,
+                  insertIndex: 3,
+                  cardPlacements: [
+                    { reclaimJokerIndex: 1 },
+                    { insertIndex: 0 },
+                    { insertIndex: 0 },
+                  ],
+                  cards: [{ rank: 13, suit: 0 }, { isJoker: true }, { rank: 10, suit: 0 }],
+                },
+              ],
+            }}
+            canCompose={false}
+            viewerPlayerId={viewerPlayerId}
+            showDraftTotal={false}
+          />
+        </DndContext>,
+      );
+    const view = renderPreview("player-2");
 
     expect(
       [...view.container.querySelectorAll<HTMLElement>("[aria-label]")].map((card) =>
@@ -156,6 +165,11 @@ describe("draftPreviewForComposition", () => {
     expect(
       view.container.querySelectorAll('[data-spectator-card-motion="joker-reclaim"]'),
     ).toHaveLength(1);
+
+    view.unmount();
+    const actorView = renderPreview("player-1");
+
+    expect(actorView.container.querySelector("[data-spectator-card-motion]")).toBeNull();
   });
 
   it("keeps two identical jokers on their independently assigned edges", () => {
@@ -326,12 +340,19 @@ describe("draftPreviewForComposition", () => {
 
 describe("GameBoardTable draft total", () => {
   it("marks remote draft compositions and cards for spectator motion", () => {
-    const view = renderDraftTable(false);
+    const view = renderDraftTable(false, undefined, "player-2");
 
     expect(
       view.container.querySelectorAll('[data-spectator-composition-motion="draft"]'),
     ).toHaveLength(1);
     expect(view.container.querySelectorAll('[data-spectator-card-motion="draft"]')).toHaveLength(3);
+  });
+
+  it("does not animate draft composition placement for the acting player", () => {
+    const view = renderDraftTable(false, undefined, "player-1");
+
+    expect(view.container.querySelector('[data-spectator-composition-motion="draft"]')).toBeNull();
+    expect(view.container.querySelector('[data-spectator-card-motion="draft"]')).toBeNull();
   });
 
   it("shows the total before the player has opened", () => {

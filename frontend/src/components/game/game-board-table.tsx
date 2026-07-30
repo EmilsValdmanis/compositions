@@ -72,6 +72,7 @@ function TableComposition({
   players,
   activity,
   canCompose,
+  viewerPlayerId,
   invalidEntryKeys,
 }: {
   composition: TableCompositionView;
@@ -79,6 +80,7 @@ function TableComposition({
   players: PlayerSnapshot[];
   activity?: CompositionActivitySnapshot;
   canCompose: boolean;
+  viewerPlayerId?: string;
   invalidEntryKeys: Set<string>;
 }) {
   const hasInteractiveEntries = composition.stagedEntries.length > 0;
@@ -90,6 +92,10 @@ function TableComposition({
   const cardInsertIndices = hasInteractiveEntries
     ? composition.cardInsertIndices
     : spectatorDraft?.cardInsertIndices;
+  const changePlayerId = spectatorDraft?.playerId ?? activity?.playerId;
+  const animateRemoteChanges = Boolean(
+    !hasInteractiveEntries && changePlayerId && changePlayerId !== viewerPlayerId,
+  );
 
   return (
     <div className="w-fit shrink-0 overflow-visible p-1">
@@ -103,6 +109,7 @@ function TableComposition({
         players={players}
         stagedEntryPlayerId={spectatorDraft?.playerId}
         stagedEntriesInteractive={hasInteractiveEntries}
+        animateStagedEntries={animateRemoteChanges}
         dropTargetsEnabled={canCompose}
         activity={activity}
         invalidEntryKeys={invalidEntryKeys}
@@ -117,6 +124,7 @@ function TableCompositionsSection({
   activityByIndex,
   players,
   canCompose,
+  viewerPlayerId,
   invalidEntryKeys,
 }: {
   tableCompositions: TableCompositionView[];
@@ -124,6 +132,7 @@ function TableCompositionsSection({
   activityByIndex: Map<number, CompositionActivitySnapshot>;
   players: PlayerSnapshot[];
   canCompose: boolean;
+  viewerPlayerId?: string;
   invalidEntryKeys: Set<string>;
 }) {
   if (tableCompositions.length === 0) {
@@ -152,6 +161,7 @@ function TableCompositionsSection({
             players={players}
             activity={activityByIndex.get(composition.tableIndex)}
             canCompose={canCompose}
+            viewerPlayerId={viewerPlayerId}
             invalidEntryKeys={invalidEntryKeys}
           />
         ))}
@@ -180,10 +190,12 @@ function SpectatorNewDraft({
   composition,
   players,
   playerId,
+  animateCards,
 }: {
   composition: DraftCompositionSnapshot;
   players: PlayerSnapshot[];
   playerId?: string;
+  animateCards: boolean;
 }) {
   const pointTotal = draftCompositionPointTotal(composition.cards);
 
@@ -201,24 +213,30 @@ function SpectatorNewDraft({
         </Badge>
       </div>
       <div className="flex items-start gap-2">
-        <AnimatePresence initial={false} mode="popLayout">
-          {draftCardInstances(composition.cards).map(({ card, key }) => (
-            <motion.div
-              key={key}
-              layout="position"
-              initial={spectatorCardEnter}
-              animate={spectatorCardVisible}
-              exit={{
-                ...spectatorCardExit,
-                transition: spectatorCardExitTransition,
-              }}
-              transition={spectatorCardTransition}
-              data-spectator-card-motion="draft"
-            >
-              <GameCard card={card} size="default" />
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {animateCards ? (
+          <AnimatePresence initial={false} mode="popLayout">
+            {draftCardInstances(composition.cards).map(({ card, key }) => (
+              <motion.div
+                key={key}
+                layout="position"
+                initial={spectatorCardEnter}
+                animate={spectatorCardVisible}
+                exit={{
+                  ...spectatorCardExit,
+                  transition: spectatorCardExitTransition,
+                }}
+                transition={spectatorCardTransition}
+                data-spectator-card-motion="draft"
+              >
+                <GameCard card={card} size="default" />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        ) : (
+          draftCardInstances(composition.cards).map(({ card, key }) => (
+            <GameCard key={key} card={card} size="default" />
+          ))
+        )}
       </div>
     </div>
   );
@@ -287,6 +305,7 @@ function DraftCompositionsSection({
   newCompositions,
   players,
   turnPlayerId,
+  animateStagedDrafts,
   invalidCompositionIds,
 }: {
   sectionRef: RefObject<HTMLDivElement | null>;
@@ -297,6 +316,7 @@ function DraftCompositionsSection({
   newCompositions: DraftedCompositionView[];
   players: PlayerSnapshot[];
   turnPlayerId?: string;
+  animateStagedDrafts: boolean;
   invalidCompositionIds: Set<string>;
 }) {
   return (
@@ -308,28 +328,41 @@ function DraftCompositionsSection({
         <DraftTotal points={visibleDraftPointsTotal} />
       ) : null}
 
-      <AnimatePresence initial={false} mode="popLayout">
-        {stagedNewDrafts.map((composition) => (
-          <motion.div
+      {animateStagedDrafts ? (
+        <AnimatePresence initial={false} mode="popLayout">
+          {stagedNewDrafts.map((composition) => (
+            <motion.div
+              key={composition.id}
+              layout="position"
+              initial={spectatorCompositionEnter}
+              animate={spectatorCardVisible}
+              exit={{
+                ...spectatorCompositionExit,
+                transition: spectatorCardExitTransition,
+              }}
+              transition={spectatorCardTransition}
+              data-spectator-composition-motion="draft"
+            >
+              <SpectatorNewDraft
+                composition={composition}
+                players={players}
+                playerId={turnPlayerId}
+                animateCards
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      ) : (
+        stagedNewDrafts.map((composition) => (
+          <SpectatorNewDraft
             key={composition.id}
-            layout="position"
-            initial={spectatorCompositionEnter}
-            animate={spectatorCardVisible}
-            exit={{
-              ...spectatorCompositionExit,
-              transition: spectatorCardExitTransition,
-            }}
-            transition={spectatorCardTransition}
-            data-spectator-composition-motion="draft"
-          >
-            <SpectatorNewDraft
-              composition={composition}
-              players={players}
-              playerId={turnPlayerId}
-            />
-          </motion.div>
-        ))}
-      </AnimatePresence>
+            composition={composition}
+            players={players}
+            playerId={turnPlayerId}
+            animateCards={false}
+          />
+        ))
+      )}
 
       {newCompositions.map((composition) => (
         <EditableNewDraft
@@ -349,6 +382,7 @@ export function GameBoardTable({
   players,
   turnActivity,
   canCompose,
+  viewerPlayerId,
   showDraftTotal,
   invalidCompositionIds = new Set<string>(),
   invalidEntryKeys = new Set<string>(),
@@ -358,6 +392,7 @@ export function GameBoardTable({
   players: PlayerSnapshot[];
   turnActivity?: TurnActivitySnapshot;
   canCompose: boolean;
+  viewerPlayerId?: string;
   showDraftTotal: boolean;
   invalidCompositionIds?: Set<string>;
   invalidEntryKeys?: Set<string>;
@@ -491,6 +526,7 @@ export function GameBoardTable({
             activityByIndex={activityByIndex}
             players={players}
             canCompose={canCompose}
+            viewerPlayerId={viewerPlayerId}
             invalidEntryKeys={invalidEntryKeys}
           />
 
@@ -503,6 +539,9 @@ export function GameBoardTable({
             newCompositions={newCompositions}
             players={players}
             turnPlayerId={turnActivity?.playerId}
+            animateStagedDrafts={Boolean(
+              turnActivity?.playerId && turnActivity.playerId !== viewerPlayerId,
+            )}
             invalidCompositionIds={invalidCompositionIds}
           />
         </div>

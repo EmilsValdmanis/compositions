@@ -4,8 +4,12 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { GameCard } from "#/components/game/game-card";
+import { setReducedMotionPreferenceEnabled } from "#/lib/reduced-motion";
 
-afterEach(cleanup);
+afterEach(() => {
+  setReducedMotionPreferenceEnabled(false);
+  cleanup();
+});
 
 describe("GameCard", () => {
   it.each([
@@ -29,5 +33,20 @@ describe("GameCard", () => {
     const view = render(<GameCard card={{ isJoker: true }} />);
 
     expect(view.container.querySelectorAll("svg")).toHaveLength(1);
+  });
+
+  it("keeps interactive cards visible when reduced motion is enabled", () => {
+    setReducedMotionPreferenceEnabled(true);
+
+    const view = render(
+      <GameCard
+        card={{ rank: 7, suit: 3 }}
+        dragSource={{ id: "discard-draw", data: { drawSource: "discard" } }}
+      />,
+    );
+
+    const card = view.container.querySelector("button");
+    expect(card?.style.opacity).toBe("1");
+    expect(card?.querySelector("svg")).toBeTruthy();
   });
 });
