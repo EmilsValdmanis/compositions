@@ -122,6 +122,8 @@ CREATE TABLE games (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX games_started_at_idx ON games (started_at DESC);
+
 CREATE TABLE game_player_statistics (
     game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -161,6 +163,13 @@ CREATE TABLE game_player_statistics (
     longest_round_win_streak INTEGER NOT NULL,
     PRIMARY KEY (game_id, user_id)
 );
+
+CREATE INDEX game_player_statistics_user_id_idx
+    ON game_player_statistics (user_id, game_id);
+
+CREATE INDEX game_bug_reports_completed_at_idx
+ON game_bug_reports (completed_at DESC)
+WHERE completed_at IS NOT NULL;
 
 CREATE TABLE player_statistics (
 	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
