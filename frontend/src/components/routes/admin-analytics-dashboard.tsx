@@ -1,9 +1,15 @@
-import { Alert02Icon, Calendar03Icon, RefreshIcon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  Calendar03Icon,
+  RefreshIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useQuery } from "@tanstack/react-query";
-import { format, parseISO } from "date-fns";
+import { differenceInCalendarDays, format, parseISO } from "date-fns";
 import { enUS, lv } from "date-fns/locale";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { DateRange } from "react-day-picker";
 import {
   Area,
@@ -13,11 +19,12 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  Rectangle,
   XAxis,
   YAxis,
+  type BarShapeProps,
 } from "recharts";
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
-import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Calendar } from "#/components/ui/calendar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
@@ -30,7 +37,9 @@ import {
   ChartTooltipContent,
 } from "#/components/ui/chart";
 import { Popover, PopoverContent, PopoverTrigger } from "#/components/ui/popover";
+import { Separator } from "#/components/ui/separator";
 import { Skeleton } from "#/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { H2 } from "#/components/typography";
 import {
   adminAnalyticsOptions,
@@ -38,7 +47,13 @@ import {
   type AdminAnalyticsRange,
   type AdminAnalyticsTotals,
 } from "#/lib/admin-analytics";
-import { currentAnalyticsDate, shiftCalendarDate } from "#/lib/admin-analytics-date";
+import {
+  analyticsPeriodRange,
+  currentAnalyticsDate,
+  shiftAnalyticsPeriod,
+  shiftCalendarDate,
+  type AnalyticsPeriod,
+} from "#/lib/admin-analytics-date";
 import { m } from "#/paraglide/messages.js";
 import { getLocale, type Locale } from "#/paraglide/runtime.js";
 
@@ -93,81 +108,162 @@ function DateRangePicker({
   onChange: (value: AdminAnalyticsRange) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<DateRange | undefined>({
+  const [period, setPeriod] = useState<AnalyticsPeriod>("custom");
+  const [draft, setDraft] = useState<DateRange | undefined>(() => ({
     from: parseCalendarDate(value.from),
     to: parseCalendarDate(value.to),
-  });
+  }));
+  const rangeStartRef = useRef<Date | undefined>(undefined);
+  const [month, setMonth] = useState(() => parseCalendarDate(value.from));
   const todayValue = currentAnalyticsDate();
   const today = parseCalendarDate(todayValue);
-  const earliestDate = parseCalendarDate(shiftCalendarDate(todayValue, -365));
+
+  function applyRange(nextRange: AdminAnalyticsRange, nextPeriod: AnalyticsPeriod) {
+    setPeriod(nextPeriod);
+    setDraft({
+      from: parseCalendarDate(nextRange.from),
+      to: parseCalendarDate(nextRange.to),
+    });
+    rangeStartRef.current = undefined;
+    setMonth(parseCalendarDate(nextRange.from));
+    onChange(nextRange);
+  }
+
+  function applyPreset(nextPeriod: Exclude<AnalyticsPeriod, "custom">) {
+    applyRange(analyticsPeriodRange(nextPeriod, todayValue), nextPeriod);
+  }
+
+  function selectDay(day: Date, disabled: boolean | undefined) {
+    if (disabled) return;
+
+    const rangeStart = rangeStartRef.current;
+    if (!rangeStart) {
+      setPeriod("custom");
+      setDraft({ from: day, to: undefined });
+      rangeStartRef.current = day;
+      return;
+    }
+
+    const from = day < rangeStart ? day : rangeStart;
+    const to = day < rangeStart ? rangeStart : day;
+    if (differenceInCalendarDays(to, from) > 365) {
+      setDraft({ from: day, to: undefined });
+      rangeStartRef.current = day;
+      return;
+    }
+
+    applyRange({ from: format(from, "yyyy-MM-dd"), to: format(to, "yyyy-MM-dd") }, "custom");
+  }
+
+  function movePeriod(amount: -1 | 1) {
+    applyRange(shiftAnalyticsPeriod(value, period, amount), period);
+  }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (nextOpen) {
-          setDraft({ from: parseCalendarDate(value.from), to: parseCalendarDate(value.to) });
-        }
-      }}
-    >
-      <PopoverTrigger
-        render={<Button variant="outline" className="w-full justify-start sm:w-auto" />}
+    <div className="flex w-full items-center gap-1 sm:w-auto">
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={m.admin_analytics_previous_period()}
+        title={m.admin_analytics_previous_period()}
+        onClick={() => movePeriod(-1)}
       >
-        <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
-        <span className="truncate">{formatDateRange(value)}</span>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-auto p-0">
-        <Calendar
-          mode="range"
-          today={today}
-          selected={draft}
-          onSelect={(nextRange) => {
-            setDraft(nextRange);
-            if (nextRange?.from && nextRange.to) {
-              onChange({
-                from: format(nextRange.from, "yyyy-MM-dd"),
-                to: format(nextRange.to, "yyyy-MM-dd"),
-              });
-              setOpen(false);
-            }
-          }}
-          locale={DATE_FNS_LOCALES[getLocale()]}
-          disabled={{ before: earliestDate, after: today }}
-          defaultMonth={draft?.from}
-          autoFocus
-        />
-      </PopoverContent>
-    </Popover>
+        <HugeiconsIcon icon={ArrowLeftIcon} />
+      </Button>
+      <Popover
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (nextOpen) {
+            setDraft({ from: parseCalendarDate(value.from), to: parseCalendarDate(value.to) });
+            rangeStartRef.current = undefined;
+            setMonth(parseCalendarDate(value.from));
+          }
+        }}
+      >
+        <PopoverTrigger
+          render={
+            <Button
+              variant="outline"
+              className="min-w-0 flex-1 justify-start sm:min-w-64 sm:flex-none"
+            />
+          }
+        >
+          <HugeiconsIcon icon={Calendar03Icon} data-icon="inline-start" />
+          <span className="truncate">{formatDateRange(value)}</span>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-auto gap-0 p-0">
+          <div className="p-3 pb-2">
+            <ToggleGroup
+              value={period === "custom" ? [] : [period]}
+              onValueChange={(nextValue) => {
+                const nextPeriod = nextValue[0];
+                if (nextPeriod === "week" || nextPeriod === "month" || nextPeriod === "year") {
+                  applyPreset(nextPeriod);
+                }
+              }}
+              variant="outline"
+              size="sm"
+              spacing={0}
+              className="grid w-full grid-cols-3"
+              aria-label={m.admin_analytics_date_presets()}
+            >
+              <ToggleGroupItem value="week">{m.admin_analytics_this_week()}</ToggleGroupItem>
+              <ToggleGroupItem value="month">{m.admin_analytics_this_month()}</ToggleGroupItem>
+              <ToggleGroupItem value="year">{m.admin_analytics_this_year()}</ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+          <Separator />
+          <Calendar
+            mode="range"
+            today={today}
+            selected={draft}
+            onDayClick={(day, modifiers) => selectDay(day, modifiers.disabled)}
+            locale={DATE_FNS_LOCALES[getLocale()]}
+            month={month}
+            onMonthChange={setMonth}
+            autoFocus
+          />
+        </PopoverContent>
+      </Popover>
+      <Button
+        variant="outline"
+        size="icon"
+        aria-label={m.admin_analytics_next_period()}
+        title={m.admin_analytics_next_period()}
+        onClick={() => movePeriod(1)}
+      >
+        <HugeiconsIcon icon={ArrowRightIcon} />
+      </Button>
+    </div>
   );
 }
 
-function relativeDelta(current: number, previous: number) {
-  if (previous === 0) return current === 0 ? null : Number.POSITIVE_INFINITY;
-  return (current - previous) / previous;
+function topStackRadius(
+  point: AdminAnalytics["points"][number],
+  dataKey: keyof AdminAnalytics["points"][number],
+  stackKeys: readonly (keyof AdminAnalytics["points"][number])[],
+): number | [number, number, number, number] {
+  const dataKeyIndex = stackKeys.indexOf(dataKey);
+  const isVisible = Number(point[dataKey]) > 0;
+  const hasVisibleSegmentAbove = stackKeys
+    .slice(dataKeyIndex + 1)
+    .some((key) => Number(point[key]) > 0);
+  return isVisible && !hasVisibleSegmentAbove ? [4, 4, 0, 0] : 0;
 }
 
-function DeltaBadge({ current, previous }: { current: number; previous: number }) {
-  const delta = relativeDelta(current, previous);
-  if (delta === null) return <Badge variant="outline">—</Badge>;
-  if (!Number.isFinite(delta)) return <Badge variant="secondary">{m.admin_analytics_new()}</Badge>;
-  const label = PERCENT_FORMATTERS[getLocale()].format(Math.abs(delta));
-  return (
-    <Badge variant={delta < 0 ? "destructive" : delta > 0 ? "secondary" : "outline"}>
-      {delta > 0 ? "+" : delta < 0 ? "−" : ""}
-      {label}
-    </Badge>
-  );
-}
-
-function PointDeltaBadge({ current, previous }: { current: number; previous: number }) {
-  const points = (current - previous) * 100;
-  const label = NUMBER_FORMATTERS[getLocale()].format(Math.abs(points));
-  return (
-    <Badge variant={points < 0 ? "destructive" : points > 0 ? "secondary" : "outline"}>
-      {points > 0 ? "+" : points < 0 ? "−" : ""}
-      {label} {m.admin_analytics_percentage_points_short()}
-    </Badge>
+function roundedStackShape({
+  dataKey,
+  stackKeys,
+}: {
+  dataKey: keyof AdminAnalytics["points"][number];
+  stackKeys: readonly (keyof AdminAnalytics["points"][number])[];
+}) {
+  return (props: BarShapeProps) => (
+    <Rectangle
+      {...props}
+      radius={topStackRadius(props.payload as AdminAnalytics["points"][number], dataKey, stackKeys)}
+    />
   );
 }
 
@@ -180,19 +276,7 @@ function formatPlaytime(seconds: number) {
     : m.playtime_minutes({ minutes });
 }
 
-function SummaryCard({
-  label,
-  value,
-  current,
-  previous,
-  points = false,
-}: {
-  label: string;
-  value: string;
-  current: number;
-  previous: number;
-  points?: boolean;
-}) {
+function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <Card size="sm">
       <CardHeader>
@@ -200,52 +284,27 @@ function SummaryCard({
         <CardTitle>
           <H2 className="tabular-nums">{value}</H2>
         </CardTitle>
-        <div className="pt-1">
-          {points ? (
-            <PointDeltaBadge current={current} previous={previous} />
-          ) : (
-            <DeltaBadge current={current} previous={previous} />
-          )}
-        </div>
       </CardHeader>
     </Card>
   );
 }
 
-function SummaryGrid({
-  current,
-  previous,
-}: {
-  current: AdminAnalyticsTotals;
-  previous: AdminAnalyticsTotals;
-}) {
+function SummaryGrid({ current }: { current: AdminAnalyticsTotals }) {
   const numberFormatter = NUMBER_FORMATTERS[getLocale()];
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard
-        label={m.games_played()}
-        value={numberFormatter.format(current.games)}
-        current={current.games}
-        previous={previous.games}
-      />
+      <SummaryCard label={m.games_played()} value={numberFormatter.format(current.games)} />
       <SummaryCard
         label={m.admin_analytics_active_players()}
         value={numberFormatter.format(current.activePlayers)}
-        current={current.activePlayers}
-        previous={previous.activePlayers}
       />
       <SummaryCard
         label={m.total_playtime()}
         value={formatPlaytime(current.activePlaytimeSeconds)}
-        current={current.activePlaytimeSeconds}
-        previous={previous.activePlaytimeSeconds}
       />
       <SummaryCard
         label={m.admin_analytics_healthy_finish_rate()}
         value={PERCENT_FORMATTERS[getLocale()].format(current.healthyFinishRate)}
-        current={current.healthyFinishRate}
-        previous={previous.healthyFinishRate}
-        points
       />
     </div>
   );
@@ -297,6 +356,7 @@ function AnalyticsCharts({ analytics }: { analytics: AdminAnalytics }) {
     newPlayers: { label: m.admin_analytics_new_players(), color: "var(--chart-2)" },
     returningPlayers: { label: m.admin_analytics_returning_players(), color: "var(--chart-4)" },
   } satisfies ChartConfig;
+  const playerStackKeys = ["newPlayers", "returningPlayers"] as const;
   const outcomeConfig = {
     completed: { label: m.admin_analytics_completed(), color: "var(--chart-1)" },
     forfeit: { label: m.forfeit(), color: "var(--chart-2)" },
@@ -305,6 +365,14 @@ function AnalyticsCharts({ analytics }: { analytics: AdminAnalytics }) {
     abandoned: { label: m.admin_analytics_abandoned(), color: "var(--chart-5)" },
     inProgress: { label: m.admin_analytics_in_progress(), color: "var(--muted-foreground)" },
   } satisfies ChartConfig;
+  const outcomeStackKeys = [
+    "completed",
+    "forfeit",
+    "mutualEnd",
+    "technicalAbort",
+    "abandoned",
+    "inProgress",
+  ] as const;
   const bugConfig = {
     bugReports: { label: m.admin_analytics_reports_created(), color: "var(--chart-2)" },
     bugsResolved: { label: m.admin_analytics_reports_resolved(), color: "var(--chart-4)" },
@@ -364,12 +432,17 @@ function AnalyticsCharts({ analytics }: { analytics: AdminAnalytics }) {
             <ChartYAxis />
             <ChartTooltip content={tooltipContent} />
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="newPlayers" stackId="players" fill="var(--color-newPlayers)" />
+            <Bar
+              dataKey="newPlayers"
+              stackId="players"
+              fill="var(--color-newPlayers)"
+              shape={roundedStackShape({ dataKey: "newPlayers", stackKeys: playerStackKeys })}
+            />
             <Bar
               dataKey="returningPlayers"
               stackId="players"
               fill="var(--color-returningPlayers)"
-              radius={[4, 4, 0, 0]}
+              shape={roundedStackShape({ dataKey: "returningPlayers", stackKeys: playerStackKeys })}
             />
           </BarChart>
         </ChartContainer>
@@ -386,17 +459,15 @@ function AnalyticsCharts({ analytics }: { analytics: AdminAnalytics }) {
             <ChartYAxis />
             <ChartTooltip content={tooltipContent} />
             <ChartLegend content={<ChartLegendContent className="flex-wrap gap-x-3 gap-y-1" />} />
-            <Bar dataKey="completed" stackId="outcomes" fill="var(--color-completed)" />
-            <Bar dataKey="forfeit" stackId="outcomes" fill="var(--color-forfeit)" />
-            <Bar dataKey="mutualEnd" stackId="outcomes" fill="var(--color-mutualEnd)" />
-            <Bar dataKey="technicalAbort" stackId="outcomes" fill="var(--color-technicalAbort)" />
-            <Bar dataKey="abandoned" stackId="outcomes" fill="var(--color-abandoned)" />
-            <Bar
-              dataKey="inProgress"
-              stackId="outcomes"
-              fill="var(--color-inProgress)"
-              radius={[4, 4, 0, 0]}
-            />
+            {outcomeStackKeys.map((dataKey) => (
+              <Bar
+                key={dataKey}
+                dataKey={dataKey}
+                stackId="outcomes"
+                fill={`var(--color-${dataKey})`}
+                shape={roundedStackShape({ dataKey, stackKeys: outcomeStackKeys })}
+              />
+            ))}
           </BarChart>
         </ChartContainer>
       </AnalyticsChartCard>
@@ -444,7 +515,6 @@ function AnalyticsSkeleton() {
             <CardHeader>
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-8 w-32" />
-              <Skeleton className="h-5 w-16" />
             </CardHeader>
           </Card>
         ))}
@@ -496,7 +566,7 @@ export function AdminAnalyticsDashboard() {
           <AnalyticsSkeleton />
         ) : (
           <div className="flex min-w-0 flex-col gap-4">
-            <SummaryGrid current={data.current} previous={data.previous} />
+            <SummaryGrid current={data.current} />
             <AnalyticsCharts analytics={data} />
           </div>
         )}
