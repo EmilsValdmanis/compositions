@@ -213,30 +213,31 @@ function SpectatorNewDraft({
         </Badge>
       </div>
       <div className="flex items-start gap-2">
-        {animateCards ? (
-          <AnimatePresence initial={false} mode="popLayout">
-            {draftCardInstances(composition.cards).map(({ card, key }) => (
-              <motion.div
-                key={key}
-                layout="position"
-                initial={spectatorCardEnter}
-                animate={spectatorCardVisible}
-                exit={{
-                  ...spectatorCardExit,
-                  transition: spectatorCardExitTransition,
-                }}
-                transition={spectatorCardTransition}
-                data-spectator-card-motion="draft"
-              >
-                <GameCard card={card} size="default" />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        ) : (
-          draftCardInstances(composition.cards).map(({ card, key }) => (
-            <GameCard key={key} card={card} size="default" />
-          ))
-        )}
+        <AnimatePresence initial={false} mode="popLayout">
+          {animateCards
+            ? draftCardInstances(composition.cards).map(({ card, key }) => (
+                <motion.div
+                  key={key}
+                  layout="position"
+                  initial={spectatorCardEnter}
+                  animate={spectatorCardVisible}
+                  exit={{
+                    ...spectatorCardExit,
+                    transition: spectatorCardExitTransition,
+                  }}
+                  transition={spectatorCardTransition}
+                  data-spectator-card-motion="draft"
+                >
+                  <GameCard card={card} size="default" />
+                </motion.div>
+              ))
+            : null}
+        </AnimatePresence>
+        {!animateCards
+          ? draftCardInstances(composition.cards).map(({ card, key }) => (
+              <GameCard key={key} card={card} size="default" />
+            ))
+          : null}
       </div>
     </div>
   );
@@ -328,41 +329,42 @@ function DraftCompositionsSection({
         <DraftTotal points={visibleDraftPointsTotal} />
       ) : null}
 
-      {animateStagedDrafts ? (
-        <AnimatePresence initial={false} mode="popLayout">
-          {stagedNewDrafts.map((composition) => (
-            <motion.div
+      <AnimatePresence initial={false} mode="popLayout">
+        {animateStagedDrafts
+          ? stagedNewDrafts.map((composition) => (
+              <motion.div
+                key={composition.id}
+                layout="position"
+                initial={spectatorCompositionEnter}
+                animate={spectatorCardVisible}
+                exit={{
+                  ...spectatorCompositionExit,
+                  transition: spectatorCardExitTransition,
+                }}
+                transition={spectatorCardTransition}
+                data-spectator-composition-motion="draft"
+              >
+                <SpectatorNewDraft
+                  composition={composition}
+                  players={players}
+                  playerId={turnPlayerId}
+                  animateCards
+                />
+              </motion.div>
+            ))
+          : null}
+      </AnimatePresence>
+      {!animateStagedDrafts
+        ? stagedNewDrafts.map((composition) => (
+            <SpectatorNewDraft
               key={composition.id}
-              layout="position"
-              initial={spectatorCompositionEnter}
-              animate={spectatorCardVisible}
-              exit={{
-                ...spectatorCompositionExit,
-                transition: spectatorCardExitTransition,
-              }}
-              transition={spectatorCardTransition}
-              data-spectator-composition-motion="draft"
-            >
-              <SpectatorNewDraft
-                composition={composition}
-                players={players}
-                playerId={turnPlayerId}
-                animateCards
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      ) : (
-        stagedNewDrafts.map((composition) => (
-          <SpectatorNewDraft
-            key={composition.id}
-            composition={composition}
-            players={players}
-            playerId={turnPlayerId}
-            animateCards={false}
-          />
-        ))
-      )}
+              composition={composition}
+              players={players}
+              playerId={turnPlayerId}
+              animateCards={false}
+            />
+          ))
+        : null}
 
       {newCompositions.map((composition) => (
         <EditableNewDraft
