@@ -1,7 +1,7 @@
 import { Outlet, getRouteApi } from "@tanstack/react-router";
 import { AppSidebar } from "#/components/app-sidebar";
+import { GlobalConnectionRecoveryDialog } from "#/components/connection-recovery-dialog";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
-import { ServerStatusBadge } from "#/components/server-status-badge";
 import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
 import { ThemeSwitcher } from "#/components/theme-switcher";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
@@ -17,7 +17,7 @@ export function ProtectedLayout() {
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
-  const { sidebarOpen } = rootRouteApi.useRouteContext();
+  const { session, sidebarOpen } = rootRouteApi.useRouteContext();
 
   return (
     <SidebarProvider
@@ -32,6 +32,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </SidebarInset>
+      {session ? <GlobalConnectionRecoveryDialog /> : null}
     </SidebarProvider>
   );
 }
@@ -44,7 +45,6 @@ function AppHeader() {
       <SidebarTrigger />
       <div className="ml-auto flex shrink-0 items-center  gap-1">
         <GameControlsMenu />
-        <ServerStatusBadge />
         {session ? <NotificationsDropdown /> : null}
         <ThemeSwitcher />
       </div>

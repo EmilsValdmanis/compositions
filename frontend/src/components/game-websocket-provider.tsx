@@ -479,10 +479,6 @@ function setConnectionError(message: string) {
   );
 }
 
-function resolveConnectionAuthError(_error: unknown) {
-  return "auth_required";
-}
-
 function parseEnvelope(rawData: unknown): Envelope | null {
   if (typeof rawData !== "string") {
     return null;
@@ -499,12 +495,18 @@ function parseEnvelope(rawData: unknown): Envelope | null {
   }
 }
 
-async function getConnectionAuth(): Promise<ConnectionAuth> {
+type ConnectionAuthResult =
+  | { status: "resolved"; auth: ConnectionAuth }
+  | { status: "unavailable" };
+
+async function getConnectionAuth(): Promise<ConnectionAuthResult> {
   try {
-    return await getGameConnectionAuth();
-  } catch (error) {
-    setConnectionError(resolveConnectionAuthError(error));
-    return null;
+    return {
+      status: "resolved",
+      auth: await getGameConnectionAuth(),
+    };
+  } catch {
+    return { status: "unavailable" };
   }
 }
 
@@ -706,13 +708,31 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       return;
     }
 
+    function scheduleReconnect() {
+      if (reconnectTimerRef.current !== null) {
+        return;
+      }
+
+      const reconnectAttempt = reconnectAttemptRef.current;
+      reconnectAttemptRef.current += 1;
+      const reconnectDelay = Math.min(
+        reconnectBaseDelayMs * 2 ** reconnectAttempt,
+        reconnectMaxDelayMs,
+      );
+      reconnectTimerRef.current = window.setTimeout(() => {
+        reconnectTimerRef.current = null;
+        void connectWebSocket();
+      }, reconnectDelay);
+    }
+
     const connectAttempt = connectAttemptRef.current + 1;
     connectAttemptRef.current = connectAttempt;
     connectInFlightRef.current = true;
 
     updateState((current) =>
       clearError(current, {
-        connectionStatus: "connecting",
+        connectionStatus:
+          current.connectionStatus === "disconnected" ? "disconnected" : "connecting",
         lastEvent: null,
       }),
     );
@@ -722,11 +742,23 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       return;
     }
 
-    return getConnectionAuth().then((connectionAuth) => {
+    return getConnectionAuth().then((connectionAuthResult) => {
       if (connectAttemptRef.current !== connectAttempt) {
         connectInFlightRef.current = false;
         return;
       }
+
+      if (connectionAuthResult.status === "unavailable") {
+        connectInFlightRef.current = false;
+        updateState((current) => ({
+          ...current,
+          connectionStatus: "disconnected",
+        }));
+        scheduleReconnect();
+        return;
+      }
+
+      const connectionAuth = connectionAuthResult.auth;
 
       if (!connectionAuth) {
         connectInFlightRef.current = false;
@@ -771,36 +803,31 @@ function useGameWebSocketController(): GameWebSocketContextValue {
         applyIncomingMessage(message);
       };
 
-      socket.onerror = () => {
-        if (connectAttemptRef.current === connectAttempt) {
-          connectInFlightRef.current = false;
+      function handleConnectionLoss(error: "connection_failed" | "connection_lost") {
+        if (socketRef.current !== socket) {
+          return;
         }
-        rejectPendingActions("connection_failed");
-        setConnectionError("connection_failed");
+
+        socketRef.current = null;
+        connectInFlightRef.current = false;
+        rejectPendingActions(error);
+        updateState((current) => ({
+          ...current,
+          connectionStatus: "disconnected",
+        }));
+        scheduleReconnect();
+      }
+
+      socket.onerror = () => {
+        if (connectAttemptRef.current !== connectAttempt || socketRef.current !== socket) {
+          return;
+        }
+
+        handleConnectionLoss("connection_failed");
       };
 
       socket.onclose = () => {
-        if (socketRef.current === socket) {
-          socketRef.current = null;
-          connectInFlightRef.current = false;
-          rejectPendingActions("connection_lost");
-
-          updateState((current) => ({
-            ...current,
-            connectionStatus: "disconnected",
-          }));
-
-          const reconnectAttempt = reconnectAttemptRef.current;
-          reconnectAttemptRef.current += 1;
-          const reconnectDelay = Math.min(
-            reconnectBaseDelayMs * 2 ** reconnectAttempt,
-            reconnectMaxDelayMs,
-          );
-          reconnectTimerRef.current = window.setTimeout(() => {
-            reconnectTimerRef.current = null;
-            void connectWebSocket();
-          }, reconnectDelay);
-        }
+        handleConnectionLoss("connection_lost");
       };
     });
   };
