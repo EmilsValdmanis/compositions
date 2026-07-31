@@ -334,6 +334,7 @@ func (s *wsServer) routes() http.Handler {
 	mux.HandleFunc("/auth/", s.handleSessionRoutes)
 	mux.HandleFunc("/api/leaderboard", s.handleLeaderboard)
 	mux.HandleFunc("/api/players/", s.handlePlayerProfile)
+	mux.HandleFunc("/api/admin/analytics", s.handleAdminAnalytics)
 	mux.HandleFunc("/api/admin/bug-reports", s.handleAdminBugReports)
 	mux.HandleFunc("/api/admin/bug-reports/", s.handleAdminBugReports)
 	mux.HandleFunc("/ws", s.handleWS)

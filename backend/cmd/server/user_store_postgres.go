@@ -16,6 +16,7 @@ type postgresUserStore struct {
 
 var _ leaderboardStore = (*postgresUserStore)(nil)
 var _ adminBugReportStore = (*postgresUserStore)(nil)
+var _ adminAnalyticsStore = (*postgresUserStore)(nil)
 
 func newConfiguredUserStore() (userStore, error) {
 	databaseURL, err := databaseURLFromEnv()
@@ -139,6 +140,13 @@ func (s *postgresUserStore) CompleteGameBugReport(ctx context.Context, reportID 
 		return errors.New("user store is not configured")
 	}
 	return s.store.CompleteGameBugReport(ctx, strings.TrimSpace(reportID))
+}
+
+func (s *postgresUserStore) GetAdminAnalytics(ctx context.Context, dateRange database.AdminAnalyticsRange) (database.AdminAnalyticsRecord, error) {
+	if s == nil || s.store == nil {
+		return database.AdminAnalyticsRecord{}, errors.New("user store is not configured")
+	}
+	return s.store.GetAdminAnalytics(ctx, dateRange)
 }
 
 func (s *postgresUserStore) GetPlayerProfile(ctx context.Context, userID string) (database.PlayerProfileRecord, error) {

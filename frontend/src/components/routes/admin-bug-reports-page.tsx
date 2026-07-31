@@ -75,6 +75,7 @@ import { copyTextToClipboard } from "#/lib/clipboard";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 import { getLocale, type Locale } from "#/paraglide/runtime.js";
+import { AdminAnalyticsDashboard } from "./admin-analytics-dashboard";
 
 const CREATED_AT_FORMATTERS: Record<Locale, Intl.DateTimeFormat> = {
   en: new Intl.DateTimeFormat("en", {
@@ -570,7 +571,8 @@ export function AdminBugReportsPage({ initialPage }: { initialPage: AdminBugRepo
   const reports = data ?? initialPage;
 
   return (
-    <section className="mx-auto w-full min-w-0 max-w-7xl">
+    <section className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6">
+      <AdminAnalyticsDashboard />
       <Card className="min-h-96 min-w-0">
         <CardHeader>
           <CardTitle>{m.admin_incident_archive()}</CardTitle>
