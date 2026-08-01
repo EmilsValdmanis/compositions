@@ -51,6 +51,9 @@ const ORIENTATION_HAND_CARDS_SELECTOR =
 const ORIENTATION_PILES_SELECTOR =
   '[data-card-motion-source="deck"],[data-card-motion-source="discard"]';
 const ORIENTATION_COMPOSITION_SELECTOR = '[data-onboarding-target="table"]';
+const COMPOSE_HAND_CARD_SELECTORS = [5, 6, 7].map(
+  (rank) => `[data-onboarding-target="hand"] [data-card-rank="${rank}"][data-card-suit="3"]`,
+);
 const COMPACT_TUTORIAL_QUERY = "(max-width: 47.999rem), (max-height: 42.5rem)";
 
 type TutorialStage = (typeof TUTORIAL_STAGES)[number];
@@ -240,15 +243,7 @@ function selectorsForStage(stage: TutorialStage, isDrawingCard: boolean) {
         ? ['[data-card-motion-source="deck"]', '[data-onboarding-target="hand"]']
         : ['[data-card-motion-source="deck"]'];
     case "compose":
-      return [
-        [5, 6, 7]
-          .map(
-            (rank) =>
-              `[data-onboarding-target="hand"] [data-card-rank="${rank}"][data-card-suit="3"]`,
-          )
-          .join(","),
-        '[data-onboarding-target="new-composition"]',
-      ];
+      return [...COMPOSE_HAND_CARD_SELECTORS, '[data-onboarding-target="new-composition"]'];
     case "discard":
       return [
         '[data-onboarding-target="hand"] [data-card-rank="12"][data-card-suit="0"]',
