@@ -45,6 +45,7 @@ let dndContextProps: {
   onDragStart?: (event: any) => void;
   onDragOver?: (event: any) => void;
   onDragEnd?: (event: any) => void;
+  onDragCancel?: (event: any) => void;
 } = {};
 let dragOverlayProps: {
   modifiers?: Array<(args: Record<string, unknown>) => Record<string, unknown>>;
@@ -207,7 +208,7 @@ describe("GameBoardView drag sensors", () => {
         onPlayTable={vi.fn()}
         onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 
@@ -228,6 +229,220 @@ describe("GameBoardView drag sensors", () => {
     expect(
       view.container.querySelector('[data-slot="turn-start-cue"]')?.parentElement?.dataset.slot,
     ).toBe("game-board-table-region");
+    const handCards = view.container.querySelector('[data-onboarding-target="hand-cards"]');
+    expect(handCards?.className).toContain("w-max");
+    expect(handCards?.parentElement?.className).toContain("justify-center");
+  });
+});
+
+describe("GameBoardView guided interaction callbacks", () => {
+  it("reports when a deck draw has settled into the hand", async () => {
+    const onDrawFromDeck = vi.fn();
+    const onDrawDragStateChange = vi.fn();
+    const onDrawSettled = vi.fn();
+    const initialGame = makeGame([{ rank: 5, suit: 3 }], {
+      turn: {
+        number: 1,
+        playerIndex: 0,
+        playerId: "player-1",
+        hasDrawn: false,
+        mustUseDiscardDraw: false,
+      },
+    });
+    const boardProps: ComponentProps<typeof GameBoardView> = {
+      game: initialGame,
+      roomCode: "GUIDED-DRAW",
+      playerId: "player-1",
+      players,
+      connectedPlayers: 1,
+      turnState: {
+        canDrawDeck: true,
+        canDrawDiscard: false,
+        canDiscard: false,
+        isMyTurn: true,
+        turnPlayerName: "Avery",
+      },
+      topDiscardCard: { rank: 2, suit: 0 },
+      onDiscardCard: vi.fn(),
+      onDrawFromDeck,
+      onDrawFromDiscard: vi.fn(),
+      onPlayTable: vi.fn(),
+      onPlayTableAndDiscard: vi.fn(),
+      onSendEmote: vi.fn(),
+      draftSyncMode: "disabled",
+      guidance: {
+        stage: "draw",
+        onDrawDragStateChange,
+        onDrawSettled,
+        onDraftStateChange: vi.fn(),
+      },
+    };
+
+    const view = render(<GameBoardView {...boardProps} />);
+    expect(onDrawDragStateChange).not.toHaveBeenCalled();
+
+    await act(async () => {
+      dndContextProps.onDragStart?.({
+        active: { id: "draw-pile", data: { current: { drawSource: "deck" } } },
+      });
+    });
+    expect(onDrawDragStateChange).toHaveBeenLastCalledWith(true);
+
+    view.rerender(
+      <GameBoardView
+        {...boardProps}
+        game={makeGame(
+          [
+            { rank: 5, suit: 3 },
+            { rank: 7, suit: 3 },
+          ],
+          { turn: { ...initialGame.turn, hasDrawn: true } },
+        )}
+      />,
+    );
+
+    await act(async () => {
+      dndContextProps.onDragEnd?.({
+        active: { id: "draw-pile", data: { current: { drawSource: "deck" } } },
+        over: { id: "5-3-1" },
+      });
+    });
+
+    expect(onDrawFromDeck).toHaveBeenCalledTimes(1);
+    expect(onDrawSettled).toHaveBeenCalledTimes(1);
+    expect(onDrawDragStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not strand a committed draw when the drag is canceled", async () => {
+    const onDrawSettled = vi.fn();
+    const onDrawDragStateChange = vi.fn();
+    const initialGame = makeGame([{ rank: 5, suit: 3 }], {
+      turn: {
+        number: 1,
+        playerIndex: 0,
+        playerId: "player-1",
+        hasDrawn: false,
+        mustUseDiscardDraw: false,
+      },
+    });
+    const boardProps: ComponentProps<typeof GameBoardView> = {
+      game: initialGame,
+      roomCode: "GUIDED-DRAW-CANCEL",
+      playerId: "player-1",
+      players,
+      connectedPlayers: 1,
+      turnState: {
+        canDrawDeck: true,
+        canDrawDiscard: false,
+        canDiscard: false,
+        isMyTurn: true,
+        turnPlayerName: "Avery",
+      },
+      topDiscardCard: { rank: 2, suit: 0 },
+      onDiscardCard: vi.fn(),
+      onDrawFromDeck: vi.fn(),
+      onDrawFromDiscard: vi.fn(),
+      onPlayTable: vi.fn(),
+      onPlayTableAndDiscard: vi.fn(),
+      onSendEmote: vi.fn(),
+      draftSyncMode: "disabled",
+      guidance: {
+        stage: "draw",
+        onDrawDragStateChange,
+        onDrawSettled,
+        onDraftStateChange: vi.fn(),
+      },
+    };
+
+    const view = render(<GameBoardView {...boardProps} />);
+    await act(async () => {
+      dndContextProps.onDragStart?.({
+        active: { id: "draw-pile", data: { current: { drawSource: "deck" } } },
+      });
+    });
+    view.rerender(
+      <GameBoardView
+        {...boardProps}
+        game={makeGame(
+          [
+            { rank: 5, suit: 3 },
+            { rank: 7, suit: 3 },
+          ],
+          { turn: { ...initialGame.turn, hasDrawn: true } },
+        )}
+      />,
+    );
+
+    await act(async () => dndContextProps.onDragCancel?.({}));
+
+    expect(onDrawSettled).toHaveBeenCalledOnce();
+    expect(onDrawDragStateChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("reports when a staged composition becomes valid", async () => {
+    const onDraftStateChange = vi.fn();
+
+    render(
+      <GameBoardView
+        game={makeGame([
+          { rank: 5, suit: 3 },
+          { rank: 6, suit: 3 },
+          { rank: 7, suit: 3 },
+          { rank: 12, suit: 0 },
+        ])}
+        roomCode="GUIDED-COMPOSITION"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 2, suit: 0 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        draftSyncMode="disabled"
+        guidance={{
+          stage: "compose",
+          onDrawDragStateChange: vi.fn(),
+          onDrawSettled: vi.fn(),
+          onDraftStateChange,
+        }}
+      />,
+    );
+
+    await act(async () => dragStart("5-3-1", 0));
+    await act(async () => dragEnd("5-3-1", "new-composition-drop-zone", 0));
+    await act(async () => dragStart("6-3-1", 1));
+    await act(async () => dragEnd("6-3-1", "5-3-1", 1));
+    await act(async () => dragStart("7-3-1", 2));
+    await act(async () => dragEnd("7-3-1", "6-3-1", 2));
+
+    await waitFor(() =>
+      expect(onDraftStateChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hasDraftedCompositions: true,
+          canSubmitTablePlay: true,
+          isDraggingCard: false,
+        }),
+      ),
+    );
+    const finalDraftState = onDraftStateChange.mock.calls.at(-1)?.[0];
+    expect(finalDraftState?.draftCompositions).toHaveLength(1);
+    expect(finalDraftState?.draftCompositions[0]?.cards).toEqual(
+      expect.arrayContaining([
+        { rank: 5, suit: 3 },
+        { rank: 6, suit: 3 },
+        { rank: 7, suit: 3 },
+      ]),
+    );
   });
 });
 
@@ -298,7 +513,7 @@ describe("GameBoardView draft returns", () => {
         onPlayTable={vi.fn()}
         onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 
@@ -359,7 +574,7 @@ describe("GameBoardView hand ordering", () => {
         onPlayTable={vi.fn()}
         onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 
@@ -385,7 +600,7 @@ describe("GameBoardView discard drops", () => {
       onPlayTable: vi.fn(),
       onPlayTableAndDiscard: vi.fn(),
       onSendEmote: vi.fn(),
-      disableDraftSync: true,
+      draftSyncMode: "disabled",
     } satisfies Omit<ComponentProps<typeof GameBoardView>, "turnState">;
     const view = render(
       <GameBoardView
@@ -470,7 +685,7 @@ describe("GameBoardView discard drops", () => {
         onPlayTable={onPlayTable}
         onPlayTableAndDiscard={onPlayTableAndDiscard}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 
@@ -528,7 +743,7 @@ describe("GameBoardView discard drops", () => {
         onPlayTable={vi.fn()}
         onPlayTableAndDiscard={onPlayTableAndDiscard}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 
@@ -610,7 +825,7 @@ describe("GameBoardView discard drops", () => {
         onPlayTable={onPlayTable}
         onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 
@@ -721,7 +936,7 @@ describe("GameBoardView spectator turn drafts", () => {
         onPlayTable={vi.fn()}
         onPlayTableAndDiscard={vi.fn()}
         onSendEmote={vi.fn()}
-        disableDraftSync
+        draftSyncMode="disabled"
       />,
     );
 

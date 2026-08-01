@@ -36,6 +36,22 @@ body {
   }
 }
 
+@keyframes flying-score-plane-in {
+  0% {
+    opacity: 0;
+    transform: translate(-14px, 10px) rotate(-12deg) scale(0.85);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate(0) rotate(0) scale(1);
+  }
+}
+
+.flying-score-plane {
+  animation: flying-score-plane-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .player-turn-surface {
   position: relative;
   isolation: isolate;
@@ -93,6 +109,10 @@ html[data-reduce-motion] {
     animation: none !important;
     opacity: 0;
   }
+
+  .flying-score-plane {
+    animation: none !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -116,6 +136,10 @@ html[data-reduce-motion] {
   .player-turn-surface-active::before {
     animation: none !important;
     opacity: 0;
+  }
+
+  .flying-score-plane {
+    animation: none !important;
   }
 }
 

@@ -34,6 +34,8 @@ func (s *recordingUserStore) GetSessionUserByToken(context.Context, string, time
 
 func (s *recordingUserStore) DeleteSession(context.Context, string) error { return nil }
 
+func (s *recordingUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
+
 func (s *recordingUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
 
 func (s *recordingUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
@@ -64,6 +66,10 @@ func (s *recordingSessionStore) GetSessionUserByToken(context.Context, string, t
 }
 
 func (s *recordingSessionStore) DeleteSession(context.Context, string) error { return nil }
+
+func (s *recordingSessionStore) UpdateOnboardingVersion(context.Context, string, int) error {
+	return nil
+}
 
 func (s *recordingSessionStore) SaveLobbyState(context.Context, persistedLobbyState) error {
 	return nil

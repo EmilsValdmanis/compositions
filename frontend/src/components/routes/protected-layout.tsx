@@ -2,6 +2,7 @@ import { Outlet, getRouteApi } from "@tanstack/react-router";
 import { AppSidebar } from "#/components/app-sidebar";
 import { GlobalConnectionRecoveryDialog } from "#/components/connection-recovery-dialog";
 import { GameControlsMenu } from "#/components/game/game-controls-menu";
+import { GameOnboardingProvider } from "#/components/game/game-onboarding";
 import { NotificationsDropdown } from "#/components/social/notifications-dropdown";
 import { ThemeSwitcher } from "#/components/theme-switcher";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/sidebar";
@@ -9,10 +10,19 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/s
 const rootRouteApi = getRouteApi("__root__");
 
 export function ProtectedLayout() {
+  const { session } = rootRouteApi.useRouteContext();
+  const playerID = session?.user.id ?? "unauthenticated";
+
   return (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <GameOnboardingProvider
+      key={playerID}
+      completedVersion={session?.user.onboardingVersion ?? null}
+      requiredVersion={session?.user.requiredOnboardingVersion ?? null}
+    >
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </GameOnboardingProvider>
   );
 }
 

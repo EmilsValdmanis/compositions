@@ -131,7 +131,18 @@ describe("GameResultsView flying score reveal", () => {
     expect(
       flyingScore?.querySelector('[title="Over 100: adjusted from 107 to 89 points"]'),
     ).not.toBeNull();
-    expect(flyingScore?.querySelector("svg")).not.toBeNull();
+    expect(flyingScore?.querySelector("[data-flying-icon]")?.classList.contains("size-4")).toBe(
+      true,
+    );
+    expect(
+      flyingScore?.querySelector("[data-flying-icon]")?.classList.contains("flying-score-plane"),
+    ).toBe(true);
+    expect(flyingScore?.querySelector("[data-flying-ring]")?.classList.contains("absolute")).toBe(
+      true,
+    );
+    expect(flyingScore?.querySelector("[data-flying-value]")?.classList.contains("size-9")).toBe(
+      false,
+    );
   });
 
   it("returns to the lobby from final results", () => {

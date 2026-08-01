@@ -610,6 +610,18 @@ func TestHandleSessionRoutes(t *testing.T) {
 		}
 
 		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodPost, "/auth/onboarding/complete", nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("onboarding completion status = %d; want 401", response.Code)
+		}
+
+		response = httptest.NewRecorder()
+		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodGet, "/auth/onboarding/complete", nil))
+		if response.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("onboarding completion wrong method status = %d; want 405", response.Code)
+		}
+
+		response = httptest.NewRecorder()
 		server.handleSessionRoutes(response, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 		if response.Code != http.StatusNoContent {
 			t.Fatalf("logout status = %d; want 204", response.Code)

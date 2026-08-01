@@ -164,11 +164,12 @@ type Session struct {
 }
 
 type User struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	Email     string             `json:"email"`
-	ImageUrl  string             `json:"image_url"`
-	IsAdmin   bool               `json:"is_admin"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	ID                pgtype.UUID        `json:"id"`
+	Name              string             `json:"name"`
+	Email             string             `json:"email"`
+	ImageUrl          string             `json:"image_url"`
+	IsAdmin           bool               `json:"is_admin"`
+	OnboardingVersion int32              `json:"onboarding_version"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
 }

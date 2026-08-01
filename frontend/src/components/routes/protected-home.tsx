@@ -298,7 +298,7 @@ export function ProtectedHome() {
               players={players}
               connectedPlayers={connectedPlayers}
               spectatorCount={state.room?.spectatorCount ?? 0}
-              isSpectating={state.isSpectating}
+              viewerMode={state.isSpectating ? "spectator" : "player"}
               turnState={{
                 canDrawDeck,
                 canDrawDiscard,

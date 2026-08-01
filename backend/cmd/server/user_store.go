@@ -33,6 +33,7 @@ type userStore interface {
 	CreateSession(ctx context.Context, session authSessionRecord) error
 	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
 	DeleteSession(ctx context.Context, sessionToken string) error
+	UpdateOnboardingVersion(ctx context.Context, userID string, version int) error
 	SaveLobbyState(ctx context.Context, state persistedLobbyState) error
 	LoadLobbyState(ctx context.Context) (persistedLobbyState, error)
 	CreateGameBugReport(ctx context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error)
@@ -52,6 +53,8 @@ func (noopUserStore) GetSessionUserByToken(context.Context, string, time.Time) (
 }
 
 func (noopUserStore) DeleteSession(context.Context, string) error { return database.ErrSessionNotFound }
+
+func (noopUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
 
 func (noopUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
 

@@ -81,6 +81,13 @@ func (s *postgresUserStore) DeleteSession(ctx context.Context, sessionToken stri
 	return s.store.DeleteSession(ctx, strings.TrimSpace(sessionToken))
 }
 
+func (s *postgresUserStore) UpdateOnboardingVersion(ctx context.Context, userID string, version int) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.UpdateOnboardingVersion(ctx, strings.TrimSpace(userID), version)
+}
+
 func (s *postgresUserStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
 	if s == nil || s.store == nil {
 		return errors.New("user store is not configured")

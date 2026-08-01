@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Cards01Icon, Home01Icon, SentIcon, UserIcon } from "@hugeicons/core-free-icons";
+import { Cards01Icon, Home01Icon, Sent02Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   type CompletedGameSnapshot,
@@ -105,22 +105,14 @@ function ResultPoints({
         data-score-phase={phase}
         data-flying={score.hasAdjustment || undefined}
       >
-        <div className="flex min-h-9 items-center justify-end gap-2">
-          {score.isShowingAdjustment ? (
-            <HugeiconsIcon
-              icon={SentIcon}
-              className="text-primary"
-              strokeWidth={2}
-              aria-hidden="true"
-            />
-          ) : null}
+        <div className="flex min-h-9 items-center justify-end">
           <P
             size="sm"
+            data-flying-value={score.isShowingAdjustment || undefined}
             className={cn(
-              "flex font-medium tabular-nums transition-[border-color,color] duration-200",
+              "relative font-medium tabular-nums transition-colors duration-200",
               score.isShowingOverHundred && "text-destructive",
-              score.isShowingAdjustment &&
-                "size-9 items-center justify-center rounded-full border border-primary text-primary",
+              score.isShowingAdjustment && "text-primary",
             )}
             title={
               score.isShowingAdjustment
@@ -131,6 +123,23 @@ function ResultPoints({
                 : undefined
             }
           >
+            {score.isShowingAdjustment ? (
+              <>
+                <span
+                  className="absolute top-1/2 right-[calc(100%+0.75rem)] -translate-y-1/2"
+                  aria-hidden="true"
+                >
+                  <span data-flying-icon className="flying-score-plane block size-4 text-primary">
+                    <HugeiconsIcon icon={Sent02Icon} className="size-4" strokeWidth={2} />
+                  </span>
+                </span>
+                <span
+                  data-flying-ring
+                  className="pointer-events-none absolute top-1/2 left-1/2 size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary"
+                  aria-hidden="true"
+                />
+              </>
+            ) : null}
             <AnimatedNumber value={score.displayedTotal} />
           </P>
         </div>
