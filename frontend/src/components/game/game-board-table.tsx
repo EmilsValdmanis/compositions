@@ -255,45 +255,47 @@ function EditableNewDraft({
   const pointTotal = draftCompositionPointTotal(composition.entries.map((entry) => entry.card));
 
   return (
-    <GameBoardDraftDropZone
-      id={draftCompositionDropId(composition.id)}
-      className={cn(
-        "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
-        invalid ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30" : null,
-      )}
-      invalid={invalid}
-    >
-      <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
-        <NewActivityLabel players={players} />
-        <Badge variant="outline">
-          {pointTotal === null ? (
-            <span title={m.complete_composition_points()}>?</span>
-          ) : (
-            <AnimatedNumber value={pointTotal} />
-          )}{" "}
-          {m.points_unit()}
-        </Badge>
-      </div>
-      <SortableContext
-        items={composition.entries.map((entry) => entry.key)}
-        strategy={horizontalListSortingStrategy}
+    <div data-onboarding-target="new-composition" className="w-fit rounded-3xl">
+      <GameBoardDraftDropZone
+        id={draftCompositionDropId(composition.id)}
+        className={cn(
+          "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
+          invalid ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30" : null,
+        )}
+        invalid={invalid}
       >
-        <div className="flex items-start gap-2">
-          {composition.entries.map((entry) => (
-            <GameCard
-              key={entry.key}
-              card={entry.card}
-              size="default"
-              draggable={{
-                id: entry.key,
-                cardIndex: entry.sourceIndex,
-                isVirtual: entry.isVirtual,
-              }}
-            />
-          ))}
+        <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
+          <NewActivityLabel players={players} />
+          <Badge variant="outline">
+            {pointTotal === null ? (
+              <span title={m.complete_composition_points()}>?</span>
+            ) : (
+              <AnimatedNumber value={pointTotal} />
+            )}{" "}
+            {m.points_unit()}
+          </Badge>
         </div>
-      </SortableContext>
-    </GameBoardDraftDropZone>
+        <SortableContext
+          items={composition.entries.map((entry) => entry.key)}
+          strategy={horizontalListSortingStrategy}
+        >
+          <div className="flex items-start gap-2">
+            {composition.entries.map((entry) => (
+              <GameCard
+                key={entry.key}
+                card={entry.card}
+                size="default"
+                draggable={{
+                  id: entry.key,
+                  cardIndex: entry.sourceIndex,
+                  isVirtual: entry.isVirtual,
+                }}
+              />
+            ))}
+          </div>
+        </SortableContext>
+      </GameBoardDraftDropZone>
+    </div>
   );
 }
 
@@ -308,6 +310,7 @@ function DraftCompositionsSection({
   turnPlayerId,
   animateStagedDrafts,
   invalidCompositionIds,
+  showNewCompositionDropCue,
 }: {
   sectionRef: RefObject<HTMLDivElement | null>;
   showDraftTotal: boolean;
@@ -319,12 +322,24 @@ function DraftCompositionsSection({
   turnPlayerId?: string;
   animateStagedDrafts: boolean;
   invalidCompositionIds: Set<string>;
+  showNewCompositionDropCue: boolean;
 }) {
   return (
     <div
       ref={sectionRef}
       className="flex w-full shrink-0 flex-wrap items-center justify-center gap-2 xl:gap-3"
     >
+      {showNewCompositionDropCue && newCompositions.length === 0 ? (
+        <div
+          data-onboarding-target="new-composition"
+          className="pointer-events-none grid h-24 w-40 shrink-0 place-items-center rounded-2xl border border-dashed border-foreground/30 bg-background/70 px-4 text-center text-xs font-medium text-muted-foreground shadow-sm"
+        >
+          <span className="flex flex-col items-center gap-1.5">
+            <HugeiconsIcon icon={Cards01Icon} className="size-5 text-primary" aria-hidden="true" />
+            {m.onboarding_drop_cards_here()}
+          </span>
+        </div>
+      ) : null}
       {showDraftTotal && visibleDraftPointTotals.length > 0 ? (
         <DraftTotal points={visibleDraftPointsTotal} />
       ) : null}
@@ -388,6 +403,7 @@ export function GameBoardTable({
   showDraftTotal,
   invalidCompositionIds = new Set<string>(),
   invalidEntryKeys = new Set<string>(),
+  showNewCompositionDropCue = false,
 }: {
   tableCompositions: TableCompositionView[];
   newCompositions: DraftedCompositionView[];
@@ -398,6 +414,7 @@ export function GameBoardTable({
   showDraftTotal: boolean;
   invalidCompositionIds?: Set<string>;
   invalidEntryKeys?: Set<string>;
+  showNewCompositionDropCue?: boolean;
 }) {
   const { active } = useDndContext();
   const shouldReduceMotion = useShouldReduceMotion();
@@ -512,6 +529,7 @@ export function GameBoardTable({
   return (
     <Card
       ref={setNodeRef}
+      data-onboarding-target="table"
       data-over={isOverNewCompositionBoard || undefined}
       className={cn(
         "h-full min-h-0 min-w-0 max-w-full overflow-hidden transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
@@ -545,6 +563,7 @@ export function GameBoardTable({
               turnActivity?.playerId && turnActivity.playerId !== viewerPlayerId,
             )}
             invalidCompositionIds={invalidCompositionIds}
+            showNewCompositionDropCue={showNewCompositionDropCue}
           />
         </div>
       </CardContent>

@@ -39,6 +39,10 @@ func (s *jsonLobbyStateStore) DeleteSession(context.Context, string) error {
 	return database.ErrSessionNotFound
 }
 
+func (s *jsonLobbyStateStore) UpdateOnboardingVersion(context.Context, string, int) error {
+	return nil
+}
+
 func (s *jsonLobbyStateStore) SaveLobbyState(_ context.Context, state persistedLobbyState) error {
 	if s.saveErr != nil {
 		return s.saveErr

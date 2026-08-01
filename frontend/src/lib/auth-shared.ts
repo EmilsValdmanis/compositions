@@ -5,6 +5,8 @@ export type AuthSession = {
     email: string;
     image: string;
     isAdmin: boolean;
+    onboardingVersion: number;
+    requiredOnboardingVersion: number;
   };
 };
 

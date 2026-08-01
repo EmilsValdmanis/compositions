@@ -266,6 +266,8 @@ function SortableGameCard({
     <button
       ref={setNodeRef}
       type="button"
+      data-card-rank={card.rank}
+      data-card-suit={card.suit}
       style={style}
       className={cn(
         faceDown
@@ -324,6 +326,8 @@ function DraggableGameCard({
     <button
       ref={setNodeRef}
       type="button"
+      data-card-rank={card.rank}
+      data-card-suit={card.suit}
       style={style}
       disabled={disabled}
       className={cn(
@@ -410,6 +414,8 @@ export function GameCard({
 
   return (
     <div
+      data-card-rank={card.rank}
+      data-card-suit={card.suit}
       className={
         faceDown
           ? faceDownGameCardClassName(

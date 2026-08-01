@@ -25,15 +25,16 @@ import (
 var readRandom = rand.Read
 
 const (
-	authCookieName          = "compositions_session"
-	oauthStateCookieName    = "compositions_oauth_state"
-	oauthPKCECookieName     = "compositions_oauth_pkce"
-	oauthReturnToCookieName = "compositions_oauth_return_to"
-	oauthStateCookieMaxAge  = 10 * time.Minute
-	defaultSessionLifetime  = 30 * 24 * time.Hour
-	authCookieSameSite      = http.SameSiteLaxMode
-	googleUserInfoEndpoint  = "https://www.googleapis.com/oauth2/v3/userinfo"
-	googleProvider          = "google"
+	authCookieName           = "compositions_session"
+	oauthStateCookieName     = "compositions_oauth_state"
+	oauthPKCECookieName      = "compositions_oauth_pkce"
+	oauthReturnToCookieName  = "compositions_oauth_return_to"
+	oauthStateCookieMaxAge   = 10 * time.Minute
+	defaultSessionLifetime   = 30 * 24 * time.Hour
+	currentOnboardingVersion = 1
+	authCookieSameSite       = http.SameSiteLaxMode
+	googleUserInfoEndpoint   = "https://www.googleapis.com/oauth2/v3/userinfo"
+	googleProvider           = "google"
 )
 
 type authSession struct {
@@ -50,6 +51,7 @@ type sessionWriter interface {
 	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
 	CreateSession(ctx context.Context, session authSessionRecord) error
 	DeleteSession(ctx context.Context, sessionToken string) error
+	UpdateOnboardingVersion(ctx context.Context, userID string, version int) error
 }
 
 type authSessionRecord struct {
@@ -91,11 +93,13 @@ type googleUserInfo struct {
 
 type sessionResponse struct {
 	User struct {
-		ID      string `json:"id"`
-		Name    string `json:"name"`
-		Email   string `json:"email"`
-		Image   string `json:"image"`
-		IsAdmin bool   `json:"isAdmin"`
+		ID                        string `json:"id"`
+		Name                      string `json:"name"`
+		Email                     string `json:"email"`
+		Image                     string `json:"image"`
+		IsAdmin                   bool   `json:"isAdmin"`
+		OnboardingVersion         int    `json:"onboardingVersion"`
+		RequiredOnboardingVersion int    `json:"requiredOnboardingVersion"`
 	} `json:"user"`
 }
 
@@ -417,10 +421,32 @@ func (h *authHandler) handleSession(w http.ResponseWriter, r *http.Request) {
 	payload.User.Email = session.user.Email
 	payload.User.Image = session.user.Image
 	payload.User.IsAdmin = session.user.IsAdmin
+	payload.User.OnboardingVersion = session.user.OnboardingVersion
+	payload.User.RequiredOnboardingVersion = currentOnboardingVersion
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		slog.Error("write session response failed", "error", err)
 	}
+}
+
+func (h *authHandler) handleCompleteOnboarding(w http.ResponseWriter, r *http.Request) {
+	session, err := h.sessionFromRequest(r)
+	if err != nil {
+		if errors.Is(err, errAuthenticationRequired) {
+			writeHTTPError(w, http.StatusUnauthorized, "authentication_required", "authentication required")
+			return
+		}
+		slog.Error("resolve onboarding session failed", "error", err)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to complete onboarding")
+		return
+	}
+
+	if err := h.store.UpdateOnboardingVersion(r.Context(), session.user.ID, currentOnboardingVersion); err != nil {
+		slog.Error("persist onboarding completion failed", "userID", session.user.ID, "error", err)
+		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to complete onboarding")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *authHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -454,11 +480,12 @@ func (h *authHandler) sessionFromRequest(r *http.Request) (authSession, error) {
 	}
 
 	user := authenticatedUser{
-		ID:      record.ID,
-		Name:    record.Name,
-		Email:   record.Email,
-		Image:   record.ImageURL,
-		IsAdmin: record.IsAdmin,
+		ID:                record.ID,
+		Name:              record.Name,
+		Email:             record.Email,
+		Image:             record.ImageURL,
+		IsAdmin:           record.IsAdmin,
+		OnboardingVersion: record.OnboardingVersion,
 	}
 	if !user.isAuthenticated() {
 		return authSession{}, errAuthenticationRequired

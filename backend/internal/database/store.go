@@ -47,12 +47,13 @@ type SessionRecord struct {
 }
 
 type SessionUserRecord struct {
-	ID        string
-	Name      string
-	Email     string
-	ImageURL  string
-	IsAdmin   bool
-	ExpiresAt time.Time
+	ID                string
+	Name              string
+	Email             string
+	ImageURL          string
+	IsAdmin           bool
+	OnboardingVersion int
+	ExpiresAt         time.Time
 }
 
 type StoredUserRecord struct {
@@ -690,7 +691,7 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 
 	var record SessionUserRecord
 	err = s.pool.QueryRow(ctx, `
-		SELECT u.id::text, u.name, u.email, u.image_url, u.is_admin, s.expires_at
+		SELECT u.id::text, u.name, u.email, u.image_url, u.is_admin, u.onboarding_version, s.expires_at
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		WHERE s.token_hash = $1
@@ -701,6 +702,7 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 		&record.Email,
 		&record.ImageURL,
 		&record.IsAdmin,
+		&record.OnboardingVersion,
 		&record.ExpiresAt,
 	)
 	if err != nil {
@@ -718,6 +720,33 @@ func (s *UserStore) GetSessionUserByToken(ctx context.Context, sessionToken stri
 	}
 
 	return record, nil
+}
+
+func (s *UserStore) UpdateOnboardingVersion(ctx context.Context, userID string, version int) error {
+	if s == nil || s.pool == nil {
+		return errors.New("user store is not configured")
+	}
+	if version < 0 {
+		return errors.New("onboarding version must be nonnegative")
+	}
+
+	uuidID, err := parseUUID(userID)
+	if err != nil {
+		return err
+	}
+	result, err := s.pool.Exec(ctx, `
+		UPDATE users
+		SET onboarding_version = GREATEST(onboarding_version, $2),
+			updated_at = NOW()
+		WHERE id = $1
+	`, uuidID, version)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
 }
 
 func (s *UserStore) DeleteSession(ctx context.Context, sessionToken string) error {

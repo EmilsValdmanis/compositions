@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { resultScoreState } from "#/components/game/game-results-state";
 import { playersForResults } from "#/components/game/game-view-helpers";
 import { type RoomSnapshot } from "#/components/game-websocket-provider";
+import { mockScenarios } from "#/dev/mock-game-scenarios";
 
 describe("resultScoreState", () => {
   const flyingScore = {
@@ -37,6 +38,22 @@ describe("resultScoreState", () => {
       displayedTotal: 89,
       hasAdjustment: false,
     });
+  });
+});
+
+describe("dev results fixture", () => {
+  it("includes a flying score so the adjustment UI remains visible", () => {
+    const flyingPlayer = mockScenarios[0]?.game.players.find(
+      (player) => (player.unadjustedTotalPoints ?? 0) > 100,
+    );
+
+    expect(flyingPlayer).toMatchObject({
+      playerId: "player-casey",
+      pointsGained: 12,
+      totalPoints: 89,
+      unadjustedTotalPoints: 107,
+    });
+    expect(resultScoreState(flyingPlayer!, "adjusted").isShowingAdjustment).toBe(true);
   });
 });
 

@@ -132,8 +132,9 @@ export const mockScenarios: MockScenario[] = [
         {
           playerId: "player-casey",
           handCount: 9,
-          totalPoints: 10,
-          pointsGained: 10,
+          totalPoints: 89,
+          unadjustedTotalPoints: 107,
+          pointsGained: 12,
           hasOpened: false,
         },
         {

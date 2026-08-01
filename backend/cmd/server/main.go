@@ -107,6 +107,12 @@ func (s *wsServer) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.auth.handleSession(w, r)
+	case "/auth/onboarding/complete":
+		if r.Method != http.MethodPost {
+			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+			return
+		}
+		s.auth.handleCompleteOnboarding(w, r)
 	case "/auth/logout":
 		if r.Method != http.MethodPost {
 			writeHTTPError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")

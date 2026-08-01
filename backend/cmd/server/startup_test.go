@@ -31,6 +31,8 @@ func (s *closingUserStore) GetSessionUserByToken(context.Context, string, time.T
 
 func (s *closingUserStore) DeleteSession(context.Context, string) error { return nil }
 
+func (s *closingUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
+
 func (s *closingUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
 
 func (s *closingUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {

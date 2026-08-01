@@ -26,6 +26,20 @@ async function signOut() {
   }
 }
 
+async function completeOnboarding() {
+  const response = await fetch(
+    authURL("/auth/onboarding/complete", import.meta.env.VITE_GAME_SERVER_URL),
+    {
+      method: "POST",
+      credentials: "include",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`failed to complete onboarding: ${response.status}`);
+  }
+}
+
 function signInWithGoogle(returnTo?: string) {
   const url = new URL(authURL("/auth/google", import.meta.env.VITE_GAME_SERVER_URL));
   if (returnTo) {
@@ -36,6 +50,7 @@ function signInWithGoogle(returnTo?: string) {
 
 export const authClient = {
   getSession: readSession,
+  completeOnboarding,
   signOut,
   signIn: {
     social: async ({ provider, returnTo }: { provider: string; returnTo?: string }) => {

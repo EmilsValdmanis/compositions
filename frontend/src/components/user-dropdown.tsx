@@ -3,6 +3,7 @@ import {
   BookOpen01Icon,
   Logout02FreeIcons,
   Motion01Icon,
+  PlayCircleIcon,
   UserIcon,
   VolumeHighIcon,
   VolumeOffIcon,
@@ -11,6 +12,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Link, getRouteApi, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameRulesDialog } from "#/components/game/game-rules-dialog";
+import { useGameOnboarding } from "#/components/game/game-onboarding";
 import { LanguageSubmenu } from "#/components/language-switcher";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Button } from "#/components/ui/button";
@@ -45,6 +47,7 @@ export function UserDropdown({ presentation = "button" }: { presentation?: "butt
   const { session } = rootRouteApi.useRouteContext();
   const { isMobile } = useSidebar();
   const router = useRouter();
+  const { startTutorial } = useGameOnboarding();
   const [rulesOpen, setRulesOpen] = useState(false);
   const soundsEnabled = useSyncExternalStore(
     subscribeToGameSoundPreference,
@@ -126,6 +129,10 @@ export function UserDropdown({ presentation = "button" }: { presentation?: "butt
             <DropdownMenuItem onClick={() => setRulesOpen(true)}>
               <HugeiconsIcon icon={BookOpen01Icon} />
               {m.rules()}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={startTutorial}>
+              <HugeiconsIcon icon={PlayCircleIcon} />
+              {m.tutorial()}
             </DropdownMenuItem>
             <DropdownMenuCheckboxItem
               checked={soundsEnabled}

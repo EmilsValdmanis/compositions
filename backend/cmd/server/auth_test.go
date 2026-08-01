@@ -19,15 +19,18 @@ import (
 )
 
 type stubAuthStore struct {
-	upsertedUsers   []authenticatedUser
-	createdSessions []authSessionRecord
-	deletedTokens   []string
-	sessionUser     database.SessionUserRecord
-	upsertedUser    authenticatedUser
-	sessionErr      error
-	upsertErr       error
-	createErr       error
-	deleteErr       error
+	upsertedUsers     []authenticatedUser
+	createdSessions   []authSessionRecord
+	deletedTokens     []string
+	onboardingUserID  string
+	onboardingVersion int
+	sessionUser       database.SessionUserRecord
+	upsertedUser      authenticatedUser
+	sessionErr        error
+	upsertErr         error
+	createErr         error
+	deleteErr         error
+	onboardingErr     error
 }
 
 func (s *stubAuthStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
@@ -64,6 +67,15 @@ func (s *stubAuthStore) DeleteSession(_ context.Context, sessionToken string) er
 	if s.deleteErr != nil {
 		return s.deleteErr
 	}
+	return nil
+}
+
+func (s *stubAuthStore) UpdateOnboardingVersion(_ context.Context, userID string, version int) error {
+	if s.onboardingErr != nil {
+		return s.onboardingErr
+	}
+	s.onboardingUserID = userID
+	s.onboardingVersion = version
 	return nil
 }
 
@@ -117,12 +129,13 @@ func TestSessionFromRequest(t *testing.T) {
 
 	t.Run("returns authenticated session from store", func(t *testing.T) {
 		store := &stubAuthStore{sessionUser: database.SessionUserRecord{
-			ID:        "user-123",
-			Name:      "Player One",
-			Email:     "player@example.com",
-			ImageURL:  "https://cdn.example.com/player.png",
-			IsAdmin:   true,
-			ExpiresAt: now.Add(time.Hour),
+			ID:                "user-123",
+			Name:              "Player One",
+			Email:             "player@example.com",
+			ImageURL:          "https://cdn.example.com/player.png",
+			IsAdmin:           true,
+			OnboardingVersion: 1,
+			ExpiresAt:         now.Add(time.Hour),
 		}}
 		handler := &authHandler{store: store, now: func() time.Time { return now }}
 		request := httptest.NewRequest(http.MethodGet, "/auth/session", nil)
@@ -132,7 +145,7 @@ func TestSessionFromRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("sessionFromRequest() error = %v", err)
 		}
-		if !session.valid || session.user.ID != "user-123" || !session.user.IsAdmin || session.token != "session-token" {
+		if !session.valid || session.user.ID != "user-123" || !session.user.IsAdmin || session.user.OnboardingVersion != 1 || session.token != "session-token" {
 			t.Fatalf("session = %#v; want valid authenticated session", session)
 		}
 	})
@@ -229,12 +242,13 @@ func TestHandleSession(t *testing.T) {
 
 	t.Run("returns session payload for authenticated request", func(t *testing.T) {
 		store := &stubAuthStore{sessionUser: database.SessionUserRecord{
-			ID:        "user-123",
-			Name:      "Player One",
-			Email:     "player@example.com",
-			ImageURL:  "https://cdn.example.com/player.png",
-			IsAdmin:   true,
-			ExpiresAt: now.Add(time.Hour),
+			ID:                "user-123",
+			Name:              "Player One",
+			Email:             "player@example.com",
+			ImageURL:          "https://cdn.example.com/player.png",
+			IsAdmin:           true,
+			OnboardingVersion: 1,
+			ExpiresAt:         now.Add(time.Hour),
 		}}
 		handler := &authHandler{store: store, now: func() time.Time { return now }}
 		request := httptest.NewRequest(http.MethodGet, "/auth/session", nil)
@@ -247,8 +261,55 @@ func TestHandleSession(t *testing.T) {
 		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 			t.Fatalf("json.Unmarshal() error = %v", err)
 		}
-		if payload.User.ID != "user-123" || payload.User.Email != "player@example.com" || !payload.User.IsAdmin {
+		if payload.User.ID != "user-123" || payload.User.Email != "player@example.com" || !payload.User.IsAdmin || payload.User.OnboardingVersion != 1 || payload.User.RequiredOnboardingVersion != currentOnboardingVersion {
 			t.Fatalf("payload = %#v; want authenticated session payload", payload)
+		}
+	})
+}
+
+func TestHandleCompleteOnboarding(t *testing.T) {
+	now := time.Date(2026, time.May, 25, 12, 0, 0, 0, time.UTC)
+
+	t.Run("persists the server-owned version for the authenticated user", func(t *testing.T) {
+		store := &stubAuthStore{sessionUser: database.SessionUserRecord{
+			ID: "user-123", ExpiresAt: now.Add(time.Hour),
+		}}
+		handler := &authHandler{store: store, now: func() time.Time { return now }}
+		request := httptest.NewRequest(http.MethodPost, "/auth/onboarding/complete", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+		response := httptest.NewRecorder()
+
+		handler.handleCompleteOnboarding(response, request)
+
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("handleCompleteOnboarding() status = %d; want 204", response.Code)
+		}
+		if store.onboardingUserID != "user-123" || store.onboardingVersion != currentOnboardingVersion {
+			t.Fatalf("completion = (%q, %d); want (user-123, %d)", store.onboardingUserID, store.onboardingVersion, currentOnboardingVersion)
+		}
+	})
+
+	t.Run("requires authentication", func(t *testing.T) {
+		handler := &authHandler{store: &stubAuthStore{}, now: func() time.Time { return now }}
+		response := httptest.NewRecorder()
+		handler.handleCompleteOnboarding(response, httptest.NewRequest(http.MethodPost, "/auth/onboarding/complete", nil))
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("handleCompleteOnboarding() status = %d; want 401", response.Code)
+		}
+	})
+
+	t.Run("keeps failures retryable", func(t *testing.T) {
+		store := &stubAuthStore{
+			sessionUser:   database.SessionUserRecord{ID: "user-123", ExpiresAt: now.Add(time.Hour)},
+			onboardingErr: errors.New("write failed"),
+		}
+		handler := &authHandler{store: store, now: func() time.Time { return now }}
+		request := httptest.NewRequest(http.MethodPost, "/auth/onboarding/complete", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+		response := httptest.NewRecorder()
+		handler.handleCompleteOnboarding(response, request)
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("handleCompleteOnboarding() status = %d; want 500", response.Code)
 		}
 	})
 }

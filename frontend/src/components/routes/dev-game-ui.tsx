@@ -518,7 +518,7 @@ export function DevGameUi() {
             onPlayTable={handlePlayTable}
             onPlayTableAndDiscard={handlePlayTableAndDiscard}
             onSendEmote={() => {}}
-            disableDraftSync
+            draftSyncMode="disabled"
           />
         )}
       </div>

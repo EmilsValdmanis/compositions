@@ -10,6 +10,7 @@ type authenticatedUser struct {
 	Email             string
 	Image             string
 	IsAdmin           bool
+	OnboardingVersion int
 	Provider          string
 	ProviderAccountID string
 }

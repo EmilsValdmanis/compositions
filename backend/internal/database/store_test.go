@@ -148,8 +148,21 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSessionUserByToken(admin) error = %v", err)
 	}
-	if !sessionUser.IsAdmin || sessionUser.ID != createdUser.ID {
+	if !sessionUser.IsAdmin || sessionUser.ID != createdUser.ID || sessionUser.OnboardingVersion != 0 {
 		t.Fatalf("admin session user = %#v", sessionUser)
+	}
+	if err := store.UpdateOnboardingVersion(ctx, createdUser.ID, 1); err != nil {
+		t.Fatalf("UpdateOnboardingVersion() error = %v", err)
+	}
+	if err := store.UpdateOnboardingVersion(ctx, createdUser.ID, 0); err != nil {
+		t.Fatalf("UpdateOnboardingVersion(older) error = %v", err)
+	}
+	sessionUser, err = store.GetSessionUserByToken(ctx, sessionToken, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("GetSessionUserByToken(onboarded) error = %v", err)
+	}
+	if sessionUser.OnboardingVersion != 1 {
+		t.Fatalf("onboarded session version = %d; want 1", sessionUser.OnboardingVersion)
 	}
 }
 
@@ -734,6 +747,48 @@ func TestUserEmailUniquenessMigrationDeduplicatesExistingRows(t *testing.T) {
 		VALUES ($1, $2, $3, $4)
 	`, "user-3", "Third Player", "PLAYER@example.com", "https://cdn.example.com/player-3.png"); err == nil {
 		t.Fatal("expected duplicate email insert to fail")
+	}
+}
+
+func TestOnboardingVersionMigrationOnlyRequiresNewPlayers(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := startPostgresContainer(t, ctx)
+	migrationDB, err := OpenMigrationDB(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenMigrationDB() error = %v", err)
+	}
+	defer migrationDB.Close()
+	migrator := newTestMigrator(t, migrationDB)
+	if err := migrator.Steps(14); err != nil {
+		t.Fatalf("migrator.Steps(14) error = %v", err)
+	}
+
+	pool, err := OpenPool(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("OpenPool() error = %v", err)
+	}
+	defer pool.Close()
+	existingUserID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO users (id, name) VALUES ($1, 'Existing Player')`, existingUserID); err != nil {
+		t.Fatalf("seed existing player error = %v", err)
+	}
+	if err := migrator.Steps(1); err != nil {
+		t.Fatalf("migrator.Steps(onboarding) error = %v", err)
+	}
+
+	newUserID := uuid.NewString()
+	if _, err := pool.Exec(ctx, `INSERT INTO users (id, name) VALUES ($1, 'New Player')`, newUserID); err != nil {
+		t.Fatalf("insert new player error = %v", err)
+	}
+	var existingVersion, newVersion int
+	if err := pool.QueryRow(ctx, `SELECT onboarding_version FROM users WHERE id = $1`, existingUserID).Scan(&existingVersion); err != nil {
+		t.Fatalf("read existing player version error = %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT onboarding_version FROM users WHERE id = $1`, newUserID).Scan(&newVersion); err != nil {
+		t.Fatalf("read new player version error = %v", err)
+	}
+	if existingVersion != 1 || newVersion != 0 {
+		t.Fatalf("onboarding versions = existing:%d new:%d; want existing:1 new:0", existingVersion, newVersion)
 	}
 }
 

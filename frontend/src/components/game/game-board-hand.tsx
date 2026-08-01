@@ -40,7 +40,10 @@ export function GameBoardHand({
   const { hasGame } = status;
   const { hasDraftedCompositions } = tablePlayState;
   return (
-    <Card className="min-h-0 shrink-0 pb-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]">
+    <Card
+      data-onboarding-target="hand"
+      className="min-h-0 shrink-0 pb-0 [--card-spacing:--spacing(2)] xl:[--card-spacing:--spacing(6)]"
+    >
       <CardContent className="min-h-0 px-0">
         {status.isSpectating ? (
           <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
@@ -54,24 +57,26 @@ export function GameBoardHand({
             >
               {availableHandEntries.length ? (
                 <div className="min-h-0 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-(--card-spacing) scroll-fade-x pb-1">
-                  <div className="flex w-max min-w-full justify-start pb-(--card-spacing) gap-2 xl:justify-center">
-                    {availableHandEntries.map((entry) => (
-                      <GameCard
-                        key={entry.key}
-                        card={entry.card}
-                        size="hand"
-                        draggable={{
-                          id: entry.key,
-                          cardIndex: entry.sourceIndex,
-                          isVirtual: entry.isVirtual,
-                        }}
-                        className={cn(
-                          activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
-                            ? "invisible"
-                            : undefined,
-                        )}
-                      />
-                    ))}
+                  <div className="flex min-w-full justify-center pb-(--card-spacing)">
+                    <div data-onboarding-target="hand-cards" className="flex w-max shrink-0 gap-2">
+                      {availableHandEntries.map((entry) => (
+                        <GameCard
+                          key={entry.key}
+                          card={entry.card}
+                          size="hand"
+                          draggable={{
+                            id: entry.key,
+                            cardIndex: entry.sourceIndex,
+                            isVirtual: entry.isVirtual,
+                          }}
+                          className={cn(
+                            activeDrag?.type === "draw" && entry.key === activeDrag.revealedHandKey
+                              ? "invisible"
+                              : undefined,
+                          )}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (
