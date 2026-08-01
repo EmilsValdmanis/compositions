@@ -126,7 +126,12 @@ vi.mock("#/components/game/game-board-view", () => ({
         Mock valid composition
       </button>
       <div data-onboarding-target="hand">
-        <div data-onboarding-target="hand-cards">Mock hand</div>
+        <div data-onboarding-target="hand-cards">
+          <div data-card-rank="5" data-card-suit="3" />
+          <div data-card-rank="6" data-card-suit="3" />
+          <div data-card-rank="12" data-card-suit="0" />
+          <div data-card-rank="7" data-card-suit="3" />
+        </div>
       </div>
       <div data-onboarding-target="new-composition" style={{ borderRadius: 24 }}>
         Mock composition area
@@ -208,6 +213,15 @@ beforeEach(() => {
     }
     if (this.matches('[data-onboarding-target="hand-cards"]')) {
       return mockRect(270, 510, 260, 100);
+    }
+    if (this.matches('[data-card-rank="5"][data-card-suit="3"]')) {
+      return mockRect(270, 520, 56, 80);
+    }
+    if (this.matches('[data-card-rank="6"][data-card-suit="3"]')) {
+      return mockRect(334, 520, 56, 80);
+    }
+    if (this.matches('[data-card-rank="7"][data-card-suit="3"]')) {
+      return mockRect(462, 520, 56, 80);
     }
     if (this.matches('[data-card-motion-source="discard"]')) {
       return mockRect(180, 100, 60, 90);
@@ -345,6 +359,22 @@ describe("GameOnboardingProvider", () => {
         .closest("[data-tutorial-presentation]")
         ?.getAttribute("data-tutorial-presentation"),
     ).toBe("inline");
+    await waitFor(() =>
+      expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(4),
+    );
+    const composeSpotlights = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-onboarding-spotlight]"),
+    );
+    expect(composeSpotlights.slice(0, 3).map((spotlight) => spotlight.style.left)).toEqual([
+      "265px",
+      "329px",
+      "457px",
+    ]);
+    expect(composeSpotlights.slice(0, 3).map((spotlight) => spotlight.style.width)).toEqual([
+      "66px",
+      "66px",
+      "66px",
+    ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Mock valid composition" }));
     const discardDialog = await screen.findByRole("dialog", { name: "Finish by discarding" });
