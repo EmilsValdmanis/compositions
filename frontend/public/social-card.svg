@@ -1,62 +1,64 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
   <title id="title">Compositions</title>
-  <desc id="description">Build runs, close rounds, and play to 100.</desc>
+  <desc id="description">Compositions logo above a five-card run completed by a joker.</desc>
+
   <defs>
-    <linearGradient id="sky" x1="70" y1="45" x2="1130" y2="585" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#06131D"/>
-      <stop offset="1" stop-color="#0B2938"/>
-    </linearGradient>
-    <linearGradient id="ink" x1="150" y1="130" x2="700" y2="500" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F4FAFC"/>
-      <stop offset="1" stop-color="#7DD3FC"/>
-    </linearGradient>
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity=".48"/>
+    <filter id="surface-glow" x="-12%" y="-24%" width="124%" height="148%">
+      <feDropShadow dx="0" dy="0" stdDeviation="45" flood-color="#00598A" flood-opacity=".42"/>
     </filter>
-    <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
-      <circle cx="2" cy="2" r="2" fill="#38BDF8" opacity=".16"/>
-    </pattern>
+    <filter id="card-shadow" x="-25%" y="-20%" width="150%" height="155%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000000" flood-opacity=".28"/>
+    </filter>
+    <path id="heart" d="M10.4107 19.9677C7.58942 17.858 2 13.0348 2 8.69444C2 5.82563 4.10526 3.5 7 3.5C8.5 3.5 10 4 12 6C14 4 15.5 3.5 17 3.5C19.8947 3.5 22 5.82563 22 8.69444C22 13.0348 16.4106 17.858 13.5893 19.9677C12.6399 20.6776 11.3601 20.6776 10.4107 19.9677Z"/>
+    <g id="joker-mark" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 7C5.10457 7 6 6.10457 6 5C6 3.89543 5.10457 3 4 3C2.89543 3 2 3.89543 2 5C2 6.10457 2.89543 7 4 7Z"/>
+      <path d="M20 9C21.1046 9 22 8.10457 22 7C22 5.89543 21.1046 5 20 5C18.8954 5 18 5.89543 18 7C18 8.10457 18.8954 9 20 9Z"/>
+      <path d="M4.96694 17C1.44331 11.5 8.98977 11 4.95922 7M6.37859 5C7.48264 5 9.99986 6 9.99986 8"/>
+      <path d="M5 17C10.2172 18.4523 13.3284 18.2088 19 17M4 20C9.96256 21.4523 13.5182 21.2088 20 20"/>
+      <path d="M18.0289 6.04492C15.664 6.47929 10.2102 9.78535 11.0499 17.2385M18.2511 8.0892C17.0361 8.66181 15.1252 9.88778 17.5983 12.9129C18.3787 13.8676 19.2858 15.88 18.951 16.8691"/>
+    </g>
   </defs>
 
-  <rect width="1200" height="630" rx="36" fill="url(#sky)"/>
-  <path d="M0 462C190 394 318 518 510 462C722 400 845 267 1200 313V630H0Z" fill="#102F3D" opacity=".72"/>
-  <rect x="36" y="36" width="1128" height="558" rx="26" fill="none" stroke="#7DD3FC" stroke-opacity=".18" stroke-width="2"/>
-  <rect x="756" y="54" width="380" height="520" rx="30" fill="url(#dots)"/>
+  <rect width="1200" height="630" fill="#090B0C"/>
+  <rect x="48" y="48" width="1104" height="534" rx="38" fill="#161B1D" stroke="#F9FBFB" stroke-opacity=".1" stroke-width="2" filter="url(#surface-glow)"/>
 
-  <g transform="translate(86 78) scale(3.2)" fill="none" stroke="#7DD3FC" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4 7C5.10457 7 6 6.10457 6 5C6 3.89543 5.10457 3 4 3C2.89543 3 2 3.89543 2 5C2 6.10457 2.89543 7 4 7Z"/>
-    <path d="M20 9C21.1046 9 22 8.10457 22 7C22 5.89543 21.1046 5 20 5C18.8954 5 18 5.89543 18 7C18 8.10457 18.8954 9 20 9Z"/>
-    <path d="M4.96694 17C1.44331 11.5 8.98977 11 4.95922 7M6.37859 5C7.48264 5 9.99986 6 9.99986 8"/>
-    <path d="M5 17C10.2172 18.4523 13.3284 18.2088 19 17M4 20C9.96256 21.4523 13.5182 21.2088 20 20"/>
-    <path d="M18.0289 6.04492C15.664 6.47929 10.2102 9.78535 11.0499 17.2385M18.2511 8.0892C17.0361 8.66181 15.1252 9.88778 17.5983 12.9129C18.3787 13.8676 19.2858 15.88 18.951 16.8691"/>
-  </g>
+  <use href="#joker-mark" transform="translate(406 91) scale(2.2)" color="#00A6F4"/>
+  <text x="476" y="139" fill="#F9FBFB" font-family="Oxanium ExtraLight, Oxanium, sans-serif" font-size="46" font-weight="600" letter-spacing="1">Compositions</text>
 
-  <text x="180" y="135" fill="#BAE6FD" font-family="JetBrains Mono, ui-monospace, monospace" font-size="30" font-weight="700" letter-spacing="7">COMPOSITIONS</text>
-  <text x="86" y="284" fill="url(#ink)" font-family="Georgia, serif" font-size="76" font-weight="700">Play your hand well.</text>
-  <text x="91" y="350" fill="#A7C7D5" font-family="JetBrains Mono, ui-monospace, monospace" font-size="25" font-weight="500">Build runs · Close rounds · Play to 100</text>
-
-  <g filter="url(#shadow)" font-family="JetBrains Mono, ui-monospace, monospace" font-weight="700">
-    <g transform="rotate(-8 823 340)">
-      <rect x="770" y="174" width="160" height="224" rx="18" fill="#102A38" stroke="#38BDF8" stroke-width="3"/>
-      <text x="790" y="214" fill="#7DD3FC" font-size="28">7</text>
-      <text x="850" y="304" fill="#7DD3FC" font-size="48" text-anchor="middle">◆</text>
+  <g color="#FF6467" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" font-family="Oxanium ExtraLight, Oxanium, sans-serif" font-size="26" font-weight="600">
+    <g transform="translate(286 250) rotate(-20 82 264)" filter="url(#card-shadow)">
+      <rect width="164" height="264" rx="22" fill="#22292B" stroke="#F9FBFB" stroke-opacity=".12" stroke-width="2"/>
+      <text x="20" y="40" fill="currentColor" stroke="none">6</text>
+      <use href="#heart" transform="translate(61 113) scale(1.75)" stroke-width="1.5"/>
+      <text x="144" y="242" fill="currentColor" stroke="none" text-anchor="end">6</text>
     </g>
-    <g transform="rotate(3 916 338)">
-      <rect x="836" y="154" width="160" height="224" rx="18" fill="#102A38" stroke="#FB7185" stroke-width="3"/>
-      <text x="856" y="194" fill="#FDA4AF" font-size="28">8</text>
-      <text x="916" y="284" fill="#FDA4AF" font-size="48" text-anchor="middle">♥</text>
-    </g>
-    <g transform="rotate(12 1000 351)">
-      <rect x="920" y="174" width="160" height="224" rx="18" fill="#102A38" stroke="#38BDF8" stroke-width="3"/>
-      <text x="940" y="214" fill="#7DD3FC" font-size="28">9</text>
-      <text x="1000" y="304" fill="#7DD3FC" font-size="48" text-anchor="middle">♣</text>
-    </g>
-  </g>
 
-  <g transform="translate(86 468)">
-    <rect width="612" height="74" rx="19" fill="#0EA5E9"/>
-    <circle cx="42" cy="37" r="15" fill="#E0F2FE" opacity=".98"/>
-    <path d="M35 38l5 5 10-12" fill="none" stroke="#0369A1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-    <text x="74" y="46" fill="#F0F9FF" font-family="JetBrains Mono, ui-monospace, monospace" font-size="22" font-weight="650">Live games · Player stats · Win streaks</text>
+    <g transform="translate(750 250) rotate(20 82 264)" filter="url(#card-shadow)">
+      <rect width="164" height="264" rx="22" fill="#22292B" stroke="#F9FBFB" stroke-opacity=".12" stroke-width="2"/>
+      <text x="20" y="40" fill="currentColor" stroke="none">10</text>
+      <use href="#heart" transform="translate(61 113) scale(1.75)" stroke-width="1.5"/>
+      <text x="144" y="242" fill="currentColor" stroke="none" text-anchor="end">10</text>
+    </g>
+
+    <g transform="translate(406 220) rotate(-10 82 264)" filter="url(#card-shadow)">
+      <rect width="164" height="264" rx="22" fill="#22292B" stroke="#F9FBFB" stroke-opacity=".12" stroke-width="2"/>
+      <text x="20" y="40" fill="currentColor" stroke="none">7</text>
+      <use href="#heart" transform="translate(61 113) scale(1.75)" stroke-width="1.5"/>
+      <text x="144" y="242" fill="currentColor" stroke="none" text-anchor="end">7</text>
+    </g>
+
+    <g transform="translate(630 220) rotate(10 82 264)" filter="url(#card-shadow)">
+      <rect width="164" height="264" rx="22" fill="#22292B" stroke="#F9FBFB" stroke-opacity=".12" stroke-width="2"/>
+      <text x="20" y="40" fill="currentColor" stroke="none">9</text>
+      <use href="#heart" transform="translate(61 113) scale(1.75)" stroke-width="1.5"/>
+      <text x="144" y="242" fill="currentColor" stroke="none" text-anchor="end">9</text>
+    </g>
+
+    <g transform="translate(518 190)" color="#00A6F4" filter="url(#card-shadow)">
+      <rect width="164" height="264" rx="22" fill="#22292B" stroke="currentColor" stroke-opacity=".45" stroke-width="2"/>
+      <text x="20" y="40" fill="currentColor" stroke="none">J</text>
+      <use href="#joker-mark" transform="translate(60 108) scale(1.85)"/>
+      <text x="144" y="242" fill="currentColor" stroke="none" text-anchor="end">J</text>
+    </g>
   </g>
 </svg>
