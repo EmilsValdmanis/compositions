@@ -21,7 +21,9 @@ export function createSocialMeta({
   type?: "profile" | "website";
   url?: string;
 }): SocialMetaDescriptor[] {
-  const image = `${origin}/social-card.png`;
+  // Social platforms cache preview images aggressively. Keep this URL versioned
+  // whenever the card artwork changes so a deploy produces a fresh preview.
+  const image = `${origin}/social-card.png?v=2026-08-08`;
 
   return [
     { name: "description", content: description },
