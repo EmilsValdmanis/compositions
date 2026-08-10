@@ -9,9 +9,12 @@ import {
   type SocialState,
 } from "#/components/game-websocket-provider";
 import {
+  AddCircleIcon,
   ChevronDownIcon,
   Copy01Icon,
   CopyLinkIcon,
+  JokerIcon,
+  Login02Icon,
   RankingIcon,
   Share08Icon,
   ZapIcon,
@@ -31,8 +34,14 @@ import {
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
 import { Input } from "#/components/ui/input";
-import { FieldDescription, FieldLegend, FieldSet } from "#/components/ui/field";
-import { Separator } from "#/components/ui/separator";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "#/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import { Caption, H2 } from "#/components/typography";
 import { cn } from "#/lib/utils";
@@ -111,27 +120,37 @@ export function GameLobbyView({
   return (
     <div
       className={cn(
-        "mx-auto my-auto grid w-full gap-4 p-1",
-        room ? "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]" : "max-w-3xl",
+        "mx-auto my-auto grid w-full gap-4 p-2",
+        room ? "max-w-5xl lg:grid-cols-[minmax(0,1fr)_22rem]" : "max-w-lg",
       )}
     >
       <Card className="min-w-0 border border-border/70 shadow-sm">
         <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>{m.lobby()}</CardTitle>
-              <CardDescription>{room ? m.ready_room() : m.create_or_join()}</CardDescription>
+          <div
+            className={cn(
+              "flex flex-wrap justify-between gap-3",
+              room ? "items-start" : "items-center",
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              {!room ? (
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <HugeiconsIcon icon={JokerIcon} className="size-5" aria-hidden="true" />
+                </div>
+              ) : null}
+              <div className="min-w-0">
+                <CardTitle>{m.lobby()}</CardTitle>
+                <CardDescription>{room ? m.ready_room() : m.create_or_join()}</CardDescription>
+              </div>
             </div>
-            <Badge variant={room ? "secondary" : "outline"}>
-              {room ? (
+            {room ? (
+              <Badge variant="secondary">
                 <>
                   <AnimatedNumber value={connectedCount} />/
                   <AnimatedNumber value={players.length} /> {m.online()}
                 </>
-              ) : (
-                m.status_offline()
-              )}
-            </Badge>
+              </Badge>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="grid gap-4">
@@ -238,29 +257,47 @@ export function GameLobbyView({
               ) : null}
             </div>
           ) : (
-            <div className="grid gap-4">
-              <Button type="button" onClick={onCreateRoom} disabled={!canCreateRoom}>
-                {m.create_room()}
-              </Button>
-              <div className="grid gap-2">
-                <Separator />
-                <Input
-                  value={roomCode}
-                  onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
-                  placeholder={m.room_code()}
-                  maxLength={6}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onJoinRoom(roomCode.trim())}
-                  disabled={!canJoinRoom}
-                >
-                  {m.join()}
-                </Button>
-              </div>
-            </div>
+            <Button
+              type="button"
+              size="lg"
+              className="w-full"
+              onClick={onCreateRoom}
+              disabled={!canCreateRoom}
+            >
+              <HugeiconsIcon icon={AddCircleIcon} data-icon="inline-start" />
+              {m.create_room()}
+            </Button>
           )}
+          {!room ? (
+            <>
+              <CardDescription className="mx-auto">{m.or()}</CardDescription>
+              <FieldGroup>
+                <Field orientation="horizontal" className="items-stretch gap-2">
+                  <FieldLabel htmlFor="room-code" className="sr-only">
+                    {m.room_code()}
+                  </FieldLabel>
+                  <Input
+                    id="room-code"
+                    className="h-10"
+                    value={roomCode}
+                    onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
+                    placeholder={m.room_code()}
+                    maxLength={6}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={() => onJoinRoom(roomCode.trim())}
+                    disabled={!canJoinRoom}
+                  >
+                    <HugeiconsIcon icon={Login02Icon} data-icon="inline-start" />
+                    {m.join()}
+                  </Button>
+                </Field>
+              </FieldGroup>
+            </>
+          ) : null}
         </CardContent>
       </Card>
 
