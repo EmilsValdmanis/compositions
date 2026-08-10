@@ -59,8 +59,8 @@ import { m } from "#/paraglide/messages.js";
 
 const GAME_DECK_CARD_COUNT = 108;
 const DECK_VISUAL_CARD_COUNT = 18;
-const DECK_STACK_BASE_BOTTOM = 24;
-const DECK_CARD_VERTICAL_OFFSET = 0.65;
+const DECK_STACK_BASE_BOTTOM = 18;
+const DECK_CARD_VERTICAL_OFFSET = 2;
 
 type DealMode = "round_robin" | "tap";
 type DealStep = "cut" | "deal";
@@ -132,6 +132,86 @@ export function deckVisualizationLayerCounts(cutSize: number) {
   return { lifted, remaining: DECK_VISUAL_CARD_COUNT - lifted };
 }
 
+function DeckCutVisualization({
+  clampedCutSize,
+  prefersReducedMotion,
+}: {
+  clampedCutSize: number;
+  prefersReducedMotion: boolean;
+}) {
+  const visualLayers = deckVisualizationLayerCounts(clampedCutSize);
+  const remainingCardCount = GAME_DECK_CARD_COUNT - clampedCutSize;
+  const transition = prefersReducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, duration: 0.26, bounce: 0.04 };
+
+  return (
+    <div
+      className="relative mx-auto h-32 w-full max-w-sm overflow-hidden perspective-[480px]"
+      style={{ transformStyle: "preserve-3d" }}
+      aria-hidden="true"
+    >
+      <motion.div
+        initial={false}
+        animate={{
+          opacity: clampedCutSize > 0 ? 0.48 : 0,
+          transform: `translate3d(-50%, 0, 0) scaleX(${0.78 + (clampedCutSize / GAME_DECK_CARD_COUNT) * 0.22})`,
+        }}
+        transition={transition}
+        className="absolute bottom-3 left-[28%] h-2.5 w-20 rounded-full bg-black/45 blur-md"
+        data-deck-pile="lifted"
+        data-card-count={clampedCutSize}
+      />
+      <motion.div
+        initial={false}
+        animate={{
+          opacity: 0.48,
+          transform: `translate3d(-50%, 0, 0) scaleX(${0.78 + (remainingCardCount / GAME_DECK_CARD_COUNT) * 0.22})`,
+        }}
+        transition={transition}
+        className="absolute bottom-3 left-[72%] h-2.5 w-20 rounded-full bg-black/45 blur-md"
+        data-deck-pile="remaining"
+        data-card-count={remainingCardCount}
+      />
+
+      {Array.from({ length: DECK_VISUAL_CARD_COUNT }, (_, index) => {
+        const firstLiftedIndex = visualLayers.remaining;
+        const isLifted = index >= firstLiftedIndex;
+        const stackIndex = isLifted ? index - firstLiftedIndex : index;
+        const stackSize = isLifted ? visualLayers.lifted : visualLayers.remaining;
+        const isTopCard = stackIndex === stackSize - 1;
+        const rotation = isLifted ? -2.5 : 2.5;
+
+        return (
+          <motion.div
+            key={index}
+            initial={false}
+            animate={{
+              bottom: DECK_STACK_BASE_BOTTOM + stackIndex * DECK_CARD_VERTICAL_OFFSET,
+              left: isLifted ? "28%" : "72%",
+              transform: `translate3d(-50%, 0, ${stackIndex * 0.3}px) rotateX(62deg) rotateZ(${rotation}deg)`,
+            }}
+            transition={transition}
+            className="pointer-events-none absolute h-24 w-17 origin-bottom transform-3d"
+            data-deck-card-pile={isLifted ? "lifted" : "remaining"}
+            style={{ zIndex: (isLifted ? DECK_VISUAL_CARD_COUNT : 0) + stackIndex + 1 }}
+          >
+            <GameCard
+              card={FACE_DOWN_CARD}
+              faceDown
+              size="default"
+              className={cn(
+                "size-full",
+                isTopCard ? "shadow-lg ring-1 ring-foreground/5" : "shadow-none",
+              )}
+            />
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SortableDealOrderPlayer({
   player,
   playerIndex,
@@ -188,8 +268,6 @@ function DeckCutFieldGroup({
   prefersReducedMotion: boolean;
   setCutSize: Dispatch<SetStateAction<string>>;
 }) {
-  const visualLayers = deckVisualizationLayerCounts(clampedCutSize);
-
   return (
     <FieldGroup>
       <Item variant="muted">
@@ -202,70 +280,10 @@ function DeckCutFieldGroup({
         </ItemContent>
         <ItemFooter>
           <div className="w-full">
-            <div
-              className="relative mx-auto h-32 w-full max-w-sm overflow-hidden perspective-[520px]"
-              aria-hidden="true"
-            >
-              <motion.div
-                initial={false}
-                animate={{
-                  x: "-50%",
-                  opacity: clampedCutSize > 0 ? 0.55 : 0,
-                  scaleX: 0.65 + (clampedCutSize / GAME_DECK_CARD_COUNT) * 0.35,
-                }}
-                transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                className="absolute bottom-7 left-1/4 h-2 w-20 rounded-full bg-black/40 blur-md"
-              />
-              <motion.div
-                initial={false}
-                animate={{
-                  x: "-50%",
-                  opacity: 0.55,
-                  scaleX:
-                    0.65 + ((GAME_DECK_CARD_COUNT - clampedCutSize) / GAME_DECK_CARD_COUNT) * 0.35,
-                }}
-                transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
-                className="absolute bottom-7 left-3/4 h-2 w-20 rounded-full bg-black/40 blur-md"
-              />
-              {Array.from({ length: DECK_VISUAL_CARD_COUNT }, (_, index) => {
-                const firstLiftedIndex = visualLayers.remaining;
-                const isLifted = index >= firstLiftedIndex;
-                const stackIndex = isLifted ? index - firstLiftedIndex : index;
-                const stackSize = isLifted ? visualLayers.lifted : visualLayers.remaining;
-                const depth = Math.max(0, stackSize - stackIndex - 1);
-
-                return (
-                  <motion.div
-                    key={index}
-                    layout={!prefersReducedMotion}
-                    initial={false}
-                    animate={{
-                      x: "-50%",
-                      rotateX: 54,
-                      rotateZ: isLifted ? -4 : 4,
-                    }}
-                    transition={
-                      prefersReducedMotion
-                        ? { duration: 0 }
-                        : { type: "spring", stiffness: 230, damping: 25, mass: 0.75 }
-                    }
-                    className="absolute h-24 w-17 origin-bottom"
-                    style={{
-                      left: isLifted ? "25%" : "75%",
-                      bottom: DECK_STACK_BASE_BOTTOM + stackIndex * DECK_CARD_VERTICAL_OFFSET,
-                      zIndex: isLifted ? DECK_VISUAL_CARD_COUNT + stackIndex + 1 : stackIndex + 1,
-                    }}
-                  >
-                    <GameCard
-                      card={FACE_DOWN_CARD}
-                      faceDown
-                      size="default"
-                      className={cn("size-full", depth === 0 ? "shadow-lg" : "shadow-none")}
-                    />
-                  </motion.div>
-                );
-              })}
-            </div>
+            <DeckCutVisualization
+              clampedCutSize={clampedCutSize}
+              prefersReducedMotion={prefersReducedMotion}
+            />
             <div className="mx-auto grid w-full max-w-sm grid-cols-2 gap-6">
               <div className="flex justify-center">
                 <Badge variant="secondary">{m.lifted_cards({ count: clampedCutSize })}</Badge>
