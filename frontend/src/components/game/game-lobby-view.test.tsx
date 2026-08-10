@@ -381,6 +381,14 @@ describe("GameLobbyView", () => {
     const { rerender } = view;
 
     fireEvent.input(view.getByLabelText("Cut size"), { target: { value: "7" } });
+    expect(
+      view.container.querySelector('[data-deck-pile="lifted"]')?.getAttribute("data-card-count"),
+    ).toBe("7");
+    expect(
+      view.container.querySelector('[data-deck-pile="remaining"]')?.getAttribute("data-card-count"),
+    ).toBe("101");
+    expect(view.container.querySelectorAll('[data-deck-card-pile="lifted"]')).toHaveLength(1);
+    expect(view.container.querySelectorAll('[data-deck-card-pile="remaining"]')).toHaveLength(17);
     fireEvent.click(view.getByRole("button", { name: /Continue/ }));
     fireEvent.click(view.getByRole("button", { name: "Start round" }));
 
