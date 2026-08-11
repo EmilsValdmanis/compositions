@@ -364,66 +364,18 @@ function useSpotlightRect(
 const backdropClassName =
   "pointer-events-none fixed z-20 bg-black/30 supports-backdrop-filter:backdrop-blur-sm";
 
-function mergeIntervals(intervals: Array<[number, number]>) {
-  const sorted = intervals.toSorted((left, right) => left[0] - right[0]);
-  const merged: Array<[number, number]> = [];
-  for (const interval of sorted) {
-    const previous = merged.at(-1);
-    if (!previous || interval[0] > previous[1]) {
-      merged.push([...interval]);
-    } else {
-      previous[1] = Math.max(previous[1], interval[1]);
-    }
-  }
-  return merged;
-}
-
-function backdropTiles(rects: SpotlightRect[]) {
+function spotlightMaskImage(rects: SpotlightRect[]) {
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  const boundaries = Array.from(
-    new Set([0, viewportHeight, ...rects.flatMap((rect) => [rect.top, rect.bottom])]),
-  ).toSorted((left, right) => left - right);
-  const tiles: SpotlightRect[] = [];
+  const cutouts = rects
+    .map((rect) => {
+      const cornerRadius = Math.min(rect.cornerRadius ?? 18, rect.width / 2, rect.height / 2);
+      return `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" rx="${cornerRadius}" fill="black"/>`;
+    })
+    .join("");
+  const mask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewportWidth} ${viewportHeight}" preserveAspectRatio="none"><defs><mask id="spotlight-mask"><rect width="${viewportWidth}" height="${viewportHeight}" fill="white"/>${cutouts}</mask></defs><rect width="${viewportWidth}" height="${viewportHeight}" fill="black" mask="url(#spotlight-mask)"/></svg>`;
 
-  for (let index = 0; index < boundaries.length - 1; index += 1) {
-    const top = boundaries[index] ?? 0;
-    const bottom = boundaries[index + 1] ?? viewportHeight;
-    const holeIntervals: Array<[number, number]> = [];
-    for (const rect of rects) {
-      if (rect.top < bottom && rect.bottom > top) {
-        holeIntervals.push([rect.left, rect.right]);
-      }
-    }
-    const holes = mergeIntervals(holeIntervals);
-    let left = 0;
-    for (const [holeLeft, holeRight] of holes) {
-      if (holeLeft > left) {
-        tiles.push({
-          id: `backdrop-${top}-${left}-${bottom}-${holeLeft}`,
-          top,
-          right: holeLeft,
-          bottom,
-          left,
-          width: holeLeft - left,
-          height: bottom - top,
-        });
-      }
-      left = Math.max(left, holeRight);
-    }
-    if (left < viewportWidth) {
-      tiles.push({
-        id: `backdrop-${top}-${left}-${bottom}-${viewportWidth}`,
-        top,
-        right: viewportWidth,
-        bottom,
-        left,
-        width: viewportWidth - left,
-        height: bottom - top,
-      });
-    }
-  }
-  return tiles;
+  return `url("data:image/svg+xml,${encodeURIComponent(mask)}")`;
 }
 
 function SpotlightBackdrop({ rects }: { rects: SpotlightRect[] }) {
@@ -431,16 +383,22 @@ function SpotlightBackdrop({ rects }: { rects: SpotlightRect[] }) {
     return <div data-onboarding-backdrop className={`${backdropClassName} inset-0`} />;
   }
 
+  const maskImage = spotlightMaskImage(rects);
+
   return (
     <>
-      {backdropTiles(rects).map((tile) => (
-        <div
-          key={tile.id}
-          data-onboarding-backdrop
-          className={backdropClassName}
-          style={{ top: tile.top, left: tile.left, width: tile.width, height: tile.height }}
-        />
-      ))}
+      <div
+        data-onboarding-backdrop
+        className={`${backdropClassName} inset-0`}
+        style={{
+          WebkitMaskImage: maskImage,
+          WebkitMaskRepeat: "no-repeat",
+          WebkitMaskSize: "100% 100%",
+          maskImage,
+          maskRepeat: "no-repeat",
+          maskSize: "100% 100%",
+        }}
+      />
       {rects.map((rect) => (
         <motion.div
           key={rect.id}
