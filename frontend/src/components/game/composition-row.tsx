@@ -15,6 +15,7 @@ import {
 } from "#/components/game-websocket-provider";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
+import { isCompleteCompositionPreview } from "#/components/game/game-card-utils";
 import {
   AddActivityLabel,
   NewActivityLabel,
@@ -61,6 +62,8 @@ function CompositionEdgeDraftZone({
   players,
   playerId,
   invalidEntryKeys,
+  complete,
+  overlapFirst,
 }: {
   entries: HandEntry[];
   interactive: boolean;
@@ -68,6 +71,8 @@ function CompositionEdgeDraftZone({
   players: PlayerSnapshot[];
   playerId?: string;
   invalidEntryKeys: Set<string>;
+  complete: boolean;
+  overlapFirst: boolean;
 }) {
   return (
     <SortableContext
@@ -76,36 +81,54 @@ function CompositionEdgeDraftZone({
     >
       <div
         data-slot="composition-edge-draft-zone"
-        className={cn(entries.length === 0 ? "contents" : "flex shrink-0 items-center gap-2")}
+        className={cn(
+          entries.length === 0
+            ? "contents"
+            : complete
+              ? "contents"
+              : "flex shrink-0 items-center gap-2",
+        )}
       >
         {interactive
-          ? entries.map((entry) => (
-              <GameCard
+          ? entries.map((entry, entryIndex) => (
+              <motion.div
                 key={entry.key}
-                card={entry.card}
-                size="default"
-                draggable={{
-                  id: entry.key,
-                  cardIndex: entry.sourceIndex,
-                  isVirtual: entry.isVirtual,
-                }}
-                decoration={{
-                  highlight: "addition",
-                  label: (
-                    <AddActivityLabel
-                      players={players}
-                      playerId={playerId}
-                      offsetClassName="translate-y-[2px]"
-                    />
-                  ),
-                }}
-                invalid={invalidEntryKeys.has(entry.key)}
-              />
+                layout="position"
+                transition={spectatorCardTransition}
+                data-composition-card-wrap
+                data-card-rank={entry.card.rank}
+                data-card-suit={entry.card.suit}
+                data-card-joker={entry.card.isJoker || undefined}
+                data-composition-card-overlap={
+                  complete && (overlapFirst || entryIndex > 0) ? "true" : undefined
+                }
+              >
+                <GameCard
+                  card={entry.card}
+                  size="default"
+                  draggable={{
+                    id: entry.key,
+                    cardIndex: entry.sourceIndex,
+                    isVirtual: entry.isVirtual,
+                  }}
+                  decoration={{
+                    highlight: "addition",
+                    label: (
+                      <AddActivityLabel
+                        players={players}
+                        playerId={playerId}
+                        offsetClassName="translate-y-[2px]"
+                      />
+                    ),
+                  }}
+                  invalid={invalidEntryKeys.has(entry.key)}
+                />
+              </motion.div>
             ))
           : null}
         <AnimatePresence initial={false} mode="popLayout">
           {animate && !interactive
-            ? entries.map((entry) => (
+            ? entries.map((entry, entryIndex) => (
                 <motion.div
                   key={entry.key}
                   layout="position"
@@ -117,6 +140,13 @@ function CompositionEdgeDraftZone({
                   }}
                   transition={spectatorCardTransition}
                   data-spectator-card-motion="addition"
+                  data-composition-card-wrap
+                  data-card-rank={entry.card.rank}
+                  data-card-suit={entry.card.suit}
+                  data-card-joker={entry.card.isJoker || undefined}
+                  data-composition-card-overlap={
+                    complete && (overlapFirst || entryIndex > 0) ? "true" : undefined
+                  }
                 >
                   <GameCard
                     card={entry.card}
@@ -138,23 +168,35 @@ function CompositionEdgeDraftZone({
             : null}
         </AnimatePresence>
         {!animate && !interactive
-          ? entries.map((entry) => (
-              <GameCard
+          ? entries.map((entry, entryIndex) => (
+              <motion.div
                 key={entry.key}
-                card={entry.card}
-                size="default"
-                decoration={{
-                  highlight: "addition",
-                  label: (
-                    <AddActivityLabel
-                      players={players}
-                      playerId={playerId}
-                      offsetClassName="translate-y-[2px]"
-                    />
-                  ),
-                }}
-                invalid={invalidEntryKeys.has(entry.key)}
-              />
+                layout="position"
+                transition={spectatorCardTransition}
+                data-composition-card-wrap
+                data-card-rank={entry.card.rank}
+                data-card-suit={entry.card.suit}
+                data-card-joker={entry.card.isJoker || undefined}
+                data-composition-card-overlap={
+                  complete && (overlapFirst || entryIndex > 0) ? "true" : undefined
+                }
+              >
+                <GameCard
+                  card={entry.card}
+                  size="default"
+                  decoration={{
+                    highlight: "addition",
+                    label: (
+                      <AddActivityLabel
+                        players={players}
+                        playerId={playerId}
+                        offsetClassName="translate-y-[2px]"
+                      />
+                    ),
+                  }}
+                  invalid={invalidEntryKeys.has(entry.key)}
+                />
+              </motion.div>
             ))
           : null}
       </div>
@@ -297,6 +339,14 @@ export function CompositionRow({
 
   const additionsAtStart = additionEntries.filter((entry) => entryInsertIndex(entry) === 0);
   const additionsAtEnd = additionEntries.filter((entry) => entryInsertIndex(entry) !== 0);
+  const complete = isCompleteCompositionPreview(
+    composition,
+    additionEntries.map((entry) => entry.card),
+    reclaims.map((reclaim) => ({
+      jokerIndex: reclaim.jokerIndex,
+      replacementCard: reclaim.replacementEntry.card,
+    })),
+  );
   const startEdgeDropId = tableCompositionEdgeDropId(index, "start");
   const endEdgeDropId = tableCompositionEdgeDropId(index, "end");
   const overId = over ? String(over.id) : null;
@@ -318,6 +368,7 @@ export function CompositionRow({
     <GameBoardDraftDropZone
       id={compositionDropId}
       activeClassName={null}
+      completedComposition={complete}
       className={cn(
         "relative flex min-w-0 flex-col overflow-visible rounded-3xl border border-border/70 bg-muted/20 p-2 xl:p-3",
         isHighlightedComposition ? "border-primary/70 bg-primary/5" : null,
@@ -333,7 +384,7 @@ export function CompositionRow({
         </div>
       ) : null}
 
-      <div className="relative flex w-fit max-w-none flex-nowrap items-center justify-start gap-2 overflow-visible xl:mx-auto xl:max-w-full xl:flex-wrap xl:justify-center xl:gap-3">
+      <div className="relative w-fit max-w-none overflow-visible xl:mx-auto xl:max-w-full">
         <CompositionEdgeDropTarget
           compositionIndex={index}
           edge="start"
@@ -341,125 +392,147 @@ export function CompositionRow({
           active={highlightStartEdgeDropTarget}
         />
 
-        {additionsAtStart.length > 0 || !stagedEntriesInteractive ? (
-          <CompositionEdgeDraftZone
-            entries={additionsAtStart}
-            interactive={stagedEntriesInteractive}
-            animate={animateStagedEntries}
-            players={players}
-            playerId={stagedEntryPlayerId}
-            invalidEntryKeys={invalidEntryKeys}
-          />
-        ) : null}
-
-        {compositionCards.map(({ card, index: cardIndex, key }) => {
-          const reclaim = reclaimByJokerIndex.get(cardIndex);
-          const cardActivity = cardActivities[cardIndex];
-          const submittedHighlight =
-            !isNewComposition && cardActivity
-              ? cardActivity.kind === "joker_reclaim"
-                ? "joker_reclaim"
-                : "addition"
-              : undefined;
-          const previewPlayerId = cardActivity?.playerId ?? stagedEntryPlayerId;
-          const previewCard = reclaim ? reclaim.replacementEntry.card : card;
-          const renderedCard = (
-            <GameCard
-              card={previewCard}
-              size="default"
-              draggable={
-                reclaim && stagedEntriesInteractive
-                  ? {
-                      id: reclaim.replacementEntry.key,
-                      cardIndex: reclaim.replacementEntry.sourceIndex,
-                      isVirtual: reclaim.replacementEntry.isVirtual,
-                    }
-                  : undefined
-              }
-              decoration={
-                submittedHighlight || reclaim
-                  ? {
-                      highlight: submittedHighlight ?? "joker_reclaim",
-                      label:
-                        (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
-                          <ReclaimActivityLabel
-                            players={players}
-                            playerId={previewPlayerId}
-                            offsetClassName="translate-y-[2px]"
-                          />
-                        ) : (
-                          <AddActivityLabel
-                            players={players}
-                            playerId={previewPlayerId}
-                            offsetClassName="translate-y-[2px]"
-                          />
-                        ),
-                    }
-                  : undefined
-              }
-              invalid={Boolean(reclaim && invalidEntryKeys.has(reclaim.replacementEntry.key))}
+        <div
+          className="composition-card-track flex w-fit max-w-none flex-nowrap items-center justify-start gap-2 overflow-visible xl:max-w-full xl:flex-wrap xl:justify-center xl:gap-3"
+          data-complete={complete}
+        >
+          {additionsAtStart.length > 0 || !stagedEntriesInteractive ? (
+            <CompositionEdgeDraftZone
+              entries={additionsAtStart}
+              interactive={stagedEntriesInteractive}
+              animate={animateStagedEntries}
+              players={players}
+              playerId={stagedEntryPlayerId}
+              invalidEntryKeys={invalidEntryKeys}
+              complete={complete}
+              overlapFirst={false}
             />
-          );
+          ) : null}
 
-          return (
-            <div key={key} className="flex flex-col items-center gap-1">
-              <div className={cn("relative", stagedEntriesInteractive ? null : "grid")}>
-                {card.isJoker && dropTargetsEnabled && isDraggingCompositionCard
-                  ? (() => {
-                      const draggedCard = active?.data.current?.card as
-                        | HandEntry["card"]
-                        | undefined;
-                      const canTargetJoker = draggedCard
-                        ? canReclaimJokerWithCard(composition, cardIndex, draggedCard)
-                        : false;
-                      const jokerDropId = tableCompositionJokerDropId(index, cardIndex);
-                      const showJokerDropTarget = canTargetJoker && isHoveringAnyCompositionTarget;
+          {compositionCards.map(({ card, index: cardIndex, key }) => {
+            const reclaim = reclaimByJokerIndex.get(cardIndex);
+            const cardActivity = cardActivities[cardIndex];
+            const submittedHighlight =
+              !isNewComposition && cardActivity
+                ? cardActivity.kind === "joker_reclaim"
+                  ? "joker_reclaim"
+                  : "addition"
+                : undefined;
+            const previewPlayerId = cardActivity?.playerId ?? stagedEntryPlayerId;
+            const previewCard = reclaim ? reclaim.replacementEntry.card : card;
+            const renderedCard = (
+              <GameCard
+                card={previewCard}
+                size="default"
+                draggable={
+                  reclaim && stagedEntriesInteractive
+                    ? {
+                        id: reclaim.replacementEntry.key,
+                        cardIndex: reclaim.replacementEntry.sourceIndex,
+                        isVirtual: reclaim.replacementEntry.isVirtual,
+                      }
+                    : undefined
+                }
+                decoration={
+                  submittedHighlight || reclaim
+                    ? {
+                        highlight: submittedHighlight ?? "joker_reclaim",
+                        label:
+                          (submittedHighlight ?? "joker_reclaim") === "joker_reclaim" ? (
+                            <ReclaimActivityLabel
+                              players={players}
+                              playerId={previewPlayerId}
+                              offsetClassName="translate-y-[2px]"
+                            />
+                          ) : (
+                            <AddActivityLabel
+                              players={players}
+                              playerId={previewPlayerId}
+                              offsetClassName="translate-y-[2px]"
+                            />
+                          ),
+                      }
+                    : undefined
+                }
+                invalid={Boolean(reclaim && invalidEntryKeys.has(reclaim.replacementEntry.key))}
+              />
+            );
 
-                      return (
-                        <JokerReclaimDropTarget
-                          compositionIndex={index}
-                          jokerIndex={cardIndex}
-                          visible={showJokerDropTarget}
-                          active={canTargetJoker && overId === jokerDropId}
-                        />
-                      );
-                    })()
-                  : null}
+            return (
+              <motion.div
+                key={key}
+                layout="position"
+                transition={spectatorCardTransition}
+                className="flex flex-col items-center gap-1"
+                data-composition-card-wrap
+                data-card-rank={previewCard.rank}
+                data-card-suit={previewCard.suit}
+                data-card-joker={previewCard.isJoker || undefined}
+                data-composition-card-overlap={
+                  complete && (additionsAtStart.length > 0 || cardIndex > 0) ? "true" : undefined
+                }
+              >
+                <div className={cn("relative", stagedEntriesInteractive ? null : "grid")}>
+                  {card.isJoker && dropTargetsEnabled && isDraggingCompositionCard
+                    ? (() => {
+                        const draggedCard = active?.data.current?.card as
+                          | HandEntry["card"]
+                          | undefined;
+                        const canTargetJoker = draggedCard
+                          ? canReclaimJokerWithCard(composition, cardIndex, draggedCard)
+                          : false;
+                        const jokerDropId = tableCompositionJokerDropId(index, cardIndex);
+                        const showJokerDropTarget =
+                          canTargetJoker && isHoveringAnyCompositionTarget;
 
-                {stagedEntriesInteractive || !animateStagedEntries ? renderedCard : null}
-                <AnimatePresence initial={false}>
-                  {animateStagedEntries ? (
-                    <motion.div
-                      key={reclaim ? `reclaim-${reclaim.replacementEntry.key}` : `table-${key}`}
-                      className="col-start-1 row-start-1"
-                      initial={spectatorCardEnter}
-                      animate={spectatorCardVisible}
-                      exit={{
-                        ...spectatorCardExit,
-                        transition: spectatorCardExitTransition,
-                      }}
-                      transition={spectatorCardTransition}
-                      data-spectator-card-motion={reclaim ? "joker-reclaim" : undefined}
-                    >
-                      {renderedCard}
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </div>
-            </div>
-          );
-        })}
+                        return (
+                          <JokerReclaimDropTarget
+                            compositionIndex={index}
+                            jokerIndex={cardIndex}
+                            visible={showJokerDropTarget}
+                            active={canTargetJoker && overId === jokerDropId}
+                          />
+                        );
+                      })()
+                    : null}
 
-        {additionsAtEnd.length > 0 || !stagedEntriesInteractive ? (
-          <CompositionEdgeDraftZone
-            entries={additionsAtEnd}
-            interactive={stagedEntriesInteractive}
-            animate={animateStagedEntries}
-            players={players}
-            playerId={stagedEntryPlayerId}
-            invalidEntryKeys={invalidEntryKeys}
-          />
-        ) : null}
+                  {stagedEntriesInteractive || !animateStagedEntries ? renderedCard : null}
+                  <AnimatePresence initial={false}>
+                    {animateStagedEntries ? (
+                      <motion.div
+                        key={reclaim ? `reclaim-${reclaim.replacementEntry.key}` : `table-${key}`}
+                        className="col-start-1 row-start-1"
+                        initial={spectatorCardEnter}
+                        animate={spectatorCardVisible}
+                        exit={{
+                          ...spectatorCardExit,
+                          transition: spectatorCardExitTransition,
+                        }}
+                        transition={spectatorCardTransition}
+                        data-spectator-card-motion={reclaim ? "joker-reclaim" : undefined}
+                      >
+                        {renderedCard}
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            );
+          })}
+
+          {additionsAtEnd.length > 0 || !stagedEntriesInteractive ? (
+            <CompositionEdgeDraftZone
+              entries={additionsAtEnd}
+              interactive={stagedEntriesInteractive}
+              animate={animateStagedEntries}
+              players={players}
+              playerId={stagedEntryPlayerId}
+              invalidEntryKeys={invalidEntryKeys}
+              complete={complete}
+              overlapFirst
+            />
+          ) : null}
+        </div>
 
         <CompositionEdgeDropTarget
           compositionIndex={index}

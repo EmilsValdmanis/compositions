@@ -23,6 +23,7 @@ import { GameCard } from "#/components/game/game-card";
 import {
   draftCompositionPointTotal,
   draftCompositionPreviewPointTotal,
+  isCompleteDraftComposition,
 } from "#/components/game/game-card-utils";
 import {
   spectatorCardEnter,
@@ -198,9 +199,13 @@ function SpectatorNewDraft({
   animateCards: boolean;
 }) {
   const pointTotal = draftCompositionPointTotal(composition.cards);
+  const complete = isCompleteDraftComposition(composition.cards);
 
   return (
-    <div className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3">
+    <div
+      className="flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3"
+      data-completed-composition={complete || undefined}
+    >
       <div className="mb-2.5 flex min-h-5 items-center justify-between gap-2">
         <NewActivityLabel players={players} playerId={playerId} />
         <Badge variant="outline">
@@ -212,10 +217,10 @@ function SpectatorNewDraft({
           {m.points_unit()}
         </Badge>
       </div>
-      <div className="flex items-start gap-2">
+      <div className="composition-card-track flex items-start gap-2" data-complete={complete}>
         <AnimatePresence initial={false} mode="popLayout">
           {animateCards
-            ? draftCardInstances(composition.cards).map(({ card, key }) => (
+            ? draftCardInstances(composition.cards).map(({ card, key }, cardIndex) => (
                 <motion.div
                   key={key}
                   layout="position"
@@ -227,6 +232,11 @@ function SpectatorNewDraft({
                   }}
                   transition={spectatorCardTransition}
                   data-spectator-card-motion="draft"
+                  data-composition-card-wrap
+                  data-card-rank={card.rank}
+                  data-card-suit={card.suit}
+                  data-card-joker={card.isJoker || undefined}
+                  data-composition-card-overlap={complete && cardIndex > 0 ? "true" : undefined}
                 >
                   <GameCard card={card} size="default" />
                 </motion.div>
@@ -234,8 +244,19 @@ function SpectatorNewDraft({
             : null}
         </AnimatePresence>
         {!animateCards
-          ? draftCardInstances(composition.cards).map(({ card, key }) => (
-              <GameCard key={key} card={card} size="default" />
+          ? draftCardInstances(composition.cards).map(({ card, key }, cardIndex) => (
+              <motion.div
+                key={key}
+                layout="position"
+                transition={spectatorCardTransition}
+                data-composition-card-wrap
+                data-card-rank={card.rank}
+                data-card-suit={card.suit}
+                data-card-joker={card.isJoker || undefined}
+                data-composition-card-overlap={complete && cardIndex > 0 ? "true" : undefined}
+              >
+                <GameCard card={card} size="default" />
+              </motion.div>
             ))
           : null}
       </div>
@@ -253,11 +274,13 @@ function EditableNewDraft({
   invalid: boolean;
 }) {
   const pointTotal = draftCompositionPointTotal(composition.entries.map((entry) => entry.card));
+  const complete = isCompleteDraftComposition(composition.entries.map((entry) => entry.card));
 
   return (
     <div data-onboarding-target="new-composition" className="w-fit rounded-3xl">
       <GameBoardDraftDropZone
         id={draftCompositionDropId(composition.id)}
+        completedComposition={complete}
         className={cn(
           "flex w-fit shrink-0 flex-col rounded-3xl border border-primary/70 bg-primary/5 p-3",
           invalid ? "border-destructive bg-destructive/5 ring-1 ring-destructive/30" : null,
@@ -279,18 +302,28 @@ function EditableNewDraft({
           items={composition.entries.map((entry) => entry.key)}
           strategy={horizontalListSortingStrategy}
         >
-          <div className="flex items-start gap-2">
-            {composition.entries.map((entry) => (
-              <GameCard
+          <div className="composition-card-track flex items-start gap-2" data-complete={complete}>
+            {composition.entries.map((entry, entryIndex) => (
+              <motion.div
                 key={entry.key}
-                card={entry.card}
-                size="default"
-                draggable={{
-                  id: entry.key,
-                  cardIndex: entry.sourceIndex,
-                  isVirtual: entry.isVirtual,
-                }}
-              />
+                layout="position"
+                transition={spectatorCardTransition}
+                data-composition-card-wrap
+                data-card-rank={entry.card.rank}
+                data-card-suit={entry.card.suit}
+                data-card-joker={entry.card.isJoker || undefined}
+                data-composition-card-overlap={complete && entryIndex > 0 ? "true" : undefined}
+              >
+                <GameCard
+                  card={entry.card}
+                  size="default"
+                  draggable={{
+                    id: entry.key,
+                    cardIndex: entry.sourceIndex,
+                    isVirtual: entry.isVirtual,
+                  }}
+                />
+              </motion.div>
             ))}
           </div>
         </SortableContext>

@@ -172,6 +172,64 @@ describe("draftPreviewForComposition", () => {
     expect(actorView.container.querySelector("[data-spectator-card-motion]")).toBeNull();
   });
 
+  it("includes the final added card in a completed composition's overlap", () => {
+    const view = render(
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[
+            {
+              tableIndex: 0,
+              key: "table-0",
+              snapshot: {
+                type: "set",
+                cards: [
+                  { rank: 5, suit: 0 },
+                  { rank: 5, suit: 2 },
+                  { rank: 5, suit: 3 },
+                ],
+                points: 15,
+                complete: false,
+              },
+              stagedEntries: [],
+              reclaims: [],
+              insertIndex: 3,
+            },
+          ]}
+          newCompositions={[]}
+          players={[]}
+          turnActivity={{
+            playerId: "player-1",
+            round: 1,
+            turnNumber: 1,
+            draftCompositions: [
+              {
+                id: "draft-table-0",
+                tableIndex: 0,
+                cards: [{ rank: 5, suit: 1 }],
+              },
+            ],
+          }}
+          canCompose={false}
+          viewerPlayerId="player-2"
+          showDraftTotal={false}
+        />
+      </DndContext>,
+    );
+
+    const completedComposition = view.container.querySelector(
+      '[data-completed-composition="true"]',
+    );
+    const cardWrappers = completedComposition?.querySelectorAll("[data-composition-card-wrap]");
+
+    expect(cardWrappers).toHaveLength(4);
+    expect(
+      [...(cardWrappers ?? [])].map((wrapper) =>
+        wrapper.getAttribute("data-composition-card-overlap"),
+      ),
+    ).toEqual([null, "true", "true", "true"]);
+    expect(cardWrappers?.[3]?.getAttribute("data-card-suit")).toBe("1");
+  });
+
   it("keeps two identical jokers on their independently assigned edges", () => {
     const preview = draftPreviewForComposition(
       {

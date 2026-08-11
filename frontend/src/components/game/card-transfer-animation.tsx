@@ -2,7 +2,11 @@ import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { type GameSnapshot } from "#/components/game-websocket-provider";
 import { GameCard } from "#/components/game/game-card";
-import { type CardTransfer, inferCardTransfer } from "#/components/game/card-transfer-state";
+import {
+  type CardTransfer,
+  inferCardTransfer,
+  inferCompletedCompositionCollection,
+} from "#/components/game/card-transfer-state";
 import { shouldReduceMotion } from "#/lib/reduced-motion";
 
 type Flight = CardTransfer & {
@@ -81,6 +85,9 @@ export function CardTransferAnimation({
 
     const transfer = inferCardTransfer(previous, game, viewerPlayerId);
     if (!transfer) return;
+    if (transfer.source === "player" && inferCompletedCompositionCollection(previous, game)) {
+      return;
+    }
 
     const playerAnchor = findPlayerAnchor(boardRef.current, transfer.actorPlayerId);
     const pileAnchor = findPileAnchor(

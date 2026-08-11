@@ -9,6 +9,27 @@ export type CardTransfer = {
   target: "discard" | "player";
 };
 
+export type CompletedCompositionCollection = {
+  actorPlayerId: string;
+  collectedCards: CardSnapshot[];
+  discardCard: CardSnapshot;
+  previousTopDiscard: CardSnapshot | null;
+};
+
+function cardsEqual(left: CardSnapshot, right: CardSnapshot) {
+  return (
+    Boolean(left.isJoker) === Boolean(right.isJoker) &&
+    left.rank === right.rank &&
+    left.suit === right.suit
+  );
+}
+
+function cardListsEqual(left: CardSnapshot[], right: CardSnapshot[]) {
+  return (
+    left.length === right.length && left.every((card, index) => cardsEqual(card, right[index]))
+  );
+}
+
 function playerHandCount(game: GameSnapshot, playerId: string) {
   return game.players.find((player) => player.playerId === playerId)?.handCount;
 }
@@ -19,6 +40,30 @@ function sameTurn(previous: GameSnapshot, current: GameSnapshot) {
     previous.turn.number === current.turn.number &&
     previous.turn.playerId === current.turn.playerId
   );
+}
+
+export function inferCompletedCompositionCollection(
+  previous: GameSnapshot,
+  current: GameSnapshot,
+): CompletedCompositionCollection | null {
+  const addedCardCount = current.discardPile.length - previous.discardPile.length;
+  const discardCard = current.discardPile[0];
+  const actorPlayerId = previous.turn.playerId;
+
+  if (!actorPlayerId || !discardCard || addedCardCount <= 1) {
+    return null;
+  }
+
+  if (!cardListsEqual(current.discardPile.slice(addedCardCount), previous.discardPile)) {
+    return null;
+  }
+
+  return {
+    actorPlayerId,
+    collectedCards: current.discardPile.slice(1, addedCardCount),
+    discardCard,
+    previousTopDiscard: previous.discardPile[0] ?? null,
+  };
 }
 
 export function inferCardTransfer(

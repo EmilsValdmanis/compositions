@@ -12,6 +12,14 @@ afterEach(() => {
 });
 
 describe("GameCard", () => {
+  it("contains face layers within the card's stacking context", () => {
+    const view = render(<GameCard card={{ rank: 13, suit: 0 }} />);
+
+    expect(view.container.querySelector("[data-game-card]")?.classList.contains("isolate")).toBe(
+      true,
+    );
+  });
+
   it.each([
     ["hearts", 0],
     ["diamonds", 1],

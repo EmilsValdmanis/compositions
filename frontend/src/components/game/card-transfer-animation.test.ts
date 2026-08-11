@@ -4,7 +4,11 @@ import {
   CARD_TRANSFER_DURATION_MS,
   CARD_TRANSFER_PLAYER_SCALE,
 } from "#/components/game/card-transfer-animation";
-import { inferCardTransfer } from "#/components/game/card-transfer-state";
+import {
+  inferCardTransfer,
+  inferCompletedCompositionCollection,
+} from "#/components/game/card-transfer-state";
+import { buildCompletedCardCollectionKeyframes } from "#/components/game/completed-composition-animation";
 import { type GameSnapshot } from "#/components/game-websocket-provider";
 
 function game(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
@@ -159,5 +163,49 @@ describe("card transfer motion", () => {
 
     expect(frames[0]?.transform).toContain(`scale(${CARD_TRANSFER_PLAYER_SCALE})`);
     expect(frames.at(-1)?.transform).toContain("scale(1)");
+  });
+});
+
+describe("completed composition collection", () => {
+  it("separates collected cards from the discard placed above them", () => {
+    const previous = game({
+      turn: { ...game().turn, hasDrawn: true },
+      discardPile: [{ rank: 7, suit: 1 }],
+    });
+    const completedSet = [
+      { rank: 9, suit: 0 },
+      { rank: 9, suit: 1 },
+      { rank: 9, suit: 2 },
+      { rank: 9, suit: 3 },
+    ];
+    const current = game({
+      discardPile: [{ rank: 12, suit: 3 }, ...completedSet, ...previous.discardPile],
+    });
+
+    expect(inferCompletedCompositionCollection(previous, current)).toEqual({
+      actorPlayerId: "other-player",
+      collectedCards: completedSet,
+      discardCard: { rank: 12, suit: 3 },
+      previousTopDiscard: { rank: 7, suit: 1 },
+    });
+  });
+
+  it("ignores an ordinary one-card discard", () => {
+    const previous = game();
+    const current = game({
+      discardPile: [{ rank: 12, suit: 3 }, ...previous.discardPile],
+    });
+
+    expect(inferCompletedCompositionCollection(previous, current)).toBeNull();
+  });
+
+  it("lifts before converging on the discard pile", () => {
+    const frames = buildCompletedCardCollectionKeyframes(
+      { left: 10, top: 20, width: 56, height: 80 },
+      { left: 210, top: 120, width: 56, height: 80 },
+    );
+
+    expect(frames[1]?.transform).toContain("-16px");
+    expect(frames.at(-1)?.transform).toContain("translate3d(200px, 100px, 0)");
   });
 });

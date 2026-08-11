@@ -2,6 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   draftCompositionPointTotal,
   draftCompositionPreviewPointTotal,
+  isCompleteCompositionPreview,
+  isCompleteDraftComposition,
   isValidDraftComposition,
 } from "#/components/game/game-card-utils";
 
@@ -219,5 +221,45 @@ describe("isValidDraftComposition", () => {
 
     expect(isValidDraftComposition(cards)).toBe(true);
     expect(draftCompositionPointTotal(cards)).toBeNull();
+  });
+});
+
+describe("completed composition previews", () => {
+  it("recognizes a natural four-suit set", () => {
+    expect(
+      isCompleteDraftComposition([
+        { rank: 9, suit: 0 },
+        { rank: 9, suit: 1 },
+        { rank: 9, suit: 2 },
+        { rank: 9, suit: 3 },
+      ]),
+    ).toBe(true);
+  });
+
+  it("does not complete a four-card set that still contains a joker", () => {
+    expect(
+      isCompleteDraftComposition(
+        [{ rank: 9, suit: 0 }, { rank: 9, suit: 1 }, { rank: 9, suit: 2 }, { isJoker: true }],
+        "set",
+      ),
+    ).toBe(false);
+  });
+
+  it("recognizes the final card added to a table composition", () => {
+    expect(
+      isCompleteCompositionPreview(
+        {
+          type: "set",
+          cards: [
+            { rank: 9, suit: 0 },
+            { rank: 9, suit: 1 },
+            { rank: 9, suit: 2 },
+          ],
+          points: 27,
+          complete: false,
+        },
+        [{ rank: 9, suit: 3 }],
+      ),
+    ).toBe(true);
   });
 });

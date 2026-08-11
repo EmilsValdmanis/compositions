@@ -184,6 +184,40 @@ export function isValidDraftComposition(cards: CardSnapshot[], type?: Compositio
   return draftSetPointTotal(cards) !== null || draftRunPointTotal(cards) !== null;
 }
 
+export function isCompleteDraftComposition(
+  cards: CardSnapshot[],
+  type?: CompositionSnapshot["type"],
+) {
+  if (cards.some((card) => card.isJoker)) {
+    return false;
+  }
+
+  if (type === "set" || (type === undefined && draftSetPointTotal(cards) !== null)) {
+    return cards.length === 4 && draftSetPointTotal(cards) !== null;
+  }
+
+  return cards.length === 14 && draftRunPointTotal(cards) !== null;
+}
+
+export function isCompleteCompositionPreview(
+  composition: CompositionSnapshot,
+  additions: CardSnapshot[],
+  replacements: Array<{ jokerIndex: number; replacementCard: CardSnapshot }> = [],
+) {
+  if (composition.complete && additions.length === 0 && replacements.length === 0) {
+    return true;
+  }
+
+  const replacementByJokerIndex = new Map(
+    replacements.map((replacement) => [replacement.jokerIndex, replacement.replacementCard]),
+  );
+  const previewCards = composition.cards.map(
+    (card, index) => replacementByJokerIndex.get(index) ?? card,
+  );
+
+  return isCompleteDraftComposition([...previewCards, ...additions], composition.type);
+}
+
 export function draftCompositionPreviewPointTotal(
   composition: CompositionSnapshot,
   additions: CardSnapshot[],
