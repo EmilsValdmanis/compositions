@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
 import { GameCard } from "#/components/game/game-card";
+import { isCompleteDraftComposition } from "#/components/game/game-card-utils";
 import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
@@ -230,13 +231,25 @@ function discardFromHand(game: GameSnapshot, cardIndex: number, expectedCard: Ca
 
   const nextHand = [...game.hand];
   const [discardedCard] = nextHand.splice(cardIndex, 1);
+  const nextDiscardPile = cloneCards(game.discardPile);
+  const remainingCompositions = game.activeCompositions.filter((composition) => {
+    if (!composition.complete) return true;
+
+    for (let index = composition.cards.length - 1; index >= 0; index -= 1) {
+      const card = composition.cards[index];
+      if (card) nextDiscardPile.unshift({ ...card });
+    }
+    return false;
+  });
+  if (discardedCard) nextDiscardPile.unshift(discardedCard);
   const nextPlayerIndex = (game.turn.playerIndex + 1) % game.players.length;
   const nextPlayer = game.players[nextPlayerIndex];
 
   return {
     ...game,
     hand: nextHand,
-    discardPile: discardedCard ? [discardedCard, ...game.discardPile] : game.discardPile,
+    discardPile: nextDiscardPile,
+    activeCompositions: remainingCompositions,
     turn: {
       ...game.turn,
       number: game.turn.number + 1,
@@ -283,7 +296,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
       type: "run",
       cards: cloneCards(composition.cards),
       points: composition.cards.length * 10,
-      complete: composition.cards.length >= 3,
+      complete: isCompleteDraftComposition(composition.cards),
       jokerRepresentations: undefined,
     });
   }
@@ -295,7 +308,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
       const insertIndex = addition.insertIndex ?? target.cards.length;
       target.cards.splice(insertIndex, 0, ...cloneCards(addition.cards));
       target.points += addition.cards.length * 5;
-      target.complete = target.cards.length >= 3;
+      target.complete = isCompleteDraftComposition(target.cards, target.type);
     }
   }
 
@@ -325,8 +338,10 @@ export function DevGameUi() {
   const [viewMode, setViewMode] = useState<DevViewMode>("board");
   const [resultsMode, setResultsMode] = useState<DevResultsMode>("round");
   const [resultsReplayKey, setResultsReplayKey] = useState(0);
+  const [boardReplayKey, setBoardReplayKey] = useState(0);
   const [lobbyRoom, setLobbyRoom] = useState<RoomSnapshot | null>(null);
   const [lobbyRoomCode, setLobbyRoomCode] = useState("");
+  const completedDiscardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const players = scenario?.players ?? [];
   const room = scenario ? cloneRoom(scenario.room) : null;
@@ -367,6 +382,13 @@ export function DevGameUi() {
       return baseGame ? updater(baseGame) : null;
     });
   }
+
+  useEffect(
+    () => () => {
+      if (completedDiscardTimerRef.current) clearTimeout(completedDiscardTimerRef.current);
+    },
+    [],
+  );
 
   if (!import.meta.env.DEV || !scenario || !game || !room) {
     return null;
@@ -416,6 +438,22 @@ export function DevGameUi() {
     setResultsReplayKey((current) => current + 1);
   }
 
+  function replayCompletedDiscard() {
+    const replayGame = cloneGame(scenario.game);
+    setViewMode("board");
+    setGameOverride(replayGame);
+    setBoardReplayKey((current) => current + 1);
+    if (completedDiscardTimerRef.current) clearTimeout(completedDiscardTimerRef.current);
+    completedDiscardTimerRef.current = setTimeout(() => {
+      completedDiscardTimerRef.current = null;
+      setGameOverride((current) => {
+        const baseGame = current ? cloneGame(current) : cloneGame(replayGame);
+        const discardCard = baseGame.hand[0];
+        return discardCard ? discardFromHand(baseGame, 0, discardCard) : baseGame;
+      });
+    }, 500);
+  }
+
   function enterLobbyRoom(code: string) {
     if (!room) return;
 
@@ -461,6 +499,10 @@ export function DevGameUi() {
                 {m.replay_celebration()}
               </Button>
             </>
+          ) : viewMode === "board" ? (
+            <Button type="button" variant="outline" size="sm" onClick={replayCompletedDiscard}>
+              {m.replay_completed_discard()}
+            </Button>
           ) : null}
         </div>
         <Tabs
@@ -547,6 +589,7 @@ export function DevGameUi() {
           </div>
         ) : (
           <GameBoardView
+            key={boardReplayKey}
             game={game}
             roomCode={room.code}
             playerId={resolvedPerspectiveId}

@@ -19,6 +19,25 @@ body {
   margin: 0;
 }
 
+.composition-card-track [data-composition-card-wrap] {
+  margin-inline-start: 0;
+}
+
+.composition-card-track[data-complete="true"] {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
+.composition-card-track[data-complete="true"] [data-composition-card-overlap="true"] {
+  margin-inline-start: -1.75rem;
+}
+
+@media (min-width: 80rem) {
+  .composition-card-track[data-complete="true"] [data-composition-card-overlap="true"] {
+    margin-inline-start: -2rem;
+  }
+}
+
 @keyframes reduced-motion-pulse {
   50% {
     opacity: 0.45;

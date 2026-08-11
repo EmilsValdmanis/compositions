@@ -101,7 +101,7 @@ const cardCenterSuitClassNames: Record<GameCardSize, string> = {
 
 function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center overflow-hidden rounded-xl border shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+    "relative isolate grid shrink-0 select-none place-items-center overflow-hidden rounded-xl border shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     cardAccentClass(card),
     gameCardSizeClassNames[size],
     className,
@@ -110,7 +110,7 @@ function gameCardClassName(card: CardSnapshot, size: GameCardSize, className?: s
 
 function faceDownGameCardClassName(size: GameCardSize, className?: string) {
   return cn(
-    "relative grid shrink-0 select-none place-items-center overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+    "relative isolate grid shrink-0 select-none place-items-center overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-[transform,box-shadow,opacity] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
     gameCardSizeClassNames[size],
     className,
   );
@@ -266,8 +266,10 @@ function SortableGameCard({
     <button
       ref={setNodeRef}
       type="button"
+      data-game-card
       data-card-rank={card.rank}
       data-card-suit={card.suit}
+      data-card-joker={card.isJoker || undefined}
       style={style}
       className={cn(
         faceDown
@@ -326,8 +328,10 @@ function DraggableGameCard({
     <button
       ref={setNodeRef}
       type="button"
+      data-game-card
       data-card-rank={card.rank}
       data-card-suit={card.suit}
+      data-card-joker={card.isJoker || undefined}
       style={style}
       disabled={disabled}
       className={cn(
@@ -414,8 +418,10 @@ export function GameCard({
 
   return (
     <div
+      data-game-card
       data-card-rank={card.rank}
       data-card-suit={card.suit}
+      data-card-joker={card.isJoker || undefined}
       className={
         faceDown
           ? faceDownGameCardClassName(

@@ -40,6 +40,7 @@ import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameBoardTable } from "#/components/game/game-board-table";
 import { GameCard } from "#/components/game/game-card";
 import { CardTransferAnimation } from "#/components/game/card-transfer-animation";
+import { CompletedCompositionAnimation } from "#/components/game/completed-composition-animation";
 import { TurnStartCue } from "#/components/game/turn-start-cue";
 import {
   setPersistedHandOrder,
@@ -1255,6 +1256,7 @@ export function GameBoardView({
         guidanceStage={guidance?.stage}
       />
       <CardTransferAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
+      <CompletedCompositionAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
       <DragOverlay dropAnimation={null} modifiers={[keepCardOverlayInViewport]}>
         {activeDraw ? (
           <GameCard

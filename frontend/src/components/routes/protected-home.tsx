@@ -4,11 +4,21 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ClientOnly, getRouteApi } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
+import {
+  COMPLETED_COLLECTION_DURATION_MS,
+  COMPLETED_DISCARD_DURATION_MS,
+} from "#/components/game/completed-composition-animation";
+import { inferCompletedCompositionCollection } from "#/components/game/card-transfer-state";
 import { EndGameProposalAlert } from "#/components/game/end-game-proposal-alert";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName, playersForResults } from "#/components/game/game-view-helpers";
-import { type GameMode, useGameWebSocket } from "#/components/game-websocket-provider";
+import {
+  type GameMode,
+  type GameSnapshot,
+  type RoomSnapshot,
+  useGameWebSocket,
+} from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
@@ -16,6 +26,7 @@ import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-vie
 import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
 import { pageTitle } from "#/lib/page-title";
+import { shouldReduceMotion } from "#/lib/reduced-motion";
 import { m } from "#/paraglide/messages.js";
 
 async function copyText(text: string, successMessage: string) {
@@ -37,6 +48,104 @@ function roomShareUrl(code: string) {
   const url = new URL(window.location.href);
   url.searchParams.set("room", code);
   return url.toString();
+}
+
+type RoundResultsSnapshot = {
+  room: RoomSnapshot | null;
+  game: GameSnapshot;
+};
+
+type RoundResultsTransition = {
+  currentGame: GameSnapshot | null;
+  resultRoom: RoomSnapshot | null;
+  resultGame: GameSnapshot | null;
+  visibleResults: RoundResultsSnapshot | null;
+  pendingResults: RoundResultsSnapshot | null;
+  transitionId: number;
+};
+
+function useVisibleRoundResults(
+  resultRoom: RoomSnapshot | null,
+  resultGame: GameSnapshot | null,
+  currentGame: GameSnapshot | null,
+) {
+  const [storedTransition, setStoredTransition] = useState<RoundResultsTransition>(() => ({
+    currentGame,
+    resultRoom,
+    resultGame,
+    visibleResults: resultGame ? { room: resultRoom, game: resultGame } : null,
+    pendingResults: null,
+    transitionId: 0,
+  }));
+  let transition = storedTransition;
+
+  if (
+    transition.currentGame !== currentGame ||
+    transition.resultRoom !== resultRoom ||
+    transition.resultGame !== resultGame
+  ) {
+    const nextResults = resultGame ? { room: resultRoom, game: resultGame } : null;
+    const completedCollection =
+      resultGame && transition.currentGame && currentGame
+        ? inferCompletedCompositionCollection(transition.currentGame, currentGame)
+        : null;
+    const shouldDeferResults = completedCollection != null || transition.pendingResults != null;
+
+    transition = {
+      currentGame,
+      resultRoom,
+      resultGame,
+      visibleResults: shouldDeferResults ? null : nextResults,
+      pendingResults: shouldDeferResults ? nextResults : null,
+      transitionId: completedCollection ? transition.transitionId + 1 : transition.transitionId,
+    };
+    setStoredTransition(transition);
+  }
+
+  const pendingTransitionId = transition.pendingResults ? transition.transitionId : null;
+
+  useEffect(() => {
+    if (pendingTransitionId == null) return;
+
+    const duration = shouldReduceMotion()
+      ? 280
+      : COMPLETED_COLLECTION_DURATION_MS + COMPLETED_DISCARD_DURATION_MS + 40;
+    const resultRevealTimer = setTimeout(() => {
+      setStoredTransition((currentTransition) =>
+        currentTransition.transitionId === pendingTransitionId && currentTransition.pendingResults
+          ? {
+              ...currentTransition,
+              visibleResults: currentTransition.pendingResults,
+              pendingResults: null,
+            }
+          : currentTransition,
+      );
+    }, duration);
+
+    return () => clearTimeout(resultRevealTimer);
+  }, [pendingTransitionId]);
+
+  return transition.visibleResults;
+}
+
+function SpectatorNotice({ onStopSpectating }: { onStopSpectating: () => Promise<unknown> }) {
+  return (
+    <Alert className="pr-36">
+      <HugeiconsIcon icon={ViewIcon} />
+      <AlertTitle>{m.watching_game()}</AlertTitle>
+      <AlertDescription>{m.spectator_hand_hidden()}</AlertDescription>
+      <AlertAction>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void onStopSpectating().catch(() => toast.error(m.social_action_failed()))}
+        >
+          {m.stop_watching()}
+        </Button>
+      </AlertAction>
+    </Alert>
+  );
 }
 
 export function ProtectedHome() {
@@ -96,15 +205,13 @@ export function ProtectedHome() {
   const canDiscard = Boolean(state.game) && isMyTurn && Boolean(state.game?.turn.hasDrawn);
   const turnPlayerName = playerName(players, state.game?.turn.playerId);
   const completedGame = state.completedGame;
-  const roundResults =
-    phase === "round_over" || phase === "game_over"
-      ? state.game
-        ? { room: state.room, game: state.game }
-        : null
-      : completedGame;
-  const roundResultPlayers = playersForResults(roundResults?.room ?? null, state.room);
+  const isResultsPhase = phase === "round_over" || phase === "game_over";
+  const resultGame = isResultsPhase ? state.game : (completedGame?.game ?? null);
+  const resultRoom = isResultsPhase && resultGame ? state.room : (completedGame?.room ?? null);
+  const visibleRoundResults = useVisibleRoundResults(resultRoom, resultGame, state.game);
+  const roundResultPlayers = playersForResults(visibleRoundResults?.room ?? null, state.room);
   const isBootstrappingConnection = isGameRouteSnapshotResolving(state);
-  const currentPageTitle = roundResults
+  const currentPageTitle = visibleRoundResults
     ? m.results()
     : isLobbyPhase
       ? state.room
@@ -211,30 +318,12 @@ export function ProtectedHome() {
       <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-3 md:gap-4">
         <title>{pageTitle(currentPageTitle)}</title>
         <EndGameProposalAlert />
-        {state.isSpectating ? (
-          <Alert className="pr-36">
-            <HugeiconsIcon icon={ViewIcon} />
-            <AlertTitle>{m.watching_game()}</AlertTitle>
-            <AlertDescription>{m.spectator_hand_hidden()}</AlertDescription>
-            <AlertAction>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  void stopSpectating().catch(() => toast.error(m.social_action_failed()))
-                }
-              >
-                {m.stop_watching()}
-              </Button>
-            </AlertAction>
-          </Alert>
-        ) : null}
-        {roundResults ? (
+        {state.isSpectating ? <SpectatorNotice onStopSpectating={stopSpectating} /> : null}
+        {visibleRoundResults ? (
           <div key="round-results" className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
-              room={roundResults.room}
-              game={roundResults.game}
+              room={visibleRoundResults.room}
+              game={visibleRoundResults.game}
               players={roundResultPlayers}
               playerId={state.playerId}
               connectedPlayers={connectedPlayers}
