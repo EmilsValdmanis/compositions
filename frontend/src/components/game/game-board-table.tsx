@@ -153,7 +153,10 @@ function TableCompositionsSection({
 
   return (
     <div className="w-full shrink-0 overflow-visible">
-      <div className="flex w-full flex-wrap items-center justify-center gap-2 overflow-visible p-1 xl:gap-4">
+      <div
+        data-slot="table-compositions"
+        className="flex w-full flex-wrap items-center justify-center-safe gap-2 overflow-visible p-1 xl:gap-4"
+      >
         {tableCompositions.map((composition) => (
           <TableComposition
             key={composition.key}
