@@ -295,6 +295,10 @@ export function tableCompositionJokerTargetFromDropId(dropId: string) {
 }
 
 export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKey: string) {
+  if (!compositions.some((composition) => composition.handKeys.includes(handKey))) {
+    return compositions;
+  }
+
   const next: DraftComposition[] = [];
 
   for (const composition of compositions) {

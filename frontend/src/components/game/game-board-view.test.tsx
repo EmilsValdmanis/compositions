@@ -580,8 +580,67 @@ describe("GameBoardView hand ordering", () => {
 
     await act(async () => dragStart("joker-1", 1));
     await act(async () => dragOver("joker-1", "6-0-1"));
+    await act(async () => dragOver("joker-1", "6-0-1"));
 
     expect(sortableContextItems.at(-1)).toEqual(["4-0-1", "6-0-1", "joker-1"]);
+  });
+
+  it("handles a repeated collision target only once while reordering a draft", async () => {
+    const onDraftStateChange = vi.fn();
+
+    render(
+      <GameBoardView
+        game={makeGame([
+          { rank: 5, suit: 3 },
+          { rank: 6, suit: 3 },
+          { rank: 7, suit: 3 },
+        ])}
+        roomCode="STABLE-DRAFT-ORDER"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 8, suit: 3 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        draftSyncMode="disabled"
+        guidance={{
+          stage: "compose",
+          onDrawDragStateChange: vi.fn(),
+          onDrawSettled: vi.fn(),
+          onDraftStateChange,
+        }}
+      />,
+    );
+
+    await act(async () => dragStart("5-3-1", 0));
+    await act(async () => dragEnd("5-3-1", "new-composition-drop-zone", 0));
+    await act(async () => dragStart("6-3-1", 1));
+    await act(async () => dragEnd("6-3-1", "5-3-1", 1));
+    await act(async () => dragStart("7-3-1", 2));
+    await act(async () => dragEnd("7-3-1", "6-3-1", 2));
+
+    onDraftStateChange.mockClear();
+    await act(async () => dragStart("5-3-1", 0));
+    await act(async () => dragOver("5-3-1", "7-3-1"));
+    await act(async () => dragOver("5-3-1", "7-3-1"));
+
+    expect(onDraftStateChange).toHaveBeenCalledTimes(1);
+    expect(onDraftStateChange.mock.calls[0]?.[0].draftCompositions[0]?.cards).toEqual([
+      { rank: 5, suit: 3 },
+      { rank: 7, suit: 3 },
+      { rank: 6, suit: 3 },
+    ]);
   });
 });
 
