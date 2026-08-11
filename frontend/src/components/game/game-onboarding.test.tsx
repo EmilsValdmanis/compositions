@@ -199,6 +199,13 @@ function mockRect(left: number, top: number, width: number, height: number): DOM
   };
 }
 
+function spotlightMaskMarkup() {
+  const maskImage = document.querySelector<HTMLElement>("[data-onboarding-backdrop]")?.style
+    .maskImage;
+  expect(maskImage).toContain("data:image/svg+xml");
+  return decodeURIComponent(maskImage ?? "");
+}
+
 beforeEach(() => {
   completeOnboardingMock.mockReset();
   completeOnboardingMock.mockResolvedValue(undefined);
@@ -412,6 +419,7 @@ describe("GameOnboardingProvider", () => {
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(3),
     );
+    expect(spotlightMaskMarkup().match(/<rect [^>]*rx=/g)).toHaveLength(3);
     expect(document.querySelector<HTMLElement>("[data-onboarding-spotlight]")?.style.width).toBe(
       "270px",
     );
