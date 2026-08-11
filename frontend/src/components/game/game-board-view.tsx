@@ -23,6 +23,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { toast } from "sonner";
 import {
   type ActionResult,
   type CardSnapshot,
@@ -41,7 +42,6 @@ import { GameBoardTable } from "#/components/game/game-board-table";
 import { GameCard } from "#/components/game/game-card";
 import { CardTransferAnimation } from "#/components/game/card-transfer-animation";
 import { CompletedCompositionAnimation } from "#/components/game/completed-composition-animation";
-import { TurnStartCue } from "#/components/game/turn-start-cue";
 import {
   setPersistedHandOrder,
   usePersistedHandOrder,
@@ -77,6 +77,7 @@ import {
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
 import { playGameSound } from "#/lib/game-sounds";
+import { m } from "#/paraglide/messages.js";
 
 const CARD_OVERLAY_VIEWPORT_MARGIN = 8;
 
@@ -371,8 +372,21 @@ function GameBoardLayout({
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
   guidanceStage?: "orientation" | "draw" | "compose" | "discard";
 }) {
-  const currentPlayer = players.find((player) => player.playerId === currentPlayerId);
   const isSpectating = viewerMode === "spectator";
+  const turnToastId = game
+    ? `your-turn:${currentPlayerId}:${game.round}:${game.turn.number}`
+    : null;
+
+  useEffect(() => {
+    if (!turnToastId || !turnState.isMyTurn || guidanceStage) {
+      return;
+    }
+
+    toast.info(m.your_turn(), {
+      id: turnToastId,
+      duration: 1_600,
+    });
+  }, [guidanceStage, turnState.isMyTurn, turnToastId]);
 
   return (
     <div
@@ -400,16 +414,6 @@ function GameBoardLayout({
         data-slot="game-board-table-region"
         className="relative col-start-1 row-start-2 min-h-0 min-w-0 xl:col-start-1 xl:row-span-2 xl:row-start-1 [@media(max-height:600px)]:col-start-1 [@media(max-height:600px)]:row-span-2 [@media(max-height:600px)]:row-start-2"
       >
-        {!guidanceStage && turnState.isMyTurn && game ? (
-          <TurnStartCue
-            key={`${game.round}:${game.turn.number}`}
-            round={game.round}
-            turnNumber={game.turn.number}
-            playerName={currentPlayer?.name ?? turnState.turnPlayerName}
-            playerImageUrl={currentPlayer?.imageUrl}
-          />
-        ) : null}
-
         <GameBoardTable
           tableCompositions={tableCompositions}
           newCompositions={newCompositions}

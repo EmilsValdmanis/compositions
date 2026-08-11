@@ -62,6 +62,42 @@ describe("GameBoardTable empty state", () => {
   });
 });
 
+describe("GameBoardTable composition overflow", () => {
+  it("keeps the start of an oversized composition reachable", () => {
+    const view = render(
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[
+            {
+              tableIndex: 0,
+              key: "long-run",
+              snapshot: {
+                type: "run",
+                cards: Array.from({ length: 13 }, (_, rank) => ({ rank: rank + 1, suit: 0 })),
+                jokerRepresentations: {},
+                points: 91,
+                complete: false,
+              },
+              stagedEntries: [],
+              reclaims: [],
+              insertIndex: 13,
+            },
+          ]}
+          newCompositions={[]}
+          players={[]}
+          canCompose={false}
+          showDraftTotal={false}
+        />
+      </DndContext>,
+    );
+
+    const compositionLane = view.container.querySelector('[data-slot="table-compositions"]');
+
+    expect(compositionLane?.classList.contains("justify-center-safe")).toBe(true);
+    expect(compositionLane?.classList.contains("justify-center")).toBe(false);
+  });
+});
+
 describe("draftPreviewForComposition", () => {
   it("does not reserve flex gaps for empty composition edge drafts", () => {
     const view = render(

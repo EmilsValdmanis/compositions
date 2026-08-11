@@ -121,6 +121,15 @@ vi.mock("@dnd-kit/sortable", () => ({
   }),
 }));
 
+const toastInfoMock = vi.fn();
+vi.doMock("sonner", () => ({
+  toast: {
+    error: vi.fn(),
+    info: toastInfoMock,
+    success: vi.fn(),
+  },
+}));
+
 const { GameBoardView } = await import("#/components/game/game-board-view");
 
 beforeEach(() => {
@@ -128,6 +137,7 @@ beforeEach(() => {
   dndContextProps = {};
   dragOverlayProps = {};
   sortableContextItems = [];
+  toastInfoMock.mockClear();
 });
 
 afterEach(() => {
@@ -226,9 +236,11 @@ describe("GameBoardView drag sensors", () => {
         windowRect: { left: 0, right: 800, top: 0, bottom: 600 },
       }),
     ).toMatchObject({ x: 12, y: 14 });
-    expect(
-      view.container.querySelector('[data-slot="turn-start-cue"]')?.parentElement?.dataset.slot,
-    ).toBe("game-board-table-region");
+    expect(view.container.querySelector('[data-slot="turn-start-cue"]')).toBeNull();
+    expect(toastInfoMock).toHaveBeenCalledWith("Your turn", {
+      id: "your-turn:player-1:1:1",
+      duration: 1_600,
+    });
     const handCards = view.container.querySelector('[data-onboarding-target="hand-cards"]');
     expect(handCards?.className).toContain("w-max");
     expect(handCards?.parentElement?.className).toContain("justify-center");
@@ -645,7 +657,7 @@ describe("GameBoardView hand ordering", () => {
 });
 
 describe("GameBoardView discard drops", () => {
-  it("shows the turn-start cue only for the active player", () => {
+  it("shows the turn-start toast only for the active player", () => {
     const sharedProps = {
       game: makeGame([]),
       roomCode: "ROOM",
@@ -674,7 +686,7 @@ describe("GameBoardView discard drops", () => {
       />,
     );
 
-    expect(view.queryByText("Your turn")).toBeNull();
+    expect(toastInfoMock).not.toHaveBeenCalled();
 
     view.rerender(
       <GameBoardView
@@ -689,12 +701,27 @@ describe("GameBoardView discard drops", () => {
       />,
     );
 
-    const cue = view.getByRole("status", { name: "Your turn, Avery" });
-    expect(cue?.getAttribute("data-turn-number")).toBe("1");
-    expect(cue.querySelector('[data-slot="avatar"]')).not.toBeNull();
-    expect(view.queryByText("Play or discard")).toBeNull();
-    expect(cue.textContent).toContain("R01");
-    expect(cue.textContent).toContain("T01");
+    expect(toastInfoMock).toHaveBeenCalledTimes(1);
+    expect(toastInfoMock).toHaveBeenCalledWith("Your turn", {
+      id: "your-turn:player-1:1:1",
+      duration: 1_600,
+    });
+    expect(view.container.querySelector('[data-slot="turn-start-cue"]')).toBeNull();
+
+    view.rerender(
+      <GameBoardView
+        {...sharedProps}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+      />,
+    );
+
+    expect(toastInfoMock).toHaveBeenCalledTimes(1);
   });
 
   it("commits a staged table play and discard as one action", async () => {
