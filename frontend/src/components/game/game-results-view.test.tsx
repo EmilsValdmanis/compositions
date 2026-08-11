@@ -9,8 +9,16 @@ import {
 } from "#/components/game-websocket-provider";
 
 vi.mock("#/components/ui/animated-number", () => ({
-  AnimatedNumber: ({ value, prefix }: { value: number; prefix?: string }) => (
-    <span>
+  AnimatedNumber: ({
+    value,
+    prefix,
+    trend,
+  }: {
+    value: number;
+    prefix?: string;
+    trend?: number;
+  }) => (
+    <span data-number-trend={trend}>
       {prefix}
       {value}
     </span>
@@ -21,8 +29,14 @@ vi.mock("#/components/game/game-board-players", () => ({
   GameBoardPlayers: () => null,
 }));
 
+const { fireCelebrationConfettiMock, fireStreamingCelebrationConfettiMock } = vi.hoisted(() => ({
+  fireCelebrationConfettiMock: vi.fn(),
+  fireStreamingCelebrationConfettiMock: vi.fn(),
+}));
+
 vi.mock("#/lib/confetti", () => ({
-  fireCelebrationConfetti: vi.fn(),
+  fireCelebrationConfetti: fireCelebrationConfettiMock,
+  fireStreamingCelebrationConfetti: fireStreamingCelebrationConfettiMock,
 }));
 
 const { GameResultsView } = await import("#/components/game/game-results-view");
@@ -69,9 +83,9 @@ const game: GameSnapshot = {
     {
       playerId: "winner",
       handCount: 0,
-      totalPoints: 40,
+      totalPoints: 90,
       pointsGained: 0,
-      unadjustedTotalPoints: 40,
+      unadjustedTotalPoints: 90,
       hasOpened: true,
     },
     {
@@ -90,8 +104,12 @@ const game: GameSnapshot = {
   activeCompositions: [],
 };
 
-describe("GameResultsView flying score reveal", () => {
-  beforeEach(() => vi.useFakeTimers());
+describe("GameResultsView score reveal", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fireCelebrationConfettiMock.mockClear();
+    fireStreamingCelebrationConfettiMock.mockClear();
+  });
 
   afterEach(() => {
     cleanup();
@@ -120,11 +138,43 @@ describe("GameResultsView flying score reveal", () => {
     expect(flyingScore?.dataset.scorePhase).toBe("previous");
     expect(flyingScore?.textContent).toContain("95");
 
-    await act(async () => vi.advanceTimersByTime(500));
+    await act(async () => vi.advanceTimersByTime(700));
+    expect(flyingScore?.dataset.scorePhase).toBe("counting");
+    expect(flyingScore?.querySelector("[data-score-total]")?.textContent).toBe("95");
+    expect(
+      flyingScore
+        ?.querySelector("[data-score-total] [data-number-trend]")
+        ?.getAttribute("data-number-trend"),
+    ).toBe("1");
+    expect(view.container.querySelector("[data-points-arrival]")).toBeNull();
+
+    await act(async () => vi.advanceTimersByTime(310));
+    const halfwayScore = Number(
+      flyingScore?.querySelector("[data-score-total]")?.textContent ?? "0",
+    );
+    expect(halfwayScore).toBeGreaterThan(95);
+    expect(halfwayScore).toBeLessThan(107);
+
+    await act(async () => vi.advanceTimersByTime(310));
     expect(flyingScore?.dataset.scorePhase).toBe("round");
     expect(flyingScore?.textContent).toContain("107");
 
-    await act(async () => vi.advanceTimersByTime(1_000));
+    await act(async () => vi.advanceTimersByTime(180));
+    expect(flyingScore?.dataset.scorePhase).toBe("adjusting");
+    expect(
+      flyingScore
+        ?.querySelector("[data-score-total] [data-number-trend]")
+        ?.getAttribute("data-number-trend"),
+    ).toBe("-1");
+
+    await act(async () => vi.advanceTimersByTime(260));
+    const halfwayAdjustment = Number(
+      flyingScore?.querySelector("[data-score-total]")?.textContent ?? "0",
+    );
+    expect(halfwayAdjustment).toBeGreaterThan(89);
+    expect(halfwayAdjustment).toBeLessThan(107);
+
+    await act(async () => vi.advanceTimersByTime(260));
     expect(flyingScore?.dataset.scorePhase).toBe("adjusted");
     expect(flyingScore?.textContent).toContain("89");
     expect(flyingScore?.textContent).not.toContain("Flew");
@@ -143,9 +193,21 @@ describe("GameResultsView flying score reveal", () => {
     expect(flyingScore?.querySelector("[data-flying-value]")?.classList.contains("size-9")).toBe(
       false,
     );
+
+    await act(async () => vi.advanceTimersByTime(500));
+    expect(
+      [...view.container.querySelectorAll('[data-slot="result-row"]')].map((row) =>
+        row.getAttribute("data-player-id"),
+      ),
+    ).toEqual(["flying", "winner"]);
+    expect(
+      view.container
+        .querySelector('[data-player-id="flying"]')
+        ?.getAttribute("data-rankings-reordered"),
+    ).toBe("true");
   });
 
-  it("returns to the lobby from final results", () => {
+  it("starts the score reveal after skipping the winner takeover", async () => {
     const onBackToLobby = vi.fn();
     const view = render(
       <GameResultsView
@@ -165,9 +227,57 @@ describe("GameResultsView flying score reveal", () => {
       />,
     );
 
+    expect(view.container.querySelector('[data-slot="game-winner-takeover"]')).not.toBeNull();
+    expect(fireStreamingCelebrationConfettiMock).toHaveBeenCalledWith({
+      durationMs: 3_200,
+      delayMs: 260,
+    });
+    expect(fireCelebrationConfettiMock).not.toHaveBeenCalled();
+
+    const flyingScore = view.container.querySelector<HTMLElement>('[data-flying="true"]');
+    expect(flyingScore?.dataset.scorePhase).toBe("previous");
+    await act(async () => vi.advanceTimersByTime(1_000));
+    expect(flyingScore?.dataset.scorePhase).toBe("previous");
+
+    fireEvent.click(view.getByRole("button", { name: "Final scores" }));
+    await act(async () => vi.advanceTimersByTime(699));
+    expect(flyingScore?.dataset.scorePhase).toBe("previous");
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(flyingScore?.dataset.scorePhase).toBe("counting");
+
     fireEvent.click(view.getByRole("button", { name: "Back to lobby" }));
 
     expect(onBackToLobby).toHaveBeenCalledOnce();
+  });
+
+  it("starts the score reveal after the winner takeover finishes", async () => {
+    const view = render(
+      <GameResultsView
+        room={{ ...room, phase: "game_over" }}
+        game={game}
+        players={players}
+        playerId="winner"
+        connectedPlayers={2}
+        dealChoice={{
+          pendingDealChoice: null,
+          dealChooserName: null,
+          isDealChooser: false,
+        }}
+        onChooseDealing={() => {}}
+        onSendEmote={() => {}}
+      />,
+    );
+
+    const flyingScore = view.container.querySelector<HTMLElement>('[data-flying="true"]');
+    await act(async () => vi.advanceTimersByTime(4_599));
+    expect(flyingScore?.dataset.scorePhase).toBe("previous");
+
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(flyingScore?.dataset.scorePhase).toBe("previous");
+    await act(async () => vi.advanceTimersByTime(699));
+    expect(flyingScore?.dataset.scorePhase).toBe("previous");
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(flyingScore?.dataset.scorePhase).toBe("counting");
   });
 
   it("does not show the lobby action after a completed round", () => {

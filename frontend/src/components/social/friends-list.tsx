@@ -142,7 +142,7 @@ export function SidebarFriendsList({
     <SidebarGroup className="min-h-0 flex-1 overflow-hidden pt-0">
       <SidebarGroupLabel>{m.friends()}</SidebarGroupLabel>
       <SidebarGroupContent
-        className="no-scrollbar min-h-0 flex-1 overflow-y-auto pr-1 group-data-[collapsible=icon]:pr-0"
+        className="no-scrollbar min-h-0 flex-1 overflow-y-auto pr-1 group-data-[collapsible=icon]:pr-0 scroll-fade-y"
         aria-busy={isLoading}
       >
         {isLoading ? (

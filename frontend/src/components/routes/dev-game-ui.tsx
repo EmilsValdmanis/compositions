@@ -6,6 +6,7 @@ import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
+import { Button } from "#/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
 import {
   type ActionResult,
@@ -20,6 +21,7 @@ import { m } from "#/paraglide/messages.js";
 
 const scenarios = mockScenarios;
 type DevViewMode = "start" | "board" | "deal" | "results" | "cards";
+type DevResultsMode = "round" | "game";
 
 const deckRanks = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 1] as const;
 const deckSuits = [3, 0, 2, 1] as const;
@@ -321,6 +323,8 @@ export function DevGameUi() {
   const scenario = scenarios[0];
   const [gameOverride, setGameOverride] = useState<GameSnapshot | null>(null);
   const [viewMode, setViewMode] = useState<DevViewMode>("board");
+  const [resultsMode, setResultsMode] = useState<DevResultsMode>("round");
+  const [resultsReplayKey, setResultsReplayKey] = useState(0);
   const [lobbyRoom, setLobbyRoom] = useState<RoomSnapshot | null>(null);
   const [lobbyRoomCode, setLobbyRoomCode] = useState("");
 
@@ -332,7 +336,12 @@ export function DevGameUi() {
       ? cloneGame(scenario.game)
       : null;
   const game = rawGame;
-  const resultsGame = rawGame ? revealLeftoverHands(rawGame) : null;
+  const resultsGame = rawGame
+    ? {
+        ...revealLeftoverHands(rawGame),
+        roundWinnerIndex: resultsMode === "game" ? 0 : rawGame.roundWinnerIndex,
+      }
+    : null;
 
   const resolvedPerspectiveId = scenario?.controlledPlayerId ?? "";
 
@@ -347,7 +356,7 @@ export function DevGameUi() {
   const resultsRoom = room
     ? {
         ...room,
-        phase: "round_over",
+        phase: resultsMode === "game" ? "game_over" : "round_over",
         pendingDealChoice: undefined,
       }
     : null;
@@ -402,6 +411,11 @@ export function DevGameUi() {
     setViewMode("board");
   }
 
+  function showResultsMode(mode: DevResultsMode) {
+    setResultsMode(mode);
+    setResultsReplayKey((current) => current + 1);
+  }
+
   function enterLobbyRoom(code: string) {
     if (!room) return;
 
@@ -416,7 +430,39 @@ export function DevGameUi() {
 
   return (
     <section className="mx-auto flex h-full min-h-0 w-full flex-1 flex-col gap-2 md:gap-4 [@media(max-height:600px)]:gap-2">
-      <div className="flex shrink-0 items-center justify-end">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex min-h-8 items-center gap-2">
+          {viewMode === "results" ? (
+            <>
+              <div className="flex rounded-full bg-muted p-1">
+                <Button
+                  type="button"
+                  variant={resultsMode === "round" ? "secondary" : "ghost"}
+                  size="xs"
+                  onClick={() => showResultsMode("round")}
+                >
+                  {m.round_results()}
+                </Button>
+                <Button
+                  type="button"
+                  variant={resultsMode === "game" ? "secondary" : "ghost"}
+                  size="xs"
+                  onClick={() => showResultsMode("game")}
+                >
+                  {m.game_winner()}
+                </Button>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setResultsReplayKey((current) => current + 1)}
+              >
+                {m.replay_celebration()}
+              </Button>
+            </>
+          ) : null}
+        </div>
         <Tabs
           value={viewMode}
           onValueChange={(value) => setViewMode(value as DevViewMode)}
@@ -482,6 +528,7 @@ export function DevGameUi() {
         ) : viewMode === "results" && resultsGame ? (
           <div className="flex min-h-0 flex-1 overflow-auto">
             <GameResultsView
+              key={`${resultsMode}:${resultsReplayKey}`}
               room={resultsRoom}
               game={resultsGame}
               players={players}
@@ -493,6 +540,7 @@ export function DevGameUi() {
                 isDealChooser: false,
               }}
               onStartNextRound={handleStartNextRound}
+              onBackToLobby={() => setViewMode("start")}
               onChooseDealing={handleChooseDealing}
               onSendEmote={() => {}}
             />
