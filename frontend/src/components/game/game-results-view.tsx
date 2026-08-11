@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Cards01Icon, Home01Icon, Sent02Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -36,7 +37,7 @@ import {
 } from "#/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#/components/ui/tooltip";
 import { Caption, P } from "#/components/typography";
-import { fireCelebrationConfetti } from "#/lib/confetti";
+import { fireCelebrationConfetti, fireStreamingCelebrationConfetti } from "#/lib/confetti";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
@@ -62,11 +63,36 @@ type GameResultsViewProps = {
   onSendFriendRequest?: (userId: string) => Promise<unknown>;
 };
 
-function rankingRows(game: GameSnapshot, players: PlayerSnapshot[]) {
+type ResultScoreTimelinePhase = ResultScorePhase | "counting" | "adjusting";
+
+const SCORE_REVEAL_DELAY_MS = 700;
+const SCORE_REVEAL_STEP_MS = 1_000;
+const SCORE_COUNT_DURATION_MS = 620;
+const SCORE_ADJUSTMENT_HOLD_MS = 180;
+const SCORE_ADJUSTMENT_COUNT_DURATION_MS = 520;
+const SCORE_REVEAL_HANDOFF_MS = 100;
+const RANKING_REORDER_DELAY_MS = 500;
+const GAME_WINNER_DURATION_MS = 4_600;
+
+function rankingRows(
+  game: GameSnapshot,
+  players: PlayerSnapshot[],
+  phase: ResultScorePhase = "adjusted",
+) {
   const roundWinnerPlayerId = game.players[game.roundWinnerIndex]?.playerId;
 
   return game.players
-    .toSorted((left, right) => left.totalPoints - right.totalPoints)
+    .toSorted((left, right) => {
+      const pointsDifference =
+        resultScoreState(left, phase).displayedTotal -
+        resultScoreState(right, phase).displayedTotal;
+
+      if (pointsDifference !== 0) return pointsDifference;
+      return (
+        (players.find((player) => player.playerId === left.playerId)?.seat ?? 0) -
+        (players.find((player) => player.playerId === right.playerId)?.seat ?? 0)
+      );
+    })
     .map((playerState, index) => ({
       rank: index + 1,
       player: players.find((player) => player.playerId === playerState.playerId) ?? null,
@@ -89,19 +115,78 @@ function keyedCards(cards: GameSnapshot["hand"]) {
   });
 }
 
+function GradualScoreNumber({
+  from,
+  value,
+  isCounting,
+  prefix,
+  duration = SCORE_COUNT_DURATION_MS,
+  trend = 1,
+}: {
+  from: number;
+  value: number;
+  isCounting: boolean;
+  prefix?: string;
+  duration?: number;
+  trend?: 1 | -1;
+}) {
+  const shouldReduceMotion = useShouldReduceMotion();
+  const [displayedValue, setDisplayedValue] = useState(isCounting ? from : value);
+
+  useEffect(() => {
+    if (!isCounting || shouldReduceMotion || from === value) {
+      setDisplayedValue(value);
+      return;
+    }
+
+    setDisplayedValue(from);
+    const direction = value > from ? 1 : -1;
+    const distance = Math.abs(value - from);
+    const timer = window.setInterval(() => {
+      setDisplayedValue((current) => {
+        const next = current + direction;
+
+        if ((direction > 0 && next >= value) || (direction < 0 && next <= value)) {
+          window.clearInterval(timer);
+          return value;
+        }
+
+        return next;
+      });
+    }, duration / distance);
+
+    return () => window.clearInterval(timer);
+  }, [duration, from, isCounting, shouldReduceMotion, value]);
+
+  return (
+    <AnimatedNumber
+      value={isCounting && !shouldReduceMotion ? displayedValue : value}
+      prefix={prefix}
+      trend={trend}
+    />
+  );
+}
+
 function ResultPoints({
   playerState,
   phase,
 }: {
   playerState: GameSnapshot["players"][number];
-  phase: ResultScorePhase;
+  phase: ResultScoreTimelinePhase;
 }) {
-  const score = resultScoreState(playerState, phase);
+  const isCountingUp = phase === "counting";
+  const isCountingDown = phase === "adjusting";
+  const score = resultScoreState(
+    playerState,
+    isCountingUp ? "round" : isCountingDown ? "adjusted" : phase,
+  );
+  const previousScore = resultScoreState(playerState, "previous");
+  const roundScore = resultScoreState(playerState, "round");
 
   return (
     <>
       <TableCell
-        className="text-right"
+        className="relative text-right"
         data-score-phase={phase}
         data-flying={score.hasAdjustment || undefined}
       >
@@ -140,19 +225,133 @@ function ResultPoints({
                 />
               </>
             ) : null}
-            <AnimatedNumber value={score.displayedTotal} />
+            <span data-score-total>
+              <GradualScoreNumber
+                from={isCountingDown ? roundScore.displayedTotal : previousScore.displayedTotal}
+                value={score.displayedTotal}
+                isCounting={isCountingUp || isCountingDown}
+                duration={isCountingDown ? SCORE_ADJUSTMENT_COUNT_DURATION_MS : undefined}
+                trend={isCountingDown ? -1 : 1}
+              />
+            </span>
           </P>
         </div>
       </TableCell>
       <TableCell className="text-right">
         <Caption className={cn(score.displayedGained > 0 && "font-medium text-primary")}>
-          <AnimatedNumber
-            value={score.displayedGained}
-            prefix={score.displayedGained > 0 ? "+" : undefined}
-          />
+          <span data-score-gained>
+            <GradualScoreNumber
+              from={previousScore.displayedGained}
+              value={score.displayedGained}
+              isCounting={isCountingUp}
+              prefix={score.displayedGained > 0 ? "+" : undefined}
+            />
+          </span>
         </Caption>
       </TableCell>
     </>
+  );
+}
+
+function WinnerCrown({ large = false }: { large?: boolean }) {
+  const shouldReduceMotion = useShouldReduceMotion();
+
+  return (
+    <motion.span
+      aria-hidden="true"
+      className={cn(
+        "absolute z-20 origin-bottom-left drop-shadow-sm",
+        large ? "-top-9 right-1 text-5xl/none" : "-top-4 -right-0.5 rotate-18 text-sm/none",
+      )}
+      style={{ fontFamily: '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"' }}
+      initial={{ opacity: 0, y: shouldReduceMotion ? 0 : -16, rotate: large ? -12 : 2, scale: 0.5 }}
+      animate={{ opacity: 1, y: 0, rotate: large ? 8 : 18, scale: 1 }}
+      transition={{
+        delay: shouldReduceMotion ? 0 : large ? 0.45 : 0.16,
+        type: "spring",
+        stiffness: 420,
+        damping: 17,
+      }}
+    >
+      👑
+    </motion.span>
+  );
+}
+
+function GameWinnerTakeover({
+  winner,
+  onComplete,
+}: {
+  winner: PlayerSnapshot;
+  onComplete: () => void;
+}) {
+  const shouldReduceMotion = useShouldReduceMotion();
+
+  useEffect(() => {
+    void fireStreamingCelebrationConfetti({ durationMs: 3_200, delayMs: 260 });
+    const timer = window.setTimeout(
+      onComplete,
+      shouldReduceMotion ? 2_000 : GAME_WINNER_DURATION_MS,
+    );
+
+    return () => window.clearTimeout(timer);
+  }, [onComplete, shouldReduceMotion]);
+
+  return (
+    <motion.div
+      data-slot="game-winner-takeover"
+      className="fixed inset-0 z-100 grid place-items-center overflow-hidden bg-[radial-gradient(circle_at_50%_42%,color-mix(in_oklab,var(--primary)_28%,var(--background)),var(--background)_62%)] p-6 text-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: shouldReduceMotion ? 0.15 : 0.38 }}
+      role="status"
+      aria-live="assertive"
+      aria-label={m.wins_game({ name: winner.name })}
+    >
+      <motion.div
+        className="relative z-10 flex flex-col items-center"
+        initial={{ y: shouldReduceMotion ? 0 : 28, scale: shouldReduceMotion ? 1 : 0.82 }}
+        animate={{ y: 0, scale: 1 }}
+        transition={{ delay: 0.12, type: "spring", stiffness: 240, damping: 20 }}
+      >
+        <Caption className="mb-8 font-semibold tracking-[0.32em] text-primary uppercase">
+          {m.match_champion()}
+        </Caption>
+        <div className="relative mb-7">
+          <motion.div
+            className="absolute inset-[-1.5rem] rounded-full border border-primary/25"
+            animate={shouldReduceMotion ? undefined : { scale: [0.8, 1.12], opacity: [0.8, 0] }}
+            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+            aria-hidden="true"
+          />
+          <Avatar className="size-28 border-4 border-background shadow-2xl ring-4 ring-primary/30 md:size-36">
+            {winner.imageUrl ? <AvatarImage src={winner.imageUrl} alt={winner.name} /> : null}
+            <AvatarFallback className="text-3xl md:text-4xl">
+              {getUserInitials(winner.name)}
+            </AvatarFallback>
+          </Avatar>
+          <WinnerCrown large />
+        </div>
+        <motion.h1
+          className="font-heading text-4xl/none font-bold tracking-[-0.05em] text-balance md:text-7xl/none"
+          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: shouldReduceMotion ? 0 : 0.42, duration: 0.45 }}
+        >
+          {winner.name}
+        </motion.h1>
+        <P className="mt-4 text-muted-foreground">{m.wins_game({ name: winner.name })}</P>
+        <Button
+          type="button"
+          variant="secondary"
+          className="pointer-events-auto mt-10"
+          onClick={onComplete}
+        >
+          {m.final_scores()}
+        </Button>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -251,186 +450,324 @@ export function GameResultsView({
         : isGameOver
           ? m.final()
           : m.complete();
-  const hasCelebrated = useRef(false);
+  const celebratedRoundRef = useRef<string | null>(null);
   const isWinner = winner?.playerId === playerId;
   const shouldReduceMotion = useShouldReduceMotion();
   const scoreRevealKey = `${game.round}:${shouldReduceMotion}`;
+  const winnerTakeoverKey =
+    isGameOver && winner ? `${room?.code ?? "game"}:${game.round}:${winner.playerId}` : null;
   const [scoreReveal, setScoreReveal] = useState<{
     key: string;
-    phase: ResultScorePhase;
-  }>(() => ({ key: scoreRevealKey, phase: "previous" }));
-  const scorePhase = shouldReduceMotion
-    ? "adjusted"
-    : scoreReveal.key === scoreRevealKey
-      ? scoreReveal.phase
-      : "previous";
+    phaseByPlayerId: Record<string, ResultScoreTimelinePhase>;
+    hasReordered: boolean;
+  }>(() => ({ key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false }));
+  const [winnerTakeover, setWinnerTakeover] = useState(() => Boolean(winnerTakeoverKey));
+  const revealState =
+    scoreReveal.key === scoreRevealKey
+      ? scoreReveal
+      : { key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false };
+  const scoreOrder = rankingRows(game, players, "previous")
+    .filter(({ playerState }) => {
+      const previous = resultScoreState(playerState, "previous");
+      const round = resultScoreState(playerState, "round");
+      const adjusted = resultScoreState(playerState, "adjusted");
+
+      return (
+        previous.displayedTotal !== round.displayedTotal ||
+        round.displayedTotal !== adjusted.displayedTotal
+      );
+    })
+    .map(({ playerState }) => playerState.playerId);
+  const scoreOrderKey = scoreOrder.join("|");
+  const scoreValuesKey = game.players
+    .map(
+      (player) =>
+        `${player.playerId}:${player.totalPoints}:${player.pointsGained}:${player.unadjustedTotalPoints ?? ""}`,
+    )
+    .join("|");
+  const visibleRows = rankingRows(
+    game,
+    players,
+    shouldReduceMotion || revealState.hasReordered ? "adjusted" : "previous",
+  );
+  const completeWinnerTakeover = useCallback(() => setWinnerTakeover(false), []);
 
   useEffect(() => {
-    if (shouldReduceMotion) {
+    if (winnerTakeover) {
+      setScoreReveal({ key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false });
       return;
     }
 
-    const roundScoreTimer = window.setTimeout(
-      () => setScoreReveal({ key: scoreRevealKey, phase: "round" }),
-      500,
-    );
-    const adjustmentTimer = window.setTimeout(
-      () => setScoreReveal({ key: scoreRevealKey, phase: "adjusted" }),
-      1_500,
+    if (shouldReduceMotion) {
+      setScoreReveal({
+        key: scoreRevealKey,
+        phaseByPlayerId: Object.fromEntries(
+          game.players.map((player) => [player.playerId, "adjusted" as const]),
+        ),
+        hasReordered: true,
+      });
+      return;
+    }
+
+    setScoreReveal({ key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false });
+    const timers: number[] = [];
+    let nextRevealAt = SCORE_REVEAL_DELAY_MS;
+    let finalScoreAt = SCORE_REVEAL_DELAY_MS;
+
+    scoreOrder.forEach((scorePlayerId) => {
+      const scorePlayer = game.players.find((player) => player.playerId === scorePlayerId);
+      const hasAdjustment = scorePlayer
+        ? resultScoreState(scorePlayer, "round").displayedTotal !==
+          resultScoreState(scorePlayer, "adjusted").displayedTotal
+        : false;
+      const revealAt = nextRevealAt;
+      const roundAt = revealAt + SCORE_COUNT_DURATION_MS;
+      const adjustingAt = roundAt + SCORE_ADJUSTMENT_HOLD_MS;
+      const adjustedAt = hasAdjustment
+        ? adjustingAt + SCORE_ADJUSTMENT_COUNT_DURATION_MS
+        : revealAt + SCORE_COUNT_DURATION_MS + SCORE_ADJUSTMENT_HOLD_MS;
+
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: scoreRevealKey,
+            phaseByPlayerId: {
+              ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
+              [scorePlayerId]: "counting",
+            },
+            hasReordered: false,
+          }));
+        }, revealAt),
+      );
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: scoreRevealKey,
+            phaseByPlayerId: {
+              ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
+              [scorePlayerId]: "round",
+            },
+            hasReordered: false,
+          }));
+        }, roundAt),
+      );
+      if (hasAdjustment) {
+        timers.push(
+          window.setTimeout(() => {
+            setScoreReveal((current) => ({
+              key: scoreRevealKey,
+              phaseByPlayerId: {
+                ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
+                [scorePlayerId]: "adjusting",
+              },
+              hasReordered: false,
+            }));
+          }, adjustingAt),
+        );
+      }
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: scoreRevealKey,
+            phaseByPlayerId: {
+              ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
+              [scorePlayerId]: "adjusted",
+            },
+            hasReordered: false,
+          }));
+        }, adjustedAt),
+      );
+
+      finalScoreAt = adjustedAt;
+      nextRevealAt = hasAdjustment
+        ? adjustedAt + SCORE_REVEAL_HANDOFF_MS
+        : revealAt + SCORE_REVEAL_STEP_MS;
+    });
+
+    timers.push(
+      window.setTimeout(() => {
+        setScoreReveal({
+          key: scoreRevealKey,
+          phaseByPlayerId: Object.fromEntries(
+            game.players.map((player) => [player.playerId, "adjusted" as const]),
+          ),
+          hasReordered: true,
+        });
+      }, finalScoreAt + RANKING_REORDER_DELAY_MS),
     );
 
     return () => {
-      window.clearTimeout(roundScoreTimer);
-      window.clearTimeout(adjustmentTimer);
+      timers.forEach((timer) => window.clearTimeout(timer));
     };
-  }, [scoreRevealKey, shouldReduceMotion]);
+  }, [scoreOrderKey, scoreRevealKey, scoreValuesKey, shouldReduceMotion, winnerTakeover]);
 
   useEffect(() => {
-    if (!isWinner || hasCelebrated.current) return;
+    if (isGameOver || !isWinner || celebratedRoundRef.current === scoreRevealKey) return;
 
-    hasCelebrated.current = true;
+    celebratedRoundRef.current = scoreRevealKey;
     void fireCelebrationConfetti({ delayMs: 250 });
-  }, [isWinner]);
+  }, [isGameOver, isWinner, scoreRevealKey]);
+
+  useEffect(() => {
+    setWinnerTakeover(Boolean(winnerTakeoverKey));
+  }, [winnerTakeoverKey]);
 
   return (
-    <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 p-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <Card className="min-h-0 border border-border/70 shadow-sm">
-        <CardHeader>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>{resultTitle}</CardTitle>
-              <CardDescription>{resultDescription}</CardDescription>
-            </div>
-            <Badge variant={isGameOver ? "default" : "secondary"}>{resultBadge}</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto scroll-fade-x overscroll-y-contain">
-          <div className="overflow-hidden rounded-lg border border-border/70">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>{m.player()}</TableHead>
-                  <TableHead className="text-right">{m.cards()}</TableHead>
-                  <TableHead className="text-right">{m.score()}</TableHead>
-                  <TableHead className="text-right">{m.round()}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rankingRows(game, players).map(({ rank, player, playerState, isRoundWinner }) => {
-                  const playerName = player?.name ?? m.unknown_player();
+    <>
+      <AnimatePresence>
+        {winnerTakeover && winner ? (
+          <GameWinnerTakeover
+            key={winnerTakeoverKey ?? winner.playerId}
+            winner={winner}
+            onComplete={completeWinnerTakeover}
+          />
+        ) : null}
+      </AnimatePresence>
 
-                  return (
-                    <TableRow
-                      key={playerState.playerId}
-                      className={cn(
-                        isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
-                      )}
-                    >
-                      <TableCell>
-                        <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
-                          {rank}
-                        </P>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex w-fit items-center gap-2">
-                          <Avatar
-                            size="sm"
-                            aria-label={
-                              isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
-                            }
-                          >
-                            {player?.imageUrl ? (
-                              <AvatarImage src={player.imageUrl} alt={playerName} />
-                            ) : null}
-                            <AvatarFallback>
-                              {playerName === m.unknown_player() ? (
-                                <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
-                              ) : (
-                                getUserInitials(playerName)
-                              )}
-                            </AvatarFallback>
-                            {isRoundWinner ? (
-                              <span
-                                aria-hidden="true"
-                                className="absolute -top-3 -right-0.5 z-20 origin-bottom-left rotate-18 text-sm/none drop-shadow-sm"
-                                style={{
-                                  fontFamily:
-                                    '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"',
-                                }}
-                              >
-                                👑
-                              </span>
-                            ) : null}
-                          </Avatar>
+      <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 p-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <Card className="min-h-0 border border-border/70 shadow-sm">
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>{resultTitle}</CardTitle>
+                <CardDescription>{resultDescription}</CardDescription>
+              </div>
+              <Badge variant={isGameOver ? "default" : "secondary"}>{resultBadge}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto scroll-fade-x overscroll-y-contain">
+            <div className="overflow-hidden rounded-lg border border-border/70">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>#</TableHead>
+                    <TableHead>{m.player()}</TableHead>
+                    <TableHead className="text-right">{m.cards()}</TableHead>
+                    <TableHead className="text-right">{m.score()}</TableHead>
+                    <TableHead className="text-right">{m.round()}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visibleRows.map(({ rank, player, playerState, isRoundWinner }) => {
+                    const playerName = player?.name ?? m.unknown_player();
+                    const scorePhase = shouldReduceMotion
+                      ? "adjusted"
+                      : scoreOrder.includes(playerState.playerId)
+                        ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
+                        : "adjusted";
+
+                    return (
+                      <motion.tr
+                        key={playerState.playerId}
+                        layout="position"
+                        data-slot="result-row"
+                        data-player-id={playerState.playerId}
+                        data-rankings-reordered={revealState.hasReordered || undefined}
+                        className={cn(
+                          "border-b transition-colors last:border-0 hover:bg-muted/50",
+                          isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+                        )}
+                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                      >
+                        <TableCell>
                           <P
                             size="sm"
                             className={cn("font-medium", isRoundWinner && "text-primary")}
                           >
-                            {playerName}
+                            {rank}
                           </P>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {playerState.hand && playerState.hand?.length !== 0 && (
-                          <LeftoverHandTooltip
-                            handCount={playerState.handCount}
-                            hand={playerState.hand}
-                            playerName={playerName}
-                          />
-                        )}
-                      </TableCell>
-                      <ResultPoints playerState={playerState} phase={scorePhase} />
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex w-fit items-center gap-2">
+                            <Avatar
+                              size="sm"
+                              aria-label={
+                                isRoundWinner
+                                  ? m.winner_accessible({ name: playerName })
+                                  : playerName
+                              }
+                            >
+                              {player?.imageUrl ? (
+                                <AvatarImage src={player.imageUrl} alt={playerName} />
+                              ) : null}
+                              <AvatarFallback>
+                                {playerName === m.unknown_player() ? (
+                                  <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
+                                ) : (
+                                  getUserInitials(playerName)
+                                )}
+                              </AvatarFallback>
+                              {isRoundWinner ? <WinnerCrown /> : null}
+                            </Avatar>
+                            <P
+                              size="sm"
+                              className={cn("font-medium", isRoundWinner && "text-primary")}
+                            >
+                              {playerName}
+                            </P>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {playerState.hand && playerState.hand?.length !== 0 && (
+                            <LeftoverHandTooltip
+                              handCount={playerState.handCount}
+                              hand={playerState.hand}
+                              playerName={playerName}
+                            />
+                          )}
+                        </TableCell>
+                        <ResultPoints playerState={playerState} phase={scorePhase} />
+                      </motion.tr>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
 
-          {!isGameOver && dealChoice.pendingDealChoice ? (
-            <DealChoicePanel
-              players={players}
-              pendingDealChoice={dealChoice.pendingDealChoice}
-              dealChooserName={dealChoice.dealChooserName}
-              isDealChooser={dealChoice.isDealChooser}
-              onChooseDealing={onChooseDealing}
-            />
-          ) : null}
-        </CardContent>
-        {isGameOver ? (
-          <CardFooter className="shrink-0 justify-end">
-            <Button type="button" onClick={onBackToLobby}>
-              <HugeiconsIcon icon={Home01Icon} data-icon="inline-start" />
-              {m.back_to_lobby()}
-            </Button>
-          </CardFooter>
-        ) : !dealChoice.pendingDealChoice ? (
-          <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
-            {!isHost ? (
-              <P size="sm" className="text-muted-foreground">
-                {m.waiting_for_host()}
-              </P>
+            {!isGameOver && dealChoice.pendingDealChoice ? (
+              <DealChoicePanel
+                players={players}
+                pendingDealChoice={dealChoice.pendingDealChoice}
+                dealChooserName={dealChoice.dealChooserName}
+                isDealChooser={dealChoice.isDealChooser}
+                onChooseDealing={onChooseDealing}
+              />
             ) : null}
-            <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
-              {m.start_next_round()}
-            </Button>
-          </CardFooter>
-        ) : null}
-      </Card>
+          </CardContent>
+          {isGameOver ? (
+            <CardFooter className="shrink-0 justify-end">
+              <Button type="button" onClick={onBackToLobby}>
+                <HugeiconsIcon icon={Home01Icon} data-icon="inline-start" />
+                {m.back_to_lobby()}
+              </Button>
+            </CardFooter>
+          ) : !dealChoice.pendingDealChoice ? (
+            <CardFooter className="shrink-0 flex-wrap justify-end gap-3">
+              {!isHost ? (
+                <P size="sm" className="text-muted-foreground">
+                  {m.waiting_for_host()}
+                </P>
+              ) : null}
+              <Button type="button" onClick={onStartNextRound} disabled={!isHost}>
+                {m.start_next_round()}
+              </Button>
+            </CardFooter>
+          ) : null}
+        </Card>
 
-      <GameBoardPlayers
-        players={players}
-        game={game}
-        connectedPlayers={connectedPlayers}
-        hasDraftedCompositions={false}
-        showTurnIndicator={false}
-        onResetDraftCompositions={noopResetDraftCompositions}
-        onSendEmote={onSendEmote}
-        currentPlayerId={playerId}
-        social={social}
-        onSendFriendRequest={onSendFriendRequest}
-      />
-    </div>
+        <GameBoardPlayers
+          players={players}
+          game={game}
+          connectedPlayers={connectedPlayers}
+          hasDraftedCompositions={false}
+          showTurnIndicator={false}
+          onResetDraftCompositions={noopResetDraftCompositions}
+          onSendEmote={onSendEmote}
+          currentPlayerId={playerId}
+          social={social}
+          onSendFriendRequest={onSendFriendRequest}
+        />
+      </div>
+    </>
   );
 }
