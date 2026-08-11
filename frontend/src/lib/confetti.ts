@@ -12,7 +12,19 @@ type StreamingCelebrationConfettiOptions = {
   delayMs?: number;
 };
 
-const APP_COLORS = ["#a5d8f3", "#55b6e8", "#278bc7", "#176ca5", "#0d4d7d"];
+const LIGHT_THEME_COLORS = ["#0b2638", "#0d4d7d", "#176ca5", "#278bc7", "#55b6e8"];
+const DARK_THEME_COLORS = ["#f4fbff", "#a5d8f3", "#55b6e8", "#278bc7", "#176ca5"];
+
+function celebrationColors() {
+  const root = document.documentElement;
+  const isDark = root.classList.contains("dark")
+    ? true
+    : root.classList.contains("light")
+      ? false
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  return isDark ? DARK_THEME_COLORS : LIGHT_THEME_COLORS;
+}
 
 export async function fireCelebrationConfetti({
   count = 200,
@@ -31,7 +43,7 @@ export async function fireCelebrationConfetti({
   }
 
   const defaults: confetti.Options = {
-    colors: APP_COLORS,
+    colors: celebrationColors(),
     origin: { y: originY },
   };
 
@@ -68,7 +80,7 @@ export async function fireStreamingCelebrationConfetti({
   const fireSideBurst = (particleCount: number) => {
     const shared: confetti.Options = {
       particleCount,
-      colors: APP_COLORS,
+      colors: celebrationColors(),
       startVelocity: 42,
       spread: 48,
       ticks: 180,
