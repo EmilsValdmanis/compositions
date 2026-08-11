@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Cards01Icon, Home01Icon, Sent02Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -134,25 +134,20 @@ function GradualScoreNumber({
   const [displayedValue, setDisplayedValue] = useState(isCounting ? from : value);
 
   useEffect(() => {
-    if (!isCounting || shouldReduceMotion || from === value) {
-      setDisplayedValue(value);
-      return;
-    }
+    if (!isCounting || shouldReduceMotion || from === value) return;
 
-    setDisplayedValue(from);
     const direction = value > from ? 1 : -1;
     const distance = Math.abs(value - from);
+    let currentValue = from;
     const timer = window.setInterval(() => {
-      setDisplayedValue((current) => {
-        const next = current + direction;
+      const nextValue = currentValue + direction;
+      const hasReachedTarget =
+        (direction > 0 && nextValue >= value) || (direction < 0 && nextValue <= value);
 
-        if ((direction > 0 && next >= value) || (direction < 0 && next <= value)) {
-          window.clearInterval(timer);
-          return value;
-        }
+      currentValue = hasReachedTarget ? value : nextValue;
+      setDisplayedValue(currentValue);
 
-        return next;
-      });
+      if (hasReachedTarget) window.clearInterval(timer);
     }, duration / distance);
 
     return () => window.clearInterval(timer);
@@ -227,6 +222,7 @@ function ResultPoints({
             ) : null}
             <span data-score-total>
               <GradualScoreNumber
+                key={`total-${phase}`}
                 from={isCountingDown ? roundScore.displayedTotal : previousScore.displayedTotal}
                 value={score.displayedTotal}
                 isCounting={isCountingUp || isCountingDown}
@@ -241,6 +237,7 @@ function ResultPoints({
         <Caption className={cn(score.displayedGained > 0 && "font-medium text-primary")}>
           <span data-score-gained>
             <GradualScoreNumber
+              key={`gained-${phase}`}
               from={previousScore.displayedGained}
               value={score.displayedGained}
               isCounting={isCountingUp}
@@ -286,16 +283,17 @@ function GameWinnerTakeover({
   onComplete: () => void;
 }) {
   const shouldReduceMotion = useShouldReduceMotion();
+  const completeTakeover = useEffectEvent(onComplete);
 
   useEffect(() => {
     void fireStreamingCelebrationConfetti({ durationMs: 3_200, delayMs: 260 });
     const timer = window.setTimeout(
-      onComplete,
+      completeTakeover,
       shouldReduceMotion ? 2_000 : GAME_WINNER_DURATION_MS,
     );
 
     return () => window.clearTimeout(timer);
-  }, [onComplete, shouldReduceMotion]);
+  }, [shouldReduceMotion]);
 
   return (
     <motion.div
@@ -402,6 +400,273 @@ function LeftoverHandTooltip({
   );
 }
 
+type RankingRow = ReturnType<typeof rankingRows>[number];
+type ScoreRevealState = {
+  key: string;
+  phaseByPlayerId: Record<string, ResultScoreTimelinePhase>;
+  hasReordered: boolean;
+};
+
+function scoreTimeline(game: GameSnapshot, players: PlayerSnapshot[]) {
+  const timeline: { playerId: string; hasAdjustment: boolean }[] = [];
+
+  for (const { playerState } of rankingRows(game, players, "previous")) {
+    const previous = resultScoreState(playerState, "previous");
+    const round = resultScoreState(playerState, "round");
+    const adjusted = resultScoreState(playerState, "adjusted");
+
+    if (
+      previous.displayedTotal !== round.displayedTotal ||
+      round.displayedTotal !== adjusted.displayedTotal
+    ) {
+      timeline.push({
+        playerId: playerState.playerId,
+        hasAdjustment: round.displayedTotal !== adjusted.displayedTotal,
+      });
+    }
+  }
+
+  return timeline;
+}
+
+function scoreValuesKey(gamePlayers: GameSnapshot["players"]) {
+  let key = "";
+
+  for (const player of gamePlayers) {
+    key += `${player.playerId}:${player.totalPoints}:${player.pointsGained}:${player.unadjustedTotalPoints ?? ""}|`;
+  }
+
+  return key;
+}
+
+function adjustedScorePhases(gamePlayers: GameSnapshot["players"]) {
+  const phases: Record<string, ResultScoreTimelinePhase> = {};
+
+  for (const player of gamePlayers) phases[player.playerId] = "adjusted";
+
+  return phases;
+}
+
+function useResultScoreReveal({
+  game,
+  players,
+  shouldReduceMotion,
+  winnerTakeover,
+}: {
+  game: GameSnapshot;
+  players: PlayerSnapshot[];
+  shouldReduceMotion: boolean;
+  winnerTakeover: boolean;
+}) {
+  const scoreRevealKey = `${game.round}:${shouldReduceMotion}`;
+  const scoreTimelineKey = `${scoreRevealKey}:${scoreValuesKey(game.players)}:${winnerTakeover ? "paused" : "active"}`;
+  const [scoreReveal, setScoreReveal] = useState<ScoreRevealState>(() => ({
+    key: scoreTimelineKey,
+    phaseByPlayerId: {},
+    hasReordered: false,
+  }));
+  const scorePlayerIds = new Set<string>();
+
+  for (const { playerId: scorePlayerId } of scoreTimeline(game, players)) {
+    scorePlayerIds.add(scorePlayerId);
+  }
+
+  const revealState: ScoreRevealState = winnerTakeover
+    ? { key: scoreTimelineKey, phaseByPlayerId: {}, hasReordered: false }
+    : shouldReduceMotion
+      ? {
+          key: scoreTimelineKey,
+          phaseByPlayerId: adjustedScorePhases(game.players),
+          hasReordered: true,
+        }
+      : scoreReveal.key === scoreTimelineKey
+        ? scoreReveal
+        : { key: scoreTimelineKey, phaseByPlayerId: {}, hasReordered: false };
+
+  useEffect(() => {
+    if (winnerTakeover || shouldReduceMotion) return;
+
+    const timers: number[] = [];
+    let nextRevealAt = SCORE_REVEAL_DELAY_MS;
+    let finalScoreAt = SCORE_REVEAL_DELAY_MS;
+
+    for (const { playerId: scorePlayerId, hasAdjustment } of scoreTimeline(game, players)) {
+      const revealAt = nextRevealAt;
+      const roundAt = revealAt + SCORE_COUNT_DURATION_MS;
+      const adjustingAt = roundAt + SCORE_ADJUSTMENT_HOLD_MS;
+      const adjustedAt = hasAdjustment
+        ? adjustingAt + SCORE_ADJUSTMENT_COUNT_DURATION_MS
+        : revealAt + SCORE_COUNT_DURATION_MS + SCORE_ADJUSTMENT_HOLD_MS;
+
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: scoreTimelineKey,
+            phaseByPlayerId: {
+              ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+              [scorePlayerId]: "counting",
+            },
+            hasReordered: false,
+          }));
+        }, revealAt),
+      );
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: scoreTimelineKey,
+            phaseByPlayerId: {
+              ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+              [scorePlayerId]: "round",
+            },
+            hasReordered: false,
+          }));
+        }, roundAt),
+      );
+      if (hasAdjustment) {
+        timers.push(
+          window.setTimeout(() => {
+            setScoreReveal((current) => ({
+              key: scoreTimelineKey,
+              phaseByPlayerId: {
+                ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+                [scorePlayerId]: "adjusting",
+              },
+              hasReordered: false,
+            }));
+          }, adjustingAt),
+        );
+      }
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: scoreTimelineKey,
+            phaseByPlayerId: {
+              ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+              [scorePlayerId]: "adjusted",
+            },
+            hasReordered: false,
+          }));
+        }, adjustedAt),
+      );
+
+      finalScoreAt = adjustedAt;
+      nextRevealAt = hasAdjustment
+        ? adjustedAt + SCORE_REVEAL_HANDOFF_MS
+        : revealAt + SCORE_REVEAL_STEP_MS;
+    }
+
+    timers.push(
+      window.setTimeout(() => {
+        setScoreReveal({
+          key: scoreTimelineKey,
+          phaseByPlayerId: adjustedScorePhases(game.players),
+          hasReordered: true,
+        });
+      }, finalScoreAt + RANKING_REORDER_DELAY_MS),
+    );
+
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, [game, players, scoreTimelineKey, shouldReduceMotion, winnerTakeover]);
+
+  return { scorePlayerIds, scoreRevealKey, revealState };
+}
+
+function ResultsScoreTable({
+  rows,
+  revealState,
+  scorePlayerIds,
+  shouldReduceMotion,
+}: {
+  rows: RankingRow[];
+  revealState: ScoreRevealState;
+  scorePlayerIds: Set<string>;
+  shouldReduceMotion: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/70">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>#</TableHead>
+            <TableHead>{m.player()}</TableHead>
+            <TableHead className="text-right">{m.cards()}</TableHead>
+            <TableHead className="text-right">{m.score()}</TableHead>
+            <TableHead className="text-right">{m.round()}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map(({ rank, player, playerState, isRoundWinner }) => {
+            const playerName = player?.name ?? m.unknown_player();
+            const scorePhase = shouldReduceMotion
+              ? "adjusted"
+              : scorePlayerIds.has(playerState.playerId)
+                ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
+                : "adjusted";
+
+            return (
+              <motion.tr
+                key={playerState.playerId}
+                layout="position"
+                data-slot="result-row"
+                data-player-id={playerState.playerId}
+                data-rankings-reordered={revealState.hasReordered || undefined}
+                className={cn(
+                  "border-b transition-colors last:border-0 hover:bg-muted/50",
+                  isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+                )}
+                transition={{ type: "spring", stiffness: 380, damping: 32 }}
+              >
+                <TableCell>
+                  <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
+                    {rank}
+                  </P>
+                </TableCell>
+                <TableCell>
+                  <div className="flex w-fit items-center gap-2">
+                    <Avatar
+                      size="sm"
+                      aria-label={
+                        isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
+                      }
+                    >
+                      {player?.imageUrl ? (
+                        <AvatarImage src={player.imageUrl} alt={playerName} />
+                      ) : null}
+                      <AvatarFallback>
+                        {playerName === m.unknown_player() ? (
+                          <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
+                        ) : (
+                          getUserInitials(playerName)
+                        )}
+                      </AvatarFallback>
+                      {isRoundWinner ? <WinnerCrown /> : null}
+                    </Avatar>
+                    <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
+                      {playerName}
+                    </P>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  {playerState.hand && playerState.hand.length !== 0 ? (
+                    <LeftoverHandTooltip
+                      handCount={playerState.handCount}
+                      hand={playerState.hand}
+                      playerName={playerName}
+                    />
+                  ) : null}
+                </TableCell>
+                <ResultPoints playerState={playerState} phase={scorePhase} />
+              </motion.tr>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export function GameResultsView({
   room,
   game,
@@ -453,153 +718,26 @@ export function GameResultsView({
   const celebratedRoundRef = useRef<string | null>(null);
   const isWinner = winner?.playerId === playerId;
   const shouldReduceMotion = useShouldReduceMotion();
-  const scoreRevealKey = `${game.round}:${shouldReduceMotion}`;
   const winnerTakeoverKey =
     isGameOver && winner ? `${room?.code ?? "game"}:${game.round}:${winner.playerId}` : null;
-  const [scoreReveal, setScoreReveal] = useState<{
-    key: string;
-    phaseByPlayerId: Record<string, ResultScoreTimelinePhase>;
-    hasReordered: boolean;
-  }>(() => ({ key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false }));
-  const [winnerTakeover, setWinnerTakeover] = useState(() => Boolean(winnerTakeoverKey));
-  const revealState =
-    scoreReveal.key === scoreRevealKey
-      ? scoreReveal
-      : { key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false };
-  const scoreOrder = rankingRows(game, players, "previous")
-    .filter(({ playerState }) => {
-      const previous = resultScoreState(playerState, "previous");
-      const round = resultScoreState(playerState, "round");
-      const adjusted = resultScoreState(playerState, "adjusted");
-
-      return (
-        previous.displayedTotal !== round.displayedTotal ||
-        round.displayedTotal !== adjusted.displayedTotal
-      );
-    })
-    .map(({ playerState }) => playerState.playerId);
-  const scoreOrderKey = scoreOrder.join("|");
-  const scoreValuesKey = game.players
-    .map(
-      (player) =>
-        `${player.playerId}:${player.totalPoints}:${player.pointsGained}:${player.unadjustedTotalPoints ?? ""}`,
-    )
-    .join("|");
+  const [dismissedWinnerTakeoverKey, setDismissedWinnerTakeoverKey] = useState<string | null>(null);
+  const winnerTakeover = Boolean(
+    winnerTakeoverKey && winnerTakeoverKey !== dismissedWinnerTakeoverKey,
+  );
+  const { scorePlayerIds, scoreRevealKey, revealState } = useResultScoreReveal({
+    game,
+    players,
+    shouldReduceMotion,
+    winnerTakeover,
+  });
   const visibleRows = rankingRows(
     game,
     players,
     shouldReduceMotion || revealState.hasReordered ? "adjusted" : "previous",
   );
-  const completeWinnerTakeover = useCallback(() => setWinnerTakeover(false), []);
-
-  useEffect(() => {
-    if (winnerTakeover) {
-      setScoreReveal({ key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false });
-      return;
-    }
-
-    if (shouldReduceMotion) {
-      setScoreReveal({
-        key: scoreRevealKey,
-        phaseByPlayerId: Object.fromEntries(
-          game.players.map((player) => [player.playerId, "adjusted" as const]),
-        ),
-        hasReordered: true,
-      });
-      return;
-    }
-
-    setScoreReveal({ key: scoreRevealKey, phaseByPlayerId: {}, hasReordered: false });
-    const timers: number[] = [];
-    let nextRevealAt = SCORE_REVEAL_DELAY_MS;
-    let finalScoreAt = SCORE_REVEAL_DELAY_MS;
-
-    scoreOrder.forEach((scorePlayerId) => {
-      const scorePlayer = game.players.find((player) => player.playerId === scorePlayerId);
-      const hasAdjustment = scorePlayer
-        ? resultScoreState(scorePlayer, "round").displayedTotal !==
-          resultScoreState(scorePlayer, "adjusted").displayedTotal
-        : false;
-      const revealAt = nextRevealAt;
-      const roundAt = revealAt + SCORE_COUNT_DURATION_MS;
-      const adjustingAt = roundAt + SCORE_ADJUSTMENT_HOLD_MS;
-      const adjustedAt = hasAdjustment
-        ? adjustingAt + SCORE_ADJUSTMENT_COUNT_DURATION_MS
-        : revealAt + SCORE_COUNT_DURATION_MS + SCORE_ADJUSTMENT_HOLD_MS;
-
-      timers.push(
-        window.setTimeout(() => {
-          setScoreReveal((current) => ({
-            key: scoreRevealKey,
-            phaseByPlayerId: {
-              ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
-              [scorePlayerId]: "counting",
-            },
-            hasReordered: false,
-          }));
-        }, revealAt),
-      );
-      timers.push(
-        window.setTimeout(() => {
-          setScoreReveal((current) => ({
-            key: scoreRevealKey,
-            phaseByPlayerId: {
-              ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
-              [scorePlayerId]: "round",
-            },
-            hasReordered: false,
-          }));
-        }, roundAt),
-      );
-      if (hasAdjustment) {
-        timers.push(
-          window.setTimeout(() => {
-            setScoreReveal((current) => ({
-              key: scoreRevealKey,
-              phaseByPlayerId: {
-                ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
-                [scorePlayerId]: "adjusting",
-              },
-              hasReordered: false,
-            }));
-          }, adjustingAt),
-        );
-      }
-      timers.push(
-        window.setTimeout(() => {
-          setScoreReveal((current) => ({
-            key: scoreRevealKey,
-            phaseByPlayerId: {
-              ...(current.key === scoreRevealKey ? current.phaseByPlayerId : {}),
-              [scorePlayerId]: "adjusted",
-            },
-            hasReordered: false,
-          }));
-        }, adjustedAt),
-      );
-
-      finalScoreAt = adjustedAt;
-      nextRevealAt = hasAdjustment
-        ? adjustedAt + SCORE_REVEAL_HANDOFF_MS
-        : revealAt + SCORE_REVEAL_STEP_MS;
-    });
-
-    timers.push(
-      window.setTimeout(() => {
-        setScoreReveal({
-          key: scoreRevealKey,
-          phaseByPlayerId: Object.fromEntries(
-            game.players.map((player) => [player.playerId, "adjusted" as const]),
-          ),
-          hasReordered: true,
-        });
-      }, finalScoreAt + RANKING_REORDER_DELAY_MS),
-    );
-
-    return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
-    };
-  }, [scoreOrderKey, scoreRevealKey, scoreValuesKey, shouldReduceMotion, winnerTakeover]);
+  const completeWinnerTakeover = () => {
+    setDismissedWinnerTakeoverKey(winnerTakeoverKey);
+  };
 
   useEffect(() => {
     if (isGameOver || !isWinner || celebratedRoundRef.current === scoreRevealKey) return;
@@ -607,10 +745,6 @@ export function GameResultsView({
     celebratedRoundRef.current = scoreRevealKey;
     void fireCelebrationConfetti({ delayMs: 250 });
   }, [isGameOver, isWinner, scoreRevealKey]);
-
-  useEffect(() => {
-    setWinnerTakeover(Boolean(winnerTakeoverKey));
-  }, [winnerTakeoverKey]);
 
   return (
     <>
@@ -636,93 +770,12 @@ export function GameResultsView({
             </div>
           </CardHeader>
           <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto scroll-fade-x overscroll-y-contain">
-            <div className="overflow-hidden rounded-lg border border-border/70">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>{m.player()}</TableHead>
-                    <TableHead className="text-right">{m.cards()}</TableHead>
-                    <TableHead className="text-right">{m.score()}</TableHead>
-                    <TableHead className="text-right">{m.round()}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleRows.map(({ rank, player, playerState, isRoundWinner }) => {
-                    const playerName = player?.name ?? m.unknown_player();
-                    const scorePhase = shouldReduceMotion
-                      ? "adjusted"
-                      : scoreOrder.includes(playerState.playerId)
-                        ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
-                        : "adjusted";
-
-                    return (
-                      <motion.tr
-                        key={playerState.playerId}
-                        layout="position"
-                        data-slot="result-row"
-                        data-player-id={playerState.playerId}
-                        data-rankings-reordered={revealState.hasReordered || undefined}
-                        className={cn(
-                          "border-b transition-colors last:border-0 hover:bg-muted/50",
-                          isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
-                        )}
-                        transition={{ type: "spring", stiffness: 380, damping: 32 }}
-                      >
-                        <TableCell>
-                          <P
-                            size="sm"
-                            className={cn("font-medium", isRoundWinner && "text-primary")}
-                          >
-                            {rank}
-                          </P>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex w-fit items-center gap-2">
-                            <Avatar
-                              size="sm"
-                              aria-label={
-                                isRoundWinner
-                                  ? m.winner_accessible({ name: playerName })
-                                  : playerName
-                              }
-                            >
-                              {player?.imageUrl ? (
-                                <AvatarImage src={player.imageUrl} alt={playerName} />
-                              ) : null}
-                              <AvatarFallback>
-                                {playerName === m.unknown_player() ? (
-                                  <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
-                                ) : (
-                                  getUserInitials(playerName)
-                                )}
-                              </AvatarFallback>
-                              {isRoundWinner ? <WinnerCrown /> : null}
-                            </Avatar>
-                            <P
-                              size="sm"
-                              className={cn("font-medium", isRoundWinner && "text-primary")}
-                            >
-                              {playerName}
-                            </P>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {playerState.hand && playerState.hand?.length !== 0 && (
-                            <LeftoverHandTooltip
-                              handCount={playerState.handCount}
-                              hand={playerState.hand}
-                              playerName={playerName}
-                            />
-                          )}
-                        </TableCell>
-                        <ResultPoints playerState={playerState} phase={scorePhase} />
-                      </motion.tr>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <ResultsScoreTable
+              rows={visibleRows}
+              revealState={revealState}
+              scorePlayerIds={scorePlayerIds}
+              shouldReduceMotion={shouldReduceMotion}
+            />
 
             {!isGameOver && dealChoice.pendingDealChoice ? (
               <DealChoicePanel

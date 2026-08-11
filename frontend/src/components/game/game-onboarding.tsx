@@ -481,7 +481,7 @@ function OrientationLabels({ rects }: { rects: SpotlightRect[] }) {
       {rects.map((rect, index) => {
         const label = orientationLabel(rect.id);
         if (!label) return null;
-        const left = Math.min(Math.max(8, rect.left + 24), window.innerWidth - 168);
+        const left = `min(max(8px, ${rect.left + 24}px), calc(100vw - 168px))`;
         const top = rect.top - 3;
 
         return (
