@@ -52,7 +52,8 @@ import {
 } from "#/components/ui/input-group";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "#/components/ui/item";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
-import { H2 } from "#/components/typography";
+import { H2, H3 } from "#/components/typography";
+import { isCompleteRoomCode, ROOM_CODE_LENGTH } from "#/lib/room-code";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -125,6 +126,7 @@ export function GameLobbyView({
   const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
   const connectedCount = players.filter((player) => player.connected).length;
   const isHost = Boolean(room && currentPlayerId === room.hostPlayerId);
+  const canSubmitRoomCode = canJoinRoom && isCompleteRoomCode(roomCode);
 
   return (
     <div
@@ -141,15 +143,10 @@ export function GameLobbyView({
               room ? "items-start" : "items-center",
             )}
           >
-            <div className="flex min-w-0 items-center gap-3">
-              {!room ? (
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <HugeiconsIcon icon={JokerIcon} className="size-5" aria-hidden="true" />
-                </div>
-              ) : null}
+            <div className={cn("flex min-w-0 items-center gap-2", !room && "mx-auto")}>
+              <HugeiconsIcon icon={JokerIcon} className="size-7 text-primary" aria-hidden="true" />
               <div className="min-w-0">
-                <CardTitle>{m.lobby()}</CardTitle>
-                <CardDescription>{room ? m.ready_room() : m.create_or_join()}</CardDescription>
+                <H3>{m.compositions()}</H3>
               </div>
             </div>
             {room ? (
@@ -277,8 +274,15 @@ export function GameLobbyView({
             </Button>
           )}
           {!room ? (
-            <>
-              <CardDescription className="mx-auto">{m.or()}</CardDescription>
+            <form
+              className="grid gap-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (canSubmitRoomCode) {
+                  onJoinRoom(roomCode.trim());
+                }
+              }}
+            >
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="room-code" className="sr-only">
@@ -290,19 +294,18 @@ export function GameLobbyView({
                       value={roomCode}
                       onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
                       placeholder={m.room_code()}
-                      maxLength={6}
+                      maxLength={ROOM_CODE_LENGTH}
                     />
                     <InputGroupAddon
                       align="inline-end"
                       className="self-stretch p-0 has-[>button]:mr-0"
                     >
                       <InputGroupButton
-                        type="button"
+                        type="submit"
                         variant="ghost"
                         size="sm"
                         className="h-full rounded-l-none px-4"
-                        onClick={() => onJoinRoom(roomCode.trim())}
-                        disabled={!canJoinRoom}
+                        disabled={!canSubmitRoomCode}
                       >
                         <HugeiconsIcon icon={Login02Icon} data-icon="inline-start" />
                         {m.join()}
@@ -311,7 +314,7 @@ export function GameLobbyView({
                   </InputGroup>
                 </Field>
               </FieldGroup>
-            </>
+            </form>
           ) : null}
         </CardContent>
       </Card>

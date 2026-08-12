@@ -265,6 +265,7 @@ type GameWebSocketContextValue = {
   state: LobbyState;
   connect: () => Promise<void>;
   disconnect: () => void;
+  dismissError: () => void;
   dismissCompletedGame: () => void;
   createRoom: () => void;
   joinRoom: (roomCode: string) => void;
@@ -861,6 +862,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     state,
     connect,
     disconnect,
+    dismissError: () => updateState((current) => clearError(current)),
     dismissCompletedGame: () =>
       updateState((current) => ({
         ...current,

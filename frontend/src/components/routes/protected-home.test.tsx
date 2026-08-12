@@ -11,6 +11,7 @@ import { type GameSnapshot, type RoomSnapshot } from "#/components/game-websocke
 const testRuntime = vi.hoisted(() => ({
   boardMountCount: 0,
   navigate: vi.fn(),
+  toastError: vi.fn(),
   useGameWebSocket: vi.fn(),
 }));
 
@@ -24,6 +25,13 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("#/components/game-websocket-provider", () => ({
   useGameWebSocket: testRuntime.useGameWebSocket,
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    error: testRuntime.toastError,
+    success: vi.fn(),
+  },
 }));
 
 vi.mock("#/components/game/game-board-view", async () => {
@@ -140,12 +148,14 @@ function room(phase: string): RoomSnapshot {
 
 function websocketValue(state: Record<string, unknown>) {
   const action = vi.fn();
+  const dismissError = vi.fn();
 
   return {
     state,
     createRoom: action,
     joinRoom: action,
     leaveRoom: action,
+    dismissError,
     startGame: action,
     startNextRound: action,
     dismissCompletedGame: action,
@@ -161,7 +171,7 @@ function websocketValue(state: Record<string, unknown>) {
   };
 }
 
-function lobbyState(currentRoom: RoomSnapshot, currentGame: GameSnapshot) {
+function lobbyState(currentRoom: RoomSnapshot | null, currentGame: GameSnapshot | null) {
   return {
     connectionStatus: "connected",
     sessionId: "session-1",
@@ -190,6 +200,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   testRuntime.boardMountCount = 0;
   testRuntime.navigate.mockReset();
+  testRuntime.toastError.mockReset();
   testRuntime.useGameWebSocket.mockReset();
 });
 
@@ -229,5 +240,23 @@ describe("ProtectedHome completed composition handoff", () => {
     });
 
     expect(view.getByTestId("game-results")).toBeTruthy();
+  });
+});
+
+describe("ProtectedHome errors", () => {
+  it("acknowledges an error after showing its toast", async () => {
+    const state = {
+      ...lobbyState(null, null),
+      lastError: "The room was not found.",
+      lastErrorCode: "room_not_found",
+      lastErrorId: 1,
+    };
+    const connection = websocketValue(state);
+    testRuntime.useGameWebSocket.mockReturnValue(connection);
+
+    render(<ProtectedHome />);
+
+    expect(testRuntime.toastError).toHaveBeenCalledWith(state.lastError);
+    expect(connection.dismissError).toHaveBeenCalledOnce();
   });
 });

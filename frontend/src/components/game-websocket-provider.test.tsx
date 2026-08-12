@@ -89,8 +89,15 @@ class FakeWebSocket {
 }
 
 function Harness({ children }: { children?: ReactNode }) {
-  const { state, connect, disconnect, discardCard, playTableAndDiscard, updateTurnDrafts } =
-    useGameWebSocket();
+  const {
+    state,
+    connect,
+    disconnect,
+    dismissError,
+    discardCard,
+    playTableAndDiscard,
+    updateTurnDrafts,
+  } = useGameWebSocket();
 
   return (
     <div>
@@ -111,6 +118,9 @@ function Harness({ children }: { children?: ReactNode }) {
       </button>
       <button type="button" onClick={disconnect}>
         Disconnect
+      </button>
+      <button type="button" onClick={dismissError}>
+        Dismiss error
       </button>
       <button type="button" onClick={() => void discardCard(4, { rank: 12, suit: 2 })}>
         Discard test card
@@ -575,6 +585,11 @@ describe("GameWebSocketProvider", () => {
     expect(screen.getByTestId("last-error").textContent).toBe("The room is full.");
     expect(screen.getByTestId("last-error-code").textContent).toBe("room_full");
     expect(screen.getByTestId("last-error-message").textContent).toBe("room is full");
+
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss error" }));
+
+    expect(screen.getByTestId("last-error").textContent).toBe("");
+    expect(screen.getByTestId("last-error-code").textContent).toBe("");
   });
 
   it("rejects inherited object property names as message types", async () => {
