@@ -200,6 +200,30 @@ func TestPostgresUserStoreGetLeaderboard(t *testing.T) {
 	}
 }
 
+func TestPostgresUserStoreDelegatingMethodsHandleUnconfiguredStores(t *testing.T) {
+	ctx := context.Background()
+	stores := []*postgresUserStore{nil, {store: &database.UserStore{}}}
+	for _, store := range stores {
+		_ = store.Ping(ctx)
+		_, _ = store.DeleteExpiredSessions(ctx, time.Now())
+		_ = store.UpdateOnboardingVersion(ctx, " user ", 1)
+		_, _ = store.ListGameBugReportsPage(ctx, 1, 0)
+		_, _ = store.CountGameBugReports(ctx)
+		_, _ = store.GetGameBugReport(ctx, " report ")
+		_ = store.CompleteGameBugReport(ctx, " report ")
+		_, _ = store.GetAdminAnalytics(ctx, database.AdminAnalyticsRange{})
+		_, _ = store.GetPlayerGameHistory(ctx, " user ", 1, 0)
+		_, _ = store.ListSocialSnapshot(ctx, " user ")
+		_, _ = store.ListSocialSnapshots(ctx, []string{" user ", " friend "})
+		_, _ = store.SendFriendRequest(ctx, " sender ", " recipient ")
+		_, _ = store.RespondFriendRequest(ctx, " recipient ", " request ", true)
+		_ = store.RemoveFriend(ctx, " user ", " friend ")
+		_, _ = store.SendGameInvite(ctx, " sender ", " recipient ", " room ", time.Now().Add(time.Hour))
+		_, _ = store.GetGameInvite(ctx, " recipient ", " invite ")
+		_, _ = store.DeleteGameInvite(ctx, " recipient ", " invite ")
+	}
+}
+
 func TestPostgresUserStoreLobbyState(t *testing.T) {
 	originalSaveStoredLobbyState := saveStoredLobbyState
 	defer func() { saveStoredLobbyState = originalSaveStoredLobbyState }()

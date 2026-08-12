@@ -106,7 +106,7 @@ func TestHandlePlayerGameHistory(t *testing.T) {
 func TestHandlePlayerGameHistoryRejectsInvalidPagination(t *testing.T) {
 	playerID := "00000000-0000-0000-0000-000000000002"
 	server := newWSServerWithDependencies(nil, &playerProfileTestStore{userStore: noopUserStore{}}, "")
-	for _, query := range []string{"page=0", "page=nope", "pageSize=0", "pageSize=51", "mode=ranked"} {
+	for _, query := range []string{"page=0", "page=nope", "page=10002&pageSize=1", "pageSize=0", "pageSize=51", "mode=ranked"} {
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games?"+query, nil)
 		server.routes().ServeHTTP(response, request)
@@ -114,6 +114,41 @@ func TestHandlePlayerGameHistoryRejectsInvalidPagination(t *testing.T) {
 			t.Fatalf("query %q status = %d; want %d", query, response.Code, http.StatusBadRequest)
 		}
 	}
+}
+
+func TestHandlePlayerGameHistoryRemainingBranches(t *testing.T) {
+	playerID := "00000000-0000-0000-0000-000000000002"
+	request := func() *http.Request {
+		return httptest.NewRequest(http.MethodGet, "/api/players/"+playerID+"/games", nil)
+	}
+
+	t.Run("store unavailable", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		newWSServerWithDependencies(nil, noopUserStore{}, "").handlePlayerGameHistory(response, request(), playerID)
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusServiceUnavailable)
+		}
+	})
+	for name, testCase := range map[string]struct {
+		err    error
+		status int
+	}{
+		"missing": {database.ErrPlayerProfileNotFound, http.StatusNotFound},
+		"failure": {errors.New("history failed"), http.StatusInternalServerError},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := &playerProfileTestStore{userStore: noopUserStore{}, historyErr: testCase.err}
+			response := httptest.NewRecorder()
+			newWSServerWithDependencies(nil, store, "").handlePlayerGameHistory(response, request(), playerID)
+			if response.Code != testCase.status {
+				t.Fatalf("status = %d; want %d", response.Code, testCase.status)
+			}
+		})
+	}
+	t.Run("write failure", func(t *testing.T) {
+		store := &playerProfileTestStore{userStore: noopUserStore{}}
+		newWSServerWithDependencies(nil, store, "").handlePlayerGameHistory(failingResponseWriter{}, request(), playerID)
+	})
 }
 
 func TestHandlePlayerProfileRejectsInvalidID(t *testing.T) {

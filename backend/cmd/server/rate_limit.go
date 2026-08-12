@@ -4,6 +4,8 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +14,8 @@ import (
 )
 
 var errRateLimitExceeded = errors.New("rate limit exceeded")
+
+const maxUnauthenticatedConnectionsPerIP = 32
 
 type wsRateLimitConfig struct {
 	ConnectionRate  rate.Limit
@@ -22,6 +26,8 @@ type wsRateLimitConfig struct {
 	JoinRoomBurst   int
 	MessageRate     rate.Limit
 	MessageBurst    int
+	HTTPRate        rate.Limit
+	HTTPBurst       int
 	VisitorTTL      time.Duration
 }
 
@@ -39,6 +45,8 @@ type wsRateLimiters struct {
 	connectionAttempts map[string]*trackedLimiter
 	createRoomAttempts map[string]*trackedLimiter
 	joinRoomAttempts   map[string]*trackedLimiter
+	httpRequests       map[string]*trackedLimiter
+	activeConnections  map[string]int
 }
 
 func defaultWSRateLimitConfig() wsRateLimitConfig {
@@ -51,6 +59,8 @@ func defaultWSRateLimitConfig() wsRateLimitConfig {
 		JoinRoomBurst:   10,
 		MessageRate:     rate.Limit(20),
 		MessageBurst:    60,
+		HTTPRate:        rate.Limit(20),
+		HTTPBurst:       120,
 		VisitorTTL:      10 * time.Minute,
 	}
 }
@@ -65,7 +75,41 @@ func newWSRateLimiters(config wsRateLimitConfig) *wsRateLimiters {
 		connectionAttempts: make(map[string]*trackedLimiter),
 		createRoomAttempts: make(map[string]*trackedLimiter),
 		joinRoomAttempts:   make(map[string]*trackedLimiter),
+		httpRequests:       make(map[string]*trackedLimiter),
+		activeConnections:  make(map[string]int),
 	}
+}
+
+func (l *wsRateLimiters) beginConnection(r *http.Request) (func(), bool) {
+	if l == nil {
+		return func() {}, true
+	}
+	if !l.allowConnectionAttempt(r) {
+		return nil, false
+	}
+	key := clientIPFromRequest(r)
+	if key == "" {
+		key = "unknown"
+	}
+	l.mu.Lock()
+	if l.activeConnections[key] >= maxUnauthenticatedConnectionsPerIP {
+		l.mu.Unlock()
+		return nil, false
+	}
+	l.activeConnections[key]++
+	l.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			l.mu.Lock()
+			l.activeConnections[key]--
+			if l.activeConnections[key] <= 0 {
+				delete(l.activeConnections, key)
+			}
+			l.mu.Unlock()
+		})
+	}, true
 }
 
 func normalizeWSRateLimitConfig(config wsRateLimitConfig) wsRateLimitConfig {
@@ -94,6 +138,12 @@ func normalizeWSRateLimitConfig(config wsRateLimitConfig) wsRateLimitConfig {
 	if config.MessageBurst <= 0 {
 		config.MessageBurst = defaults.MessageBurst
 	}
+	if config.HTTPRate == 0 {
+		config.HTTPRate = defaults.HTTPRate
+	}
+	if config.HTTPBurst <= 0 {
+		config.HTTPBurst = defaults.HTTPBurst
+	}
 	if config.VisitorTTL <= 0 {
 		config.VisitorTTL = defaults.VisitorTTL
 	}
@@ -119,6 +169,13 @@ func (l *wsRateLimiters) allowJoinRoom(sessionID string) bool {
 		return true
 	}
 	return l.allow(l.joinRoomAttempts, sessionID, l.config.JoinRoomRate, l.config.JoinRoomBurst)
+}
+
+func (l *wsRateLimiters) allowHTTPRequest(r *http.Request) bool {
+	if l == nil {
+		return true
+	}
+	return l.allow(l.httpRequests, clientIPFromRequest(r), l.config.HTTPRate, l.config.HTTPBurst)
 }
 
 func (l *wsRateLimiters) newMessageLimiter() *rate.Limiter {
@@ -156,6 +213,7 @@ func (l *wsRateLimiters) cleanupLocked(now time.Time) {
 	l.deleteStaleLocked(l.connectionAttempts, now)
 	l.deleteStaleLocked(l.createRoomAttempts, now)
 	l.deleteStaleLocked(l.joinRoomAttempts, now)
+	l.deleteStaleLocked(l.httpRequests, now)
 	l.lastCleanup = now
 }
 
@@ -172,28 +230,61 @@ func clientIPFromRequest(r *http.Request) string {
 		return ""
 	}
 
-	for _, header := range []string{"X-Forwarded-For", "X-Real-IP"} {
-		value := strings.TrimSpace(r.Header.Get(header))
-		if value == "" {
-			continue
-		}
-		if header == "X-Forwarded-For" {
-			value = strings.TrimSpace(strings.Split(value, ",")[0])
-		}
-		if ip := net.ParseIP(value); ip != nil {
+	peer := remoteHost(r.RemoteAddr)
+	if proxyHeadersExplicitlyTrusted() {
+		if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
 			return ip.String()
 		}
+		return peer
+	}
+	if !trustedProxyIP(peer) {
+		return peer
 	}
 
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwarded != "" {
+		hops := strings.Split(forwarded, ",")
+		for index := len(hops) - 1; index >= 0; index-- {
+			if ip := net.ParseIP(strings.TrimSpace(hops[index])); ip != nil && !trustedProxyIP(ip.String()) {
+				return ip.String()
+			}
+		}
+	}
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get("X-Real-IP"))); ip != nil {
+		return ip.String()
+	}
+
+	return peer
+}
+
+func proxyHeadersExplicitlyTrusted() bool {
+	trusted, err := strconv.ParseBool(strings.TrimSpace(os.Getenv("TRUST_PROXY_HEADERS")))
+	return err == nil && trusted
+}
+
+func remoteHost(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
 	if err == nil {
 		if ip := net.ParseIP(host); ip != nil {
 			return ip.String()
 		}
 		return host
 	}
-	if ip := net.ParseIP(strings.TrimSpace(r.RemoteAddr)); ip != nil {
+	if ip := net.ParseIP(strings.TrimSpace(remoteAddr)); ip != nil {
 		return ip.String()
 	}
-	return strings.TrimSpace(r.RemoteAddr)
+	return strings.TrimSpace(remoteAddr)
+}
+
+func trustedProxyIP(peer string) bool {
+	ip := net.ParseIP(peer)
+	if ip == nil {
+		return false
+	}
+	for _, rawCIDR := range strings.Split(os.Getenv("TRUSTED_PROXY_CIDRS"), ",") {
+		_, network, err := net.ParseCIDR(strings.TrimSpace(rawCIDR))
+		if err == nil && network.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }

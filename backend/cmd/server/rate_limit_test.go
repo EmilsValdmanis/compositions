@@ -45,6 +45,44 @@ func TestWebSocketConnectionAttemptsAreRateLimited(t *testing.T) {
 	}
 }
 
+func TestWebSocketUnauthenticatedConnectionsAreCappedPerIP(t *testing.T) {
+	server := newWSServer()
+	server.rateLimits = newWSRateLimiters(wsRateLimitConfig{
+		ConnectionRate:  rate.Inf,
+		ConnectionBurst: 1,
+		CreateRoomRate:  rate.Inf,
+		CreateRoomBurst: 1,
+		JoinRoomRate:    rate.Inf,
+		JoinRoomBurst:   1,
+		MessageRate:     rate.Inf,
+		MessageBurst:    1,
+		VisitorTTL:      time.Hour,
+	})
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	const connectionCap = 32
+	connections := make([]*websocket.Conn, 0, connectionCap)
+	defer func() {
+		for _, conn := range connections {
+			_ = conn.Close()
+		}
+	}()
+	for range connectionCap {
+		connections = append(connections, mustDialWS(t, httpServer.URL))
+	}
+
+	url := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/ws"
+	overflow, response, err := websocket.DefaultDialer.Dial(url, nil)
+	if err == nil {
+		_ = overflow.Close()
+		t.Fatal("overflow Dial() error = nil; want connection cap rejection")
+	}
+	if response == nil || response.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("overflow response = %#v; want 429", response)
+	}
+}
+
 func TestWebSocketCreateAndJoinAttemptsAreRateLimited(t *testing.T) {
 	t.Run("create room", func(t *testing.T) {
 		server := newWSServer()
@@ -153,6 +191,11 @@ func TestWSRateLimiterHelpers(t *testing.T) {
 	}
 
 	var nilLimiters *wsRateLimiters
+	release, ok := nilLimiters.beginConnection(nil)
+	if !ok {
+		t.Fatal("nil beginConnection() rejected")
+	}
+	release()
 	if !nilLimiters.allowConnectionAttempt(nil) {
 		t.Fatal("nil allowConnectionAttempt() = false; want true")
 	}
@@ -161,6 +204,9 @@ func TestWSRateLimiterHelpers(t *testing.T) {
 	}
 	if !nilLimiters.allowJoinRoom("") {
 		t.Fatal("nil allowJoinRoom() = false; want true")
+	}
+	if !nilLimiters.allowHTTPRequest(nil) {
+		t.Fatal("nil allowHTTPRequest() = false; want true")
 	}
 	if !nilLimiters.newMessageLimiter().Allow() {
 		t.Fatal("nil newMessageLimiter().Allow() = false; want true")
@@ -179,6 +225,12 @@ func TestWSRateLimiterHelpers(t *testing.T) {
 		VisitorTTL:      time.Minute,
 	})
 	limiters.now = func() time.Time { return now }
+	release, ok = limiters.beginConnection(nil)
+	if !ok {
+		t.Fatal("beginConnection(nil request) rejected")
+	}
+	release()
+	release()
 	if !limiters.allow(limiters.connectionAttempts, "", rate.Inf, 1) {
 		t.Fatal("allow(empty key) = false; want true")
 	}
@@ -208,13 +260,21 @@ func TestClientIPFromRequestBranches(t *testing.T) {
 		t.Fatalf("clientIPFromRequest(nil) = %q; want empty", got)
 	}
 
+	t.Setenv("TRUSTED_PROXY_CIDRS", "192.0.2.0/24")
 	request := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	request.RemoteAddr = net.JoinHostPort("192.0.2.10", "443")
 	request.Header.Set("X-Forwarded-For", " 203.0.113.10, 203.0.113.11 ")
-	if got := clientIPFromRequest(request); got != "203.0.113.10" {
-		t.Fatalf("clientIPFromRequest(XFF) = %q; want 203.0.113.10", got)
+	if got := clientIPFromRequest(request); got != "203.0.113.11" {
+		t.Fatalf("clientIPFromRequest(XFF) = %q; want nearest untrusted hop 203.0.113.11", got)
+	}
+
+	request.Header.Set("X-Forwarded-For", "198.51.100.99, 203.0.113.12, 192.0.2.20")
+	if got := clientIPFromRequest(request); got != "203.0.113.12" {
+		t.Fatalf("clientIPFromRequest(spoofed XFF chain) = %q; want 203.0.113.12", got)
 	}
 
 	request = httptest.NewRequest(http.MethodGet, "/ws", nil)
+	request.RemoteAddr = net.JoinHostPort("192.0.2.10", "443")
 	request.Header.Set("X-Real-IP", "2001:db8::1")
 	if got := clientIPFromRequest(request); got != "2001:db8::1" {
 		t.Fatalf("clientIPFromRequest(X-Real-IP) = %q; want 2001:db8::1", got)
@@ -242,5 +302,44 @@ func TestClientIPFromRequestBranches(t *testing.T) {
 	request.RemoteAddr = " client.local "
 	if got := clientIPFromRequest(request); got != "client.local" {
 		t.Fatalf("clientIPFromRequest(remote host) = %q; want client.local", got)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/ws", nil)
+	request.RemoteAddr = net.JoinHostPort("192.0.2.10", "443")
+	request.Header.Set("X-Forwarded-For", "not-an-ip")
+	request.Header.Set("X-Real-IP", "also-not-an-ip")
+	if got := clientIPFromRequest(request); got != "192.0.2.10" {
+		t.Fatalf("clientIPFromRequest(invalid forwarded headers) = %q; want proxy peer", got)
+	}
+}
+
+func TestUntrustedPeerCannotSpoofClientIP(t *testing.T) {
+	t.Setenv("TRUST_PROXY_HEADERS", "false")
+	t.Setenv("TRUSTED_PROXY_CIDRS", "")
+	request := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	request.RemoteAddr = net.JoinHostPort("198.51.100.20", "4321")
+	request.Header.Set("X-Forwarded-For", "203.0.113.10")
+	request.Header.Set("X-Real-IP", "203.0.113.11")
+
+	if got := clientIPFromRequest(request); got != "198.51.100.20" {
+		t.Fatalf("clientIPFromRequest() = %q; want socket peer 198.51.100.20", got)
+	}
+}
+
+func TestExplicitTrustedProxyHeadersUseRailwayClientIP(t *testing.T) {
+	t.Setenv("TRUST_PROXY_HEADERS", "true")
+	t.Setenv("TRUSTED_PROXY_CIDRS", "")
+	request := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	request.RemoteAddr = net.JoinHostPort("10.42.0.8", "443")
+	request.Header.Set("X-Forwarded-For", "198.51.100.99")
+	request.Header.Set("X-Real-IP", "203.0.113.25")
+
+	if got := clientIPFromRequest(request); got != "203.0.113.25" {
+		t.Fatalf("clientIPFromRequest() = %q; want Railway X-Real-IP 203.0.113.25", got)
+	}
+
+	request.Header.Set("X-Real-IP", "invalid")
+	if got := clientIPFromRequest(request); got != "10.42.0.8" {
+		t.Fatalf("clientIPFromRequest(invalid X-Real-IP) = %q; want socket peer 10.42.0.8", got)
 	}
 }

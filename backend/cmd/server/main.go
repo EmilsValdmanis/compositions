@@ -44,10 +44,17 @@ func configureObservability(output io.Writer) error {
 }
 
 func newSentryClientOptions() sentry.ClientOptions {
+	off := &sentry.KeyValueCollectionBehavior{Mode: sentry.CollectionOff}
 	return sentry.ClientOptions{
-		Dsn:              os.Getenv("SENTRY_DSN"),
-		Environment:      os.Getenv("SENTRY_ENVIRONMENT"),
-		SendDefaultPII:   true,
+		Dsn:         os.Getenv("SENTRY_DSN"),
+		Environment: os.Getenv("SENTRY_ENVIRONMENT"),
+		DataCollection: &sentry.DataCollection{
+			UserInfo:    sentry.Set(false),
+			Cookies:     off,
+			HTTPHeaders: &sentry.HeaderCollectionConfig{Request: off, Response: off},
+			HTTPBodies:  []sentry.BodyType{},
+			QueryParams: off,
+		},
 		AttachStacktrace: true,
 		EnableTracing:    true,
 		TracesSampler:    sentry.TracesSampler(traceSampleRate),
@@ -70,7 +77,7 @@ func configureLogger(output io.Writer) {
 	handlers := []slog.Handler{slog.NewTextHandler(output, nil)}
 	if sentry.CurrentHub().Client() != nil {
 		handlers = append(handlers, sentryslog.Option{
-			LogLevel:  []slog.Level{slog.LevelInfo, slog.LevelWarn, slog.LevelError},
+			LogLevel:  []slog.Level{slog.LevelWarn, slog.LevelError},
 			AddSource: true,
 		}.NewSentryHandler(context.Background()))
 	}
@@ -85,6 +92,10 @@ func (s *wsServer) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 	if s == nil || s.auth == nil {
 		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "auth is not configured")
+		return
+	}
+	if r.Method == http.MethodPost && !sameOriginRequest(r, s.auth.config.frontendOrigin) {
+		writeHTTPError(w, http.StatusForbidden, "invalid_origin", "request origin is not allowed")
 		return
 	}
 
@@ -122,6 +133,17 @@ func (s *wsServer) handleSessionRoutes(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeHTTPError(w, http.StatusNotFound, "not_found", "not found")
 	}
+}
+
+func sameOriginRequest(r *http.Request, allowedOrigin string) bool {
+	if r == nil {
+		return false
+	}
+	origin := normalizeOrigin(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+	return allowedOrigin != "" && origin == normalizeOrigin(allowedOrigin)
 }
 
 func reportFatal(err error) {

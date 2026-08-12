@@ -129,13 +129,17 @@ func (s *wsServer) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 
 func (s *wsServer) handleAdminBugReportList(w http.ResponseWriter, r *http.Request, store adminBugReportStore) {
 	page, ok := positiveQueryInt(r, "page", 1)
-	if !ok || page > 1_000_000 {
+	if !ok {
 		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page must be a positive integer")
 		return
 	}
 	pageSize, ok := positiveQueryInt(r, "pageSize", defaultAdminBugReportPageSize)
 	if !ok || pageSize > maxAdminBugReportPageSize {
 		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page size must be between 1 and 100")
+		return
+	}
+	if page > maxOffsetPagination/pageSize+1 {
+		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page offset is too large")
 		return
 	}
 

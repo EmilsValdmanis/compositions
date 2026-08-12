@@ -120,6 +120,7 @@ func TestHandleAdminBugReports(t *testing.T) {
 			"?page=0",
 			"?page=invalid",
 			"?page=1000001",
+			"?page=10002&pageSize=1",
 			"?pageSize=0",
 			"?pageSize=101",
 		} {
@@ -158,7 +159,7 @@ func TestHandleAdminBugReports(t *testing.T) {
 		if payload.TotalPages != 5 || len(payload.Reports) != 1 || payload.Reports[0].ID != reportID {
 			t.Fatalf("payload = %#v", payload)
 		}
-		if string(response.Body.Bytes()) == "" || json.Valid(report.GameState) && containsJSONField(response.Body.Bytes(), "gameState") {
+		if response.Body.String() == "" || json.Valid(report.GameState) && containsJSONField(response.Body.Bytes(), "gameState") {
 			t.Fatal("list response unexpectedly exposed game state")
 		}
 	})
@@ -291,6 +292,87 @@ func TestHandleAdminBugReports(t *testing.T) {
 		if response.Code != http.StatusInternalServerError {
 			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
 		}
+	})
+}
+
+func TestHandleAdminBugReportsRemainingBranches(t *testing.T) {
+	now := time.Now()
+	reportID := uuid.NewString()
+	newRequest := func(method, path string) *http.Request {
+		request := httptest.NewRequest(method, path, nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session"})
+		return request
+	}
+	newAdminServer := func(store userStore) *wsServer {
+		auth := &authHandler{store: &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "admin", IsAdmin: true, ExpiresAt: now.Add(time.Hour)}}, now: func() time.Time { return now }}
+		return newWSServerWithDependencies(auth, store, "")
+	}
+
+	t.Run("preflight", func(t *testing.T) {
+		request := newRequest(http.MethodOptions, "/api/admin/bug-reports")
+		request.Header.Set("Origin", "http://localhost:3000")
+		response := httptest.NewRecorder()
+		newAdminServer(&stubAdminBugReportStore{}).handleAdminBugReports(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNoContent)
+		}
+	})
+
+	t.Run("auth not configured", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		newWSServer().handleAdminBugReports(response, newRequest(http.MethodGet, "/api/admin/bug-reports"))
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("auth storage failure", func(t *testing.T) {
+		server := newWSServerWithDependencies(&authHandler{store: &stubAuthStore{sessionErr: errors.New("auth failed")}, now: time.Now}, &stubAdminBugReportStore{}, "")
+		response := httptest.NewRecorder()
+		server.handleAdminBugReports(response, newRequest(http.MethodGet, "/api/admin/bug-reports"))
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("store unavailable", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		newAdminServer(noopUserStore{}).handleAdminBugReports(response, newRequest(http.MethodGet, "/api/admin/bug-reports"))
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusServiceUnavailable)
+		}
+	})
+
+	for name, testCase := range map[string]struct {
+		method string
+		path   string
+		status int
+	}{
+		"nested path":   {http.MethodGet, "/api/admin/bug-reports/" + reportID + "/unexpected", http.StatusNotFound},
+		"detail method": {http.MethodPost, "/api/admin/bug-reports/" + reportID, http.StatusMethodNotAllowed},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			newAdminServer(&stubAdminBugReportStore{}).handleAdminBugReports(response, newRequest(testCase.method, testCase.path))
+			if response.Code != testCase.status {
+				t.Fatalf("status = %d; want %d", response.Code, testCase.status)
+			}
+		})
+	}
+
+	t.Run("malformed completion id", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		newAdminServer(&stubAdminBugReportStore{}).handleAdminBugReports(response, newRequest(http.MethodPost, "/api/admin/bug-reports/bad/complete"))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNotFound)
+		}
+	})
+
+	t.Run("response write failures", func(t *testing.T) {
+		store := &stubAdminBugReportStore{report: database.GameBugReportRecord{ID: reportID}}
+		server := newAdminServer(store)
+		server.handleAdminBugReportList(failingResponseWriter{}, httptest.NewRequest(http.MethodGet, "/api/admin/bug-reports", nil), store)
+		server.handleAdminBugReportDetail(failingResponseWriter{}, httptest.NewRequest(http.MethodGet, "/api/admin/bug-reports/"+reportID, nil), store, reportID)
 	})
 }
 

@@ -22,6 +22,12 @@ Required auth configuration:
 - `GOOGLE_CLIENT_SECRET`: Google OAuth client secret
 - `COOKIE_SECURE`: set to `true` when serving over HTTPS
 
+Proxy configuration:
+
+- Railway deployments must set `TRUST_PROXY_HEADERS=true`. Railway routes all public traffic through its edge proxy and supplies the client address in `X-Real-IP`.
+- Leave `TRUST_PROXY_HEADERS=false` when the backend can be reached directly from the internet.
+- `TRUSTED_PROXY_CIDRS` is the alternative for deployments with known proxy networks. It accepts a comma-separated CIDR list and should remain empty on Railway.
+
 Admin access is controlled solely by `users.is_admin` in every environment. Promote a user directly
 in Postgres:
 

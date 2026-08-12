@@ -23,11 +23,12 @@ var writeControl = func(conn *websocket.Conn, messageType int, data []byte, dead
 }
 
 var (
-	wsDataWriteLocks      sync.Map
-	defaultWSReadLimit    int64 = 64 * 1024
-	defaultWSReadTimeout        = 75 * time.Second
-	defaultWSPingInterval       = 25 * time.Second
-	defaultWSWriteTimeout       = 10 * time.Second
+	wsDataWriteLocks        sync.Map
+	defaultWSReadLimit      int64 = 64 * 1024
+	defaultWSConnectTimeout       = 10 * time.Second
+	defaultWSReadTimeout          = 75 * time.Second
+	defaultWSPingInterval         = 25 * time.Second
+	defaultWSWriteTimeout         = 10 * time.Second
 )
 
 func setWSReadDeadline(conn *websocket.Conn) error {
@@ -195,6 +196,10 @@ type healthResponse struct {
 	Status string `json:"status"`
 }
 
+type readinessStore interface {
+	Ping(ctx context.Context) error
+}
+
 type roomSnapshot struct {
 	Code              string                     `json:"code"`
 	Phase             string                     `json:"phase"`
@@ -259,6 +264,8 @@ type wsServer struct {
 	allowedOrigin  string
 	rateLimits     *wsRateLimiters
 	upgrader       websocket.Upgrader
+	connectionsMu  sync.Mutex
+	connections    map[*websocket.Conn]struct{}
 }
 
 func newWSServer() *wsServer {
@@ -285,6 +292,7 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 		socialPresence: newSocialPresence(),
 		allowedOrigin:  normalizeOrigin(allowedOrigin),
 		rateLimits:     newWSRateLimiters(defaultWSRateLimitConfig()),
+		connections:    make(map[*websocket.Conn]struct{}),
 	}
 	server.socialStore, _ = store.(socialStore)
 	server.upgrader = websocket.Upgrader{
@@ -296,20 +304,31 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 }
 
 func (s *wsServer) Close() error {
-	if s == nil || s.userStore == nil {
+	if s == nil {
 		return nil
 	}
-
+	s.connectionsMu.Lock()
+	connections := make([]*websocket.Conn, 0, len(s.connections))
+	for conn := range s.connections {
+		connections = append(connections, conn)
+	}
+	s.connectionsMu.Unlock()
+	for _, conn := range connections {
+		_ = writeControl(conn, websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutting down"), time.Now().Add(defaultWSWriteTimeout))
+		_ = conn.Close()
+	}
+	if s.userStore == nil {
+		return nil
+	}
 	return s.userStore.Close()
 }
 
 func (s *wsServer) isAllowedOrigin(origin string) bool {
-	if s == nil || s.allowedOrigin == "" {
-		return true
-	}
-
 	cleanOrigin := normalizeOrigin(origin)
 	if cleanOrigin == "" {
+		return s != nil && s.allowedOrigin == ""
+	}
+	if s == nil || s.allowedOrigin == "" {
 		return false
 	}
 
@@ -338,20 +357,38 @@ func (s *wsServer) routes() http.Handler {
 	mux.HandleFunc("/api/admin/bug-reports", s.handleAdminBugReports)
 	mux.HandleFunc("/api/admin/bug-reports/", s.handleAdminBugReports)
 	mux.HandleFunc("/ws", s.handleWS)
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/health" && r.URL.Path != "/ws" && r.Method != http.MethodOptions && !s.rateLimits.allowHTTPRequest(r) {
+			writeHTTPError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "rate limit exceeded")
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *wsServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 
-	if err := json.NewEncoder(w).Encode(healthResponse{Status: "ok"}); err != nil {
+	status := "ok"
+	if store, ok := s.userStore.(readinessStore); ok {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		err := store.Ping(ctx)
+		cancel()
+		if err != nil {
+			status = "unavailable"
+			w.WriteHeader(http.StatusServiceUnavailable)
+			slog.Error("health dependency check failed", "error", err)
+		}
+	}
+	if err := json.NewEncoder(w).Encode(healthResponse{Status: status}); err != nil {
 		slog.Error("write health response", "error", err)
 	}
 }
 
 func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
-	if !s.rateLimits.allowConnectionAttempt(r) {
+	releaseConnection, allowed := s.rateLimits.beginConnection(r)
+	if !allowed {
 		writeHTTPError(w, http.StatusTooManyRequests, clientErrorCode(errRateLimitExceeded), errRateLimitExceeded.Error())
 		slog.Warn("websocket connection rate limited", "remote", r.RemoteAddr)
 		return
@@ -359,22 +396,36 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		releaseConnection()
 		slog.Warn("websocket upgrade failed", "error", err, "remote", r.RemoteAddr)
 		return
 	}
 
 	slog.Debug("websocket connection established", "remote", conn.RemoteAddr().String())
-	s.handleConnection(conn, r)
+	s.connectionsMu.Lock()
+	s.connections[conn] = struct{}{}
+	s.connectionsMu.Unlock()
+	defer func() {
+		s.connectionsMu.Lock()
+		delete(s.connections, conn)
+		s.connectionsMu.Unlock()
+	}()
+	s.handleConnectionWithRelease(conn, r, releaseConnection)
 }
 
 func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request) {
+	s.handleConnectionWithRelease(conn, request, func() {})
+}
+
+func (s *wsServer) handleConnectionWithRelease(conn *websocket.Conn, request *http.Request, releaseConnection func()) {
 	connectionEmitter := emitEvent
+	defer releaseConnection()
 	defer wsDataWriteLocks.Delete(conn)
 	defer s.socialDisconnected(conn)
 	defer s.spectatorDisconnected(conn)
 	defer conn.Close()
 	conn.SetReadLimit(defaultWSReadLimit)
-	_ = setWSReadDeadline(conn)
+	_ = conn.SetReadDeadline(time.Now().Add(defaultWSConnectTimeout))
 	conn.SetPongHandler(func(string) error {
 		return setWSReadDeadline(conn)
 	})
@@ -417,11 +468,19 @@ func (s *wsServer) handleConnection(conn *websocket.Conn, request *http.Request)
 
 		switch envelope.Type {
 		case "connect":
+			if sessionID != "" {
+				s.writeError(conn, errors.New("already connected"))
+				return
+			}
 			nextSessionID, shouldClose := s.handleConnect(conn, request, envelope)
 			if shouldClose {
 				return
 			}
 			sessionID = nextSessionID
+			if sessionID != "" {
+				releaseConnection()
+				_ = setWSReadDeadline(conn)
+			}
 		case "create_room":
 			s.handleCreateRoom(conn, sessionID, envelope)
 		case "join_room":

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -92,6 +93,19 @@ func TestHandleLeaderboard(t *testing.T) {
 	}
 }
 
+func TestHTTPAPIRequestsAreRateLimitedPerIP(t *testing.T) {
+	server := newWSServer()
+	handler := server.routes()
+	var response *httptest.ResponseRecorder
+	for range 121 {
+		response = httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/leaderboard", nil))
+	}
+	if response.Code != http.StatusTooManyRequests {
+		t.Fatalf("request 121 status = %d; want %d", response.Code, http.StatusTooManyRequests)
+	}
+}
+
 func TestHandleLeaderboardRejectsInvalidRequests(t *testing.T) {
 	viewerID := "00000000-0000-0000-0000-000000000001"
 	server := newAuthenticatedLeaderboardServer(&leaderboardTestStore{userStore: noopUserStore{}}, viewerID)
@@ -159,16 +173,71 @@ func TestLeaderboardCursorValidation(t *testing.T) {
 		}
 	}
 
-	cursor, err := encodeLeaderboardCursor(database.LeaderboardCursor{
+	cursor := encodeLeaderboardCursor(database.LeaderboardCursor{
 		Score: 9, PlayerID: "00000000-0000-0000-0000-000000000001",
 	}, database.LeaderboardMetricGames, database.LeaderboardScopeFriends)
-	if err != nil {
-		t.Fatalf("encode cursor: %v", err)
-	}
 	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricWins, database.LeaderboardScopeFriends); err == nil {
 		t.Fatal("cursor for a different metric succeeded; want error")
 	}
 	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricGames, database.LeaderboardScopeGlobal); err == nil {
 		t.Fatal("cursor for a different scope succeeded; want error")
 	}
+	for _, raw := range []string{
+		"%%%",
+		base64.RawURLEncoding.EncodeToString([]byte(`{"metric":"wins","scope":"friends","score":1,"playerId":"bad"}`)),
+		base64.RawURLEncoding.EncodeToString([]byte(`{"metric":"wins","scope":"friends","score":1,"playerId":"00000000-0000-0000-0000-000000000001"}{}`)),
+	} {
+		if _, err := decodeLeaderboardCursor(raw, database.LeaderboardMetricWins, database.LeaderboardScopeFriends); err == nil {
+			t.Fatalf("decodeLeaderboardCursor(%q) succeeded; want error", raw)
+		}
+	}
+	if got, err := decodeLeaderboardCursor(" ", database.LeaderboardMetricWins, database.LeaderboardScopeFriends); err != nil || got != nil {
+		t.Fatalf("decode empty cursor = %#v, %v; want nil, nil", got, err)
+	}
+}
+
+func TestHandleLeaderboardRemainingBranches(t *testing.T) {
+	viewerID := "00000000-0000-0000-0000-000000000001"
+
+	t.Run("preflight", func(t *testing.T) {
+		server := newAuthenticatedLeaderboardServer(&leaderboardTestStore{userStore: noopUserStore{}}, viewerID)
+		request := httptest.NewRequest(http.MethodOptions, "/api/leaderboard", nil)
+		request.Header.Set("Origin", "http://localhost:3000")
+		response := httptest.NewRecorder()
+		server.handleLeaderboard(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNoContent)
+		}
+	})
+
+	t.Run("auth unavailable", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		newWSServer().handleLeaderboard(response, httptest.NewRequest(http.MethodGet, "/api/leaderboard", nil))
+		if response.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusServiceUnavailable)
+		}
+	})
+
+	t.Run("auth failure", func(t *testing.T) {
+		server := newWSServerWithDependencies(&authHandler{store: &stubAuthStore{sessionErr: errors.New("auth failed")}, now: time.Now}, &leaderboardTestStore{userStore: noopUserStore{}}, "")
+		response := httptest.NewRecorder()
+		server.handleLeaderboard(response, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard"))
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusInternalServerError)
+		}
+	})
+
+	t.Run("write failure", func(t *testing.T) {
+		server := newAuthenticatedLeaderboardServer(&leaderboardTestStore{userStore: noopUserStore{}}, viewerID)
+		server.handleLeaderboard(failingResponseWriter{}, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard"))
+	})
+}
+
+func FuzzDecodeLeaderboardCursor(f *testing.F) {
+	f.Add("")
+	f.Add("not-base64")
+	f.Add(encodeLeaderboardCursor(database.LeaderboardCursor{Score: 1, PlayerID: "00000000-0000-0000-0000-000000000001"}, database.LeaderboardMetricWins, database.LeaderboardScopeFriends))
+	f.Fuzz(func(_ *testing.T, raw string) {
+		_, _ = decodeLeaderboardCursor(raw, database.LeaderboardMetricWins, database.LeaderboardScopeFriends)
+	})
 }

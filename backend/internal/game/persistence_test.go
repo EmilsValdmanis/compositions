@@ -2,9 +2,34 @@ package game
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 )
+
+func TestRestoreRejectsInvalidGameMode(t *testing.T) {
+	snapshot := NewGameState().PersistenceSnapshot()
+	snapshot.GameMode = GameMode("invalid")
+	if _, err := RestoreGameState(snapshot); !errors.Is(err, ErrInvalidGameMode) {
+		t.Fatalf("RestoreGameState() error = %v; want %v", err, ErrInvalidGameMode)
+	}
+}
+
+func FuzzRestoreGameState(f *testing.F) {
+	valid, err := json.Marshal(NewGameState().PersistenceSnapshot())
+	if err != nil {
+		f.Fatal(err)
+	}
+	f.Add(valid)
+	f.Add([]byte(`{"version":1}`))
+	f.Add([]byte("not-json"))
+	f.Fuzz(func(_ *testing.T, data []byte) {
+		var snapshot PersistenceSnapshot
+		if json.Unmarshal(data, &snapshot) == nil {
+			_, _ = RestoreGameState(snapshot)
+		}
+	})
+}
 
 func TestGameStatePersistenceSnapshotRoundTrips(t *testing.T) {
 	state := NewGameStateWithDeck([]Card{NewCard(Ace, Hearts)})

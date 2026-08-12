@@ -32,6 +32,7 @@ func TestRunServerAndMain(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
 	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("DATABASE_URL", "postgres://unused")
@@ -200,6 +201,59 @@ func TestNewSentryClientOptions(t *testing.T) {
 	}
 	if options.DisableLogs {
 		t.Fatal("newSentryClientOptions().DisableLogs = true; want false")
+	}
+}
+
+func TestSentryDisablesAutomaticPIICollection(t *testing.T) {
+	collection := newSentryClientOptions().DataCollection
+	if collection == nil || collection.UserInfo.Or(true) || collection.Cookies == nil || collection.Cookies.Mode != sentry.CollectionOff ||
+		collection.HTTPHeaders == nil || collection.HTTPHeaders.Request == nil || collection.HTTPHeaders.Request.Mode != sentry.CollectionOff ||
+		collection.HTTPHeaders.Response == nil || collection.HTTPHeaders.Response.Mode != sentry.CollectionOff || len(collection.HTTPBodies) != 0 ||
+		collection.QueryParams == nil || collection.QueryParams.Mode != sentry.CollectionOff {
+		t.Fatalf("DataCollection = %#v; want automatic PII collection disabled", collection)
+	}
+}
+
+func TestCrossOriginUnsafeAuthRequestIsRejected(t *testing.T) {
+	server := newWSServerWithAuth(&authHandler{
+		config: authConfig{frontendOrigin: "https://app.example"},
+		store:  &stubAuthStore{},
+		now:    time.Now,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	request.Header.Set("Origin", "https://attacker.example")
+	recorder := httptest.NewRecorder()
+
+	server.handleSessionRoutes(recorder, request)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("cross-origin logout status = %d; want %d", recorder.Code, http.StatusForbidden)
+	}
+}
+
+func TestSameOriginRequestNilIsRejected(t *testing.T) {
+	if sameOriginRequest(nil, "https://app.example") {
+		t.Fatal("sameOriginRequest(nil) = true; want false")
+	}
+}
+
+func TestInternalErrorsAreRedactedFromClients(t *testing.T) {
+	secret := errors.New("dial postgres with password super-secret failed")
+	if code := clientErrorCode(secret); code != clientErrorInternal {
+		t.Fatalf("clientErrorCode() = %q; want %q", code, clientErrorInternal)
+	}
+	message := clientErrorMessage(secret)
+	if strings.Contains(message, "super-secret") || message == secret.Error() {
+		t.Fatalf("clientErrorMessage() leaked internal error: %q", message)
+	}
+}
+
+func TestClientErrorRemainingBranches(t *testing.T) {
+	if got := clientErrorCode(nil); got != clientErrorInternal {
+		t.Fatalf("clientErrorCode(nil) = %q", got)
+	}
+	if got := clientErrorCode(errors.New("problem description must be under limit")); got != "problem_too_long" {
+		t.Fatalf("clientErrorCode(problem length) = %q", got)
 	}
 }
 
@@ -393,6 +447,7 @@ func TestRunServerWrapsHandlerWhenSentryEnabled(t *testing.T) {
 	originalOpenConfiguredUserStore := openConfiguredUserStore
 	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
 	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
 	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
 	t.Setenv("DATABASE_URL", "postgres://unused")

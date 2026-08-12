@@ -18,6 +18,8 @@ const (
 	maxAdminAnalyticsDays    = 366
 )
 
+var loadAdminAnalyticsLocation = time.LoadLocation
+
 type adminAnalyticsStore interface {
 	GetAdminAnalytics(context.Context, database.AdminAnalyticsRange) (database.AdminAnalyticsRecord, error)
 }
@@ -86,7 +88,7 @@ func parseAdminAnalyticsRange(r *http.Request) (database.AdminAnalyticsRange, st
 	if days < 1 || days > maxAdminAnalyticsDays {
 		return database.AdminAnalyticsRange{}, "", "", errors.New("date range must be between 1 and 366 days")
 	}
-	location, err := time.LoadLocation(adminAnalyticsTimezone)
+	location, err := loadAdminAnalyticsLocation(adminAnalyticsTimezone)
 	if err != nil {
 		return database.AdminAnalyticsRange{}, "", "", errors.New("analytics timezone is unavailable")
 	}

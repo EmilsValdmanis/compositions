@@ -75,6 +75,7 @@ var exactClientErrorCodes = map[string]string{
 	"session belongs to a different user":           "session_user_mismatch",
 	"session not active on this connection":         "session_not_found",
 	"connect first":                                 "connect_first",
+	"already connected":                             "already_connected",
 	"missing data":                                  "missing_data",
 	"invalid data":                                  "invalid_data",
 	"unknown message type":                          "unknown_message_type",
@@ -148,8 +149,8 @@ func clientErrorCode(err error) string {
 }
 
 func clientErrorMessage(err error) string {
-	if err == nil {
-		return clientErrorInternal
+	if clientErrorCode(err) == clientErrorInternal {
+		return "internal server error"
 	}
 	return err.Error()
 }

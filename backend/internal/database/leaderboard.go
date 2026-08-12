@@ -2,11 +2,11 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -182,8 +182,9 @@ func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCurso
 		cursorPlayerID = parsedID
 	}
 
-	rows, err := s.pool.Query(ctx, rankedPlayers+`
-		SELECT rank, score, player_id::text, name, image_url, wins, games_played,
+	var playersJSON, placementJSON json.RawMessage
+	err = s.pool.QueryRow(ctx, rankedPlayers+`, page AS (
+		SELECT rank, score, player_id, name, image_url, wins, games_played,
 			rounds_won, points_inflicted, total_playtime_seconds
 		FROM ranked
 		WHERE NOT $3::boolean
@@ -191,21 +192,31 @@ func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCurso
 			OR (score = $4 AND player_id > $5)
 		ORDER BY score DESC, player_id ASC
 		LIMIT $6
-	`, string(scope), viewerID, hasCursor, cursorScore, cursorPlayerID, limit+1)
+	)
+	SELECT COALESCE((
+		SELECT jsonb_agg(jsonb_build_object(
+			'Rank', rank, 'Score', score, 'PlayerID', player_id::text,
+			'Name', name, 'ImageURL', image_url, 'Wins', wins,
+			'GamesPlayed', games_played, 'RoundsWon', rounds_won,
+			'PointsInflicted', points_inflicted,
+			'TotalPlaytimeSeconds', total_playtime_seconds
+		) ORDER BY score DESC, player_id ASC) FROM page
+	), '[]'::jsonb),
+	COALESCE((
+		SELECT jsonb_build_object(
+			'Rank', rank, 'Score', score, 'PlayerID', player_id::text,
+			'Name', name, 'ImageURL', image_url, 'Wins', wins,
+			'GamesPlayed', games_played, 'RoundsWon', rounds_won,
+			'PointsInflicted', points_inflicted,
+			'TotalPlaytimeSeconds', total_playtime_seconds
+		) FROM ranked WHERE player_id = $2
+	), 'null'::jsonb)
+	`, string(scope), viewerID, hasCursor, cursorScore, cursorPlayerID, limit+1).Scan(&playersJSON, &placementJSON)
 	if err != nil {
 		return LeaderboardPage{}, err
 	}
-	defer rows.Close()
-
-	page := LeaderboardPage{Players: make([]LeaderboardPlayerRecord, 0, limit)}
-	for rows.Next() {
-		player, err := scanLeaderboardPlayer(rows)
-		if err != nil {
-			return LeaderboardPage{}, err
-		}
-		page.Players = append(page.Players, player)
-	}
-	if err := rows.Err(); err != nil {
+	page := LeaderboardPage{}
+	if err := json.Unmarshal(playersJSON, &page.Players); err != nil {
 		return LeaderboardPage{}, err
 	}
 
@@ -218,39 +229,10 @@ func (s *UserStore) GetLeaderboard(ctx context.Context, cursor *LeaderboardCurso
 	if viewerUserID == "" {
 		return page, nil
 	}
-	placement, err := scanLeaderboardPlayer(s.pool.QueryRow(ctx, rankedPlayers+`
-		SELECT rank, score, player_id::text, name, image_url, wins, games_played,
-			rounds_won, points_inflicted, total_playtime_seconds
-		FROM ranked
-		WHERE player_id = $2
-	`, string(scope), viewerID))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return page, nil
-	}
-	if err != nil {
+	var placement *LeaderboardPlayerRecord
+	if err := json.Unmarshal(placementJSON, &placement); err != nil {
 		return LeaderboardPage{}, err
 	}
-	page.Placement = &placement
+	page.Placement = placement
 	return page, nil
-}
-
-type leaderboardPlayerScanner interface {
-	Scan(dest ...any) error
-}
-
-func scanLeaderboardPlayer(scanner leaderboardPlayerScanner) (LeaderboardPlayerRecord, error) {
-	var player LeaderboardPlayerRecord
-	err := scanner.Scan(
-		&player.Rank,
-		&player.Score,
-		&player.PlayerID,
-		&player.Name,
-		&player.ImageURL,
-		&player.Wins,
-		&player.GamesPlayed,
-		&player.RoundsWon,
-		&player.PointsInflicted,
-		&player.TotalPlaytimeSeconds,
-	)
-	return player, err
 }

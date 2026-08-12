@@ -19,6 +19,113 @@ type closingUserStore struct {
 	closed  bool
 }
 
+type cleaningUserStore struct {
+	closingUserStore
+	cleanupCount int64
+	cleanupErr   error
+	called       chan struct{}
+}
+
+func (s *cleaningUserStore) DeleteExpiredSessions(context.Context, time.Time) (int64, error) {
+	if s.called != nil {
+		select {
+		case s.called <- struct{}{}:
+		default:
+		}
+	}
+	return s.cleanupCount, s.cleanupErr
+}
+
+func TestSuperviseHTTPServerShutdownBranches(t *testing.T) {
+	t.Run("serve returns", func(t *testing.T) {
+		want := errors.New("serve failed")
+		if err := superviseHTTPServer(context.Background(), func() error { return want }, func(context.Context) error { return nil }); !errors.Is(err, want) {
+			t.Fatalf("superviseHTTPServer() error = %v", err)
+		}
+	})
+	t.Run("graceful shutdown", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := superviseHTTPServer(ctx, func() error { return http.ErrServerClosed }, func(context.Context) error { return nil }); err != nil {
+			t.Fatalf("superviseHTTPServer() error = %v", err)
+		}
+	})
+	t.Run("shutdown error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		want := errors.New("shutdown failed")
+		if err := superviseHTTPServer(ctx, func() error { return http.ErrServerClosed }, func(context.Context) error { return want }); !errors.Is(err, want) {
+			t.Fatalf("superviseHTTPServer() error = %v", err)
+		}
+	})
+	t.Run("serve error after shutdown", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		want := errors.New("late serve failure")
+		if err := superviseHTTPServer(ctx, func() error { return want }, func(context.Context) error { return nil }); !errors.Is(err, want) {
+			t.Fatalf("superviseHTTPServer() error = %v", err)
+		}
+	})
+}
+
+func TestSessionCleanupLifecycle(t *testing.T) {
+	server := &wsServer{userStore: noopUserStore{}}
+	if count, err := server.cleanupExpiredSessions(context.Background(), time.Now()); err != nil || count != 0 {
+		t.Fatalf("cleanupExpiredSessions(no cleaner) = %d, %v", count, err)
+	}
+	stop := server.startMaintenance(context.Background())
+	stop()
+
+	store := &cleaningUserStore{cleanupCount: 2, called: make(chan struct{}, 1)}
+	server.userStore = store
+	if count, err := server.cleanupExpiredSessions(context.Background(), time.Now()); err != nil || count != 2 {
+		t.Fatalf("cleanupExpiredSessions() = %d, %v", count, err)
+	}
+	select {
+	case <-store.called:
+	default:
+	}
+	originalInterval := sessionCleanupInterval
+	sessionCleanupInterval = time.Millisecond
+	defer func() { sessionCleanupInterval = originalInterval }()
+	stop = server.startMaintenance(context.Background())
+	select {
+	case <-store.called:
+	case <-time.After(time.Second):
+		t.Fatal("maintenance cleanup did not run")
+	}
+	stop()
+
+	store = &cleaningUserStore{cleanupErr: errors.New("cleanup failed"), called: make(chan struct{}, 1)}
+	server.userStore = store
+	stop = server.startMaintenance(context.Background())
+	select {
+	case <-store.called:
+	case <-time.After(time.Second):
+		t.Fatal("failing maintenance cleanup did not run")
+	}
+	stop()
+}
+
+func TestNewConfiguredWSServerClosesStoreOnCleanupError(t *testing.T) {
+	originalOpenConfiguredUserStore := openConfiguredUserStore
+	defer func() { openConfiguredUserStore = originalOpenConfiguredUserStore }()
+	t.Setenv("BASE_URL", "https://backend.test")
+	t.Setenv("FRONTEND_URL", "https://frontend.test")
+	t.Setenv("GOOGLE_CLIENT_ID", "client-id")
+	t.Setenv("GOOGLE_CLIENT_SECRET", "client-secret")
+	store := &cleaningUserStore{cleanupErr: errors.New("cleanup boom")}
+	openConfiguredUserStore = func() (userStore, error) { return store, nil }
+
+	server, err := newConfiguredWSServer()
+	if err == nil || err.Error() != "clean expired sessions: cleanup boom" {
+		t.Fatalf("newConfiguredWSServer() = %#v, %v; want cleanup error", server, err)
+	}
+	if !store.closed {
+		t.Fatal("store was not closed")
+	}
+}
+
 func (s *closingUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
 	return user, nil
 }

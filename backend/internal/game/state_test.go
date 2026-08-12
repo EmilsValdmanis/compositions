@@ -196,6 +196,33 @@ func BenchmarkGameStateCanTakeDiscardNowNoLegalPlay(b *testing.B) {
 	}
 }
 
+func TestCanTakeDiscardNowNoLegalPlayAllocationBudget(t *testing.T) {
+	baseRun := benchmarkRun(card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))
+	state := benchmarkDiscardState(
+		[]Card{
+			card(Two, Clubs), card(Three, Diamonds), card(Four, Spades), card(Five, Clubs),
+			card(Six, Diamonds), card(Eight, Spades), card(Nine, Clubs), card(Jack, Diamonds),
+			card(Queen, Spades), card(King, Clubs), card(Ace, Diamonds), card(Two, Hearts),
+		},
+		card(Five, Spades), true, baseRun,
+	)
+	allocations := testing.AllocsPerRun(1, func() {
+		if state.canTakeDiscardNow() {
+			t.Fatal("canTakeDiscardNow() = true; want false")
+		}
+	})
+	if allocations >= 20_000 {
+		t.Fatalf("allocations = %.0f; want fewer than 20000", allocations)
+	}
+}
+
+func TestStartGameRejectsInvalidMode(t *testing.T) {
+	state := NewGameState()
+	if err := state.StartGameWithMode(0, 0, DealRoundRobin, nil, 0, GameMode("invalid")); !errors.Is(err, ErrInvalidGameMode) {
+		t.Fatalf("StartGameWithMode() error = %v; want %v", err, ErrInvalidGameMode)
+	}
+}
+
 func BenchmarkGameStateCanTakeDiscardNowOpenedAddition(b *testing.B) {
 	baseRun := benchmarkRun(card(Seven, Hearts), card(Eight, Hearts), card(Nine, Hearts))
 	state := benchmarkDiscardState(

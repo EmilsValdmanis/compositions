@@ -40,6 +40,13 @@ type UserStore struct {
 	queries *dbsqlc.Queries
 }
 
+func (s *UserStore) Ping(ctx context.Context) error {
+	if s == nil || s.pool == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.pool.Ping(ctx)
+}
+
 type SessionRecord struct {
 	Token     string
 	UserID    string
@@ -111,7 +118,16 @@ func OpenPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 		return nil, errors.New("database url is required")
 	}
 
-	pool, err := pgxpool.New(ctx, cleanURL)
+	config, err := pgxpool.ParseConfig(cleanURL)
+	if err != nil {
+		return nil, fmt.Errorf("open postgres pool: %w", err)
+	}
+	config.MaxConns = 20
+	config.MinConns = 2
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
+	config.HealthCheckPeriod = time.Minute
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("open postgres pool: %w", err)
 	}
@@ -121,6 +137,20 @@ func OpenPool(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	}
 
 	return pool, nil
+}
+
+func (s *UserStore) DeleteExpiredSessions(ctx context.Context, before time.Time) (int64, error) {
+	if s == nil || s.pool == nil {
+		return 0, errors.New("user store is not configured")
+	}
+	if before.IsZero() {
+		before = time.Now()
+	}
+	result, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE expires_at <= $1`, before.UTC())
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 func NewUserStore(ctx context.Context, databaseURL string) (*UserStore, error) {

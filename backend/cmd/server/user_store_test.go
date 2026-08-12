@@ -140,12 +140,15 @@ func TestHandleConnectClosesWhenUserPersistenceFails(t *testing.T) {
 		t.Fatalf("handleConnect() sessionID = %q; want empty", nextSessionID)
 	}
 
-	mustReadError(t, clientConn, "save user: db unavailable")
+	mustReadError(t, clientConn, "internal server error")
 }
 
 func TestUserStoreSessionHelpers(t *testing.T) {
 	t.Run("noop user store methods", func(t *testing.T) {
 		store := noopUserStore{}
+		if err := store.UpdateOnboardingVersion(context.Background(), "user", 1); err != nil {
+			t.Fatalf("UpdateOnboardingVersion() error = %v", err)
+		}
 		if err := store.CreateSession(context.Background(), authSessionRecord{}); err != nil {
 			t.Fatalf("noop CreateSession() error = %v", err)
 		}

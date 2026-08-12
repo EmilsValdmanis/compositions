@@ -6,6 +6,17 @@ import (
 	"testing"
 )
 
+func TestSnapshotNilAndInvalidModeDefaults(t *testing.T) {
+	var state *GameState
+	if _, ok := state.SnapshotForSpectator(); ok {
+		t.Fatal("nil SnapshotForSpectator() ok = true")
+	}
+	state = &GameState{gameMode: GameMode("invalid")}
+	if got := state.GameMode(); got != GameModeFull {
+		t.Fatalf("GameMode() = %q; want %q", got, GameModeFull)
+	}
+}
+
 func TestCardConstructorsAccessorsAndSnapshots(t *testing.T) {
 	queen := NewCard(Queen, Spades)
 	if queen.Rank() != Queen {

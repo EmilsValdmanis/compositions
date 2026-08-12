@@ -25,6 +25,7 @@ type playerGameHistoryStore interface {
 const (
 	defaultGameHistoryPageSize = 10
 	maxGameHistoryPageSize     = 50
+	maxOffsetPagination        = 10_000
 )
 
 type playerGameHistoryItemResponse struct {
@@ -144,13 +145,17 @@ func playerStatisticsResponseFromRecord(profile database.PlayerStatisticsRecord)
 
 func (s *wsServer) handlePlayerGameHistory(w http.ResponseWriter, r *http.Request, userID string) {
 	page, ok := positiveQueryInt(r, "page", 1)
-	if !ok || page > 1_000_000 {
+	if !ok {
 		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page must be a positive integer")
 		return
 	}
 	pageSize, ok := positiveQueryInt(r, "pageSize", defaultGameHistoryPageSize)
 	if !ok || pageSize > maxGameHistoryPageSize {
 		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page size must be between 1 and 50")
+		return
+	}
+	if page > maxOffsetPagination/pageSize+1 {
+		writeHTTPError(w, http.StatusBadRequest, "invalid_pagination", "page offset is too large")
 		return
 	}
 	filter, ok := database.ParseGameHistoryFilter(strings.TrimSpace(r.URL.Query().Get("mode")))

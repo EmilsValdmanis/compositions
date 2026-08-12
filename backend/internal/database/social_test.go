@@ -72,6 +72,13 @@ func TestUserStoreSocialWorkflow(t *testing.T) {
 	if len(blakeSocial.Friends) != 1 || blakeSocial.Friends[0].ID != avery.ID {
 		t.Fatalf("friends = %#v; want Avery", blakeSocial.Friends)
 	}
+	batchedSocial, err := store.ListSocialSnapshots(ctx, []string{avery.ID, blake.ID})
+	if err != nil {
+		t.Fatalf("ListSocialSnapshots() error = %v", err)
+	}
+	if len(batchedSocial) != 2 || len(batchedSocial[avery.ID].Friends) != 1 || len(batchedSocial[blake.ID].Friends) != 1 {
+		t.Fatalf("batched social snapshots = %#v", batchedSocial)
+	}
 	if len(blakeSocial.IncomingFriendRequests) != 0 {
 		t.Fatalf("incoming requests after accept = %#v; want none", blakeSocial.IncomingFriendRequests)
 	}
