@@ -125,6 +125,21 @@ vi.mock("#/components/game/game-board-view", () => ({
       >
         Mock valid composition
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          const six = document.querySelector<HTMLElement>(
+            '[data-onboarding-target="hand"] [data-card-rank="6"][data-card-suit="3"]',
+          );
+          const seven = document.querySelector<HTMLElement>(
+            '[data-onboarding-target="hand"] [data-card-rank="7"][data-card-suit="3"]',
+          );
+          if (six) six.style.transform = "translateX(-64px)";
+          if (seven) seven.style.transform = "translateX(-128px)";
+        }}
+      >
+        Mock hand reposition
+      </button>
       <div data-onboarding-target="hand">
         <div data-onboarding-target="hand-cards">
           <div data-card-rank="5" data-card-suit="3" />
@@ -199,23 +214,6 @@ function mockRect(left: number, top: number, width: number, height: number): DOM
   };
 }
 
-function spotlightMaskMarkup() {
-  const maskImage = document.querySelector<HTMLElement>("[data-onboarding-backdrop]")?.style
-    .maskImage;
-  expect(maskImage).toContain("data:image/svg+xml");
-  return decodeURIComponent(maskImage ?? "");
-}
-
-function tutorialPresentation(stage: string) {
-  return waitFor(() => {
-    const presentation = document.querySelector<HTMLElement>(
-      `[data-tutorial-presentation][data-tutorial-stage="${stage}"]`,
-    );
-    expect(presentation).not.toBeNull();
-    return presentation!;
-  });
-}
-
 beforeEach(() => {
   completeOnboardingMock.mockReset();
   completeOnboardingMock.mockResolvedValue(undefined);
@@ -235,10 +233,12 @@ beforeEach(() => {
       return mockRect(270, 520, 56, 80);
     }
     if (this.matches('[data-card-rank="6"][data-card-suit="3"]')) {
-      return mockRect(334, 520, 56, 80);
+      const shift = this.getAttribute("style")?.includes("-64px") ? -64 : 0;
+      return mockRect(334 + shift, 520, 56, 80);
     }
     if (this.matches('[data-card-rank="7"][data-card-suit="3"]')) {
-      return mockRect(462, 520, 56, 80);
+      const shift = this.getAttribute("style")?.includes("-128px") ? -128 : 0;
+      return mockRect(462 + shift, 520, 56, 80);
     }
     if (this.matches('[data-card-motion-source="discard"]')) {
       return mockRect(180, 100, 60, 90);
@@ -282,20 +282,23 @@ describe("GameOnboardingProvider", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Let’s play one turn together" });
     expect(dialog).toBeTruthy();
-    expect(dialog.dataset.slot).toBe("dialog-content");
-    expect((await tutorialPresentation("intro")).dataset.centered).toBe("true");
-    expect(dialog.className).not.toContain("overflow");
+    expect(dialog.parentElement?.parentElement?.dataset.centered).toBe("true");
+    expect(dialog.parentElement?.parentElement?.dataset.tutorialStage).toBe("intro");
+    expect(dialog.parentElement?.className).not.toContain("overflow");
+    expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
     expect(document.querySelector("[data-onboarding-backdrop]")?.className).toContain("z-20");
+    expect(document.querySelector("[data-onboarding-backdrop]")?.className).toContain(
+      "backdrop-blur-sm",
+    );
     expect(screen.getByLabelText("Practice game")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Skip tutorial" })).toBeNull();
     expect(screen.queryByText("1 of 5")).toBeNull();
     const stageBadge = screen.getByText("Safe practice round");
     expect(stageBadge.dataset.slot).toBe("badge");
     expect(stageBadge.parentElement?.dataset.slot).toBe("card-header");
-    const coachTitle = screen
-      .getAllByText("Let’s play one turn together")
-      .find((element) => element.parentElement?.dataset.slot === "card-content");
-    expect(coachTitle).toBeTruthy();
+    expect(screen.getByText("Let’s play one turn together").parentElement?.dataset.slot).toBe(
+      "card-content",
+    );
   });
 
   it("uses each account's completion version instead of shared browser storage", async () => {
@@ -347,8 +350,12 @@ describe("GameOnboardingProvider", () => {
     const orientationDialog = await screen.findByRole("dialog", {
       name: "Meet your playing area",
     });
+    expect(
+      orientationDialog
+        .closest("[data-tutorial-presentation]")
+        ?.getAttribute("data-tutorial-presentation"),
+    ).toBe("inline");
     expect(orientationDialog.getAttribute("aria-modal")).toBeNull();
-    expect((await tutorialPresentation("orientation")).dataset.tutorialPresentation).toBe("inline");
     await waitFor(() =>
       expect(
         screen
@@ -358,13 +365,24 @@ describe("GameOnboardingProvider", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
-    await screen.findByRole("dialog", { name: "Pick up from the draw pile" });
-    expect((await tutorialPresentation("draw")).dataset.tutorialPresentation).toBe("inline");
+    const drawDialog = await screen.findByRole("dialog", { name: "Pick up from the draw pile" });
+    expect(
+      drawDialog
+        .closest("[data-tutorial-presentation]")
+        ?.getAttribute("data-tutorial-presentation"),
+    ).toBe("inline");
 
     fireEvent.click(screen.getByRole("button", { name: "Mock start draw" }));
     fireEvent.click(screen.getByRole("button", { name: "Mock drop draw" }));
-    await screen.findByRole("dialog", { name: "Build a spade run" });
-    expect((await tutorialPresentation("compose")).dataset.tutorialPresentation).toBe("inline");
+    const composeDialog = await screen.findByRole("dialog", { name: "Build a spade run" });
+    expect(
+      composeDialog
+        .closest("[data-tutorial-presentation]")
+        ?.getAttribute("data-tutorial-presentation"),
+    ).toBe("inline");
+    expect(document.querySelector("[data-onboarding-backdrop]")?.className).toContain(
+      "backdrop-blur-sm",
+    );
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(4),
     );
@@ -381,10 +399,37 @@ describe("GameOnboardingProvider", () => {
       "66px",
       "66px",
     ]);
+    const composeMask = document.querySelector("[data-onboarding-mask]");
+    const composeMaskImage = document.querySelector<HTMLElement>("[data-onboarding-backdrop]")
+      ?.style.maskImage;
+    expect(composeMaskImage).toMatch(/^url\(["']?#onboarding-spotlight-mask-/);
+    expect(composeMaskImage).not.toContain("data:image");
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock hand reposition" }));
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll<HTMLElement>("[data-onboarding-spotlight]"))
+          .slice(0, 3)
+          .map((spotlight) => spotlight.style.left),
+      ).toEqual(["265px", "265px", "329px"]),
+    );
+    expect(document.querySelector("[data-onboarding-mask]")).toBe(composeMask);
+    expect(
+      Array.from(document.querySelectorAll("[data-onboarding-mask-cutout]"))
+        .slice(0, 3)
+        .map((cutout) => cutout.getAttribute("x")),
+    ).toEqual(["265", "265", "329"]);
+    expect(document.querySelector<HTMLElement>("[data-onboarding-backdrop]")?.style.maskImage).toBe(
+      composeMaskImage,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Mock valid composition" }));
-    await screen.findByRole("dialog", { name: "Finish by discarding" });
-    expect((await tutorialPresentation("discard")).dataset.tutorialPresentation).toBe("inline");
+    const discardDialog = await screen.findByRole("dialog", { name: "Finish by discarding" });
+    expect(
+      discardDialog
+        .closest("[data-tutorial-presentation]")
+        ?.getAttribute("data-tutorial-presentation"),
+    ).toBe("inline");
 
     fireEvent.click(screen.getByRole("button", { name: "Mock discard" }));
     expect(await screen.findByRole("dialog", { name: "You just finished a turn" })).toBeTruthy();
@@ -395,20 +440,26 @@ describe("GameOnboardingProvider", () => {
     await screen.findByRole("dialog", { name: "Let’s play one turn together" });
 
     fireEvent.click(screen.getByRole("button", { name: "Take the turn" }));
-    await screen.findByRole("dialog", {
+    const orientationDialog = await screen.findByRole("dialog", {
       name: "Meet your playing area",
     });
-    const orientationPresentation = await tutorialPresentation("orientation");
-    expect(orientationPresentation.dataset.tutorialPresentation).toBe("overlay");
-    expect(orientationPresentation.style.top).toBe("215px");
-    expect(orientationPresentation.style.left).toBe("351px");
+    expect(
+      orientationDialog
+        .closest("[data-tutorial-presentation]")
+        ?.getAttribute("data-tutorial-presentation"),
+    ).toBe("overlay");
+    expect(orientationDialog.parentElement?.parentElement?.style.top).toBe("215px");
+    expect(orientationDialog.parentElement?.parentElement?.style.left).toBe("351px");
+    expect(orientationDialog.parentElement?.parentElement?.dataset.tutorialStage).toBe(
+      "orientation",
+    );
     expect(screen.getByText("Your hand")).toBeTruthy();
     expect(screen.getByText("Draw & discard")).toBeTruthy();
     expect(screen.getByText("Composition area")).toBeTruthy();
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(3),
     );
-    expect(spotlightMaskMarkup().match(/<rect [^>]*rx=/g)).toHaveLength(3);
+    expect(document.querySelectorAll("[data-onboarding-mask-cutout]")).toHaveLength(3);
     expect(document.querySelector<HTMLElement>("[data-onboarding-spotlight]")?.style.width).toBe(
       "270px",
     );
@@ -422,27 +473,29 @@ describe("GameOnboardingProvider", () => {
     ).toBe("37px");
 
     fireEvent.click(screen.getByRole("button", { name: "Got it" }));
-    await screen.findByRole("dialog", {
+    const drawDialog = await screen.findByRole("dialog", {
       name: "Pick up from the draw pile",
     });
-    const drawPresentation = await tutorialPresentation("draw");
+    expect(drawDialog.parentElement?.parentElement?.dataset.tutorialStage).toBe("draw");
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(1),
     );
-    const drawCoachLeft = drawPresentation.style.left;
+    const drawCoachLeft = drawDialog.parentElement?.parentElement?.style.left;
 
     fireEvent.click(screen.getByRole("button", { name: "Mock start draw" }));
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(2),
     );
-    expect((await tutorialPresentation("draw")).style.left).toBe(drawCoachLeft);
+    expect(drawDialog.parentElement?.parentElement?.style.left).toBe(drawCoachLeft);
     expect(await screen.findByRole("dialog", { name: "Pick up from the draw pile" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Mock drop draw" }));
-    expect((await tutorialPresentation("draw")).dataset.tutorialStage).toBe("draw");
+    expect(
+      screen.getByRole("dialog", { name: "Pick up from the draw pile" }).parentElement
+        ?.parentElement?.dataset.tutorialStage,
+    ).toBe("draw");
     const composeDialog = await screen.findByRole("dialog", { name: "Build a spade run" });
-    expect(composeDialog).toBeTruthy();
-    expect((await tutorialPresentation("compose")).dataset.tutorialStage).toBe("compose");
+    expect(composeDialog.parentElement?.parentElement?.dataset.tutorialStage).toBe("compose");
     await waitFor(() =>
       expect(
         Array.from(document.querySelectorAll<HTMLElement>("[data-onboarding-spotlight]")).at(-1)
@@ -458,17 +511,22 @@ describe("GameOnboardingProvider", () => {
     expect(await screen.findByRole("dialog", { name: "Build a spade run" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Mock valid composition" }));
-    expect((await tutorialPresentation("compose")).dataset.tutorialStage).toBe("compose");
+    expect(
+      screen.getByRole("dialog", { name: "Build a spade run" }).parentElement?.parentElement
+        ?.dataset.tutorialStage,
+    ).toBe("compose");
     const discardDialog = await screen.findByRole("dialog", { name: "Finish by discarding" });
-    expect(discardDialog).toBeTruthy();
-    expect((await tutorialPresentation("discard")).dataset.tutorialStage).toBe("discard");
+    expect(discardDialog.parentElement?.parentElement?.dataset.tutorialStage).toBe("discard");
 
     fireEvent.click(screen.getByRole("button", { name: "Mock discard" }));
-    expect((await tutorialPresentation("discard")).dataset.tutorialStage).toBe("discard");
-    await screen.findByRole("dialog", {
+    expect(
+      screen.getByRole("dialog", { name: "Finish by discarding" }).parentElement?.parentElement
+        ?.dataset.tutorialStage,
+    ).toBe("discard");
+    const completeDialog = await screen.findByRole("dialog", {
       name: "You just finished a turn",
     });
-    expect((await tutorialPresentation("complete")).dataset.tutorialStage).toBe("complete");
+    expect(completeDialog.parentElement?.parentElement?.dataset.tutorialStage).toBe("complete");
     expect(fireCelebrationConfettiMock).toHaveBeenCalledWith({
       count: 140,
       originY: 0.72,

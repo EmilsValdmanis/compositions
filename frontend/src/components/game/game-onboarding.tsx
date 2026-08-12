@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -37,13 +38,6 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "#/components/ui/dialog";
 import { authClient } from "#/lib/auth-client";
 import { fireCelebrationConfetti } from "#/lib/confetti";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
@@ -284,6 +278,8 @@ function useSpotlightRect(
       window.cancelAnimationFrame?.bind(window) ??
       ((frameId: number) => window.clearTimeout(frameId));
     let frame = 0;
+    let trackingFrame = 0;
+    let trackUntil = 0;
 
     function measure() {
       cancelFrame(frame);
@@ -347,17 +343,37 @@ function useSpotlightRect(
       });
     }
 
+    function trackLayoutMotion() {
+      trackUntil = performance.now() + 350;
+      if (trackingFrame) return;
+
+      function trackFrame() {
+        measure();
+        trackingFrame = performance.now() < trackUntil ? requestFrame(trackFrame) : 0;
+      }
+
+      trackingFrame = requestFrame(trackFrame);
+    }
+
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(spotlightRoot);
     const mutationObserver =
-      typeof MutationObserver === "undefined" ? null : new MutationObserver(measure);
-    mutationObserver?.observe(spotlightRoot, { childList: true, subtree: true });
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(stage === "compose" ? trackLayoutMotion : measure);
+    mutationObserver?.observe(spotlightRoot, {
+      childList: true,
+      subtree: true,
+      attributes: stage === "compose",
+      attributeFilter: stage === "compose" ? ["class", "style"] : undefined,
+    });
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     measure();
 
     return () => {
       cancelFrame(frame);
+      cancelFrame(trackingFrame);
       observer?.disconnect();
       mutationObserver?.disconnect();
       window.removeEventListener("resize", measure);
@@ -371,39 +387,51 @@ function useSpotlightRect(
 const backdropClassName =
   "pointer-events-none fixed z-20 bg-black/30 supports-backdrop-filter:backdrop-blur-sm";
 
-function spotlightMaskImage(rects: SpotlightRect[]) {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const cutouts = rects
-    .map((rect) => {
-      const cornerRadius = Math.min(rect.cornerRadius ?? 18, rect.width / 2, rect.height / 2);
-      return `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" rx="${cornerRadius}" fill="black"/>`;
-    })
-    .join("");
-  const mask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewportWidth} ${viewportHeight}" preserveAspectRatio="none"><defs><mask id="spotlight-mask"><rect width="${viewportWidth}" height="${viewportHeight}" fill="white"/>${cutouts}</mask></defs><rect width="${viewportWidth}" height="${viewportHeight}" fill="black" mask="url(#spotlight-mask)"/></svg>`;
-
-  return `url("data:image/svg+xml,${encodeURIComponent(mask)}")`;
-}
-
 function SpotlightBackdrop({ rects }: { rects: SpotlightRect[] }) {
+  const maskId = `onboarding-spotlight-mask-${useId().replaceAll(":", "")}`;
+
   if (rects.length === 0) {
-    return <div data-onboarding-backdrop className={`${backdropClassName} inset-0`} />;
+    return <div data-onboarding-backdrop className={cn(backdropClassName, "inset-0")} />;
   }
 
-  const maskImage = spotlightMaskImage(rects);
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maskImage = `url(#${maskId})`;
 
   return (
     <>
+      <svg data-onboarding-mask className="pointer-events-none fixed size-0" aria-hidden="true">
+        <defs>
+          <mask
+            id={maskId}
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={viewportWidth}
+            height={viewportHeight}
+          >
+            <rect width={viewportWidth} height={viewportHeight} fill="white" />
+            {rects.map((rect) => (
+              <rect
+                key={rect.id}
+                data-onboarding-mask-cutout
+                x={rect.left}
+                y={rect.top}
+                width={rect.width}
+                height={rect.height}
+                rx={Math.min(rect.cornerRadius ?? 18, rect.width / 2, rect.height / 2)}
+                fill="black"
+              />
+            ))}
+          </mask>
+        </defs>
+      </svg>
       <div
         data-onboarding-backdrop
-        className={`${backdropClassName} inset-0`}
+        className={cn(backdropClassName, "inset-0")}
         style={{
           WebkitMaskImage: maskImage,
-          WebkitMaskRepeat: "no-repeat",
-          WebkitMaskSize: "100% 100%",
           maskImage,
-          maskRepeat: "no-repeat",
-          maskSize: "100% 100%",
         }}
       />
       {rects.map((rect) => (
@@ -639,6 +667,10 @@ function TutorialCoach({
           >
             <Card
               size="sm"
+              role="dialog"
+              aria-modal={isCentered ? "true" : undefined}
+              aria-labelledby="tutorial-coach-title"
+              aria-describedby="tutorial-coach-description"
               className={cn(
                 "ring-1 ring-foreground/10",
                 isInline
@@ -733,7 +765,6 @@ function TutorialGame({
   const spotlightRect = (stage === "draw" ? spotlightRects.at(0) : spotlightRects.at(-1)) ?? null;
   const canCompose = stage === "compose" || stage === "discard";
   const useInlineCoach = compactLayout && stage !== "intro" && stage !== "complete";
-  const currentStageContent = stageContent(stage);
 
   function continueTutorial() {
     if (stage === "complete") {
@@ -807,121 +838,107 @@ function TutorialGame({
   }
 
   return (
-    <DialogContent
-      variant="fullscreen"
-      showCloseButton={false}
-      aria-describedby="tutorial-dialog-description"
+    <motion.section
+      className="fixed inset-0 z-40 flex min-h-0 flex-col bg-background p-2"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: shouldReduceMotion ? 0.08 : 0.2 }}
+      aria-label={m.onboarding_practice_game()}
     >
-      <DialogHeader className="sr-only">
-        <DialogTitle>{currentStageContent.title}</DialogTitle>
-        <DialogDescription id="tutorial-dialog-description">
-          {currentStageContent.description}
-        </DialogDescription>
-      </DialogHeader>
-
-      <motion.section
-        className="flex size-full min-h-0 flex-col p-2"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: shouldReduceMotion ? 0.08 : 0.2 }}
-        aria-label={m.onboarding_practice_game()}
-      >
-        <header className="flex h-12 shrink-0 items-center gap-2 px-2 md:h-14 md:px-3">
-          <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
-            <HugeiconsIcon icon={JokerIcon} aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate font-heading text-sm font-semibold">
-              {m.onboarding_practice_game()}
-            </p>
-            <p className="text-xs text-muted-foreground">{m.onboarding_practice_description()}</p>
-          </div>
-          <Badge variant="outline" className="ml-auto hidden sm:inline-flex">
-            {m.onboarding_practice_badge()}
-          </Badge>
-        </header>
-
-        {useInlineCoach ? (
-          <TutorialCoach
-            stage={stage}
-            rect={spotlightRect}
-            compositionProgress={compositionProgress}
-            isCompleting={isCompleting}
-            onContinue={continueTutorial}
-            presentation="inline"
-          />
-        ) : null}
-
-        <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
-          <GameBoardView
-            game={game}
-            roomCode="TUTORIAL"
-            playerId={TUTORIAL_PLAYER_ID}
-            players={tutorialPlayers}
-            connectedPlayers={tutorialPlayers.length}
-            turnState={{
-              canDrawDeck: stage === "draw" && !game.turn.hasDrawn,
-              canDrawDiscard: false,
-              canDiscard: canCompose && game.turn.hasDrawn,
-              isMyTurn: true,
-              turnPlayerName: tutorialPlayers[0]?.name ?? "Alex",
-            }}
-            topDiscardCard={game.discardPile[0] ?? null}
-            onDrawFromDeck={drawFromDeck}
-            onDrawFromDiscard={() => undefined}
-            guidance={{
-              stage:
-                stage === "orientation"
-                  ? "orientation"
-                  : stage === "draw"
-                    ? "draw"
-                    : stage === "compose"
-                      ? "compose"
-                      : "discard",
-              onDrawDragStateChange: setIsDrawingCard,
-              onDrawSettled: () =>
-                setStage((current) => (current === "draw" ? "compose" : current)),
-              onDraftStateChange: ({ draftCompositions, isDraggingCard }) => {
-                const isComplete = isTutorialDraftComplete(draftCompositions);
-                setCompositionProgress(tutorialDraftProgress(draftCompositions));
-                setStage((current) => {
-                  if (current === "compose" && isComplete && !isDraggingCard) return "discard";
-                  if (current === "discard" && !isComplete) return "compose";
-                  return current;
-                });
-              },
-            }}
-            onDiscardCard={async () => ({
-              action: "discard_card",
-              playerId: TUTORIAL_PLAYER_ID,
-              ok: false,
-            })}
-            onPlayTable={async () => ({
-              action: "play_table",
-              playerId: TUTORIAL_PLAYER_ID,
-              ok: false,
-            })}
-            onPlayTableAndDiscard={playTableAndDiscard}
-            onSendEmote={() => undefined}
-            draftSyncMode="disabled"
-          />
+      <header className="flex h-12 shrink-0 items-center gap-2 px-2 md:h-14 md:px-3">
+        <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
+          <HugeiconsIcon icon={JokerIcon} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate font-heading text-sm font-semibold">
+            {m.onboarding_practice_game()}
+          </p>
+          <p className="text-xs text-muted-foreground">{m.onboarding_practice_description()}</p>
         </div>
+        <Badge variant="outline" className="ml-auto hidden sm:inline-flex">
+          {m.onboarding_practice_badge()}
+        </Badge>
+      </header>
 
-        <SpotlightBackdrop rects={spotlightRects} />
-        {stage === "orientation" ? <OrientationLabels rects={spotlightRects} /> : null}
-        {!useInlineCoach ? (
-          <TutorialCoach
-            stage={stage}
-            rect={spotlightRect}
-            compositionProgress={compositionProgress}
-            isCompleting={isCompleting}
-            onContinue={continueTutorial}
-            presentation="overlay"
-          />
-        ) : null}
-      </motion.section>
-    </DialogContent>
+      {useInlineCoach ? (
+        <TutorialCoach
+          stage={stage}
+          rect={spotlightRect}
+          compositionProgress={compositionProgress}
+          isCompleting={isCompleting}
+          onContinue={continueTutorial}
+          presentation="inline"
+        />
+      ) : null}
+
+      <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
+        <GameBoardView
+          game={game}
+          roomCode="TUTORIAL"
+          playerId={TUTORIAL_PLAYER_ID}
+          players={tutorialPlayers}
+          connectedPlayers={tutorialPlayers.length}
+          turnState={{
+            canDrawDeck: stage === "draw" && !game.turn.hasDrawn,
+            canDrawDiscard: false,
+            canDiscard: canCompose && game.turn.hasDrawn,
+            isMyTurn: true,
+            turnPlayerName: tutorialPlayers[0]?.name ?? "Alex",
+          }}
+          topDiscardCard={game.discardPile[0] ?? null}
+          onDrawFromDeck={drawFromDeck}
+          onDrawFromDiscard={() => undefined}
+          guidance={{
+            stage:
+              stage === "orientation"
+                ? "orientation"
+                : stage === "draw"
+                  ? "draw"
+                  : stage === "compose"
+                    ? "compose"
+                    : "discard",
+            onDrawDragStateChange: setIsDrawingCard,
+            onDrawSettled: () => setStage((current) => (current === "draw" ? "compose" : current)),
+            onDraftStateChange: ({ draftCompositions, isDraggingCard }) => {
+              const isComplete = isTutorialDraftComplete(draftCompositions);
+              setCompositionProgress(tutorialDraftProgress(draftCompositions));
+              setStage((current) => {
+                if (current === "compose" && isComplete && !isDraggingCard) return "discard";
+                if (current === "discard" && !isComplete) return "compose";
+                return current;
+              });
+            },
+          }}
+          onDiscardCard={async () => ({
+            action: "discard_card",
+            playerId: TUTORIAL_PLAYER_ID,
+            ok: false,
+          })}
+          onPlayTable={async () => ({
+            action: "play_table",
+            playerId: TUTORIAL_PLAYER_ID,
+            ok: false,
+          })}
+          onPlayTableAndDiscard={playTableAndDiscard}
+          onSendEmote={() => undefined}
+          draftSyncMode="disabled"
+        />
+      </div>
+
+      <SpotlightBackdrop rects={spotlightRects} />
+      {stage === "orientation" ? <OrientationLabels rects={spotlightRects} /> : null}
+      {!useInlineCoach ? (
+        <TutorialCoach
+          stage={stage}
+          rect={spotlightRect}
+          compositionProgress={compositionProgress}
+          isCompleting={isCompleting}
+          onContinue={continueTutorial}
+          presentation="overlay"
+        />
+      ) : null}
+    </motion.section>
   );
 }
 
@@ -969,10 +986,12 @@ export function GameOnboardingProvider({
 
   return (
     <GameOnboardingContext.Provider value={{ startTutorial }}>
-      {children}
-      <Dialog open={open}>
+      <div className="contents" inert={open || undefined} aria-hidden={open || undefined}>
+        {children}
+      </div>
+      <AnimatePresence>
         {open ? <TutorialGame isCompleting={isCompleting} onComplete={completeTutorial} /> : null}
-      </Dialog>
+      </AnimatePresence>
     </GameOnboardingContext.Provider>
   );
 }
