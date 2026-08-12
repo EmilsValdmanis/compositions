@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { Cards01Icon, Home01Icon, Sent02Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -27,6 +27,13 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "#/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -296,60 +303,64 @@ function GameWinnerTakeover({
   }, [shouldReduceMotion]);
 
   return (
-    <motion.div
-      data-slot="game-winner-takeover"
-      className="fixed inset-0 z-100 grid place-items-center overflow-hidden bg-[radial-gradient(circle_at_50%_42%,color-mix(in_oklab,var(--primary)_28%,var(--background)),var(--background)_62%)] p-6 text-center"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: shouldReduceMotion ? 0.15 : 0.38 }}
-      role="status"
-      aria-live="assertive"
-      aria-label={m.wins_game({ name: winner.name })}
+    <DialogContent
+      variant="fullscreen"
+      showCloseButton={false}
+      aria-describedby="winner-takeover-description"
     >
+      <DialogHeader className="sr-only">
+        <DialogTitle>{m.wins_game({ name: winner.name })}</DialogTitle>
+        <DialogDescription id="winner-takeover-description">{m.match_champion()}</DialogDescription>
+      </DialogHeader>
       <motion.div
-        className="relative z-10 flex flex-col items-center"
-        initial={{ y: shouldReduceMotion ? 0 : 28, scale: shouldReduceMotion ? 1 : 0.82 }}
-        animate={{ y: 0, scale: 1 }}
-        transition={{ delay: 0.12, type: "spring", stiffness: 240, damping: 20 }}
+        data-slot="game-winner-takeover"
+        className="grid size-full place-items-center overflow-hidden bg-[radial-gradient(circle_at_50%_42%,color-mix(in_oklab,var(--primary)_28%,var(--background)),var(--background)_62%)] p-6 text-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: shouldReduceMotion ? 0.15 : 0.38 }}
+        role="status"
+        aria-live="assertive"
       >
-        <Caption className="mb-8 font-semibold tracking-[0.32em] text-primary uppercase">
-          {m.match_champion()}
-        </Caption>
-        <div className="relative mb-7">
-          <motion.div
-            className="absolute inset-[-1.5rem] rounded-full border border-primary/25"
-            animate={shouldReduceMotion ? undefined : { scale: [0.8, 1.12], opacity: [0.8, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
-            aria-hidden="true"
-          />
-          <Avatar className="size-28 border-4 border-background shadow-2xl ring-4 ring-primary/30 md:size-36">
-            {winner.imageUrl ? <AvatarImage src={winner.imageUrl} alt={winner.name} /> : null}
-            <AvatarFallback className="text-3xl md:text-4xl">
-              {getUserInitials(winner.name)}
-            </AvatarFallback>
-          </Avatar>
-          <WinnerCrown large />
-        </div>
-        <motion.h1
-          className="font-heading text-4xl/none font-bold tracking-[-0.05em] text-balance md:text-7xl/none"
-          initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: shouldReduceMotion ? 0 : 0.42, duration: 0.45 }}
+        <motion.div
+          className="relative flex flex-col items-center"
+          initial={{ y: shouldReduceMotion ? 0 : 28, scale: shouldReduceMotion ? 1 : 0.82 }}
+          animate={{ y: 0, scale: 1 }}
+          transition={{ delay: 0.12, type: "spring", stiffness: 240, damping: 20 }}
         >
-          {winner.name}
-        </motion.h1>
-        <P className="mt-4 text-muted-foreground">{m.wins_game({ name: winner.name })}</P>
-        <Button
-          type="button"
-          variant="secondary"
-          className="pointer-events-auto mt-10"
-          onClick={onComplete}
-        >
-          {m.final_scores()}
-        </Button>
+          <Caption className="mb-8 font-semibold tracking-[0.32em] text-primary uppercase">
+            {m.match_champion()}
+          </Caption>
+          <div className="relative mb-7">
+            <motion.div
+              className="absolute inset-[-1.5rem] rounded-full border border-primary/25"
+              animate={shouldReduceMotion ? undefined : { scale: [0.8, 1.12], opacity: [0.8, 0] }}
+              transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+              aria-hidden="true"
+            />
+            <Avatar className="size-28 border-4 border-background shadow-2xl ring-4 ring-primary/30 md:size-36">
+              {winner.imageUrl ? <AvatarImage src={winner.imageUrl} alt={winner.name} /> : null}
+              <AvatarFallback className="text-3xl md:text-4xl">
+                {getUserInitials(winner.name)}
+              </AvatarFallback>
+            </Avatar>
+            <WinnerCrown large />
+          </div>
+          <motion.h1
+            className="font-heading text-4xl/none font-bold tracking-[-0.05em] text-balance md:text-7xl/none"
+            initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: shouldReduceMotion ? 0 : 0.42, duration: 0.45 }}
+          >
+            {winner.name}
+          </motion.h1>
+          <P className="mt-4 text-muted-foreground">{m.wins_game({ name: winner.name })}</P>
+          <Button type="button" variant="secondary" className="mt-10" onClick={onComplete}>
+            {m.final_scores()}
+          </Button>
+        </motion.div>
       </motion.div>
-    </motion.div>
+    </DialogContent>
   );
 }
 
@@ -585,85 +596,83 @@ function ResultsScoreTable({
   shouldReduceMotion: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>#</TableHead>
-            <TableHead>{m.player()}</TableHead>
-            <TableHead className="text-right">{m.cards()}</TableHead>
-            <TableHead className="text-right">{m.score()}</TableHead>
-            <TableHead className="text-right">{m.round()}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map(({ rank, player, playerState, isRoundWinner }) => {
-            const playerName = player?.name ?? m.unknown_player();
-            const scorePhase = shouldReduceMotion
-              ? "adjusted"
-              : scorePlayerIds.has(playerState.playerId)
-                ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
-                : "adjusted";
+    <Table containerClassName="rounded-lg border border-border/70">
+      <TableHeader>
+        <TableRow>
+          <TableHead>#</TableHead>
+          <TableHead>{m.player()}</TableHead>
+          <TableHead className="text-right">{m.cards()}</TableHead>
+          <TableHead className="text-right">{m.score()}</TableHead>
+          <TableHead className="text-right">{m.round()}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map(({ rank, player, playerState, isRoundWinner }) => {
+          const playerName = player?.name ?? m.unknown_player();
+          const scorePhase = shouldReduceMotion
+            ? "adjusted"
+            : scorePlayerIds.has(playerState.playerId)
+              ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
+              : "adjusted";
 
-            return (
-              <motion.tr
-                key={playerState.playerId}
-                layout="position"
-                data-slot="result-row"
-                data-player-id={playerState.playerId}
-                data-rankings-reordered={revealState.hasReordered || undefined}
-                className={cn(
-                  "border-b transition-colors last:border-0 hover:bg-muted/50",
-                  isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
-                )}
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
-              >
-                <TableCell>
+          return (
+            <motion.tr
+              key={playerState.playerId}
+              layout="position"
+              data-slot="result-row"
+              data-player-id={playerState.playerId}
+              data-rankings-reordered={revealState.hasReordered || undefined}
+              className={cn(
+                "border-b transition-colors last:border-0 hover:bg-muted/50",
+                isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+              )}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            >
+              <TableCell>
+                <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
+                  {rank}
+                </P>
+              </TableCell>
+              <TableCell>
+                <div className="flex w-fit items-center gap-2">
+                  <Avatar
+                    size="sm"
+                    aria-label={
+                      isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
+                    }
+                  >
+                    {player?.imageUrl ? (
+                      <AvatarImage src={player.imageUrl} alt={playerName} />
+                    ) : null}
+                    <AvatarFallback>
+                      {playerName === m.unknown_player() ? (
+                        <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
+                      ) : (
+                        getUserInitials(playerName)
+                      )}
+                    </AvatarFallback>
+                    {isRoundWinner ? <WinnerCrown /> : null}
+                  </Avatar>
                   <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
-                    {rank}
+                    {playerName}
                   </P>
-                </TableCell>
-                <TableCell>
-                  <div className="flex w-fit items-center gap-2">
-                    <Avatar
-                      size="sm"
-                      aria-label={
-                        isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
-                      }
-                    >
-                      {player?.imageUrl ? (
-                        <AvatarImage src={player.imageUrl} alt={playerName} />
-                      ) : null}
-                      <AvatarFallback>
-                        {playerName === m.unknown_player() ? (
-                          <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
-                        ) : (
-                          getUserInitials(playerName)
-                        )}
-                      </AvatarFallback>
-                      {isRoundWinner ? <WinnerCrown /> : null}
-                    </Avatar>
-                    <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
-                      {playerName}
-                    </P>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  {playerState.hand && playerState.hand.length !== 0 ? (
-                    <LeftoverHandTooltip
-                      handCount={playerState.handCount}
-                      hand={playerState.hand}
-                      playerName={playerName}
-                    />
-                  ) : null}
-                </TableCell>
-                <ResultPoints playerState={playerState} phase={scorePhase} />
-              </motion.tr>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-right">
+                {playerState.hand && playerState.hand.length !== 0 ? (
+                  <LeftoverHandTooltip
+                    handCount={playerState.handCount}
+                    hand={playerState.hand}
+                    playerName={playerName}
+                  />
+                ) : null}
+              </TableCell>
+              <ResultPoints playerState={playerState} phase={scorePhase} />
+            </motion.tr>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -748,7 +757,12 @@ export function GameResultsView({
 
   return (
     <>
-      <AnimatePresence>
+      <Dialog
+        open={winnerTakeover}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) completeWinnerTakeover();
+        }}
+      >
         {winnerTakeover && winner ? (
           <GameWinnerTakeover
             key={winnerTakeoverKey ?? winner.playerId}
@@ -756,7 +770,7 @@ export function GameResultsView({
             onComplete={completeWinnerTakeover}
           />
         ) : null}
-      </AnimatePresence>
+      </Dialog>
 
       <div className="mx-auto grid w-full max-w-5xl flex-1 content-center gap-4 p-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Card className="min-h-0 border border-border/70 shadow-sm">

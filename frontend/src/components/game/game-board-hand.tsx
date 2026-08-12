@@ -7,7 +7,8 @@ import {
 } from "#/components/game/game-board-view-state";
 import { GameCard } from "#/components/game/game-card";
 import { Card, CardContent } from "#/components/ui/card";
-import { Caption } from "#/components/typography";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";
+import { Spinner } from "#/components/ui/spinner";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -30,6 +31,27 @@ type GameBoardHandProps = {
   tablePlayState: TablePlayState;
 };
 
+function HandState({
+  children,
+  loading = false,
+}: {
+  children: React.ReactNode;
+  loading?: boolean;
+}) {
+  return (
+    <Empty className="border p-6">
+      <EmptyHeader>
+        {loading ? (
+          <EmptyMedia variant="icon">
+            <Spinner />
+          </EmptyMedia>
+        ) : null}
+        <EmptyDescription>{children}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  );
+}
+
 export function GameBoardHand({
   status,
   availableHandEntries,
@@ -46,9 +68,7 @@ export function GameBoardHand({
     >
       <CardContent className="min-h-0 px-0">
         {status.isSpectating ? (
-          <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
-            {m.spectator_hand_hidden()}
-          </Caption>
+          <HandState>{m.spectator_hand_hidden()}</HandState>
         ) : hasGame ? (
           <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
             <GameBoardDraftDropZone
@@ -80,16 +100,14 @@ export function GameBoardHand({
                   </div>
                 </div>
               ) : (
-                <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
+                <HandState>
                   {hasDraftedCompositions ? m.all_cards_staged() : m.no_cards_in_hand()}
-                </Caption>
+                </HandState>
               )}
             </GameBoardDraftDropZone>
           </SortableContext>
         ) : (
-          <Caption className="rounded-3xl border border-dashed border-border/70 p-6">
-            {m.waiting_game_snapshot()}
-          </Caption>
+          <HandState loading>{m.waiting_game_snapshot()}</HandState>
         )}
       </CardContent>
     </Card>

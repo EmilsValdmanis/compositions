@@ -35,6 +35,14 @@ import {
   EmptyTitle,
 } from "#/components/ui/empty";
 import {
+  Item,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemTitle,
+} from "#/components/ui/item";
+import {
   Pagination,
   PaginationContent,
   PaginationItem,
@@ -126,18 +134,18 @@ function compositionIdentity(composition: PersistedGameState["activeCompositions
 
 function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <Caption>{label}</Caption>
-      <P size="sm" className="min-w-0 break-words font-medium">
-        {value}
-      </P>
-    </div>
+    <Item variant="muted" size="sm" className="min-w-0">
+      <ItemContent className="min-w-0">
+        <ItemDescription>{label}</ItemDescription>
+        <ItemTitle className="min-w-0 break-words">{value}</ItemTitle>
+      </ItemContent>
+    </Item>
   );
 }
 
 function ReportMetadata({ report }: { report: AdminBugReportDetail }) {
   return (
-    <div className="grid gap-4 rounded-2xl bg-muted/50 p-4 sm:grid-cols-2">
+    <ItemGroup className="grid gap-2 sm:grid-cols-2">
       <DetailItem label={m.admin_report_id()} value={report.id} />
       <DetailItem label={m.admin_room()} value={report.roomCode} />
       <DetailItem label={m.admin_reporter_player()} value={report.reporterPlayerId} />
@@ -152,7 +160,7 @@ function ReportMetadata({ report }: { report: AdminBugReportDetail }) {
         label={m.admin_abort_requested()}
         value={report.requestedAbort ? m.yes() : m.no()}
       />
-    </div>
+    </ItemGroup>
   );
 }
 
@@ -166,17 +174,15 @@ function StateMetric({
   icon: Parameters<typeof HugeiconsIcon>[0]["icon"];
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-2xl bg-muted/50 p-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-background text-primary shadow-sm">
+    <Item variant="muted" size="sm" className="min-w-0 flex-nowrap">
+      <ItemMedia variant="icon" className="size-9 rounded-xl bg-background text-primary shadow-sm">
         <HugeiconsIcon icon={icon} aria-hidden="true" />
-      </span>
-      <div className="min-w-0">
-        <Caption>{label}</Caption>
-        <P size="sm" className="truncate font-semibold tabular-nums">
-          {value}
-        </P>
-      </div>
-    </div>
+      </ItemMedia>
+      <ItemContent className="min-w-0">
+        <ItemDescription>{label}</ItemDescription>
+        <ItemTitle className="truncate tabular-nums">{value}</ItemTitle>
+      </ItemContent>
+    </Item>
   );
 }
 
@@ -206,9 +212,11 @@ function CardCollection({
             ))}
           </div>
         ) : (
-          <P size="sm" className="text-muted-foreground">
-            {m.admin_no_cards()}
-          </P>
+          <Empty className="border-0 p-4">
+            <EmptyHeader>
+              <EmptyTitle className="text-sm">{m.admin_no_cards()}</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         )}
       </CardContent>
     </Card>
@@ -221,7 +229,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
 
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col gap-4">
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <ItemGroup className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <StateMetric
           label={m.admin_game_phase()}
           value={phaseLabel(state.phase)}
@@ -242,7 +250,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
           value={state.drawPile.length}
           icon={Layers01Icon}
         />
-      </div>
+      </ItemGroup>
 
       <Card className="min-w-0">
         <CardHeader>
@@ -266,9 +274,11 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
               ),
             )
           ) : (
-            <P size="sm" className="text-muted-foreground">
-              {m.admin_no_compositions()}
-            </P>
+            <Empty className="border-0 p-4">
+              <EmptyHeader>
+                <EmptyTitle className="text-sm">{m.admin_no_compositions()}</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           )}
         </CardContent>
       </Card>
@@ -329,9 +339,11 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
               </Badge>
             </div>
             <Separator />
-            <DetailItem label={m.admin_snapshot_version()} value={state.version} />
-            <DetailItem label={m.admin_dealer_index()} value={state.dealerIndex} />
-            <DetailItem label={m.admin_round_winner_index()} value={state.roundWinnerIndex} />
+            <ItemGroup className="gap-2">
+              <DetailItem label={m.admin_snapshot_version()} value={state.version} />
+              <DetailItem label={m.admin_dealer_index()} value={state.dealerIndex} />
+              <DetailItem label={m.admin_round_winner_index()} value={state.roundWinnerIndex} />
+            </ItemGroup>
           </CardContent>
         </Card>
       </div>

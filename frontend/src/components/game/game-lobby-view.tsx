@@ -17,6 +17,7 @@ import {
   Login02Icon,
   RankingIcon,
   Share08Icon,
+  UserGroupIcon,
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -24,6 +25,7 @@ import { DealChoicePanel } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { AnimatedNumber } from "#/components/ui/animated-number";
+import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#/components/ui/card";
@@ -33,7 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
-import { Input } from "#/components/ui/input";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";
 import {
   Field,
   FieldDescription,
@@ -42,8 +44,15 @@ import {
   FieldLegend,
   FieldSet,
 } from "#/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "#/components/ui/input-group";
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "#/components/ui/item";
 import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
-import { Caption, H2 } from "#/components/typography";
+import { H2 } from "#/components/typography";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
@@ -156,14 +165,14 @@ export function GameLobbyView({
         <CardContent className="grid gap-4">
           {room ? (
             <div className="grid gap-4">
-              <div className="grid gap-4 rounded-2xl border border-border/70 bg-muted/20 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <Caption className="font-medium tracking-[0.18em] uppercase">
-                      {m.room_code()}
-                    </Caption>
+              <Item variant="muted" className="flex-nowrap">
+                <ItemContent>
+                  <ItemDescription>{m.room_code()}</ItemDescription>
+                  <ItemTitle>
                     <H2 className="tabular-nums">{room.code}</H2>
-                  </div>
+                  </ItemTitle>
+                </ItemContent>
+                <ItemActions>
                   <DropdownMenu>
                     <DropdownMenuTrigger render={<Button type="button" variant="outline" />}>
                       <HugeiconsIcon icon={Share08Icon} strokeWidth={2} data-icon="inline-start" />
@@ -185,8 +194,8 @@ export function GameLobbyView({
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
-              </div>
+                </ItemActions>
+              </Item>
               {isHost ? (
                 <FieldSet>
                   <FieldLegend variant="label">{m.game_mode()}</FieldLegend>
@@ -243,17 +252,16 @@ export function GameLobbyView({
                 />
               ) : null}
               {completedGame ? (
-                <div className="grid gap-1 rounded-2xl border border-border/70 bg-muted/20 p-4">
-                  <Caption className="font-medium tracking-[0.18em] uppercase">
-                    {m.last_winner()}
-                  </Caption>
-                  <Caption>
+                <Alert>
+                  <HugeiconsIcon icon={RankingIcon} />
+                  <AlertTitle>{m.last_winner()}</AlertTitle>
+                  <AlertDescription>
                     {m.winner_in_round({
                       name: victor?.name ?? m.a_player(),
                       round: completedGame.game.round,
                     })}
-                  </Caption>
-                </div>
+                  </AlertDescription>
+                </Alert>
               ) : null}
             </div>
           ) : (
@@ -272,28 +280,35 @@ export function GameLobbyView({
             <>
               <CardDescription className="mx-auto">{m.or()}</CardDescription>
               <FieldGroup>
-                <Field orientation="horizontal" className="items-stretch gap-2">
+                <Field>
                   <FieldLabel htmlFor="room-code" className="sr-only">
                     {m.room_code()}
                   </FieldLabel>
-                  <Input
-                    id="room-code"
-                    className="h-10"
-                    value={roomCode}
-                    onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
-                    placeholder={m.room_code()}
-                    maxLength={6}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    onClick={() => onJoinRoom(roomCode.trim())}
-                    disabled={!canJoinRoom}
-                  >
-                    <HugeiconsIcon icon={Login02Icon} data-icon="inline-start" />
-                    {m.join()}
-                  </Button>
+                  <InputGroup className="h-10 overflow-hidden">
+                    <InputGroupInput
+                      id="room-code"
+                      value={roomCode}
+                      onChange={(event) => onRoomCodeChange(event.target.value.toUpperCase())}
+                      placeholder={m.room_code()}
+                      maxLength={6}
+                    />
+                    <InputGroupAddon
+                      align="inline-end"
+                      className="self-stretch p-0 has-[>button]:mr-0"
+                    >
+                      <InputGroupButton
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-full rounded-l-none px-4"
+                        onClick={() => onJoinRoom(roomCode.trim())}
+                        disabled={!canJoinRoom}
+                      >
+                        <HugeiconsIcon icon={Login02Icon} data-icon="inline-start" />
+                        {m.join()}
+                      </InputGroupButton>
+                    </InputGroupAddon>
+                  </InputGroup>
                 </Field>
               </FieldGroup>
             </>
@@ -327,9 +342,14 @@ export function GameLobbyView({
                   onSendFriendRequest={onSendFriendRequest}
                 />
               ) : (
-                <Caption className="rounded-2xl border border-dashed border-border/70 p-6">
-                  {m.create_or_join_room()}
-                </Caption>
+                <Empty className="border p-6">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <HugeiconsIcon icon={UserGroupIcon} />
+                    </EmptyMedia>
+                    <EmptyDescription>{m.create_or_join_room()}</EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               )}
             </CardContent>
           </Card>

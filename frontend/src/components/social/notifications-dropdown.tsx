@@ -35,6 +35,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "#/components/ui/popover";
+import { ScrollArea } from "#/components/ui/scroll-area";
 import { SidebarMenuButton } from "#/components/ui/sidebar";
 import { cn } from "#/lib/utils";
 import { getUserInitials } from "#/lib/utils";
@@ -127,7 +128,7 @@ export function NotificationsDropdown({
       <PopoverContent
         align={presentation === "sidebar" ? "start" : "end"}
         side={presentation === "sidebar" ? "right" : "bottom"}
-        className="max-h-[min(32rem,var(--available-height))] w-[min(24rem,calc(100vw-1rem))] overflow-y-auto"
+        className="w-[min(24rem,calc(100vw-1rem))]"
       >
         <PopoverHeader>
           <PopoverTitle>{m.notifications()}</PopoverTitle>
@@ -144,120 +145,122 @@ export function NotificationsDropdown({
             </EmptyHeader>
           </Empty>
         ) : (
-          <ItemGroup className="gap-2">
-            {friendRequests.map((request) => {
-              const pending = pendingIds.has(request.id);
-              return (
-                <Item key={request.id} variant="muted" size="xs">
-                  <ItemMedia>
-                    <Avatar>
-                      {request.user.imageUrl ? (
-                        <AvatarImage src={request.user.imageUrl} alt={request.user.name} />
-                      ) : null}
-                      <AvatarFallback>{getUserInitials(request.user.name)}</AvatarFallback>
-                    </Avatar>
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>{m.friend_request()}</ItemTitle>
-                    <ItemDescription>
-                      {m.friend_request_from({ name: request.user.name })}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="outline"
-                      disabled={pending}
-                      aria-label={m.decline()}
-                      onClick={() =>
-                        void respond(
-                          request.id,
-                          () => respondFriendRequest(request.id, false),
-                          m.friend_request_declined(),
-                        )
-                      }
-                    >
-                      <HugeiconsIcon icon={Cancel01Icon} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      disabled={pending}
-                      aria-label={m.accept()}
-                      onClick={() =>
-                        void respond(
-                          request.id,
-                          () => respondFriendRequest(request.id, true),
-                          m.friend_request_accepted(),
-                        )
-                      }
-                    >
-                      <HugeiconsIcon icon={Tick02Icon} />
-                    </Button>
-                  </ItemActions>
-                </Item>
-              );
-            })}
+          <ScrollArea className="max-h-[min(27rem,var(--available-height))]">
+            <ItemGroup className="gap-2 pr-2">
+              {friendRequests.map((request) => {
+                const pending = pendingIds.has(request.id);
+                return (
+                  <Item key={request.id} variant="muted" size="xs">
+                    <ItemMedia>
+                      <Avatar>
+                        {request.user.imageUrl ? (
+                          <AvatarImage src={request.user.imageUrl} alt={request.user.name} />
+                        ) : null}
+                        <AvatarFallback>{getUserInitials(request.user.name)}</AvatarFallback>
+                      </Avatar>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{m.friend_request()}</ItemTitle>
+                      <ItemDescription>
+                        {m.friend_request_from({ name: request.user.name })}
+                      </ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        disabled={pending}
+                        aria-label={m.decline()}
+                        onClick={() =>
+                          void respond(
+                            request.id,
+                            () => respondFriendRequest(request.id, false),
+                            m.friend_request_declined(),
+                          )
+                        }
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        disabled={pending}
+                        aria-label={m.accept()}
+                        onClick={() =>
+                          void respond(
+                            request.id,
+                            () => respondFriendRequest(request.id, true),
+                            m.friend_request_accepted(),
+                          )
+                        }
+                      >
+                        <HugeiconsIcon icon={Tick02Icon} />
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                );
+              })}
 
-            {gameInvites.map((invite) => {
-              const pending = pendingIds.has(invite.id);
-              return (
-                <Item key={invite.id} variant="muted" size="xs">
-                  <ItemMedia>
-                    <Avatar>
-                      {invite.user.imageUrl ? (
-                        <AvatarImage src={invite.user.imageUrl} alt={invite.user.name} />
-                      ) : null}
-                      <AvatarFallback>{getUserInitials(invite.user.name)}</AvatarFallback>
-                    </Avatar>
-                  </ItemMedia>
-                  <ItemContent>
-                    <ItemTitle>
-                      <HugeiconsIcon icon={GameController03Icon} />
-                      {m.game_invite()}
-                    </ItemTitle>
-                    <ItemDescription>
-                      {m.game_invite_from({ name: invite.user.name, roomCode: invite.roomCode })}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="outline"
-                      disabled={pending}
-                      aria-label={m.decline()}
-                      onClick={() =>
-                        void respond(
-                          invite.id,
-                          () => respondGameInvite(invite.id, false),
-                          m.game_invite_declined(),
-                        )
-                      }
-                    >
-                      <HugeiconsIcon icon={Cancel01Icon} />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      disabled={pending}
-                      aria-label={m.accept()}
-                      onClick={() =>
-                        void respond(
-                          invite.id,
-                          () => acceptGameInvite(invite.id),
-                          m.game_invite_accepted(),
-                        )
-                      }
-                    >
-                      <HugeiconsIcon icon={Tick02Icon} />
-                    </Button>
-                  </ItemActions>
-                </Item>
-              );
-            })}
-          </ItemGroup>
+              {gameInvites.map((invite) => {
+                const pending = pendingIds.has(invite.id);
+                return (
+                  <Item key={invite.id} variant="muted" size="xs">
+                    <ItemMedia>
+                      <Avatar>
+                        {invite.user.imageUrl ? (
+                          <AvatarImage src={invite.user.imageUrl} alt={invite.user.name} />
+                        ) : null}
+                        <AvatarFallback>{getUserInitials(invite.user.name)}</AvatarFallback>
+                      </Avatar>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>
+                        <HugeiconsIcon icon={GameController03Icon} />
+                        {m.game_invite()}
+                      </ItemTitle>
+                      <ItemDescription>
+                        {m.game_invite_from({ name: invite.user.name, roomCode: invite.roomCode })}
+                      </ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="outline"
+                        disabled={pending}
+                        aria-label={m.decline()}
+                        onClick={() =>
+                          void respond(
+                            invite.id,
+                            () => respondGameInvite(invite.id, false),
+                            m.game_invite_declined(),
+                          )
+                        }
+                      >
+                        <HugeiconsIcon icon={Cancel01Icon} />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        disabled={pending}
+                        aria-label={m.accept()}
+                        onClick={() =>
+                          void respond(
+                            invite.id,
+                            () => acceptGameInvite(invite.id),
+                            m.game_invite_accepted(),
+                          )
+                        }
+                      >
+                        <HugeiconsIcon icon={Tick02Icon} />
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                );
+              })}
+            </ItemGroup>
+          </ScrollArea>
         )}
       </PopoverContent>
     </Popover>

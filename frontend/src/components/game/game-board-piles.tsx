@@ -39,9 +39,7 @@ function TableCardPile({
           <GameCard card={card} faceDown={faceDown} dragSource={dragSource} />
           {countOnCard ? (
             <span className="pointer-events-none absolute inset-0 grid place-items-center">
-              <span className="grid min-w-7 place-items-center rounded-full bg-background/90 px-1.5 py-1 font-heading text-xs font-semibold text-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm">
-                <AnimatedNumber value={count} />
-              </span>
+              <AnimatedNumber value={count} />
             </span>
           ) : null}
         </div>

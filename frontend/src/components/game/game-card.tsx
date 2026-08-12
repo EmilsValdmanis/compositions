@@ -14,6 +14,7 @@ import { type CardSnapshot } from "#/components/game-websocket-provider";
 import { cardName } from "#/components/game/game-card-utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn } from "#/lib/utils";
+import { Badge } from "#/components/ui/badge";
 import { m } from "#/paraglide/messages.js";
 
 const rankLabels: Record<number, string> = {
@@ -217,9 +218,12 @@ function GameCardDecorationLayer({ decoration }: { decoration?: GameCardDecorati
         </div>
       ) : null}
       {decoration.footer ? (
-        <div className="absolute bottom-1 left-1/2 z-10 flex -translate-x-1/2 translate-y-1/2 items-center gap-1 rounded-full bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur-sm">
+        <Badge
+          variant="outline"
+          className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2 translate-y-1/2 shadow-sm"
+        >
           {decoration.footer}
-        </div>
+        </Badge>
       ) : null}
     </>
   );

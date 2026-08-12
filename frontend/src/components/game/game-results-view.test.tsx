@@ -227,7 +227,7 @@ describe("GameResultsView score reveal", () => {
       />,
     );
 
-    expect(view.container.querySelector('[data-slot="game-winner-takeover"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="game-winner-takeover"]')).not.toBeNull();
     expect(fireStreamingCelebrationConfettiMock).toHaveBeenCalledWith({
       durationMs: 3_200,
       delayMs: 260,

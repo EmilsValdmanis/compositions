@@ -37,6 +37,13 @@ import {
   CardHeader,
   CardTitle,
 } from "#/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "#/components/ui/dialog";
 import { authClient } from "#/lib/auth-client";
 import { fireCelebrationConfetti } from "#/lib/confetti";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
@@ -632,10 +639,6 @@ function TutorialCoach({
           >
             <Card
               size="sm"
-              role="dialog"
-              aria-modal={isCentered ? "true" : undefined}
-              aria-labelledby="tutorial-coach-title"
-              aria-describedby="tutorial-coach-description"
               className={cn(
                 "ring-1 ring-foreground/10",
                 isInline
@@ -730,6 +733,7 @@ function TutorialGame({
   const spotlightRect = (stage === "draw" ? spotlightRects.at(0) : spotlightRects.at(-1)) ?? null;
   const canCompose = stage === "compose" || stage === "discard";
   const useInlineCoach = compactLayout && stage !== "intro" && stage !== "complete";
+  const currentStageContent = stageContent(stage);
 
   function continueTutorial() {
     if (stage === "complete") {
@@ -803,107 +807,121 @@ function TutorialGame({
   }
 
   return (
-    <motion.section
-      className="fixed inset-0 z-40 flex min-h-0 flex-col bg-background p-2"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: shouldReduceMotion ? 0.08 : 0.2 }}
-      aria-label={m.onboarding_practice_game()}
+    <DialogContent
+      variant="fullscreen"
+      showCloseButton={false}
+      aria-describedby="tutorial-dialog-description"
     >
-      <header className="flex h-12 shrink-0 items-center gap-2 px-2 md:h-14 md:px-3">
-        <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
-          <HugeiconsIcon icon={JokerIcon} aria-hidden="true" />
-        </span>
-        <div className="min-w-0">
-          <p className="truncate font-heading text-sm font-semibold">
-            {m.onboarding_practice_game()}
-          </p>
-          <p className="text-xs text-muted-foreground">{m.onboarding_practice_description()}</p>
+      <DialogHeader className="sr-only">
+        <DialogTitle>{currentStageContent.title}</DialogTitle>
+        <DialogDescription id="tutorial-dialog-description">
+          {currentStageContent.description}
+        </DialogDescription>
+      </DialogHeader>
+
+      <motion.section
+        className="flex size-full min-h-0 flex-col p-2"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: shouldReduceMotion ? 0.08 : 0.2 }}
+        aria-label={m.onboarding_practice_game()}
+      >
+        <header className="flex h-12 shrink-0 items-center gap-2 px-2 md:h-14 md:px-3">
+          <span className="grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
+            <HugeiconsIcon icon={JokerIcon} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate font-heading text-sm font-semibold">
+              {m.onboarding_practice_game()}
+            </p>
+            <p className="text-xs text-muted-foreground">{m.onboarding_practice_description()}</p>
+          </div>
+          <Badge variant="outline" className="ml-auto hidden sm:inline-flex">
+            {m.onboarding_practice_badge()}
+          </Badge>
+        </header>
+
+        {useInlineCoach ? (
+          <TutorialCoach
+            stage={stage}
+            rect={spotlightRect}
+            compositionProgress={compositionProgress}
+            isCompleting={isCompleting}
+            onContinue={continueTutorial}
+            presentation="inline"
+          />
+        ) : null}
+
+        <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
+          <GameBoardView
+            game={game}
+            roomCode="TUTORIAL"
+            playerId={TUTORIAL_PLAYER_ID}
+            players={tutorialPlayers}
+            connectedPlayers={tutorialPlayers.length}
+            turnState={{
+              canDrawDeck: stage === "draw" && !game.turn.hasDrawn,
+              canDrawDiscard: false,
+              canDiscard: canCompose && game.turn.hasDrawn,
+              isMyTurn: true,
+              turnPlayerName: tutorialPlayers[0]?.name ?? "Alex",
+            }}
+            topDiscardCard={game.discardPile[0] ?? null}
+            onDrawFromDeck={drawFromDeck}
+            onDrawFromDiscard={() => undefined}
+            guidance={{
+              stage:
+                stage === "orientation"
+                  ? "orientation"
+                  : stage === "draw"
+                    ? "draw"
+                    : stage === "compose"
+                      ? "compose"
+                      : "discard",
+              onDrawDragStateChange: setIsDrawingCard,
+              onDrawSettled: () =>
+                setStage((current) => (current === "draw" ? "compose" : current)),
+              onDraftStateChange: ({ draftCompositions, isDraggingCard }) => {
+                const isComplete = isTutorialDraftComplete(draftCompositions);
+                setCompositionProgress(tutorialDraftProgress(draftCompositions));
+                setStage((current) => {
+                  if (current === "compose" && isComplete && !isDraggingCard) return "discard";
+                  if (current === "discard" && !isComplete) return "compose";
+                  return current;
+                });
+              },
+            }}
+            onDiscardCard={async () => ({
+              action: "discard_card",
+              playerId: TUTORIAL_PLAYER_ID,
+              ok: false,
+            })}
+            onPlayTable={async () => ({
+              action: "play_table",
+              playerId: TUTORIAL_PLAYER_ID,
+              ok: false,
+            })}
+            onPlayTableAndDiscard={playTableAndDiscard}
+            onSendEmote={() => undefined}
+            draftSyncMode="disabled"
+          />
         </div>
-        <Badge variant="outline" className="ml-auto hidden sm:inline-flex">
-          {m.onboarding_practice_badge()}
-        </Badge>
-      </header>
 
-      {useInlineCoach ? (
-        <TutorialCoach
-          stage={stage}
-          rect={spotlightRect}
-          compositionProgress={compositionProgress}
-          isCompleting={isCompleting}
-          onContinue={continueTutorial}
-          presentation="inline"
-        />
-      ) : null}
-
-      <div ref={boardRef} className="flex min-h-0 flex-1 flex-col">
-        <GameBoardView
-          game={game}
-          roomCode="TUTORIAL"
-          playerId={TUTORIAL_PLAYER_ID}
-          players={tutorialPlayers}
-          connectedPlayers={tutorialPlayers.length}
-          turnState={{
-            canDrawDeck: stage === "draw" && !game.turn.hasDrawn,
-            canDrawDiscard: false,
-            canDiscard: canCompose && game.turn.hasDrawn,
-            isMyTurn: true,
-            turnPlayerName: tutorialPlayers[0]?.name ?? "Alex",
-          }}
-          topDiscardCard={game.discardPile[0] ?? null}
-          onDrawFromDeck={drawFromDeck}
-          onDrawFromDiscard={() => undefined}
-          guidance={{
-            stage:
-              stage === "orientation"
-                ? "orientation"
-                : stage === "draw"
-                  ? "draw"
-                  : stage === "compose"
-                    ? "compose"
-                    : "discard",
-            onDrawDragStateChange: setIsDrawingCard,
-            onDrawSettled: () => setStage((current) => (current === "draw" ? "compose" : current)),
-            onDraftStateChange: ({ draftCompositions, isDraggingCard }) => {
-              const isComplete = isTutorialDraftComplete(draftCompositions);
-              setCompositionProgress(tutorialDraftProgress(draftCompositions));
-              setStage((current) => {
-                if (current === "compose" && isComplete && !isDraggingCard) return "discard";
-                if (current === "discard" && !isComplete) return "compose";
-                return current;
-              });
-            },
-          }}
-          onDiscardCard={async () => ({
-            action: "discard_card",
-            playerId: TUTORIAL_PLAYER_ID,
-            ok: false,
-          })}
-          onPlayTable={async () => ({
-            action: "play_table",
-            playerId: TUTORIAL_PLAYER_ID,
-            ok: false,
-          })}
-          onPlayTableAndDiscard={playTableAndDiscard}
-          onSendEmote={() => undefined}
-          draftSyncMode="disabled"
-        />
-      </div>
-
-      <SpotlightBackdrop rects={spotlightRects} />
-      {stage === "orientation" ? <OrientationLabels rects={spotlightRects} /> : null}
-      {!useInlineCoach ? (
-        <TutorialCoach
-          stage={stage}
-          rect={spotlightRect}
-          compositionProgress={compositionProgress}
-          isCompleting={isCompleting}
-          onContinue={continueTutorial}
-          presentation="overlay"
-        />
-      ) : null}
-    </motion.section>
+        <SpotlightBackdrop rects={spotlightRects} />
+        {stage === "orientation" ? <OrientationLabels rects={spotlightRects} /> : null}
+        {!useInlineCoach ? (
+          <TutorialCoach
+            stage={stage}
+            rect={spotlightRect}
+            compositionProgress={compositionProgress}
+            isCompleting={isCompleting}
+            onContinue={continueTutorial}
+            presentation="overlay"
+          />
+        ) : null}
+      </motion.section>
+    </DialogContent>
   );
 }
 
@@ -951,12 +969,10 @@ export function GameOnboardingProvider({
 
   return (
     <GameOnboardingContext.Provider value={{ startTutorial }}>
-      <div className="contents" inert={open || undefined} aria-hidden={open || undefined}>
-        {children}
-      </div>
-      <AnimatePresence>
+      {children}
+      <Dialog open={open}>
         {open ? <TutorialGame isCompleting={isCompleting} onComplete={completeTutorial} /> : null}
-      </AnimatePresence>
+      </Dialog>
     </GameOnboardingContext.Provider>
   );
 }
