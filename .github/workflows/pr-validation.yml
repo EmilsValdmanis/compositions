@@ -63,8 +63,8 @@ jobs:
 
             - name: Fuzz parsers
               run: |
-                  go test ./cmd/server -run '^$' -fuzz '^FuzzDecodeLeaderboardCursor$' -fuzztime=3s
-                  go test ./internal/game -run '^$' -fuzz '^FuzzRestoreGameState$' -fuzztime=3s
+                  go test ./cmd/server -run '^$' -fuzz '^FuzzDecodeLeaderboardCursor$' -fuzztime=25000x -parallel=1
+                  go test ./internal/game -run '^$' -fuzz '^FuzzRestoreGameState$' -fuzztime=25000x -parallel=1
 
             - name: Integration tests
               run: make test-integration
