@@ -51,7 +51,6 @@ import {
   analyticsPeriodRange,
   currentAnalyticsDate,
   shiftAnalyticsPeriod,
-  shiftCalendarDate,
   type AnalyticsPeriod,
 } from "#/lib/admin-analytics-date";
 import { m } from "#/paraglide/messages.js";
@@ -79,9 +78,8 @@ const FULL_DATE_FORMATTERS: Record<Locale, Intl.DateTimeFormat> = {
 
 const DATE_FNS_LOCALES = { en: enUS, lv } as const;
 
-function defaultDateRange(): AdminAnalyticsRange {
-  const to = currentAnalyticsDate();
-  return { from: shiftCalendarDate(to, -29), to };
+export function defaultDateRange(): AdminAnalyticsRange {
+  return analyticsPeriodRange("month", currentAnalyticsDate());
 }
 
 function parseCalendarDate(value: string) {
@@ -100,7 +98,7 @@ function formatDateRange(value: AdminAnalyticsRange) {
   return `${formatFullDate(value.from)} – ${formatFullDate(value.to)}`;
 }
 
-function DateRangePicker({
+export function DateRangePicker({
   value,
   onChange,
 }: {
@@ -108,7 +106,7 @@ function DateRangePicker({
   onChange: (value: AdminAnalyticsRange) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [period, setPeriod] = useState<AnalyticsPeriod>("custom");
+  const [period, setPeriod] = useState<AnalyticsPeriod>("month");
   const [draft, setDraft] = useState<DateRange | undefined>(() => ({
     from: parseCalendarDate(value.from),
     to: parseCalendarDate(value.to),
@@ -218,10 +216,11 @@ function DateRangePicker({
             mode="range"
             today={today}
             selected={draft}
-            onDayClick={(day, modifiers) => selectDay(day, modifiers.disabled)}
+            onSelect={(_nextRange, day, modifiers) => selectDay(day, modifiers.disabled)}
             locale={DATE_FNS_LOCALES[getLocale()]}
             month={month}
             onMonthChange={setMonth}
+            className="mx-auto"
             autoFocus
           />
         </PopoverContent>
