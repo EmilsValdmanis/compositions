@@ -166,6 +166,7 @@ describe("GameResultsView score reveal", () => {
         ?.querySelector("[data-score-total] [data-number-trend]")
         ?.getAttribute("data-number-trend"),
     ).toBe("-1");
+    expect(flyingScore?.querySelector("[data-flying-icon]")).toBeNull();
 
     await act(async () => vi.advanceTimersByTime(260));
     const halfwayAdjustment = Number(
@@ -173,6 +174,7 @@ describe("GameResultsView score reveal", () => {
     );
     expect(halfwayAdjustment).toBeGreaterThan(89);
     expect(halfwayAdjustment).toBeLessThan(107);
+    expect(flyingScore?.querySelector("[data-flying-icon]")).toBeNull();
 
     await act(async () => vi.advanceTimersByTime(260));
     expect(flyingScore?.dataset.scorePhase).toBe("adjusted");
@@ -187,12 +189,29 @@ describe("GameResultsView score reveal", () => {
     expect(
       flyingScore?.querySelector("[data-flying-icon]")?.classList.contains("flying-score-plane"),
     ).toBe(true);
-    expect(flyingScore?.querySelector("[data-flying-ring]")?.classList.contains("absolute")).toBe(
+    expect(
+      flyingScore
+        ?.querySelector("[data-flying-icon]")
+        ?.parentElement?.classList.contains("right-[calc(100%+0.25rem)]"),
+    ).toBe(true);
+    expect(flyingScore?.querySelector("[data-score-total]")?.classList.contains("relative")).toBe(
       true,
     );
+    expect(flyingScore?.querySelector("[data-flying-ring]")).toBeNull();
     expect(flyingScore?.querySelector("[data-flying-value]")?.classList.contains("size-9")).toBe(
       false,
     );
+    expect(
+      flyingScore?.querySelector("[data-score-value-slot]")?.classList.contains("w-[3ch]"),
+    ).toBe(true);
+    expect(
+      flyingScore?.querySelector("[data-score-value-slot]")?.classList.contains("text-right"),
+    ).toBe(true);
+    expect(
+      flyingScore?.parentElement
+        ?.querySelector("[data-round-value-slot]")
+        ?.classList.contains("w-[4ch]"),
+    ).toBe(true);
 
     await act(async () => vi.advanceTimersByTime(500));
     expect(
@@ -227,7 +246,8 @@ describe("GameResultsView score reveal", () => {
       />,
     );
 
-    expect(view.container.querySelector('[data-slot="game-winner-takeover"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="game-winner-takeover"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
     expect(fireStreamingCelebrationConfettiMock).toHaveBeenCalledWith({
       durationMs: 3_200,
       delayMs: 260,

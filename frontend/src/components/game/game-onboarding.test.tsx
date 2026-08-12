@@ -125,6 +125,21 @@ vi.mock("#/components/game/game-board-view", () => ({
       >
         Mock valid composition
       </button>
+      <button
+        type="button"
+        onClick={() => {
+          const six = document.querySelector<HTMLElement>(
+            '[data-onboarding-target="hand"] [data-card-rank="6"][data-card-suit="3"]',
+          );
+          const seven = document.querySelector<HTMLElement>(
+            '[data-onboarding-target="hand"] [data-card-rank="7"][data-card-suit="3"]',
+          );
+          if (six) six.style.transform = "translateX(-64px)";
+          if (seven) seven.style.transform = "translateX(-128px)";
+        }}
+      >
+        Mock hand reposition
+      </button>
       <div data-onboarding-target="hand">
         <div data-onboarding-target="hand-cards">
           <div data-card-rank="5" data-card-suit="3" />
@@ -199,13 +214,6 @@ function mockRect(left: number, top: number, width: number, height: number): DOM
   };
 }
 
-function spotlightMaskMarkup() {
-  const maskImage = document.querySelector<HTMLElement>("[data-onboarding-backdrop]")?.style
-    .maskImage;
-  expect(maskImage).toContain("data:image/svg+xml");
-  return decodeURIComponent(maskImage ?? "");
-}
-
 beforeEach(() => {
   completeOnboardingMock.mockReset();
   completeOnboardingMock.mockResolvedValue(undefined);
@@ -225,10 +233,12 @@ beforeEach(() => {
       return mockRect(270, 520, 56, 80);
     }
     if (this.matches('[data-card-rank="6"][data-card-suit="3"]')) {
-      return mockRect(334, 520, 56, 80);
+      const shift = this.getAttribute("style")?.includes("-64px") ? -64 : 0;
+      return mockRect(334 + shift, 520, 56, 80);
     }
     if (this.matches('[data-card-rank="7"][data-card-suit="3"]')) {
-      return mockRect(462, 520, 56, 80);
+      const shift = this.getAttribute("style")?.includes("-128px") ? -128 : 0;
+      return mockRect(462 + shift, 520, 56, 80);
     }
     if (this.matches('[data-card-motion-source="discard"]')) {
       return mockRect(180, 100, 60, 90);
@@ -275,7 +285,11 @@ describe("GameOnboardingProvider", () => {
     expect(dialog.parentElement?.parentElement?.dataset.centered).toBe("true");
     expect(dialog.parentElement?.parentElement?.dataset.tutorialStage).toBe("intro");
     expect(dialog.parentElement?.className).not.toContain("overflow");
+    expect(document.querySelector('[data-slot="dialog-overlay"]')).toBeNull();
     expect(document.querySelector("[data-onboarding-backdrop]")?.className).toContain("z-20");
+    expect(document.querySelector("[data-onboarding-backdrop]")?.className).toContain(
+      "backdrop-blur-sm",
+    );
     expect(screen.getByLabelText("Practice game")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Skip tutorial" })).toBeNull();
     expect(screen.queryByText("1 of 5")).toBeNull();
@@ -366,6 +380,9 @@ describe("GameOnboardingProvider", () => {
         .closest("[data-tutorial-presentation]")
         ?.getAttribute("data-tutorial-presentation"),
     ).toBe("inline");
+    expect(document.querySelector("[data-onboarding-backdrop]")?.className).toContain(
+      "backdrop-blur-sm",
+    );
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(4),
     );
@@ -382,6 +399,29 @@ describe("GameOnboardingProvider", () => {
       "66px",
       "66px",
     ]);
+    const composeMask = document.querySelector("[data-onboarding-mask]");
+    const composeMaskImage = document.querySelector<HTMLElement>("[data-onboarding-backdrop]")
+      ?.style.maskImage;
+    expect(composeMaskImage).toMatch(/^url\(["']?#onboarding-spotlight-mask-/);
+    expect(composeMaskImage).not.toContain("data:image");
+
+    fireEvent.click(screen.getByRole("button", { name: "Mock hand reposition" }));
+    await waitFor(() =>
+      expect(
+        Array.from(document.querySelectorAll<HTMLElement>("[data-onboarding-spotlight]"))
+          .slice(0, 3)
+          .map((spotlight) => spotlight.style.left),
+      ).toEqual(["265px", "265px", "329px"]),
+    );
+    expect(document.querySelector("[data-onboarding-mask]")).toBe(composeMask);
+    expect(
+      Array.from(document.querySelectorAll("[data-onboarding-mask-cutout]"))
+        .slice(0, 3)
+        .map((cutout) => cutout.getAttribute("x")),
+    ).toEqual(["265", "265", "329"]);
+    expect(document.querySelector<HTMLElement>("[data-onboarding-backdrop]")?.style.maskImage).toBe(
+      composeMaskImage,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Mock valid composition" }));
     const discardDialog = await screen.findByRole("dialog", { name: "Finish by discarding" });
@@ -419,7 +459,7 @@ describe("GameOnboardingProvider", () => {
     await waitFor(() =>
       expect(document.querySelectorAll("[data-onboarding-spotlight]")).toHaveLength(3),
     );
-    expect(spotlightMaskMarkup().match(/<rect [^>]*rx=/g)).toHaveLength(3);
+    expect(document.querySelectorAll("[data-onboarding-mask-cutout]")).toHaveLength(3);
     expect(document.querySelector<HTMLElement>("[data-onboarding-spotlight]")?.style.width).toBe(
       "270px",
     );

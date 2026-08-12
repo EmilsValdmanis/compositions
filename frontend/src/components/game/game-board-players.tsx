@@ -89,50 +89,48 @@ function GameScoreboard({
             {m.results()}
           </PopoverTitle>
         </PopoverHeader>
-        <div className="overflow-hidden rounded-b-3xl border-t border-border/70">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>#</TableHead>
-                <TableHead>{m.player()}</TableHead>
-                <TableHead className="text-right">{m.score()}</TableHead>
+        <Table containerClassName="rounded-b-3xl border-t border-border/70">
+          <TableHeader>
+            <TableRow>
+              <TableHead>#</TableHead>
+              <TableHead>{m.player()}</TableHead>
+              <TableHead className="text-right">{m.score()}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map(({ rank, player, playerState }) => (
+              <TableRow key={playerState.playerId}>
+                <TableCell className="tabular-nums">{rank}</TableCell>
+                <TableCell>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Avatar size="sm">
+                      {player?.imageUrl ? (
+                        <AvatarImage src={player.imageUrl} alt={player.name} />
+                      ) : null}
+                      <AvatarFallback>
+                        {getUserInitials(player?.name ?? m.unknown_player())}
+                      </AvatarFallback>
+                      {player ? (
+                        <AvatarBadge
+                          className={cn(
+                            "ring-popover",
+                            player.connected ? "bg-primary" : "bg-destructive",
+                          )}
+                        />
+                      ) : null}
+                    </Avatar>
+                    <P size="sm" className="max-w-36 truncate font-medium" title={player?.name}>
+                      {player?.name ?? m.unknown_player()}
+                    </P>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right font-medium tabular-nums">
+                  <AnimatedNumber value={playerState.totalPoints} />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map(({ rank, player, playerState }) => (
-                <TableRow key={playerState.playerId}>
-                  <TableCell className="tabular-nums">{rank}</TableCell>
-                  <TableCell>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <Avatar size="sm">
-                        {player?.imageUrl ? (
-                          <AvatarImage src={player.imageUrl} alt={player.name} />
-                        ) : null}
-                        <AvatarFallback>
-                          {getUserInitials(player?.name ?? m.unknown_player())}
-                        </AvatarFallback>
-                        {player ? (
-                          <AvatarBadge
-                            className={cn(
-                              "ring-popover",
-                              player.connected ? "bg-primary" : "bg-destructive",
-                            )}
-                          />
-                        ) : null}
-                      </Avatar>
-                      <P size="sm" className="max-w-36 truncate font-medium" title={player?.name}>
-                        {player?.name ?? m.unknown_player()}
-                      </P>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    <AnimatedNumber value={playerState.totalPoints} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       </PopoverContent>
     </Popover>
   );

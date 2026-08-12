@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog";
+import { ScrollArea } from "#/components/ui/scroll-area";
 import { m } from "#/paraglide/messages.js";
 
 type GameRulesDialogProps = {
@@ -21,9 +22,11 @@ export function GameRulesDialog({ open, onOpenChange }: GameRulesDialogProps) {
           <DialogTitle>{m.rules()}</DialogTitle>
           <DialogDescription>{m.rules_description()}</DialogDescription>
         </DialogHeader>
-        <div className="max-h-[min(72dvh,48rem)] overflow-y-auto px-6 py-5">
-          <GameRulesGuide />
-        </div>
+        <ScrollArea className="max-h-[min(72dvh,48rem)]">
+          <div className="px-6 py-5">
+            <GameRulesGuide />
+          </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );

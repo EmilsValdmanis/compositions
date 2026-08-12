@@ -177,6 +177,7 @@ function ResultPoints({
   );
   const previousScore = resultScoreState(playerState, "previous");
   const roundScore = resultScoreState(playerState, "round");
+  const showFlyingIndicator = phase === "adjusted" && score.isShowingAdjustment;
 
   return (
     <>
@@ -188,9 +189,10 @@ function ResultPoints({
         <div className="flex min-h-9 items-center justify-end">
           <P
             size="sm"
+            data-score-value-slot
             data-flying-value={score.isShowingAdjustment || undefined}
             className={cn(
-              "relative font-medium tabular-nums transition-colors duration-200",
+              "relative inline-block w-[3ch] text-right font-medium tabular-nums transition-colors duration-200",
               score.isShowingOverHundred && "text-destructive",
               score.isShowingAdjustment && "text-primary",
             )}
@@ -203,24 +205,17 @@ function ResultPoints({
                 : undefined
             }
           >
-            {score.isShowingAdjustment ? (
-              <>
+            <span data-score-total className="relative inline-block">
+              {showFlyingIndicator ? (
                 <span
-                  className="absolute top-1/2 right-[calc(100%+0.75rem)] -translate-y-1/2"
+                  className="absolute top-1/2 right-[calc(100%+0.25rem)] -translate-y-1/2"
                   aria-hidden="true"
                 >
                   <span data-flying-icon className="flying-score-plane block size-4 text-primary">
                     <HugeiconsIcon icon={Sent02Icon} className="size-4" strokeWidth={2} />
                   </span>
                 </span>
-                <span
-                  data-flying-ring
-                  className="pointer-events-none absolute top-1/2 left-1/2 size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary"
-                  aria-hidden="true"
-                />
-              </>
-            ) : null}
-            <span data-score-total>
+              ) : null}
               <GradualScoreNumber
                 key={`total-${phase}`}
                 from={isCountingDown ? roundScore.displayedTotal : previousScore.displayedTotal}
@@ -234,7 +229,13 @@ function ResultPoints({
         </div>
       </TableCell>
       <TableCell className="text-right">
-        <Caption className={cn(score.displayedGained > 0 && "font-medium text-primary")}>
+        <Caption
+          data-round-value-slot
+          className={cn(
+            "inline-block w-[4ch] text-right",
+            score.displayedGained > 0 && "font-medium text-primary",
+          )}
+        >
           <span data-score-gained>
             <GradualScoreNumber
               key={`gained-${phase}`}
@@ -317,12 +318,6 @@ function GameWinnerTakeover({
           {m.match_champion()}
         </Caption>
         <div className="relative mb-7">
-          <motion.div
-            className="absolute inset-[-1.5rem] rounded-full border border-primary/25"
-            animate={shouldReduceMotion ? undefined : { scale: [0.8, 1.12], opacity: [0.8, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
-            aria-hidden="true"
-          />
           <Avatar className="size-28 border-4 border-background shadow-2xl ring-4 ring-primary/30 md:size-36">
             {winner.imageUrl ? <AvatarImage src={winner.imageUrl} alt={winner.name} /> : null}
             <AvatarFallback className="text-3xl md:text-4xl">
@@ -332,7 +327,7 @@ function GameWinnerTakeover({
           <WinnerCrown large />
         </div>
         <motion.h1
-          className="font-heading text-4xl/none font-bold tracking-[-0.05em] text-balance md:text-7xl/none"
+          className="font-heading text-4xl/none font-bold tracking-tighter text-balance md:text-7xl/none"
           initial={{ opacity: 0, y: shouldReduceMotion ? 0 : 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: shouldReduceMotion ? 0 : 0.42, duration: 0.45 }}
@@ -585,85 +580,83 @@ function ResultsScoreTable({
   shouldReduceMotion: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border/70">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>#</TableHead>
-            <TableHead>{m.player()}</TableHead>
-            <TableHead className="text-right">{m.cards()}</TableHead>
-            <TableHead className="text-right">{m.score()}</TableHead>
-            <TableHead className="text-right">{m.round()}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map(({ rank, player, playerState, isRoundWinner }) => {
-            const playerName = player?.name ?? m.unknown_player();
-            const scorePhase = shouldReduceMotion
-              ? "adjusted"
-              : scorePlayerIds.has(playerState.playerId)
-                ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
-                : "adjusted";
+    <Table containerClassName="rounded-lg border border-border/70">
+      <TableHeader>
+        <TableRow>
+          <TableHead>#</TableHead>
+          <TableHead>{m.player()}</TableHead>
+          <TableHead className="text-right">{m.cards()}</TableHead>
+          <TableHead className="text-right">{m.score()}</TableHead>
+          <TableHead className="text-right">{m.round()}</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map(({ rank, player, playerState, isRoundWinner }) => {
+          const playerName = player?.name ?? m.unknown_player();
+          const scorePhase = shouldReduceMotion
+            ? "adjusted"
+            : scorePlayerIds.has(playerState.playerId)
+              ? (revealState.phaseByPlayerId[playerState.playerId] ?? "previous")
+              : "adjusted";
 
-            return (
-              <motion.tr
-                key={playerState.playerId}
-                layout="position"
-                data-slot="result-row"
-                data-player-id={playerState.playerId}
-                data-rankings-reordered={revealState.hasReordered || undefined}
-                className={cn(
-                  "border-b transition-colors last:border-0 hover:bg-muted/50",
-                  isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
-                )}
-                transition={{ type: "spring", stiffness: 380, damping: 32 }}
-              >
-                <TableCell>
+          return (
+            <motion.tr
+              key={playerState.playerId}
+              layout="position"
+              data-slot="result-row"
+              data-player-id={playerState.playerId}
+              data-rankings-reordered={revealState.hasReordered || undefined}
+              className={cn(
+                "border-b transition-colors last:border-0 hover:bg-muted/50",
+                isRoundWinner && "border-primary/35 bg-primary/10 hover:bg-primary/15",
+              )}
+              transition={{ type: "spring", stiffness: 380, damping: 32 }}
+            >
+              <TableCell>
+                <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
+                  {rank}
+                </P>
+              </TableCell>
+              <TableCell>
+                <div className="flex w-fit items-center gap-2">
+                  <Avatar
+                    size="sm"
+                    aria-label={
+                      isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
+                    }
+                  >
+                    {player?.imageUrl ? (
+                      <AvatarImage src={player.imageUrl} alt={playerName} />
+                    ) : null}
+                    <AvatarFallback>
+                      {playerName === m.unknown_player() ? (
+                        <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
+                      ) : (
+                        getUserInitials(playerName)
+                      )}
+                    </AvatarFallback>
+                    {isRoundWinner ? <WinnerCrown /> : null}
+                  </Avatar>
                   <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
-                    {rank}
+                    {playerName}
                   </P>
-                </TableCell>
-                <TableCell>
-                  <div className="flex w-fit items-center gap-2">
-                    <Avatar
-                      size="sm"
-                      aria-label={
-                        isRoundWinner ? m.winner_accessible({ name: playerName }) : playerName
-                      }
-                    >
-                      {player?.imageUrl ? (
-                        <AvatarImage src={player.imageUrl} alt={playerName} />
-                      ) : null}
-                      <AvatarFallback>
-                        {playerName === m.unknown_player() ? (
-                          <HugeiconsIcon icon={UserIcon} strokeWidth={2} />
-                        ) : (
-                          getUserInitials(playerName)
-                        )}
-                      </AvatarFallback>
-                      {isRoundWinner ? <WinnerCrown /> : null}
-                    </Avatar>
-                    <P size="sm" className={cn("font-medium", isRoundWinner && "text-primary")}>
-                      {playerName}
-                    </P>
-                  </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  {playerState.hand && playerState.hand.length !== 0 ? (
-                    <LeftoverHandTooltip
-                      handCount={playerState.handCount}
-                      hand={playerState.hand}
-                      playerName={playerName}
-                    />
-                  ) : null}
-                </TableCell>
-                <ResultPoints playerState={playerState} phase={scorePhase} />
-              </motion.tr>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
+                </div>
+              </TableCell>
+              <TableCell className="text-right">
+                {playerState.hand && playerState.hand.length !== 0 ? (
+                  <LeftoverHandTooltip
+                    handCount={playerState.handCount}
+                    hand={playerState.hand}
+                    playerName={playerName}
+                  />
+                ) : null}
+              </TableCell>
+              <ResultPoints playerState={playerState} phase={scorePhase} />
+            </motion.tr>
+          );
+        })}
+      </TableBody>
+    </Table>
   );
 }
 

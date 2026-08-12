@@ -27,6 +27,7 @@ import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
 import { pageTitle } from "#/lib/page-title";
 import { shouldReduceMotion } from "#/lib/reduced-motion";
+import { isCompleteRoomCode } from "#/lib/room-code";
 import { m } from "#/paraglide/messages.js";
 
 async function copyText(text: string, successMessage: string) {
@@ -154,6 +155,7 @@ export function ProtectedHome() {
   const {
     state,
     createRoom,
+    dismissError,
     joinRoom,
     leaveRoom,
     startGame,
@@ -188,7 +190,7 @@ export function ProtectedHome() {
     activePlayers.length > 0 && activePlayers.every((player) => player.connected);
   const canCreateRoom = state.connectionStatus === "connected" && !state.room;
   const canJoinRoom =
-    state.connectionStatus === "connected" && !state.room && roomCode.trim() !== "";
+    state.connectionStatus === "connected" && !state.room && isCompleteRoomCode(roomCode);
   const canLeaveRoom = Boolean(state.room) && phase === "lobby";
   const canStartGame =
     Boolean(state.room) &&
@@ -256,7 +258,8 @@ export function ProtectedHome() {
     }
 
     toast.error(state.lastError);
-  }, [state.lastError, state.lastErrorId]);
+    dismissError();
+  }, [dismissError, state.lastError, state.lastErrorId]);
 
   async function copyRoomCode() {
     if (!state.room?.code) {

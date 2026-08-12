@@ -183,6 +183,23 @@ describe("GameLobbyView", () => {
     expect(onJoinRoom).toHaveBeenCalledWith("ROOM42");
   });
 
+  it("submits a complete room code from the form and keeps partial codes disabled", () => {
+    const onJoinRoom = vi.fn();
+    const view = renderLobby({ roomCode: "ABCDE", onJoinRoom });
+
+    const joinButton = view.getByRole("button", { name: "Join" }) as HTMLButtonElement;
+    expect(joinButton.disabled).toBe(true);
+
+    view.rerender(<GameLobbyView {...view.props} roomCode="ABCDEF" onJoinRoom={onJoinRoom} />);
+
+    const completeJoinButton = view.getByRole("button", { name: "Join" }) as HTMLButtonElement;
+    expect(completeJoinButton.disabled).toBe(false);
+    const roomCodeInput = view.getByPlaceholderText("Room code");
+    fireEvent.submit(roomCodeInput.closest("form")!);
+
+    expect(onJoinRoom).toHaveBeenCalledWith("ABCDEF");
+  });
+
   it("renders room state and non-chooser deal status", () => {
     const view = renderLobby({
       room: makeRoom({

@@ -1,6 +1,7 @@
 import {
   createContext,
   useContext,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -277,6 +278,8 @@ function useSpotlightRect(
       window.cancelAnimationFrame?.bind(window) ??
       ((frameId: number) => window.clearTimeout(frameId));
     let frame = 0;
+    let trackingFrame = 0;
+    let trackUntil = 0;
 
     function measure() {
       cancelFrame(frame);
@@ -340,17 +343,37 @@ function useSpotlightRect(
       });
     }
 
+    function trackLayoutMotion() {
+      trackUntil = performance.now() + 350;
+      if (trackingFrame) return;
+
+      function trackFrame() {
+        measure();
+        trackingFrame = performance.now() < trackUntil ? requestFrame(trackFrame) : 0;
+      }
+
+      trackingFrame = requestFrame(trackFrame);
+    }
+
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(spotlightRoot);
     const mutationObserver =
-      typeof MutationObserver === "undefined" ? null : new MutationObserver(measure);
-    mutationObserver?.observe(spotlightRoot, { childList: true, subtree: true });
+      typeof MutationObserver === "undefined"
+        ? null
+        : new MutationObserver(stage === "compose" ? trackLayoutMotion : measure);
+    mutationObserver?.observe(spotlightRoot, {
+      childList: true,
+      subtree: true,
+      attributes: stage === "compose",
+      attributeFilter: stage === "compose" ? ["class", "style"] : undefined,
+    });
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
     measure();
 
     return () => {
       cancelFrame(frame);
+      cancelFrame(trackingFrame);
       observer?.disconnect();
       mutationObserver?.disconnect();
       window.removeEventListener("resize", measure);
@@ -364,39 +387,51 @@ function useSpotlightRect(
 const backdropClassName =
   "pointer-events-none fixed z-20 bg-black/30 supports-backdrop-filter:backdrop-blur-sm";
 
-function spotlightMaskImage(rects: SpotlightRect[]) {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const cutouts = rects
-    .map((rect) => {
-      const cornerRadius = Math.min(rect.cornerRadius ?? 18, rect.width / 2, rect.height / 2);
-      return `<rect x="${rect.left}" y="${rect.top}" width="${rect.width}" height="${rect.height}" rx="${cornerRadius}" fill="black"/>`;
-    })
-    .join("");
-  const mask = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewportWidth} ${viewportHeight}" preserveAspectRatio="none"><defs><mask id="spotlight-mask"><rect width="${viewportWidth}" height="${viewportHeight}" fill="white"/>${cutouts}</mask></defs><rect width="${viewportWidth}" height="${viewportHeight}" fill="black" mask="url(#spotlight-mask)"/></svg>`;
-
-  return `url("data:image/svg+xml,${encodeURIComponent(mask)}")`;
-}
-
 function SpotlightBackdrop({ rects }: { rects: SpotlightRect[] }) {
+  const maskId = `onboarding-spotlight-mask-${useId().replaceAll(":", "")}`;
+
   if (rects.length === 0) {
-    return <div data-onboarding-backdrop className={`${backdropClassName} inset-0`} />;
+    return <div data-onboarding-backdrop className={cn(backdropClassName, "inset-0")} />;
   }
 
-  const maskImage = spotlightMaskImage(rects);
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maskImage = `url(#${maskId})`;
 
   return (
     <>
+      <svg data-onboarding-mask className="pointer-events-none fixed size-0" aria-hidden="true">
+        <defs>
+          <mask
+            id={maskId}
+            maskUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={viewportWidth}
+            height={viewportHeight}
+          >
+            <rect width={viewportWidth} height={viewportHeight} fill="white" />
+            {rects.map((rect) => (
+              <rect
+                key={rect.id}
+                data-onboarding-mask-cutout
+                x={rect.left}
+                y={rect.top}
+                width={rect.width}
+                height={rect.height}
+                rx={Math.min(rect.cornerRadius ?? 18, rect.width / 2, rect.height / 2)}
+                fill="black"
+              />
+            ))}
+          </mask>
+        </defs>
+      </svg>
       <div
         data-onboarding-backdrop
-        className={`${backdropClassName} inset-0`}
+        className={cn(backdropClassName, "inset-0")}
         style={{
           WebkitMaskImage: maskImage,
-          WebkitMaskRepeat: "no-repeat",
-          WebkitMaskSize: "100% 100%",
           maskImage,
-          maskRepeat: "no-repeat",
-          maskSize: "100% 100%",
         }}
       />
       {rects.map((rect) => (

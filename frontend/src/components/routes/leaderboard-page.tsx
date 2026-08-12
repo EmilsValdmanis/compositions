@@ -28,6 +28,7 @@ import {
   EmptyTitle,
 } from "#/components/ui/empty";
 import { Spinner } from "#/components/ui/spinner";
+import { Separator } from "#/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -417,21 +418,24 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
               </Table>
 
               {isFetchingNextPage || isFetchNextPageError || hasNextPage ? (
-                <div className="flex min-h-10 items-center justify-center border-t px-4 py-2 text-xs text-muted-foreground">
-                  {isFetchingNextPage ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner className="size-3" />
-                      {m.loading_more_players()}
-                    </span>
-                  ) : isFetchNextPageError ? (
-                    <Button variant="ghost" size="xs" onClick={() => void fetchNextPage()}>
-                      <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />
-                      {m.retry_loading_players()}
-                    </Button>
-                  ) : (
-                    m.scroll_for_more_players()
-                  )}
-                </div>
+                <>
+                  <Separator />
+                  <div className="flex min-h-10 items-center justify-center px-4 py-2 text-xs text-muted-foreground">
+                    {isFetchingNextPage ? (
+                      <span className="flex items-center gap-2">
+                        <Spinner className="size-3" />
+                        {m.loading_more_players()}
+                      </span>
+                    ) : isFetchNextPageError ? (
+                      <Button variant="ghost" size="xs" onClick={() => void fetchNextPage()}>
+                        <HugeiconsIcon icon={Refresh01Icon} data-icon="inline-start" />
+                        {m.retry_loading_players()}
+                      </Button>
+                    ) : (
+                      m.scroll_for_more_players()
+                    )}
+                  </div>
+                </>
               ) : null}
             </>
           )}

@@ -9,6 +9,7 @@ import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName } from "#/components/game/game-view-helpers";
 import { Button } from "#/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "#/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "#/components/ui/toggle-group";
 import {
   type ActionResult,
   type CardSnapshot,
@@ -472,24 +473,20 @@ export function DevGameUi() {
         <div className="flex min-h-8 items-center gap-2">
           {viewMode === "results" ? (
             <>
-              <div className="flex rounded-full bg-muted p-1">
-                <Button
-                  type="button"
-                  variant={resultsMode === "round" ? "secondary" : "ghost"}
-                  size="xs"
-                  onClick={() => showResultsMode("round")}
-                >
-                  {m.round_results()}
-                </Button>
-                <Button
-                  type="button"
-                  variant={resultsMode === "game" ? "secondary" : "ghost"}
-                  size="xs"
-                  onClick={() => showResultsMode("game")}
-                >
-                  {m.game_winner()}
-                </Button>
-              </div>
+              <ToggleGroup
+                value={[resultsMode]}
+                onValueChange={(value) => {
+                  const nextMode = value[0];
+                  if (nextMode === "round" || nextMode === "game") showResultsMode(nextMode);
+                }}
+                variant="outline"
+                size="sm"
+                spacing={0}
+                aria-label={m.results()}
+              >
+                <ToggleGroupItem value="round">{m.round_results()}</ToggleGroupItem>
+                <ToggleGroupItem value="game">{m.game_winner()}</ToggleGroupItem>
+              </ToggleGroup>
               <Button
                 type="button"
                 variant="outline"
