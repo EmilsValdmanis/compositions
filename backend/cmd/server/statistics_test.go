@@ -28,6 +28,32 @@ type statisticsRecordingStore struct {
 	lobbySaveErrors  map[int]error
 }
 
+type blockingStatisticsStore struct {
+	statisticsRecordingStore
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingStatisticsStore) SaveGameCheckpoint(ctx context.Context, checkpoint database.GameCheckpointRecord) error {
+	select {
+	case <-s.started:
+	default:
+		close(s.started)
+	}
+	select {
+	case <-s.release:
+		return s.statisticsRecordingStore.SaveGameCheckpoint(ctx, checkpoint)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func saveStatisticsForTest(lobby *lobbyServer) bool {
+	lobby.mu.Lock()
+	defer lobby.mu.Unlock()
+	return lobby.saveStatisticsLocked(context.Background())
+}
+
 func TestStatisticsPlaytimePausesWhilePlayersAreDisconnected(t *testing.T) {
 	lobby, _, roomCode := newActiveLobbyForExitTests(t, 2)
 	gameRoom := lobby.rooms[roomCode]
@@ -130,7 +156,7 @@ func TestStatisticsPersistenceIsCrashConsistent(t *testing.T) {
 		store := &statisticsRecordingStore{lobbySaveErrors: map[int]error{1: errors.New("state unavailable")}}
 		lobby, gameRoom := newLobby(t, store)
 
-		lobby.persistLocked("test")
+		_ = persistLobbyForTest(lobby, "test")
 
 		if len(store.checkpoints) != 0 {
 			t.Fatalf("saved %d checkpoints after state failure; want 0", len(store.checkpoints))
@@ -144,7 +170,7 @@ func TestStatisticsPersistenceIsCrashConsistent(t *testing.T) {
 		store := &statisticsRecordingStore{}
 		lobby, gameRoom := newLobby(t, store)
 
-		lobby.persistLocked("test")
+		_ = persistLobbyForTest(lobby, "test")
 
 		if store.lobbySaveCalls != 2 || len(store.checkpoints) != 1 {
 			t.Fatalf("lobby saves/checkpoints = %d/%d; want 2/1", store.lobbySaveCalls, len(store.checkpoints))
@@ -165,7 +191,7 @@ func TestStatisticsPersistenceIsCrashConsistent(t *testing.T) {
 		store := &statisticsRecordingStore{lobbySaveErrors: map[int]error{2: errors.New("marker unavailable")}}
 		lobby, _ := newLobby(t, store)
 
-		lobby.persistLocked("test")
+		_ = persistLobbyForTest(lobby, "test")
 
 		if len(store.checkpoints) != 1 {
 			t.Fatalf("saved %d checkpoints; want 1", len(store.checkpoints))
@@ -178,6 +204,49 @@ func TestStatisticsPersistenceIsCrashConsistent(t *testing.T) {
 			t.Fatalf("persisted marker = %+v; want dirty retry marker", persisted.Rooms)
 		}
 	})
+}
+
+func TestStatisticsIODoesNotHoldLobbyStateLock(t *testing.T) {
+	store := &blockingStatisticsStore{started: make(chan struct{}), release: make(chan struct{})}
+	lobby, events, roomCode := newActiveLobbyForExitTests(t, 2)
+	lobby.store = store
+	room := lobby.rooms[roomCode]
+	room.statisticsGameID = "00000000-0000-0000-0000-000000000001"
+	room.statisticsStartedAt = time.Now().UTC()
+	room.statisticsDirty = true
+	for index, event := range events {
+		session := lobby.sessions[event.SessionID]
+		session.authenticated = true
+		session.authUserID = fmt.Sprintf("00000000-0000-0000-0000-%012d", index+1)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- persistLobbyForTest(lobby, "statistics lock test") }()
+	select {
+	case <-store.started:
+	case <-time.After(time.Second):
+		t.Fatal("statistics persistence did not start")
+	}
+
+	lockAvailable := make(chan struct{})
+	go func() {
+		lobby.mu.Lock()
+		lobby.persistenceRevision++ // Simulate state changing during the write.
+		lobby.mu.Unlock()
+		close(lockAvailable)
+	}()
+	select {
+	case <-lockAvailable:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("lobby state lock remained held during statistics I/O")
+	}
+	close(store.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !room.statisticsDirty {
+		t.Fatal("a stale statistics write cleared a newer dirty marker")
+	}
 }
 
 func TestStatisticsCheckpointLifecycle(t *testing.T) {
@@ -468,7 +537,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 	lobby.rooms["nil"] = nil
 	lobby.rooms["lobby"] = &room{gameState: game.NewGameState(), statisticsGameID: "pending"}
 	lobby.rooms["no-id"] = &room{gameState: completedRoom.gameState}
-	lobby.saveStatisticsLocked(context.Background())
+	saveStatisticsForTest(lobby)
 	if len(store.games) != 1 {
 		t.Fatalf("retry saved %d games; want 1", len(store.games))
 	}
@@ -486,7 +555,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 		noUsers.players = append(noUsers.players, &roomPlayer{player: newPlayerWithID(result.PlayerID), sessionID: "missing"})
 	}
 	lobby.rooms["no-users"] = noUsers
-	lobby.saveStatisticsLocked(context.Background())
+	saveStatisticsForTest(lobby)
 	if !lobby.rooms["abort"].statisticsSaved || !noUsers.statisticsSaved {
 		t.Fatal("unranked/no-user rooms were not finalized")
 	}
@@ -495,7 +564,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 	partial.players = []*roomPlayer{{player: newPlayerWithID(firstResult.PlayerID), sessionID: "partial-session"}}
 	lobby.sessions["partial-session"] = &playerSession{sessionID: "partial-session", authenticated: true, authUserID: "partial-user"}
 	lobby.rooms["partial"] = partial
-	lobby.saveStatisticsLocked(context.Background())
+	saveStatisticsForTest(lobby)
 	if !partial.statisticsSaved {
 		t.Fatal("partial authenticated result was not saved")
 	}
@@ -509,7 +578,7 @@ func TestSaveCompletedStatisticsBranches(t *testing.T) {
 		lobby.sessions[sid] = &playerSession{sessionID: sid, authenticated: true, authUserID: "user-" + result.PlayerID}
 	}
 	lobby.rooms["failure"] = failing
-	lobby.saveStatisticsLocked(context.Background())
+	saveStatisticsForTest(lobby)
 	if failing.statisticsSaved {
 		t.Fatal("failed statistics save was marked complete")
 	}

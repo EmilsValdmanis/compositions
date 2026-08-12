@@ -27,6 +27,7 @@ const (
 	playerEmoteTTL      = 4 * time.Second
 	endProposalTTL      = 90 * time.Second
 	endProposalCooldown = 30 * time.Second
+	issueReportCooldown = 30 * time.Second
 	statisticsIdleLimit = 15 * time.Minute
 	maxIssueLength      = 500
 )
@@ -93,6 +94,7 @@ type room struct {
 	statisticsSaved          bool
 	statisticsDirty          bool
 	endProposalCooldownUntil time.Time
+	issueReportCooldowns     map[string]time.Time
 }
 
 type endGameProposal struct {
@@ -203,6 +205,9 @@ type gameStateRecipient struct {
 
 type lobbyServer struct {
 	mu                   sync.Mutex
+	persistenceMu        sync.Mutex
+	persistenceRevision  uint64
+	persistedRevision    uint64
 	rng                  *rand.Rand
 	store                userStore
 	sessions             map[string]*playerSession
@@ -276,7 +281,10 @@ func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticat
 		"authenticated", user.isAuthenticated(),
 		"displayName", user.displayName(),
 	)
-	l.persistLocked("session created")
+	if err := l.persistLocked("session created"); err != nil {
+		delete(l.sessions, sessionID)
+		return connectedEvent{}, nil, nil, err
+	}
 	return connectedEvent{SessionID: sessionID, PlayerID: playerID}, nil, nil, nil
 }
 
@@ -327,7 +335,9 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 		)
 	}
 
-	l.persistLocked("session reconnected")
+	if err := l.persistLocked("session reconnected"); err != nil {
+		return connectedEvent{}, nil, nil, err
+	}
 	return connectedEvent{SessionID: session.sessionID, PlayerID: session.playerID}, roomState, recipients, nil
 }
 
@@ -377,7 +387,9 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 	session.roomCode = room.code
 
 	slog.Info("room created", "roomCode", room.code, "sessionID", session.sessionID, "playerID", session.playerID)
-	l.persistLocked("room created")
+	if err := l.persistLocked("room created"); err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -429,7 +441,9 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 	session.roomCode = room.code
 
 	slog.Info("player joined room", "roomCode", room.code, "sessionID", session.sessionID, "playerID", session.playerID, "playerName", cleanName)
-	l.persistLocked("player joined room")
+	if err := l.persistLocked("player joined room"); err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -472,7 +486,9 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int, requestedMode
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex, gameMode: gameMode}
 
 	slog.Info("game start requested", "roomCode", room.code, "sessionID", session.sessionID, "dealerIndex", dealerIndex, "chooserIndex", chooserIndex, "playerCount", len(room.players), "gameMode", gameMode)
-	l.persistLocked("game start requested")
+	if err := l.persistLocked("game start requested"); err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	return room.snapshot(), room.connectedConns(l.sessions), nil
 }
 
@@ -562,7 +578,9 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
-	l.persistLocked("dealing chosen")
+	if err := l.persistLocked("dealing chosen"); err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	return roomState, recipients, nil
 }
 
@@ -601,7 +619,9 @@ func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []*websock
 	room.pendingDealChoice = &pendingDealChoice{dealerIndex: dealerIndex, chooserIndex: chooserIndex}
 
 	roomState := room.snapshot()
-	l.persistLocked("next round requested")
+	if err := l.persistLocked("next round requested"); err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	return roomState, room.connectedConns(l.sessions), nil
 }
 
@@ -637,7 +657,9 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 		delete(l.rooms, roomCode)
 		session.roomCode = ""
 		slog.Info("room disbanded", "roomCode", roomCode, "sessionID", session.sessionID)
-		l.persistLocked("room disbanded")
+		if err := l.persistLocked("room disbanded"); err != nil {
+			return nil, nil, "", err
+		}
 		return nil, nil, roomCode, nil
 	}
 
@@ -673,7 +695,9 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 		"newHostID", nextHostID,
 	)
 	snapshot := room.snapshot()
-	l.persistLocked("player left room")
+	if err := l.persistLocked("player left room"); err != nil {
+		return nil, nil, "", err
+	}
 	return &snapshot, room.connectedConns(l.sessions), roomCode, nil
 }
 
@@ -731,7 +755,9 @@ func (l *lobbyServer) forfeitGame(sessionID string) (roomSnapshot, []gameStateRe
 		return roomSnapshot{}, nil, actionResultEvent{}, "", err
 	}
 	result := actionResultEvent{Action: "forfeit_game", PlayerID: session.playerID, OK: true}
-	l.persistLocked("player forfeited game")
+	if err := l.persistLocked("player forfeited game"); err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, "", err
+	}
 	return roomState, recipients, result, room.code, nil
 }
 
@@ -757,6 +783,10 @@ func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bo
 	if player := room.playerByID(session.playerID); player == nil || player.forfeited {
 		return roomSnapshot{}, nil, actionResultEvent{}, errors.New("player is not active")
 	}
+	now := time.Now()
+	if now.Before(room.issueReportCooldowns[session.playerID]) {
+		return roomSnapshot{}, nil, actionResultEvent{}, errRateLimitExceeded
+	}
 	if requestAbort {
 		if room.activeEndProposal(time.Now()) != nil {
 			return roomSnapshot{}, nil, actionResultEvent{}, errors.New("an end-game request is already active")
@@ -772,28 +802,40 @@ func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bo
 	}
 	gameStateJSON, _ := json.Marshal(room.gameState.PersistenceSnapshot())
 	reportID := uuid.NewString()
-	reportCreatedAt := time.Now().UTC()
+	reportCreatedAt := now.UTC()
+	roomCode := room.code
+	playerID := session.playerID
+	userID := session.authUserID
+	round := room.gameState.RoundNumber()
+	turn := room.gameState.TurnNumber()
+	if room.issueReportCooldowns == nil {
+		room.issueReportCooldowns = make(map[string]time.Time)
+	}
+	room.issueReportCooldowns[playerID] = now.Add(issueReportCooldown)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
-	defer cancel()
+	l.mu.Unlock()
 	savedReport, err := l.store.CreateGameBugReport(ctx, database.GameBugReportRecord{
 		ID:               reportID,
-		RoomCode:         room.code,
-		ReporterPlayerID: session.playerID,
-		ReporterUserID:   session.authUserID,
+		RoomCode:         roomCode,
+		ReporterPlayerID: playerID,
+		ReporterUserID:   userID,
 		Description:      cleanDescription,
 		GameState:        gameStateJSON,
-		Round:            room.gameState.RoundNumber(),
-		Turn:             room.gameState.TurnNumber(),
+		Round:            round,
+		Turn:             turn,
 		RequestedAbort:   requestAbort,
 		CreatedAt:        reportCreatedAt,
 	})
+	cancel()
+	l.mu.Lock()
 	if err != nil {
+		delete(room.issueReportCooldowns, playerID)
 		return roomSnapshot{}, nil, actionResultEvent{}, fmt.Errorf("save bug report: %w", err)
 	}
-	slog.Warn("game issue reported", "roomCode", room.code, "reportID", savedReport.ID, "playerID", session.playerID, "description", cleanDescription)
+	slog.Warn("game issue reported", "roomCode", roomCode, "reportID", savedReport.ID, "playerID", playerID)
 
 	if requestAbort {
-		room.endProposal = room.newEndProposal("technical_abort", session.playerID, cleanDescription, savedReport.ID)
+		room.endProposal = room.newEndProposal("technical_abort", playerID, cleanDescription, savedReport.ID)
 	}
 
 	roomState := room.snapshot()
@@ -801,8 +843,10 @@ func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bo
 	if err != nil {
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
-	result := actionResultEvent{Action: "report_issue", PlayerID: session.playerID, OK: true}
-	l.persistLocked("game issue reported")
+	result := actionResultEvent{Action: "report_issue", PlayerID: playerID, OK: true}
+	if err := l.persistLocked("game issue reported"); err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
 	return roomState, recipients, result, nil
 }
 
@@ -841,7 +885,9 @@ func (l *lobbyServer) createEndProposal(sessionID, kind, description, reportID s
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
 	result := actionResultEvent{Action: "request_end_game", PlayerID: session.playerID, OK: true}
-	l.persistLocked("end game requested")
+	if err := l.persistLocked("end game requested"); err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
 	return roomState, recipients, result, nil
 }
 
@@ -888,7 +934,9 @@ func (l *lobbyServer) voteEndGame(sessionID, proposalID string, approve bool) (r
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
 	result := actionResultEvent{Action: "vote_end_game", PlayerID: session.playerID, OK: true}
-	l.persistLocked("end game vote recorded")
+	if err := l.persistLocked("end game vote recorded"); err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
 	return roomState, recipients, result, nil
 }
 
@@ -1005,7 +1053,9 @@ func (l *lobbyServer) updateDraftActivity(sessionID string, drafts []game.DraftC
 	if err != nil {
 		return roomSnapshot{}, nil, err
 	}
-	l.persistLocked("draft activity updated")
+	if err := l.persistLocked("draft activity updated"); err != nil {
+		return roomSnapshot{}, nil, err
+	}
 	return roomState, recipients, nil
 }
 
@@ -1048,7 +1098,9 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
 	result := actionResultEvent{Action: action, PlayerID: session.playerID, OK: true}
-	l.persistLocked("game action applied")
+	if err := l.persistLocked("game action applied"); err != nil {
+		return roomSnapshot{}, nil, actionResultEvent{}, err
+	}
 	return roomState, recipients, result, nil
 }
 
@@ -1071,7 +1123,9 @@ func (l *lobbyServer) resetRoomAfterGameOver(roomCode string) (*roomSnapshot, []
 	}
 
 	snapshot := room.snapshot()
-	l.persistLocked("room reset after game over")
+	if err := l.persistLocked("room reset after game over"); err != nil {
+		return nil, nil, err
+	}
 	return &snapshot, room.connectedConns(l.sessions), nil
 }
 
@@ -1108,7 +1162,9 @@ func (l *lobbyServer) disconnectWithEmitter(sessionID string, conn *websocket.Co
 
 	player := room.playerByID(session.playerID)
 	player.connected = false
-	l.persistLocked("session disconnected")
+	if err := l.persistLocked("session disconnected"); err != nil {
+		slog.Error("persist disconnected session failed", "sessionID", sessionID, "error", err)
+	}
 
 	roomState = room.snapshot()
 	roomState.SpectatorCount = len(l.spectatorsByRoom[room.code])
@@ -1280,32 +1336,71 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 	return nil
 }
 
-func (l *lobbyServer) persistLocked(reason string) {
+func (l *lobbyServer) persistLocked(reason string) error {
 	if l == nil || l.store == nil {
-		return
+		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
-	defer cancel()
 	now := time.Now().UTC()
 	for _, room := range l.rooms {
 		room.updateStatisticsPlaytime(now)
 	}
+	l.persistenceRevision++
+	revision := l.persistenceRevision
+	snapshot := l.persistenceSnapshotLocked()
 	// Persist the authoritative game state with its dirty checkpoint marker
 	// before writing derived statistics. If this write fails, a statistics row
 	// must not get ahead of the state we would restore after a restart.
-	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
+	if err := l.saveLobbySnapshotLocked(snapshot, revision); err != nil {
 		slog.Error("persist lobby state failed", "reason", reason, "error", err)
-		return
+		return fmt.Errorf("persist lobby state: %w", err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
 	if !l.saveStatisticsLocked(ctx) {
-		return
+		return nil
 	}
 	// Statistics are idempotent. Saving the cleared dirty/finalized marker in a
 	// second write means a failure here merely causes a safe retry on restart.
-	if err := l.store.SaveLobbyState(ctx, l.persistenceSnapshotLocked()); err != nil {
+	l.persistenceRevision++
+	revision = l.persistenceRevision
+	if err := l.saveLobbySnapshotLocked(l.persistenceSnapshotLocked(), revision); err != nil {
 		slog.Error("persist statistics marker failed", "reason", reason, "error", err)
+		return fmt.Errorf("persist statistics marker: %w", err)
 	}
+	return nil
+}
+
+// saveLobbySnapshotLocked releases the state lock while waiting on the
+// database, then reacquires it before returning to its caller.
+func (l *lobbyServer) saveLobbySnapshotLocked(snapshot persistedLobbyState, revision uint64) error {
+	l.mu.Unlock()
+	l.persistenceMu.Lock()
+	var err error
+	if revision > l.persistedRevision {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+		err = l.store.SaveLobbyState(ctx, snapshot)
+		cancel()
+		if err == nil {
+			l.persistedRevision = revision
+		}
+	}
+	l.persistenceMu.Unlock()
+	l.mu.Lock()
+	return err
+}
+
+type statisticsSaveJob struct {
+	room        *room
+	roomKey     string
+	roomCode    string
+	gameID      string
+	phase       game.GamePhase
+	kind        string
+	status      string
+	checkpoint  database.GameCheckpointRecord
+	completed   database.CompletedGameRecord
+	completedAt time.Time
 }
 
 func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
@@ -1314,7 +1409,9 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 		return false
 	}
 	changed := false
-	for _, room := range l.rooms {
+	revision := l.persistenceRevision
+	jobs := make([]statisticsSaveJob, 0)
+	for roomKey, room := range l.rooms {
 		if room == nil || room.statisticsSaved || room.statisticsGameID == "" {
 			continue
 		}
@@ -1369,38 +1466,64 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 			PlayerCount: len(results), StartedAt: startedAt,
 			PlaytimeSeconds: int64(room.statisticsPlaytime / time.Second), Players: players,
 		}
-		var err error
+		job := statisticsSaveJob{
+			room: room, roomKey: roomKey, roomCode: room.code, gameID: room.statisticsGameID,
+			phase: phase, checkpoint: checkpoint, completedAt: time.Now().UTC(),
+		}
 		switch {
 		case phase == game.PhaseGameOver && len(completed) > 0:
 			kind := "normal"
 			if room.conclusion != nil && room.conclusion.kind == "forfeit" {
 				kind = "forfeit"
 			}
-			err = store.SaveCompletedGame(ctx, database.CompletedGameRecord{
+			job.kind = "completed"
+			job.completed = database.CompletedGameRecord{
 				ID: checkpoint.ID, RoomCode: checkpoint.RoomCode, CompletionKind: kind,
 				GameMode: checkpoint.GameMode, Ranked: checkpoint.Ranked,
 				RoundsPlayed: checkpoint.RoundsPlayed, PlayerCount: checkpoint.PlayerCount,
-				StartedAt: checkpoint.StartedAt, CompletedAt: time.Now().UTC(),
+				StartedAt: checkpoint.StartedAt, CompletedAt: job.completedAt,
 				PlaytimeSeconds: checkpoint.PlaytimeSeconds, Players: players,
-			})
-		case phase == game.PhaseGameOver:
-			status := "abandoned"
-			if room.conclusion != nil && (room.conclusion.kind == "mutual_end" || room.conclusion.kind == "technical_abort") {
-				status = room.conclusion.kind
 			}
-			err = store.SaveUnrankedGame(ctx, checkpoint, status, time.Now().UTC())
+		case phase == game.PhaseGameOver:
+			job.kind = "unranked"
+			job.status = "abandoned"
+			if room.conclusion != nil && (room.conclusion.kind == "mutual_end" || room.conclusion.kind == "technical_abort") {
+				job.status = room.conclusion.kind
+			}
 		case room.statisticsDirty:
-			err = store.SaveGameCheckpoint(ctx, checkpoint)
+			job.kind = "checkpoint"
 		default:
 			continue
 		}
+		jobs = append(jobs, job)
+	}
+
+	for _, job := range jobs {
+		l.mu.Unlock()
+		l.persistenceMu.Lock()
+		var err error
+		switch job.kind {
+		case "completed":
+			err = store.SaveCompletedGame(ctx, job.completed)
+		case "unranked":
+			err = store.SaveUnrankedGame(ctx, job.checkpoint, job.status, job.completedAt)
+		case "checkpoint":
+			err = store.SaveGameCheckpoint(ctx, job.checkpoint)
+		}
+		l.persistenceMu.Unlock()
+		l.mu.Lock()
 		if err != nil {
-			slog.Error("persist game statistics failed", "roomCode", room.code, "gameID", room.statisticsGameID, "error", err)
+			slog.Error("persist game statistics failed", "roomCode", job.roomCode, "gameID", job.gameID, "error", err)
 			continue
 		}
-		room.statisticsDirty = false
-		if phase == game.PhaseGameOver {
-			room.statisticsSaved = true
+		// A concurrent mutation owns the newer dirty marker and will retry this
+		// idempotent write with a fresh snapshot.
+		if l.persistenceRevision != revision || l.rooms[job.roomKey] != job.room || job.room.statisticsGameID != job.gameID {
+			continue
+		}
+		job.room.statisticsDirty = false
+		if job.phase == game.PhaseGameOver {
+			job.room.statisticsSaved = true
 		}
 		changed = true
 	}
@@ -1654,11 +1777,7 @@ func (l *lobbyServer) spectateGame(sessionID, friendUserID string, conn *websock
 	l.spectatorsByRoom[target.code][conn] = struct{}{}
 	l.spectatingRoomByConn[conn] = target.code
 
-	state, ok := target.gameState.SnapshotForSpectator()
-	if !ok {
-		l.removeSpectatorLocked(conn)
-		return gameStateEvent{}, roomSnapshot{}, nil, errors.New("game state snapshot failed")
-	}
+	state, _ := target.gameState.SnapshotForSpectator() // target.gameState was validated above.
 	if _, activity := target.turnContextForPlayer(""); activity != nil {
 		state.TurnActivity = activity
 	}
@@ -1704,10 +1823,7 @@ func (l *lobbyServer) spectatorGameRecipients(roomCode string) []gameStateRecipi
 	if room == nil || room.gameState == nil || len(l.spectatorsByRoom[roomCode]) == 0 {
 		return nil
 	}
-	state, ok := room.gameState.SnapshotForSpectator()
-	if !ok {
-		return nil
-	}
+	state, _ := room.gameState.SnapshotForSpectator() // room.gameState was validated above.
 	if _, activity := room.turnContextForPlayer(""); activity != nil {
 		state.TurnActivity = activity
 	}

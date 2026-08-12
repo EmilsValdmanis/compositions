@@ -24,6 +24,10 @@ type socialStore interface {
 	DeleteGameInvite(ctx context.Context, recipientID, inviteID string) (string, error)
 }
 
+type batchSocialStore interface {
+	ListSocialSnapshots(ctx context.Context, userIDs []string) (map[string]database.SocialSnapshotRecord, error)
+}
+
 type socialUserSnapshot struct {
 	ID         string              `json:"id"`
 	Name       string              `json:"name"`
@@ -197,6 +201,7 @@ func (s *wsServer) socialDisconnected(conn *websocket.Conn) {
 
 func (s *wsServer) refreshSocialUsers(userIDs ...string) {
 	seen := make(map[string]struct{}, len(userIDs))
+	uniqueUserIDs := make([]string, 0, len(userIDs))
 	for _, userID := range userIDs {
 		userID = strings.TrimSpace(userID)
 		if userID == "" {
@@ -206,6 +211,25 @@ func (s *wsServer) refreshSocialUsers(userIDs ...string) {
 			continue
 		}
 		seen[userID] = struct{}{}
+		uniqueUserIDs = append(uniqueUserIDs, userID)
+	}
+	if len(uniqueUserIDs) == 0 {
+		return
+	}
+	if store, ok := s.socialStore.(batchSocialStore); ok {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+		records, err := store.ListSocialSnapshots(ctx, uniqueUserIDs)
+		cancel()
+		if err != nil {
+			slog.Warn("refresh social states failed", "userCount", len(uniqueUserIDs), "error", err)
+			return
+		}
+		for _, userID := range uniqueUserIDs {
+			s.emitSocialState(userID, records[userID])
+		}
+		return
+	}
+	for _, userID := range uniqueUserIDs {
 		if _, err := s.loadAndEmitSocialState(userID); err != nil {
 			slog.Warn("refresh social state failed", "userID", userID, "error", err)
 		}
@@ -220,10 +244,18 @@ func (s *wsServer) loadAndEmitSocialState(userID string) (database.SocialSnapsho
 		return database.SocialSnapshotRecord{}, err
 	}
 	event := s.socialEventFromRecord(userID, record)
+	s.emitSocialStateEvent(userID, event)
+	return record, nil
+}
+
+func (s *wsServer) emitSocialState(userID string, record database.SocialSnapshotRecord) {
+	s.emitSocialStateEvent(userID, s.socialEventFromRecord(userID, record))
+}
+
+func (s *wsServer) emitSocialStateEvent(userID string, event socialStateEvent) {
 	for _, conn := range s.socialPresence.userConnections(userID) {
 		logEmitFailure(conn, "social_state", event, "write social state failed", "userID", userID)
 	}
-	return record, nil
 }
 
 func (s *wsServer) socialEventFromRecord(userID string, record database.SocialSnapshotRecord) socialStateEvent {
@@ -329,16 +361,35 @@ func (s *wsServer) refreshFriendsOfPlayers(players []playerSnapshot) {
 	if s == nil || s.socialStore == nil {
 		return
 	}
-	friendIDs := make([]string, 0)
+	userIDs := make([]string, 0, len(players))
 	for _, player := range players {
-		if player.UserID == "" {
-			continue
+		if player.UserID != "" {
+			userIDs = append(userIDs, player.UserID)
 		}
+	}
+	friendIDs := make([]string, 0)
+	if store, ok := s.socialStore.(batchSocialStore); ok {
 		ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
-		record, err := s.socialStore.ListSocialSnapshot(ctx, player.UserID)
+		records, err := store.ListSocialSnapshots(ctx, userIDs)
 		cancel()
 		if err != nil {
-			slog.Warn("load friends after game state change failed", "userID", player.UserID, "error", err)
+			slog.Warn("load friends after game state change failed", "userCount", len(userIDs), "error", err)
+			return
+		}
+		for _, userID := range userIDs {
+			for _, friend := range records[userID].Friends {
+				friendIDs = append(friendIDs, friend.ID)
+			}
+		}
+		s.refreshSocialUsers(friendIDs...)
+		return
+	}
+	for _, userID := range userIDs {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+		record, err := s.socialStore.ListSocialSnapshot(ctx, userID)
+		cancel()
+		if err != nil {
+			slog.Warn("load friends after game state change failed", "userID", userID, "error", err)
 			continue
 		}
 		for _, friend := range record.Friends {

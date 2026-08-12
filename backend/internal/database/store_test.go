@@ -164,6 +164,22 @@ func TestUserStoreUpsertUser(t *testing.T) {
 	if sessionUser.OnboardingVersion != 1 {
 		t.Fatalf("onboarded session version = %d; want 1", sessionUser.OnboardingVersion)
 	}
+	expiredToken := "expired-session-token"
+	if err := store.CreateSession(ctx, SessionRecord{
+		Token: expiredToken, UserID: createdUser.ID, ExpiresAt: time.Now().UTC().Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("CreateSession(expired) error = %v", err)
+	}
+	deleted, err := store.DeleteExpiredSessions(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("DeleteExpiredSessions() error = %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("DeleteExpiredSessions() = %d; want 1", deleted)
+	}
+	if _, err := store.GetSessionUserByToken(ctx, sessionToken, time.Now().UTC()); err != nil {
+		t.Fatalf("active session removed during cleanup: %v", err)
+	}
 }
 
 func TestUserStoreUpsertUserByAccount(t *testing.T) {

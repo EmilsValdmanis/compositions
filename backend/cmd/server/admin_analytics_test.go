@@ -128,3 +128,48 @@ func TestHandleAdminAnalytics(t *testing.T) {
 		}
 	})
 }
+
+func TestHandleAdminAnalyticsRemainingBranches(t *testing.T) {
+	now := time.Now()
+	auth := &authHandler{store: &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "admin", IsAdmin: true, ExpiresAt: now.Add(time.Hour)}}, now: func() time.Time { return now }}
+	server := newWSServerWithDependencies(auth, &stubAdminAnalyticsStore{}, "")
+	request := func(method string) *http.Request {
+		r := httptest.NewRequest(method, "/api/admin/analytics?from=2026-07-01&to=2026-07-30", nil)
+		r.AddCookie(&http.Cookie{Name: authCookieName, Value: "session"})
+		return r
+	}
+
+	t.Run("preflight", func(t *testing.T) {
+		r := request(http.MethodOptions)
+		r.Header.Set("Origin", "http://localhost:3000")
+		response := httptest.NewRecorder()
+		server.handleAdminAnalytics(response, r)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusNoContent)
+		}
+	})
+	t.Run("invalid to", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		server.handleAdminAnalytics(response, func() *http.Request {
+			r := request(http.MethodGet)
+			r.URL.RawQuery = "from=2026-07-01&to=nope"
+			return r
+		}())
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusBadRequest)
+		}
+	})
+	t.Run("timezone unavailable", func(t *testing.T) {
+		original := loadAdminAnalyticsLocation
+		loadAdminAnalyticsLocation = func(string) (*time.Location, error) { return nil, errors.New("missing tzdata") }
+		defer func() { loadAdminAnalyticsLocation = original }()
+		response := httptest.NewRecorder()
+		server.handleAdminAnalytics(response, request(http.MethodGet))
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d; want %d", response.Code, http.StatusBadRequest)
+		}
+	})
+	t.Run("write failure", func(t *testing.T) {
+		server.handleAdminAnalytics(failingResponseWriter{}, request(http.MethodGet))
+	})
+}

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -445,13 +447,13 @@ func TestWebSocketOriginHelpers(t *testing.T) {
 		}
 	})
 
-	t.Run("test constructors stay permissive without configured origin", func(t *testing.T) {
+	t.Run("unconfigured server permits non-browser clients but rejects browser origins", func(t *testing.T) {
 		server := newWSServerWithAllowedOrigin(nil, "")
 		if !server.isAllowedOrigin("") {
 			t.Fatal("isAllowedOrigin(empty) = false; want true")
 		}
-		if !server.isAllowedOrigin("http://frontend.test/") {
-			t.Fatal("isAllowedOrigin(configured origin) = false; want true")
+		if server.isAllowedOrigin("http://frontend.test/") {
+			t.Fatal("isAllowedOrigin(configured origin) = true; want false")
 		}
 	})
 
@@ -483,6 +485,60 @@ func TestHandleSendEmoteReturnsOnInvalidPayload(t *testing.T) {
 	})
 
 	mustReadError(t, clientConn, "invalid data")
+}
+
+func TestWebSocketDispatchesSocialMessages(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	mustConnectSession(t, conn, "")
+	for _, messageType := range []string{
+		"send_friend_request", "respond_friend_request", "remove_friend", "send_game_invite",
+		"respond_game_invite", "spectate_game", "stop_spectating",
+	} {
+		mustSendEnvelope(t, conn, messageType, map[string]any{})
+		if envelope := mustReadEnvelopeFromConn(t, conn); envelope.Type != "error" {
+			t.Fatalf("%s response type = %q; want error", messageType, envelope.Type)
+		}
+	}
+}
+
+func TestHandleForfeitRefreshesFriendsWhileGameContinues(t *testing.T) {
+	lobby, events, _ := newActiveLobbyForExitTests(t, 3)
+	serverConn, clientConn, cleanup := newSocketPair(t)
+	defer cleanup()
+	lobby.sessions[events[0].SessionID].conn = serverConn
+	server := &wsServer{lobby: lobby, socialPresence: newSocialPresence()}
+	server.handleForfeitGame(serverConn, events[0].SessionID, wsEnvelope{Type: "forfeit_game", Data: mustMarshalRawMessage(forfeitGameRequest{})})
+	readSocialResults(t, clientConn, "action_result", "left_room")
+}
+
+func TestGameBroadcastsIncludeAndEndSpectators(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	playerConn, playerPeer, cleanupPlayer := newSocketPair(t)
+	defer cleanupPlayer()
+	spectatorConn, spectatorPeer, cleanupSpectator := newSocketPair(t)
+	defer cleanupSpectator()
+	lobby.sessions[events[0].SessionID].conn = playerConn
+	lobby.spectatorsByRoom[code] = map[*websocket.Conn]struct{}{spectatorConn: {}}
+	lobby.spectatingRoomByConn[spectatorConn] = code
+	room := lobby.rooms[code]
+	state, ok := room.gameState.SnapshotForPlayer(events[0].PlayerID)
+	if !ok {
+		t.Fatal("player snapshot unavailable")
+	}
+	roomState := room.snapshot()
+	server := &wsServer{lobby: lobby, socialPresence: newSocialPresence()}
+	server.broadcastGameState([]gameStateRecipient{{conn: playerConn, event: gameStateEvent{Room: roomState, Game: state}}})
+	readSocialResult(t, playerPeer, "game_state")
+	readSocialResult(t, spectatorPeer, "game_state")
+
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
+	roomState = room.snapshot()
+	server.broadcastActionSuccess(actionResultEvent{Action: "discard", OK: true}, roomState, nil)
+	readSocialResults(t, spectatorPeer, "room_state", "spectating_ended")
 }
 
 func TestNewConfiguredWSServerRejectsInvalidOriginConfig(t *testing.T) {
@@ -645,6 +701,31 @@ func TestHandleWSUpgradeFailure(t *testing.T) {
 	}
 }
 
+func TestServerCloseClosesActiveWebSockets(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("ReadMessage() after server close error = nil; want closed connection")
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		t.Fatal("ReadMessage() timed out; server did not close the connection")
+	}
+}
+
+func TestWebSocketOriginConfigurationFailsClosed(t *testing.T) {
+	server := newWSServerWithAllowedOrigin(nil, "")
+	if server.isAllowedOrigin("https://attacker.example") {
+		t.Fatal("isAllowedOrigin(attacker) = true with no configured origin; want false")
+	}
+}
+
 func TestHandleHealth(t *testing.T) {
 	server := newWSServer()
 	recorder := httptest.NewRecorder()
@@ -667,6 +748,29 @@ func TestHandleHealth(t *testing.T) {
 	}
 	if response.Status != "ok" {
 		t.Fatalf("response.Status = %q; want ok", response.Status)
+	}
+}
+
+type unhealthyStore struct {
+	noopUserStore
+}
+
+func (unhealthyStore) Ping(context.Context) error { return errors.New("database unavailable") }
+
+func TestHandleHealthReportsDependencyFailure(t *testing.T) {
+	server := newWSServerWithDependencies(nil, unhealthyStore{}, "")
+	recorder := httptest.NewRecorder()
+	server.handleHealth(recorder, httptest.NewRequest(http.MethodGet, "/health", nil))
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d; want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+	var response healthResponse
+	if err := json.NewDecoder(recorder.Body).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "unavailable" {
+		t.Fatalf("status payload = %q; want unavailable", response.Status)
 	}
 }
 
@@ -758,14 +862,12 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	}
 
 	rawConn = mustDialWS(t, httpServer.URL)
-	mustConnectSession(t, rawConn, "")
 	if err := rawConn.WriteJSON(wsEnvelope{Type: "connect"}); err != nil {
 		t.Fatalf("WriteJSON(missing data) error = %v", err)
 	}
 	mustReadError(t, rawConn, "missing data")
 
 	rawConn = mustDialWS(t, httpServer.URL)
-	mustConnectSession(t, rawConn, "")
 	if err := rawConn.WriteJSON(wsEnvelope{Type: "mystery", Data: mustMarshalRawMessage(struct{}{})}); err != nil {
 		t.Fatalf("WriteJSON(unknown type) error = %v", err)
 	}
@@ -827,6 +929,18 @@ func TestHandleConnectionErrorsAndDisconnectBroadcasts(t *testing.T) {
 	mustSendEnvelope(t, soloConn, "start_game", startGameRequest{DealerIndex: 0})
 	mustReadError(t, soloConn, "join a room first")
 	_ = soloConn.Close()
+}
+
+func TestConnectionRejectsRepeatedConnectMessages(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	mustConnectSession(t, conn, "")
+	mustSendEnvelope(t, conn, "connect", connectRequest{})
+	mustReadError(t, conn, "already connected")
 }
 
 func TestRoomStateOmitsPlayerSessionIDs(t *testing.T) {
@@ -1282,8 +1396,8 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 	if gotError.Code != clientErrorInternal {
 		t.Fatalf("gotError.Code = %q; want %q", gotError.Code, clientErrorInternal)
 	}
-	if gotError.Message != "boom" {
-		t.Fatalf("gotError.Message = %q; want boom", gotError.Message)
+	if gotError.Message != "internal server error" {
+		t.Fatalf("gotError.Message = %q; want redacted internal error", gotError.Message)
 	}
 	server.writeActionError(errConn, "draft_update", errors.New("not your turn"))
 	gotActionErrorEnvelope := mustReadEnvelopeFromConn(t, errPeer)

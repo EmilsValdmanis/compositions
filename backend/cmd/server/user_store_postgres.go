@@ -14,6 +14,13 @@ type postgresUserStore struct {
 	store *database.UserStore
 }
 
+func (s *postgresUserStore) Ping(ctx context.Context) error {
+	if s == nil || s.store == nil {
+		return errors.New("user store is not configured")
+	}
+	return s.store.Ping(ctx)
+}
+
 var _ leaderboardStore = (*postgresUserStore)(nil)
 var _ adminBugReportStore = (*postgresUserStore)(nil)
 var _ adminAnalyticsStore = (*postgresUserStore)(nil)
@@ -79,6 +86,13 @@ func (s *postgresUserStore) DeleteSession(ctx context.Context, sessionToken stri
 		return errors.New("user store is not configured")
 	}
 	return s.store.DeleteSession(ctx, strings.TrimSpace(sessionToken))
+}
+
+func (s *postgresUserStore) DeleteExpiredSessions(ctx context.Context, before time.Time) (int64, error) {
+	if s == nil || s.store == nil {
+		return 0, errors.New("user store is not configured")
+	}
+	return s.store.DeleteExpiredSessions(ctx, before)
 }
 
 func (s *postgresUserStore) UpdateOnboardingVersion(ctx context.Context, userID string, version int) error {
@@ -203,6 +217,17 @@ func (s *postgresUserStore) ListSocialSnapshot(ctx context.Context, userID strin
 		return database.SocialSnapshotRecord{}, errors.New("user store is not configured")
 	}
 	return s.store.ListSocialSnapshot(ctx, strings.TrimSpace(userID))
+}
+
+func (s *postgresUserStore) ListSocialSnapshots(ctx context.Context, userIDs []string) (map[string]database.SocialSnapshotRecord, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("user store is not configured")
+	}
+	cleanUserIDs := make([]string, 0, len(userIDs))
+	for _, userID := range userIDs {
+		cleanUserIDs = append(cleanUserIDs, strings.TrimSpace(userID))
+	}
+	return s.store.ListSocialSnapshots(ctx, cleanUserIDs)
 }
 
 func (s *postgresUserStore) SendFriendRequest(ctx context.Context, senderID, recipientID string) (database.FriendRequestRecord, error) {

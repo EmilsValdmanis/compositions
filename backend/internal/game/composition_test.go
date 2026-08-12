@@ -5,6 +5,16 @@ import (
 	"testing"
 )
 
+func TestRunValidationDefensiveBranches(t *testing.T) {
+	if naturalRunIsValid([]Card{{rank: Rank(99), suit: Hearts}}) {
+		t.Fatal("naturalRunIsValid() accepted an out-of-range rank")
+	}
+	invalid := &Composition{variant: run, cards: []Card{card(Two, Hearts), card(Five, Hearts), card(Nine, Hearts)}}
+	if invalid.normalizeRunCards() {
+		t.Fatal("normalizeRunCards() accepted an invalid run")
+	}
+}
+
 func card(rank Rank, suit Suit) Card {
 	return Card{rank: rank, suit: suit}
 }

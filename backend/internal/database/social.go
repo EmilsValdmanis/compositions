@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -49,118 +50,91 @@ type SocialSnapshotRecord struct {
 }
 
 func (s *UserStore) ListSocialSnapshot(ctx context.Context, userID string) (SocialSnapshotRecord, error) {
+	records, err := s.ListSocialSnapshots(ctx, []string{userID})
+	if err != nil {
+		return SocialSnapshotRecord{}, err
+	}
+	return records[strings.TrimSpace(userID)], nil
+}
+
+func (s *UserStore) ListSocialSnapshots(ctx context.Context, userIDs []string) (map[string]SocialSnapshotRecord, error) {
 	if s == nil || s.pool == nil {
-		return SocialSnapshotRecord{}, errors.New("user store is not configured")
+		return nil, errors.New("user store is not configured")
 	}
-
-	viewerID, err := parseUUID(strings.TrimSpace(userID))
-	if err != nil {
-		return SocialSnapshotRecord{}, err
-	}
-
-	snapshot := SocialSnapshotRecord{
-		Friends:                      []SocialUserRecord{},
-		IncomingFriendRequests:       []FriendRequestRecord{},
-		OutgoingFriendRequestUserIDs: []string{},
-		GameInvites:                  []GameInviteRecord{},
-	}
-
-	friendRows, err := s.pool.Query(ctx, `
-		SELECT u.id::text, u.name, u.image_url
-		FROM friendships f
-		JOIN users u ON u.id = CASE WHEN f.user_a_id = $1 THEN f.user_b_id ELSE f.user_a_id END
-		WHERE f.user_a_id = $1 OR f.user_b_id = $1
-		ORDER BY LOWER(u.name), u.id
-	`, viewerID)
-	if err != nil {
-		return SocialSnapshotRecord{}, err
-	}
-	for friendRows.Next() {
-		var friend SocialUserRecord
-		if err := friendRows.Scan(&friend.ID, &friend.Name, &friend.ImageURL); err != nil {
-			friendRows.Close()
-			return SocialSnapshotRecord{}, err
+	viewerIDs := make([]pgtype.UUID, 0, len(userIDs))
+	for _, userID := range userIDs {
+		viewerID, err := parseUUID(strings.TrimSpace(userID))
+		if err != nil {
+			return nil, err
 		}
-		snapshot.Friends = append(snapshot.Friends, friend)
+		viewerIDs = append(viewerIDs, viewerID)
 	}
-	if err := friendRows.Err(); err != nil {
-		friendRows.Close()
-		return SocialSnapshotRecord{}, err
+	results := make(map[string]SocialSnapshotRecord, len(userIDs))
+	if len(viewerIDs) == 0 {
+		return results, nil
 	}
-	friendRows.Close()
 
-	requestRows, err := s.pool.Query(ctx, `
-		SELECT fr.id::text, u.id::text, u.name, u.image_url, fr.created_at
-		FROM friend_requests fr
-		JOIN users u ON u.id = fr.sender_id
-		WHERE fr.recipient_id = $1
-		ORDER BY fr.created_at DESC
-	`, viewerID)
+	rows, err := s.pool.Query(ctx, `
+		SELECT viewer_id::text,
+			COALESCE((
+				SELECT jsonb_agg(jsonb_build_object('ID', u.id::text, 'Name', u.name, 'ImageURL', u.image_url) ORDER BY LOWER(u.name), u.id)
+				FROM friendships f
+				JOIN users u ON u.id = CASE WHEN f.user_a_id = viewer_id THEN f.user_b_id ELSE f.user_a_id END
+				WHERE f.user_a_id = viewer_id OR f.user_b_id = viewer_id
+			), '[]'::jsonb),
+			COALESCE((
+				SELECT jsonb_agg(jsonb_build_object(
+					'ID', fr.id::text,
+					'User', jsonb_build_object('ID', u.id::text, 'Name', u.name, 'ImageURL', u.image_url),
+					'CreatedAt', fr.created_at
+				) ORDER BY fr.created_at DESC)
+				FROM friend_requests fr JOIN users u ON u.id = fr.sender_id
+				WHERE fr.recipient_id = viewer_id
+			), '[]'::jsonb),
+			COALESCE((
+				SELECT jsonb_agg(fr.recipient_id::text ORDER BY fr.created_at DESC)
+				FROM friend_requests fr WHERE fr.sender_id = viewer_id
+			), '[]'::jsonb),
+			COALESCE((
+				SELECT jsonb_agg(jsonb_build_object(
+					'ID', gi.id::text,
+					'User', jsonb_build_object('ID', u.id::text, 'Name', u.name, 'ImageURL', u.image_url),
+					'RoomCode', gi.room_code, 'CreatedAt', gi.created_at, 'ExpiresAt', gi.expires_at
+				) ORDER BY gi.created_at DESC)
+				FROM game_invites gi JOIN users u ON u.id = gi.sender_id
+				WHERE gi.recipient_id = viewer_id AND gi.expires_at > NOW()
+			), '[]'::jsonb)
+		FROM unnest($1::uuid[]) AS viewer_id
+	`, viewerIDs)
 	if err != nil {
-		return SocialSnapshotRecord{}, err
+		return nil, err
 	}
-	for requestRows.Next() {
-		var request FriendRequestRecord
-		if err := requestRows.Scan(&request.ID, &request.User.ID, &request.User.Name, &request.User.ImageURL, &request.CreatedAt); err != nil {
-			requestRows.Close()
-			return SocialSnapshotRecord{}, err
+	defer rows.Close()
+	for rows.Next() {
+		var userID string
+		var friendsJSON, requestsJSON, outgoingJSON, invitesJSON json.RawMessage
+		if err := rows.Scan(&userID, &friendsJSON, &requestsJSON, &outgoingJSON, &invitesJSON); err != nil {
+			return nil, err
 		}
-		snapshot.IncomingFriendRequests = append(snapshot.IncomingFriendRequests, request)
-	}
-	if err := requestRows.Err(); err != nil {
-		requestRows.Close()
-		return SocialSnapshotRecord{}, err
-	}
-	requestRows.Close()
-
-	outgoingRows, err := s.pool.Query(ctx, `
-		SELECT recipient_id::text
-		FROM friend_requests
-		WHERE sender_id = $1
-		ORDER BY created_at DESC
-	`, viewerID)
-	if err != nil {
-		return SocialSnapshotRecord{}, err
-	}
-	for outgoingRows.Next() {
-		var recipientID string
-		if err := outgoingRows.Scan(&recipientID); err != nil {
-			outgoingRows.Close()
-			return SocialSnapshotRecord{}, err
+		snapshot := SocialSnapshotRecord{}
+		if err := json.Unmarshal(friendsJSON, &snapshot.Friends); err != nil {
+			return nil, err
 		}
-		snapshot.OutgoingFriendRequestUserIDs = append(snapshot.OutgoingFriendRequestUserIDs, recipientID)
-	}
-	if err := outgoingRows.Err(); err != nil {
-		outgoingRows.Close()
-		return SocialSnapshotRecord{}, err
-	}
-	outgoingRows.Close()
-
-	inviteRows, err := s.pool.Query(ctx, `
-		SELECT gi.id::text, u.id::text, u.name, u.image_url, gi.room_code, gi.created_at, gi.expires_at
-		FROM game_invites gi
-		JOIN users u ON u.id = gi.sender_id
-		WHERE gi.recipient_id = $1 AND gi.expires_at > NOW()
-		ORDER BY gi.created_at DESC
-	`, viewerID)
-	if err != nil {
-		return SocialSnapshotRecord{}, err
-	}
-	for inviteRows.Next() {
-		var invite GameInviteRecord
-		if err := inviteRows.Scan(&invite.ID, &invite.User.ID, &invite.User.Name, &invite.User.ImageURL, &invite.RoomCode, &invite.CreatedAt, &invite.ExpiresAt); err != nil {
-			inviteRows.Close()
-			return SocialSnapshotRecord{}, err
+		if err := json.Unmarshal(requestsJSON, &snapshot.IncomingFriendRequests); err != nil {
+			return nil, err
 		}
-		snapshot.GameInvites = append(snapshot.GameInvites, invite)
+		if err := json.Unmarshal(outgoingJSON, &snapshot.OutgoingFriendRequestUserIDs); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(invitesJSON, &snapshot.GameInvites); err != nil {
+			return nil, err
+		}
+		results[userID] = snapshot
 	}
-	if err := inviteRows.Err(); err != nil {
-		inviteRows.Close()
-		return SocialSnapshotRecord{}, err
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
-	inviteRows.Close()
-
-	return snapshot, nil
+	return results, nil
 }
 
 func (s *UserStore) SendFriendRequest(ctx context.Context, senderID, recipientID string) (FriendRequestRecord, error) {

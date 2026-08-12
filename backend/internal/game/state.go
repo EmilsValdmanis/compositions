@@ -59,8 +59,6 @@ type JokerReclaim struct {
 
 type tablePlayCandidate struct {
 	usedMask    uint32
-	comp        *Composition
-	addition    *CompositionAddition
 	reclaim     *JokerReclaim
 	usesDiscard bool
 }
@@ -86,12 +84,6 @@ type selectedAddition struct {
 	compositionIndex int
 	insertIndex      *int
 	mask             uint32
-}
-
-type handCardKey struct {
-	rank    Rank
-	suit    Suit
-	isJoker bool
 }
 
 const (
@@ -993,7 +985,7 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
 					return true
 				}
-				if searchSupportCandidates(baseState, discardMask, 1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+				if !baseState.hasOpened && searchSupportCandidates(baseState, discardMask, 1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
 					return true
 				}
 				selectedCompMasks = selectedCompMasks[:len(selectedCompMasks)-1]
@@ -1016,7 +1008,7 @@ func hasLegalPlayWithDiscard(baseState tablePlayState, discardMask uint32, scrat
 				if validateTablePlay(baseState, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, nextUsedMask, true, scratch) {
 					return true
 				}
-				if searchSupportCandidates(baseState, discardMask, 1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
+				if !baseState.hasOpened && searchSupportCandidates(baseState, discardMask, 1, nextUsedMask, selectedCompMasks, selectedCompVariants, selectedAdditions, selectedReclaims, scratch) {
 					return true
 				}
 				selectedAdditions = selectedAdditions[:len(selectedAdditions)-1]
@@ -1330,9 +1322,7 @@ func applyTablePlayState(state tablePlayState, comps []*Composition, additions [
 			if !runCardsAreOrdered(comp.cards) && !runCardsAreReverseOrdered(comp.cards) {
 				return tablePlayState{}, ErrInvalidComposition
 			}
-			if !comp.normalizeRunCards() {
-				return tablePlayState{}, ErrInvalidComposition
-			}
+			_ = comp.normalizeRunCards()
 		}
 		playedCards = append(playedCards, comp.cards...)
 		openingPoints += comp.Points()

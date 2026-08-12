@@ -35,9 +35,7 @@ func newComposition(cards []Card, variant compositionVariant, requireOrderedRun 
 		if requireOrderedRun && !runCardsAreOrdered(c.cards) && !runCardsAreReverseOrdered(c.cards) {
 			return nil, false
 		}
-		if !c.normalizeRunCards() {
-			return nil, false
-		}
+		_ = c.normalizeRunCards()
 	}
 	c.assignJokers()
 	return c, true
@@ -365,28 +363,21 @@ func (c *Composition) isValidSet() bool {
 		return false
 	}
 
-	var realCards []Card
+	var firstRank Rank
+	hasRank := false
+	var seenSuits [5]bool
 	for _, card := range c.cards {
-		if !card.isJoker {
-			realCards = append(realCards, card)
+		if card.isJoker {
+			continue
 		}
-	}
-
-	if len(realCards) > 0 {
-		firstRank := realCards[0].rank
-		for _, card := range realCards[1:] {
-			if card.rank != firstRank {
-				return false
-			}
+		if hasRank && card.rank != firstRank {
+			return false
 		}
-
-		seenSuits := make(map[Suit]bool)
-		for _, card := range realCards {
-			if seenSuits[card.suit] {
-				return false
-			}
-			seenSuits[card.suit] = true
+		firstRank, hasRank = card.rank, true
+		if int(card.suit) < 0 || int(card.suit) >= len(seenSuits) || seenSuits[card.suit] {
+			return false
 		}
+		seenSuits[card.suit] = true
 	}
 	return true
 }
@@ -396,7 +387,8 @@ func (c *Composition) isValidRun() bool {
 		return false
 	}
 
-	var realCards []Card
+	var realCardBuffer [14]Card
+	realCards := realCardBuffer[:0]
 	var jokerCount int
 
 	for _, card := range c.cards {
@@ -415,6 +407,9 @@ func (c *Composition) isValidRun() bool {
 			}
 		}
 	}
+	if jokerCount == 0 {
+		return naturalRunIsValid(realCards)
+	}
 
 	_, ok := tryFitSequence(realCards, jokerCount, false)
 	if ok {
@@ -423,6 +418,49 @@ func (c *Composition) isValidRun() bool {
 
 	_, ok = tryFitSequence(realCards, jokerCount, true)
 	return ok
+}
+
+func naturalRunIsValid(cards []Card) bool {
+	var counts [15]int
+	for _, card := range cards {
+		if card.rank < Ace || card.rank > King {
+			return false
+		}
+		counts[card.rank]++
+		if card.rank != Ace && counts[card.rank] > 1 {
+			return false
+		}
+	}
+	for start := 1; start+len(cards)-1 <= 14; start++ {
+		valid := true
+		for sequenceRank := 1; sequenceRank <= 14; sequenceRank++ {
+			rank := sequenceRankToCardRank(sequenceRank)
+			expected := 0
+			if sequenceRank >= start && sequenceRank < start+len(cards) {
+				expected = 1
+			}
+			if rank == Ace {
+				if sequenceRank == 1 {
+					if start+len(cards)-1 == 14 {
+						expected++
+					}
+					if counts[Ace] != expected {
+						valid = false
+						break
+					}
+				}
+				continue
+			}
+			if counts[rank] != expected {
+				valid = false
+				break
+			}
+		}
+		if valid {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Composition) assignJokers() bool {

@@ -112,12 +112,7 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	var nextCursor *string
 	if page.NextCursor != nil {
-		encoded, err := encodeLeaderboardCursor(*page.NextCursor, metric, scope)
-		if err != nil {
-			slog.Error("encode leaderboard cursor failed", "error", err)
-			writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to load leaderboard")
-			return
-		}
+		encoded := encodeLeaderboardCursor(*page.NextCursor, metric, scope)
 		nextCursor = &encoded
 	}
 	var placement *leaderboardPlayerResponse
@@ -143,12 +138,9 @@ func leaderboardPlayerFromRecord(player database.LeaderboardPlayerRecord) leader
 	}
 }
 
-func encodeLeaderboardCursor(cursor database.LeaderboardCursor, metric database.LeaderboardMetric, scope database.LeaderboardScope) (string, error) {
-	payload, err := json.Marshal(leaderboardCursorPayload{Metric: metric, Scope: scope, Score: cursor.Score, PlayerID: cursor.PlayerID})
-	if err != nil {
-		return "", err
-	}
-	return base64.RawURLEncoding.EncodeToString(payload), nil
+func encodeLeaderboardCursor(cursor database.LeaderboardCursor, metric database.LeaderboardMetric, scope database.LeaderboardScope) string {
+	payload, _ := json.Marshal(leaderboardCursorPayload{Metric: metric, Scope: scope, Score: cursor.Score, PlayerID: cursor.PlayerID})
+	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
 func decodeLeaderboardCursor(raw string, metric database.LeaderboardMetric, scope database.LeaderboardScope) (*database.LeaderboardCursor, error) {

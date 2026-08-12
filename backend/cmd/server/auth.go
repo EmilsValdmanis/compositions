@@ -126,6 +126,9 @@ func absoluteURLFromString(rawURL, envName string) (string, error) {
 func frontendConfigFromEnv() (string, string, error) {
 	frontendURL := strings.TrimSpace(os.Getenv("FRONTEND_URL"))
 	if frontendURL == "" {
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("SENTRY_ENVIRONMENT")), "production") {
+			return "", "", errors.New("FRONTEND_URL is required in production")
+		}
 		return "/", "", nil
 	}
 

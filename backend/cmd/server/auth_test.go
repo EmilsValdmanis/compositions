@@ -18,6 +18,14 @@ import (
 	"golang.org/x/oauth2"
 )
 
+func TestFrontendConfigIsRequiredInProduction(t *testing.T) {
+	t.Setenv("SENTRY_ENVIRONMENT", "production")
+	t.Setenv("FRONTEND_URL", "")
+	if _, _, err := frontendConfigFromEnv(); err == nil || err.Error() != "FRONTEND_URL is required in production" {
+		t.Fatalf("frontendConfigFromEnv() error = %v; want production configuration error", err)
+	}
+}
+
 type stubAuthStore struct {
 	upsertedUsers     []authenticatedUser
 	createdSessions   []authSessionRecord
@@ -295,6 +303,17 @@ func TestHandleCompleteOnboarding(t *testing.T) {
 		handler.handleCompleteOnboarding(response, httptest.NewRequest(http.MethodPost, "/auth/onboarding/complete", nil))
 		if response.Code != http.StatusUnauthorized {
 			t.Fatalf("handleCompleteOnboarding() status = %d; want 401", response.Code)
+		}
+	})
+
+	t.Run("returns internal session lookup failures", func(t *testing.T) {
+		handler := &authHandler{store: &stubAuthStore{sessionErr: errors.New("lookup failed")}, now: func() time.Time { return now }}
+		request := httptest.NewRequest(http.MethodPost, "/auth/onboarding/complete", nil)
+		request.AddCookie(&http.Cookie{Name: authCookieName, Value: "session-token"})
+		response := httptest.NewRecorder()
+		handler.handleCompleteOnboarding(response, request)
+		if response.Code != http.StatusInternalServerError {
+			t.Fatalf("handleCompleteOnboarding() status = %d; want 500", response.Code)
 		}
 	})
 

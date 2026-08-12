@@ -13,6 +13,7 @@ import (
 
 	"github.com/EmilsValdmanis/compositions/internal/database"
 	"github.com/EmilsValdmanis/compositions/internal/game"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -23,6 +24,26 @@ type jsonLobbyStateStore struct {
 	loadErr      error
 	bugReports   []database.GameBugReportRecord
 	bugReportErr error
+}
+
+type blockingLobbyStateStore struct {
+	jsonLobbyStateStore
+	started chan struct{}
+	release chan struct{}
+}
+
+func (s *blockingLobbyStateStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+	select {
+	case <-s.started:
+	default:
+		close(s.started)
+	}
+	select {
+	case <-s.release:
+		return s.jsonLobbyStateStore.SaveLobbyState(ctx, state)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *jsonLobbyStateStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
@@ -87,6 +108,359 @@ func setGameStatePhaseForTest(t *testing.T, state *game.GameState, phase game.Ga
 	reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().SetInt(int64(phase))
 }
 
+func persistLobbyForTest(lobby *lobbyServer, reason string) error {
+	if lobby == nil {
+		return (*lobbyServer)(nil).persistLocked(reason)
+	}
+	lobby.mu.Lock()
+	defer lobby.mu.Unlock()
+	return lobby.persistLocked(reason)
+}
+
+func TestPersistenceFailureIsReturnedToMutationCaller(t *testing.T) {
+	store := &jsonLobbyStateStore{saveErr: errors.New("database unavailable")}
+	lobby := newLobbyServerWithStore(store)
+	connected, _, _, err := lobby.connect("", nil)
+	if err == nil {
+		t.Fatal("connect() error = nil when persistence failed")
+	}
+	if connected.SessionID != "" {
+		t.Fatalf("connect() event = %#v; want no successful event", connected)
+	}
+}
+
+func TestPersistenceIODoesNotHoldLobbyStateLock(t *testing.T) {
+	lobby := newLobbyServer()
+	connected, _, _, err := lobby.connect("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := &blockingLobbyStateStore{started: make(chan struct{}), release: make(chan struct{})}
+	lobby.store = store
+
+	mutationDone := make(chan error, 1)
+	go func() {
+		_, _, err := lobby.createRoom(connected.SessionID, "Host")
+		mutationDone <- err
+	}()
+	select {
+	case <-store.started:
+	case <-time.After(time.Second):
+		t.Fatal("persistence did not start")
+	}
+
+	readDone := make(chan error, 1)
+	go func() {
+		_, err := lobby.authenticatedUserID(connected.SessionID)
+		readDone <- err
+	}()
+	select {
+	case <-readDone:
+		// Authentication may fail; only lock availability matters here.
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("lobby state lock remained held during persistence I/O")
+	}
+	close(store.release)
+	if err := <-mutationDone; err != nil {
+		t.Fatalf("createRoom() error = %v", err)
+	}
+}
+
+func TestLobbyMutationsReturnPersistenceFailures(t *testing.T) {
+	failing := func() *jsonLobbyStateStore { return &jsonLobbyStateStore{saveErr: errors.New("save failed")} }
+	t.Run("reconnect", func(t *testing.T) {
+		lobby := newLobbyServer()
+		event, _, _, _ := lobby.connect("", nil)
+		lobby.store = failing()
+		if _, _, _, err := lobby.connect(event.SessionID, nil); err == nil {
+			t.Fatal("reconnect persistence error = nil")
+		}
+	})
+	t.Run("create", func(t *testing.T) {
+		lobby := newLobbyServer()
+		event, _, _, _ := lobby.connect("", nil)
+		lobby.store = failing()
+		if _, _, err := lobby.createRoom(event.SessionID, "Host"); err == nil {
+			t.Fatal("create persistence error = nil")
+		}
+	})
+	t.Run("join", func(t *testing.T) {
+		lobby := newLobbyServer()
+		host, _, _, _ := lobby.connect("", nil)
+		guest, _, _, _ := lobby.connect("", nil)
+		room, _, _ := lobby.createRoom(host.SessionID, "Host")
+		lobby.store = failing()
+		if _, _, err := lobby.joinRoom(guest.SessionID, room.Code, "Guest"); err == nil {
+			t.Fatal("join persistence error = nil")
+		}
+	})
+	t.Run("start and choose", func(t *testing.T) {
+		lobby, events, _ := newLobbyReadyToStart(t)
+		lobby.store = failing()
+		if _, _, err := lobby.startGame(events[0].SessionID, 0); err == nil {
+			t.Fatal("start persistence error = nil")
+		}
+		lobby.store = noopUserStore{}
+		lobby.rooms[lobby.sessions[events[0].SessionID].roomCode].pendingDealChoice = nil
+		_, _, _ = lobby.startGame(events[0].SessionID, 0)
+		lobby.store = failing()
+		cut := 0
+		if _, _, err := lobby.chooseDealing(events[1].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut}); err == nil {
+			t.Fatal("choose persistence error = nil")
+		}
+	})
+	t.Run("leave", func(t *testing.T) {
+		lobby := newLobbyServer()
+		host, _, _, _ := lobby.connect("", nil)
+		_, _, _ = lobby.createRoom(host.SessionID, "Host")
+		lobby.store = failing()
+		if _, _, _, err := lobby.leaveRoom(host.SessionID); err == nil {
+			t.Fatal("disband persistence error = nil")
+		}
+
+		lobby = newLobbyServer()
+		host, _, _, _ = lobby.connect("", nil)
+		guest, _, _, _ := lobby.connect("", nil)
+		room, _, _ := lobby.createRoom(host.SessionID, "Host")
+		_, _, _ = lobby.joinRoom(guest.SessionID, room.Code, "Guest")
+		lobby.store = failing()
+		if _, _, _, err := lobby.leaveRoom(guest.SessionID); err == nil {
+			t.Fatal("leave persistence error = nil")
+		}
+	})
+	t.Run("active game mutations", func(t *testing.T) {
+		newActive := func(t *testing.T) (*lobbyServer, []connectedEvent) {
+			lobby, events, _ := newActiveLobbyForExitTests(t, 2)
+			return lobby, events
+		}
+		lobby, events := newActive(t)
+		lobby.store = failing()
+		if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err == nil {
+			t.Fatal("forfeit persistence error = nil")
+		}
+		lobby, events = newActive(t)
+		lobby.store = failing()
+		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "issue", false); err == nil {
+			t.Fatal("report persistence error = nil")
+		}
+		lobby, events = newActive(t)
+		lobby.store = failing()
+		if _, _, _, err := lobby.requestEndGame(events[0].SessionID, "mutual_end"); err == nil {
+			t.Fatal("request persistence error = nil")
+		}
+		lobby, events = newActive(t)
+		proposal, _, _, _ := lobby.requestEndGame(events[0].SessionID, "mutual_end")
+		lobby.store = failing()
+		if _, _, _, err := lobby.voteEndGame(events[1].SessionID, proposal.EndProposal.ID, false); err == nil {
+			t.Fatal("vote persistence error = nil")
+		}
+		lobby, events = newActive(t)
+		lobby.store = failing()
+		if _, _, err := lobby.updateDraftActivity(events[0].SessionID, nil); err == nil {
+			t.Fatal("draft persistence error = nil")
+		}
+		lobby, events = newActive(t)
+		lobby.store = failing()
+		if _, _, _, err := lobby.applyGameAction(events[0].SessionID, "test", func(*game.GameState) error { return nil }, nil); err == nil {
+			t.Fatal("game action persistence error = nil")
+		}
+	})
+}
+
+func TestRemainingLobbyPersistenceFailures(t *testing.T) {
+	want := errors.New("save failed")
+	failing := func() *jsonLobbyStateStore { return &jsonLobbyStateStore{saveErr: want} }
+
+	t.Run("next round", func(t *testing.T) {
+		lobby, events, code := newActiveLobbyForExitTests(t, 2)
+		setGameStatePhaseForTest(t, lobby.rooms[code].gameState, game.PhaseRoundOver)
+		lobby.store = failing()
+		if _, _, err := lobby.startNextRound(events[0].SessionID); !errors.Is(err, want) {
+			t.Fatalf("startNextRound() error = %v; want %v", err, want)
+		}
+	})
+
+	t.Run("draft and action use current player", func(t *testing.T) {
+		for _, action := range []string{"draft", "action"} {
+			lobby, _, code := newActiveLobbyForExitTests(t, 2)
+			room := lobby.rooms[code]
+			currentSessionID := room.players[room.gameState.CurrentPlayerIndex()].sessionID
+			lobby.store = failing()
+			var err error
+			if action == "draft" {
+				_, _, err = lobby.updateDraftActivity(currentSessionID, nil)
+			} else {
+				_, _, _, err = lobby.applyGameAction(currentSessionID, "test", func(*game.GameState) error { return nil }, nil)
+			}
+			if !errors.Is(err, want) {
+				t.Fatalf("%s error = %v; want %v", action, err, want)
+			}
+		}
+	})
+
+	t.Run("room reset", func(t *testing.T) {
+		lobby, _, code := newActiveLobbyForExitTests(t, 2)
+		setGameStatePhaseForTest(t, lobby.rooms[code].gameState, game.PhaseGameOver)
+		lobby.store = failing()
+		if _, _, err := lobby.resetRoomAfterGameOver(code); !errors.Is(err, want) {
+			t.Fatalf("resetRoomAfterGameOver() error = %v; want %v", err, want)
+		}
+	})
+
+	t.Run("disconnect", func(t *testing.T) {
+		lobby := newLobbyServer()
+		conn := &websocket.Conn{}
+		event, _, _, err := lobby.connect("", conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := lobby.createRoom(event.SessionID, "Host"); err != nil {
+			t.Fatal(err)
+		}
+		lobby.store = failing()
+		lobby.disconnectWithEmitter(event.SessionID, conn, func(*websocket.Conn, string, any) error { return nil })
+		if lobby.sessions[event.SessionID].conn != nil {
+			t.Fatal("session remained connected")
+		}
+	})
+}
+
+func TestLobbySocialHelperBranches(t *testing.T) {
+	lobby := newLobbyServer()
+	if _, err := lobby.authenticatedUserID("missing"); err == nil {
+		t.Fatal("authenticatedUserID(missing) error = nil")
+	}
+	if _, err := lobby.joinableRoomCode("missing"); err == nil {
+		t.Fatal("joinableRoomCode(missing) error = nil")
+	}
+
+	host, _, _, _ := lobby.connect("", nil)
+	guest, _, _, _ := lobby.connect("", nil)
+	roomState, _, _ := lobby.createRoom(host.SessionID, "Host")
+	if _, err := lobby.joinableRoomCode(host.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.joinRoom(guest.SessionID, roomState.Code, "Guest"); err != nil {
+		t.Fatal(err)
+	}
+	room := lobby.rooms[roomState.Code]
+	room.pendingDealChoice = &pendingDealChoice{}
+	if _, err := lobby.joinableRoomCode(host.SessionID); err == nil || err.Error() != "game already started" {
+		t.Fatalf("joinable pending room error = %v", err)
+	}
+	room.pendingDealChoice = nil
+	for len(room.players) < maxPlayersPerRoom {
+		room.players = append(room.players, &roomPlayer{player: newPlayerWithID(uuid.NewString())})
+	}
+	if _, err := lobby.joinableRoomCode(host.SessionID); err == nil || err.Error() != "room is full" {
+		t.Fatalf("joinable full room error = %v", err)
+	}
+
+	if _, ok := lobby.activeGameForUser("nobody"); ok {
+		t.Fatal("inactive user reported active")
+	}
+	lobby.rooms["nil"] = nil
+	room.players = room.players[:2]
+	room.pendingDealChoice = nil
+	setGameStatePhaseForTest(t, room.gameState, game.PhaseInProgress)
+	room.players[0].authUserID = "active-user"
+	room.players[0].connected = true
+	room.statisticsStartedAt = time.Time{}
+	if startedAt, ok := lobby.activeGameForUser("active-user"); !ok || startedAt.IsZero() {
+		t.Fatalf("activeGameForUser() = %v, %t", startedAt, ok)
+	}
+}
+
+func TestLobbySpectatorDefensiveBranches(t *testing.T) {
+	lobby, _, code := newActiveLobbyForExitTests(t, 2)
+	lobby.rooms["nil-room"] = nil
+	room := lobby.rooms[code]
+	room.players[0].authUserID = "friend-user"
+	room.statisticsStartedAt = time.Now()
+	viewerConn := &websocket.Conn{}
+
+	if _, _, _, err := lobby.spectateGame("missing", "friend-user", viewerConn); err == nil {
+		t.Fatal("missing session spectate error = nil")
+	}
+	unauth, _, _, _ := lobby.connect("", viewerConn)
+	if _, _, _, err := lobby.spectateGame(unauth.SessionID, "friend-user", viewerConn); !errors.Is(err, errAuthenticationRequired) {
+		t.Fatalf("unauthenticated spectate error = %v", err)
+	}
+	viewer := lobby.sessions[unauth.SessionID]
+	viewer.authenticated = true
+	viewer.authUserID = "viewer-user"
+	viewer.displayName = "Viewer"
+	if _, _, _, err := lobby.spectateGame(unauth.SessionID, "viewer-user", viewerConn); err == nil || err.Error() != "cannot spectate yourself" {
+		t.Fatalf("self spectate error = %v", err)
+	}
+	if _, _, err := lobby.createRoom(unauth.SessionID, "Viewer"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := lobby.spectateGame(unauth.SessionID, "friend-user", viewerConn); err == nil || err.Error() != "leave your room before spectating" {
+		t.Fatalf("in-room spectate error = %v", err)
+	}
+	if _, _, _, err := lobby.leaveRoom(unauth.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := lobby.spectateGame(unauth.SessionID, "missing-user", viewerConn); err == nil || err.Error() != "friend is not in an active game" {
+		t.Fatalf("inactive friend spectate error = %v", err)
+	}
+
+	room.turnActivity = &game.TurnActivitySnapshot{PlayerID: room.players[room.gameState.CurrentPlayerIndex()].player.ID}
+	baseline, _ := room.gameState.SnapshotForSpectator()
+	room.turnBaseline = &baseline
+	if _, _, _, err := lobby.spectateGame(unauth.SessionID, "friend-user", viewerConn); err != nil {
+		t.Fatal(err)
+	}
+	recipients := lobby.spectatorGameRecipients(code)
+	if len(recipients) != 1 || recipients[0].event.Game.TurnActivity == nil {
+		t.Fatalf("spectator recipients = %#v", recipients)
+	}
+	if got := lobby.spectatorGameRecipients("missing"); got != nil {
+		t.Fatalf("missing spectator recipients = %#v", got)
+	}
+	connections := lobby.endSpectatingRoom(code)
+	if len(connections) != 1 || len(lobby.spectatingRoomByConn) != 0 {
+		t.Fatalf("ended connections = %#v mappings = %#v", connections, lobby.spectatingRoomByConn)
+	}
+}
+
+func TestLobbyRejectsInvalidModesFromInputAndPersistence(t *testing.T) {
+	lobby, events, _ := newLobbyReadyToStart(t)
+	if _, _, err := lobby.startGame(events[0].SessionID, 0, game.GameMode("invalid")); !errors.Is(err, game.ErrInvalidGameMode) {
+		t.Fatalf("startGame(invalid mode) error = %v", err)
+	}
+
+	store := &jsonLobbyStateStore{}
+	persistedLobby, persistedEvents, code := newLobbyReadyToStart(t)
+	persistedLobby.store = store
+	if err := persistLobbyForTest(persistedLobby, "test"); err != nil {
+		t.Fatal(err)
+	}
+	var state persistedLobbyState
+	if err := json.Unmarshal(store.data, &state); err != nil {
+		t.Fatal(err)
+	}
+	state.Rooms[0].PendingDealChoice = &persistedPendingDealChoice{DealerIndex: 0, ChooserIndex: 1, GameMode: game.GameMode("invalid")}
+	data, _ := json.Marshal(state)
+	store.data = data
+	restored := newLobbyServerWithStore(store)
+	if err := restored.restorePersistedState(context.Background()); err == nil || err.Error() != "persisted deal choice has invalid game mode" {
+		t.Fatalf("restore invalid mode error = %v (events %d, code %s)", err, len(persistedEvents), code)
+	}
+}
+
+func TestIssueReportsHaveASeparateCooldown(t *testing.T) {
+	lobby, events, _ := newActiveLobbyForExitTests(t, 2)
+	lobby.store = &jsonLobbyStateStore{}
+	if _, _, _, err := lobby.reportIssue(events[0].SessionID, "first report", false); err != nil {
+		t.Fatalf("first reportIssue() error = %v", err)
+	}
+	if _, _, _, err := lobby.reportIssue(events[0].SessionID, "second report", false); !errors.Is(err, errRateLimitExceeded) {
+		t.Fatalf("second reportIssue() error = %v; want rate limit exceeded", err)
+	}
+}
+
 func newActiveLobbyForExitTests(t *testing.T, playerCount int) (*lobbyServer, []connectedEvent, string) {
 	t.Helper()
 	lobby := newLobbyServer()
@@ -115,6 +489,27 @@ func newActiveLobbyForExitTests(t *testing.T, playerCount int) (*lobbyServer, []
 		t.Fatalf("chooseDealing() error = %v", err)
 	}
 	return lobby, events, roomState.Code
+}
+
+func newLobbyReadyToStart(t *testing.T) (*lobbyServer, []connectedEvent, string) {
+	t.Helper()
+	lobby := newLobbyServer()
+	events := make([]connectedEvent, 2)
+	for index := range events {
+		event, _, _, err := lobby.connect("", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		events[index] = event
+	}
+	room, _, err := lobby.createRoom(events[0].SessionID, "Host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.joinRoom(events[1].SessionID, room.Code, "Guest"); err != nil {
+		t.Fatal(err)
+	}
+	return lobby, events, room.Code
 }
 
 func TestLobbyStartsQuickGameWithSelectedMode(t *testing.T) {
@@ -352,7 +747,7 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 	}
 	pendingRoom.statisticsPlaytime = 37 * time.Minute
 	pendingRoom.statisticsActiveSince = time.Now().UTC()
-	restoredPending.persistLocked("playtime fixture")
+	_ = persistLobbyForTest(restoredPending, "playtime fixture")
 
 	restoredGame := newLobbyServerWithStore(store)
 	if err := restoredGame.restorePersistedState(context.Background()); err != nil {
@@ -461,7 +856,7 @@ func TestLobbyServerPersistenceEdgeBranches(t *testing.T) {
 	if err := (*lobbyServer)(nil).restorePersistedState(context.Background()); err != nil {
 		t.Fatalf("nil restorePersistedState() error = %v", err)
 	}
-	(*lobbyServer)(nil).persistLocked("nil receiver")
+	_ = persistLobbyForTest(nil, "nil receiver")
 
 	lobby := newLobbyServerWithStore(nil)
 	if _, ok := lobby.store.(noopUserStore); !ok {
@@ -491,7 +886,7 @@ func TestLobbyServerPersistenceEdgeBranches(t *testing.T) {
 	if len(snapshot.Rooms) != 1 || len(snapshot.Rooms[0].Players) != 1 {
 		t.Fatalf("snapshot.Rooms = %#v; want one room with one player", snapshot.Rooms)
 	}
-	lobby.persistLocked("save error is logged")
+	_ = persistLobbyForTest(lobby, "save error is logged")
 }
 
 func TestLobbyServerAuthenticatedReconnectWithExistingSessionID(t *testing.T) {
