@@ -478,9 +478,7 @@ function useResultScoreReveal({
         ? scoreReveal
         : { key: scoreTimelineKey, phaseByPlayerId: {}, hasReordered: false };
 
-  useEffect(() => {
-    if (winnerTakeover || shouldReduceMotion) return;
-
+  const scheduleScoreReveal = useEffectEvent((activeScoreTimelineKey: string) => {
     const timers: number[] = [];
     let nextRevealAt = SCORE_REVEAL_DELAY_MS;
     let finalScoreAt = SCORE_REVEAL_DELAY_MS;
@@ -496,9 +494,9 @@ function useResultScoreReveal({
       timers.push(
         window.setTimeout(() => {
           setScoreReveal((current) => ({
-            key: scoreTimelineKey,
+            key: activeScoreTimelineKey,
             phaseByPlayerId: {
-              ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
               [scorePlayerId]: "counting",
             },
             hasReordered: false,
@@ -508,9 +506,9 @@ function useResultScoreReveal({
       timers.push(
         window.setTimeout(() => {
           setScoreReveal((current) => ({
-            key: scoreTimelineKey,
+            key: activeScoreTimelineKey,
             phaseByPlayerId: {
-              ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
               [scorePlayerId]: "round",
             },
             hasReordered: false,
@@ -521,9 +519,9 @@ function useResultScoreReveal({
         timers.push(
           window.setTimeout(() => {
             setScoreReveal((current) => ({
-              key: scoreTimelineKey,
+              key: activeScoreTimelineKey,
               phaseByPlayerId: {
-                ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+                ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
                 [scorePlayerId]: "adjusting",
               },
               hasReordered: false,
@@ -534,9 +532,9 @@ function useResultScoreReveal({
       timers.push(
         window.setTimeout(() => {
           setScoreReveal((current) => ({
-            key: scoreTimelineKey,
+            key: activeScoreTimelineKey,
             phaseByPlayerId: {
-              ...(current.key === scoreTimelineKey ? current.phaseByPlayerId : {}),
+              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
               [scorePlayerId]: "adjusted",
             },
             hasReordered: false,
@@ -553,7 +551,7 @@ function useResultScoreReveal({
     timers.push(
       window.setTimeout(() => {
         setScoreReveal({
-          key: scoreTimelineKey,
+          key: activeScoreTimelineKey,
           phaseByPlayerId: adjustedScorePhases(game.players),
           hasReordered: true,
         });
@@ -563,7 +561,13 @@ function useResultScoreReveal({
     return () => {
       for (const timer of timers) window.clearTimeout(timer);
     };
-  }, [game, players, scoreTimelineKey, shouldReduceMotion, winnerTakeover]);
+  });
+
+  useEffect(() => {
+    if (winnerTakeover || shouldReduceMotion) return;
+
+    return scheduleScoreReveal(scoreTimelineKey);
+  }, [scoreTimelineKey, shouldReduceMotion, winnerTakeover]);
 
   return { scorePlayerIds, scoreRevealKey, revealState };
 }

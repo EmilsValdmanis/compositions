@@ -322,4 +322,53 @@ describe("GameResultsView score reveal", () => {
     expect(view.queryByRole("button", { name: "Back to lobby" })).toBeNull();
     expect(view.getByRole("button", { name: "Start next round" })).not.toBeNull();
   });
+
+  it("does not replay settled scores when the deck-cut choice appears", async () => {
+    const baseProps = {
+      room,
+      game,
+      players,
+      playerId: "flying",
+      connectedPlayers: 2,
+      onChooseDealing: vi.fn(),
+      onSendEmote: vi.fn(),
+    };
+    const view = render(
+      <GameResultsView
+        {...baseProps}
+        dealChoice={{
+          pendingDealChoice: null,
+          dealChooserName: null,
+          isDealChooser: false,
+        }}
+      />,
+    );
+
+    await act(async () => vi.runAllTimers());
+    expect(
+      view.container.querySelector<HTMLElement>('[data-flying="true"]')?.dataset.scorePhase,
+    ).toBe("adjusted");
+
+    view.rerender(
+      <GameResultsView
+        {...baseProps}
+        game={{ ...game, players: game.players.map((player) => ({ ...player })) }}
+        players={players.map((player) => ({ ...player }))}
+        dealChoice={{
+          pendingDealChoice: {
+            dealerIndex: 0,
+            chooserIndex: 1,
+            chooserPlayerId: "flying",
+          },
+          dealChooserName: "Blair",
+          isDealChooser: true,
+        }}
+      />,
+    );
+
+    await act(async () => vi.advanceTimersByTime(700));
+    expect(
+      view.container.querySelector<HTMLElement>('[data-flying="true"]')?.dataset.scorePhase,
+    ).toBe("adjusted");
+  });
 });

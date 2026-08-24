@@ -413,7 +413,7 @@ export function insertHandKeyIntoDraft(
     );
   }
 
-  const next = removeHandKeyFromDrafts(compositions, handKey);
+  const next = [...removeHandKeyFromDrafts(compositions, handKey)];
   const targetIndex = next.findIndex((composition) => composition.id === targetCompositionId);
 
   if (targetIndex < 0) {

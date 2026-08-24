@@ -5,6 +5,7 @@ import {
   isCompleteCompositionPreview,
   isCompleteDraftComposition,
   isValidDraftComposition,
+  jokerReclaimPointValue,
 } from "#/components/game/game-card-utils";
 
 describe("draftCompositionPointTotal", () => {
@@ -261,5 +262,37 @@ describe("completed composition previews", () => {
         [{ rank: 9, suit: 3 }],
       ),
     ).toBe(true);
+  });
+});
+
+describe("jokerReclaimPointValue", () => {
+  it("scores the natural card used to reclaim a face-card joker", () => {
+    expect(
+      jokerReclaimPointValue(
+        {
+          type: "run",
+          cards: [{ rank: 9, suit: 2 }, { rank: 10, suit: 2 }, { isJoker: true }],
+          points: 30,
+          complete: false,
+        },
+        2,
+        { rank: 11, suit: 2 },
+      ),
+    ).toBe(10);
+  });
+
+  it("scores an ace-low reclaim as one point", () => {
+    expect(
+      jokerReclaimPointValue(
+        {
+          type: "run",
+          cards: [{ isJoker: true }, { rank: 2, suit: 0 }, { rank: 3, suit: 0 }],
+          points: 6,
+          complete: false,
+        },
+        0,
+        { rank: 1, suit: 0 },
+      ),
+    ).toBe(1);
   });
 });

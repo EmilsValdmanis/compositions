@@ -24,6 +24,7 @@ import {
   draftCompositionPointTotal,
   draftCompositionPreviewPointTotal,
   isCompleteDraftComposition,
+  jokerReclaimPointValue,
 } from "#/components/game/game-card-utils";
 import {
   spectatorCardEnter,
@@ -307,10 +308,8 @@ function EditableNewDraft({
         >
           <div className="composition-card-track flex items-start gap-2" data-complete={complete}>
             {composition.entries.map((entry, entryIndex) => (
-              <motion.div
+              <div
                 key={entry.key}
-                layout="position"
-                transition={spectatorCardTransition}
                 data-composition-card-wrap
                 data-card-rank={entry.card.rank}
                 data-card-suit={entry.card.suit}
@@ -326,7 +325,7 @@ function EditableNewDraft({
                     isVirtual: entry.isVirtual,
                   }}
                 />
-              </motion.div>
+              </div>
             ))}
           </div>
         </SortableContext>
@@ -532,7 +531,7 @@ export function GameBoardTable({
     const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
     const additions = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
 
-    if (additions.length === 0) {
+    if (additions.length === 0 && reclaims.length === 0) {
       return [];
     }
 
@@ -545,8 +544,21 @@ export function GameBoardTable({
       })),
     );
 
+    const reclaimPoints = reclaims.reduce<number | null>((total, reclaim) => {
+      if (total === null) return null;
+
+      const points = jokerReclaimPointValue(
+        composition.snapshot,
+        reclaim.jokerIndex,
+        reclaim.replacementEntry.card,
+      );
+      return points === null ? null : total + points;
+    }, 0);
+
     return [
-      previewPoints === null ? null : Math.max(0, previewPoints - composition.snapshot.points),
+      previewPoints === null || reclaimPoints === null
+        ? null
+        : Math.max(0, previewPoints - composition.snapshot.points) + reclaimPoints,
     ];
   });
   const visibleDraftPointTotals = [

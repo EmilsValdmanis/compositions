@@ -20,6 +20,20 @@ describe("GameCard", () => {
     );
   });
 
+  it("does not clip activity labels positioned outside the card face", () => {
+    const view = render(
+      <GameCard
+        card={{ rank: 11, suit: 1 }}
+        decoration={{ highlight: "addition", label: <span>Add</span> }}
+      />,
+    );
+
+    const card = view.container.querySelector("[data-game-card]");
+
+    expect(view.getByText("Add")).toBeTruthy();
+    expect(card?.classList.contains("overflow-hidden")).toBe(false);
+  });
+
   it.each([
     ["hearts", 0],
     ["diamonds", 1],

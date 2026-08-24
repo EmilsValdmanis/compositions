@@ -489,6 +489,66 @@ describe("GameBoardTable draft total", () => {
     ).toBe(true);
     expect(view.queryByTitle("Complete a valid composition to resolve its point value")).toBeNull();
   });
+
+  it("counts a jack used to reclaim a joker toward the opening total", () => {
+    const view = render(
+      <DndContext>
+        <GameBoardTable
+          tableCompositions={[
+            {
+              tableIndex: 0,
+              key: "table-0",
+              snapshot: {
+                type: "run",
+                cards: [{ rank: 9, suit: 2 }, { rank: 10, suit: 2 }, { isJoker: true }],
+                jokerRepresentations: { 2: [{ rank: 11, suit: 2 }] },
+                points: 30,
+                complete: false,
+              },
+              stagedEntries: [],
+              reclaims: [],
+              insertIndex: 3,
+            },
+          ]}
+          newCompositions={[]}
+          players={[]}
+          turnActivity={{
+            playerId: "player-1",
+            round: 1,
+            turnNumber: 1,
+            draftCompositions: [
+              {
+                id: "reclaim-jack",
+                tableIndex: 0,
+                cards: [{ rank: 11, suit: 2 }],
+                cardPlacements: [{ reclaimJokerIndex: 2 }],
+              },
+              {
+                id: "nine-points",
+                cards: [
+                  { rank: 4, suit: 1 },
+                  { rank: 3, suit: 1 },
+                  { rank: 2, suit: 1 },
+                ],
+              },
+              {
+                id: "eighteen-points",
+                cards: [{ rank: 7, suit: 0 }, { isJoker: true }, { rank: 5, suit: 0 }],
+              },
+            ],
+          }}
+          canCompose={false}
+          viewerPlayerId="player-1"
+          showDraftTotal
+        />
+      </DndContext>,
+    );
+
+    const total = [...view.container.querySelectorAll('[data-slot="badge"]')].find((badge) =>
+      badge.textContent?.includes("Total"),
+    );
+    expect(total?.textContent).toContain("37 pts");
+  });
 });
 
 describe("GameBoardTable mobile draft placement", () => {

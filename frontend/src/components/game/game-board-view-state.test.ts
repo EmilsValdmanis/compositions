@@ -810,6 +810,22 @@ describe("buildVirtualReclaimedJokers", () => {
 });
 
 describe("insertHandKeyIntoDraft", () => {
+  it("returns a new composition array when inserting a card from hand", () => {
+    const draftCompositions = [
+      {
+        id: "draft-1",
+        tableIndex: null,
+        handKeys: ["5-3-1", "6-3-1"],
+      },
+    ];
+
+    const inserted = insertHandKeyIntoDraft(draftCompositions, "7-3-1", "draft-1", "6-3-1");
+
+    expect(inserted).not.toBe(draftCompositions);
+    expect(draftCompositions[0]?.handKeys).toEqual(["5-3-1", "6-3-1"]);
+    expect(inserted[0]?.handKeys).toEqual(["5-3-1", "7-3-1", "6-3-1"]);
+  });
+
   it("reorders cards within the same draft composition", () => {
     const entries = buildHandEntries([
       { rank: 1, suit: 1 },
