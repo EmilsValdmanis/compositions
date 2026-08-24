@@ -35,7 +35,6 @@ function ActivityLabel({
   playerId,
   label = m.activity_new(),
   icon,
-  iconOnly = false,
   className,
   offsetClassName,
 }: {
@@ -43,7 +42,6 @@ function ActivityLabel({
   playerId?: string;
   label?: string;
   icon?: React.ComponentProps<typeof HugeiconsIcon>["icon"];
-  iconOnly?: boolean;
   className?: string;
   offsetClassName?: string;
 }) {
@@ -54,17 +52,11 @@ function ActivityLabel({
         offsetClassName,
         className,
       )}
-      title={iconOnly ? label : undefined}
     >
       {icon ? (
-        <HugeiconsIcon
-          icon={icon}
-          className={cn("size-3.5", iconOnly && "size-4")}
-          strokeWidth={2}
-          aria-hidden="true"
-        />
+        <HugeiconsIcon icon={icon} className="size-3.5" strokeWidth={2} aria-hidden="true" />
       ) : null}
-      <span className={cn(iconOnly && "sr-only")}>{label}</span>
+      <span>{label}</span>
       {playerId ? (
         <PlayerMarker players={players} playerId={playerId} className="size-4 shrink-0" />
       ) : null}
@@ -79,13 +71,13 @@ export function NewActivityLabel(
 }
 
 export function AddActivityLabel(
-  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon" | "iconOnly">,
+  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
 ) {
-  return <ActivityLabel {...props} label={m.activity_add()} icon={Add01Icon} iconOnly />;
+  return <ActivityLabel {...props} label={m.activity_add()} icon={Add01Icon} />;
 }
 
 export function ReclaimActivityLabel(
-  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon" | "iconOnly">,
+  props: Omit<Parameters<typeof ActivityLabel>[0], "label" | "icon">,
 ) {
-  return <ActivityLabel {...props} label={m.activity_reclaim()} icon={ChevronUpIcon} iconOnly />;
+  return <ActivityLabel {...props} label={m.activity_reclaim()} icon={ChevronUpIcon} />;
 }

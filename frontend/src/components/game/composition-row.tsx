@@ -91,10 +91,8 @@ function CompositionEdgeDraftZone({
       >
         {interactive
           ? entries.map((entry, entryIndex) => (
-              <motion.div
+              <div
                 key={entry.key}
-                layout="position"
-                transition={spectatorCardTransition}
                 data-composition-card-wrap
                 data-card-rank={entry.card.rank}
                 data-card-suit={entry.card.suit}
@@ -123,7 +121,7 @@ function CompositionEdgeDraftZone({
                   }}
                   invalid={invalidEntryKeys.has(entry.key)}
                 />
-              </motion.div>
+              </div>
             ))
           : null}
         <AnimatePresence initial={false} mode="popLayout">
@@ -461,8 +459,6 @@ export function CompositionRow({
             return (
               <motion.div
                 key={key}
-                layout="position"
-                transition={spectatorCardTransition}
                 className="flex flex-col items-center gap-1"
                 data-composition-card-wrap
                 data-card-rank={previewCard.rank}

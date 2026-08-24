@@ -50,6 +50,24 @@ function rankPointValue(rank: number, aceLow = false) {
   return 0;
 }
 
+export function jokerReclaimPointValue(
+  composition: CompositionSnapshot,
+  jokerIndex: number,
+  replacementCard: CardSnapshot,
+) {
+  if (!composition.cards[jokerIndex]?.isJoker || typeof replacementCard.rank !== "number") {
+    return null;
+  }
+
+  const nextCard = composition.cards[jokerIndex + 1];
+  const nextRepresentation = composition.jokerRepresentations?.[jokerIndex + 1];
+  const nextRank = nextCard?.isJoker ? nextRepresentation?.[0]?.rank : nextCard?.rank;
+  const aceLow =
+    composition.type === "run" && jokerIndex === 0 && replacementCard.rank === 1 && nextRank === 2;
+
+  return rankPointValue(replacementCard.rank, aceLow);
+}
+
 function hasValidNaturalIdentity(card: CardSnapshot) {
   return (
     card.isJoker === true ||

@@ -876,29 +876,29 @@ function useGameBoardController({
     const droppedOnDraftCard = draftCompositions.find((composition) =>
       composition.handKeys.includes(overId),
     );
-    if (droppedOnDraftCard?.tableIndex === null) {
-      updateDraftCompositions(
-        (current) =>
-          insertHandKeyIntoDraft(current, activeDrag.handKey, droppedOnDraftCard.id, overId),
-        true,
-      );
-      return;
-    }
-
     const droppedOnDraftContainer = compositionIdFromDropId(overId);
-    if (!droppedOnDraftContainer) {
-      return;
-    }
-
-    const target = draftCompositions.find(
-      (composition) => composition.id === droppedOnDraftContainer,
+    const targetDraft =
+      droppedOnDraftCard ??
+      draftCompositions.find((composition) => composition.id === droppedOnDraftContainer);
+    const currentDraft = draftCompositions.find((composition) =>
+      composition.handKeys.includes(activeDrag.handKey),
     );
-    if (target?.tableIndex !== null) {
+
+    if (!targetDraft || targetDraft.tableIndex !== null || currentDraft?.id === targetDraft.id) {
       return;
     }
 
+    // Insert once as the card enters a composition so Sortable can immediately
+    // open a gap. From that point onward its transforms preview reordering; not
+    // mutating on every card collision avoids recursive dnd-kit measurements.
     updateDraftCompositions(
-      (current) => insertHandKeyIntoDraft(current, activeDrag.handKey, droppedOnDraftContainer),
+      (current) =>
+        insertHandKeyIntoDraft(
+          current,
+          activeDrag.handKey,
+          targetDraft.id,
+          droppedOnDraftCard ? overId : undefined,
+        ),
       true,
     );
   }

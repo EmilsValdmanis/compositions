@@ -175,22 +175,20 @@ export const mockScenarios: MockScenario[] = [
             { rank: 8, suit: 1 },
             { rank: 9, suit: 1 },
             { rank: 10, suit: 1 },
+            { rank: 11, suit: 1 },
           ],
-          points: 40,
+          points: 50,
           complete: false,
         },
         {
           type: "set",
           cards: [
             { rank: 12, suit: 0 },
-            { isJoker: true },
+            { rank: 12, suit: 1 },
             { rank: 12, suit: 3 },
             { rank: 12, suit: 2 },
           ],
-          jokerRepresentations: {
-            1: [{ rank: 12, suit: 1 }],
-          },
-          points: 55,
+          points: 40,
           complete: false,
         },
         {
@@ -307,6 +305,26 @@ export const mockScenarios: MockScenario[] = [
           },
         ],
         compositionActivities: [
+          {
+            tableIndex: 0,
+            playerId: "player-avery",
+            cardActivities: {
+              4: {
+                kind: "addition",
+                playerId: "player-avery",
+              },
+            },
+          },
+          {
+            tableIndex: 1,
+            playerId: "player-avery",
+            cardActivities: {
+              1: {
+                kind: "joker_reclaim",
+                playerId: "player-avery",
+              },
+            },
+          },
           {
             tableIndex: 3,
             kind: "new_composition",

@@ -7,15 +7,15 @@ import { m } from "#/paraglide/messages.js";
 
 afterEach(cleanup);
 
-describe("compact activity labels", () => {
+describe("activity labels", () => {
   it.each([
     [AddActivityLabel, m.activity_add()],
     [ReclaimActivityLabel, m.activity_reclaim()],
-  ] as const)("renders the translated label accessibly behind an icon", (Label, title) => {
+  ] as const)("renders both the translated label and its icon", (Label, title) => {
     const view = render(<Label players={[]} />);
-    const label = view.getByTitle(title);
+    const label = view.getByText(title);
 
-    expect(label.querySelector("svg")).not.toBeNull();
-    expect(label.querySelector(".sr-only")?.textContent).toBe(title);
+    expect(label.classList.contains("sr-only")).toBe(false);
+    expect(label.parentElement?.querySelector("svg")).not.toBeNull();
   });
 });

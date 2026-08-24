@@ -597,7 +597,69 @@ describe("GameBoardView hand ordering", () => {
     expect(sortableContextItems.at(-1)).toEqual(["4-0-1", "6-0-1", "joker-1"]);
   });
 
-  it("handles a repeated collision target only once while reordering a draft", async () => {
+  it("opens a sortable composition gap as a hand card first enters it", async () => {
+    const onDraftStateChange = vi.fn();
+
+    render(
+      <GameBoardView
+        game={makeGame([
+          { rank: 5, suit: 3 },
+          { rank: 6, suit: 3 },
+          { rank: 7, suit: 3 },
+        ])}
+        roomCode="DRAFT-ENTRY-PREVIEW"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={{ rank: 8, suit: 3 }}
+        onDiscardCard={vi.fn()}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTable={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        draftSyncMode="disabled"
+        guidance={{
+          stage: "compose",
+          onDrawDragStateChange: vi.fn(),
+          onDrawSettled: vi.fn(),
+          onDraftStateChange,
+        }}
+      />,
+    );
+
+    await act(async () => dragStart("5-3-1", 0));
+    await act(async () => dragEnd("5-3-1", "new-composition-drop-zone", 0));
+    await act(async () => dragStart("6-3-1", 1));
+    await act(async () => dragEnd("6-3-1", "5-3-1", 1));
+
+    onDraftStateChange.mockClear();
+    sortableContextItems = [];
+
+    await act(async () => dragStart("7-3-1", 2));
+    await act(async () => dragOver("7-3-1", "5-3-1"));
+
+    expect(onDraftStateChange).toHaveBeenCalledTimes(1);
+    expect(
+      sortableContextItems.some(
+        (items) => items.includes("5-3-1") && items.includes("6-3-1") && items.includes("7-3-1"),
+      ),
+    ).toBe(true);
+
+    await act(async () => dragOver("7-3-1", "6-3-1"));
+    await act(async () => dragOver("7-3-1", "5-3-1"));
+
+    expect(onDraftStateChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("defers composition reordering until drop so alternating collisions cannot update-loop", async () => {
     const onDraftStateChange = vi.fn();
 
     render(
@@ -645,7 +707,12 @@ describe("GameBoardView hand ordering", () => {
     onDraftStateChange.mockClear();
     await act(async () => dragStart("5-3-1", 0));
     await act(async () => dragOver("5-3-1", "7-3-1"));
+    await act(async () => dragOver("5-3-1", "6-3-1"));
     await act(async () => dragOver("5-3-1", "7-3-1"));
+
+    expect(onDraftStateChange).not.toHaveBeenCalled();
+
+    await act(async () => dragEnd("5-3-1", "7-3-1", 0));
 
     expect(onDraftStateChange).toHaveBeenCalledTimes(1);
     expect(onDraftStateChange.mock.calls[0]?.[0].draftCompositions[0]?.cards).toEqual([
