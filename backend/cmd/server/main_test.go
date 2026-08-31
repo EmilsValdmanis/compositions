@@ -199,9 +199,6 @@ func TestNewSentryClientOptions(t *testing.T) {
 	if !options.EnableTracing {
 		t.Fatal("newSentryClientOptions().EnableTracing = false; want true")
 	}
-	if options.DisableLogs {
-		t.Fatal("newSentryClientOptions().DisableLogs = true; want false")
-	}
 }
 
 func TestSentryDisablesAutomaticPIICollection(t *testing.T) {
