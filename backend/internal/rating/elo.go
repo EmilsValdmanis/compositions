@@ -25,7 +25,7 @@ func (rules Rules) Calculate(players []Player) ([]int, error) {
 		return nil, errors.New("invalid Elo rules")
 	}
 	if len(players) < 2 || len(players) > 4 {
-		return nil, errors.New("Elo requires two to four players")
+		return nil, errors.New("elo requires two to four players")
 	}
 	for _, p := range players {
 		if p.Rating < 0 || p.Placement < 1 || p.Placement > len(players) {
