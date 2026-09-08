@@ -68,3 +68,14 @@ func TestPlaceholdersAndBoolInt(t *testing.T) {
 		t.Fatal("placeholders(0) should be empty")
 	}
 }
+
+func TestValidateCheckpointRejectsEquivalentUUIDs(t *testing.T) {
+	record := validCheckpointRecord()
+	record.Players[0].UserID = "abcdef12-3456-4789-abcd-0123456789ab"
+	other := record.Players[0]
+	other.UserID = strings.ToUpper(other.UserID)
+	record.Players = append(record.Players, other)
+	if _, err := validateCheckpoint(record); err == nil {
+		t.Fatal("accepted duplicate player with differently cased UUID")
+	}
+}

@@ -106,11 +106,25 @@ type GamePlayerStatistic struct {
 	LongestRoundWinStreak       int32       `json:"longest_round_win_streak"`
 }
 
+type GameRatingChange struct {
+	RulesVersion string      `json:"rules_version"`
+	GameID       pgtype.UUID `json:"game_id"`
+	UserID       pgtype.UUID `json:"user_id"`
+	RatingBefore int32       `json:"rating_before"`
+	RatingAfter  int32       `json:"rating_after"`
+}
+
 type LobbyState struct {
 	ID        bool               `json:"id"`
 	State     []byte             `json:"state"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type PlayerRating struct {
+	UserID      pgtype.UUID `json:"user_id"`
+	Rating      int32       `json:"rating"`
+	GamesPlayed int64       `json:"games_played"`
 }
 
 type PlayerStatistic struct {

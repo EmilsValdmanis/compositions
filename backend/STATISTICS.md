@@ -151,3 +151,84 @@ snapshot. Run one active game-server replica against a database. Supporting
 multiple replicas later requires room ownership (or advisory locking) and
 routing each room's WebSocket connections to its owner; statistics writes are
 already transactional and idempotent, but the lobby itself is not distributed.
+
+## Elo rating
+
+Migration 16 adds a fresh rating ladder; historical results are not replayed.
+Every player starts at 1,000. Existing leaderboard participants without a rating
+row display that baseline. New players appear after their first ranked full game.
+
+Only completed or forfeited **ranked full** games with records for all two to four
+participants affect Elo. Quick, unranked, abandoned, mutually ended, technically
+aborted, and incomplete-participant games do not. Checkpoints never change Elo.
+Placements come from the game engine: lower is better, equal placements draw,
+and forfeits finish below remaining players in the engine's forfeit order.
+
+For each player and opponent, expected score is
+`1 / (1 + 10^((opponentRating - playerRating) / 400))`.
+Actual score is 1 for finishing ahead, 0.5 for tying, and 0 for finishing behind.
+The change is `round(32 * sum(actual - expected) / (playerCount - 1))`, calculated
+from all pre-game ratings simultaneously. Round deltas half away from zero and
+floor final ratings at zero. Changes are bounded by 32 per game regardless of
+player count; equal-rated duels change by 16. Rounding and the floor can cause
+small rating drift. There are no placements, decay, seasons, or promotion series.
+
+| Tier | Elo |
+| --- | --- |
+| Bronze | 0–1,199 |
+| Silver | 1,200–1,399 |
+| Gold | 1,400–1,599 |
+| Platinum | 1,600–1,799 |
+| Diamond | 1,800–1,999 |
+| Master | 2,000–2,199 |
+| Grand Master | 2,200+ |
+
+`player_ratings` stores the current rating and rated-game count;
+`game_rating_changes` records before/after values for each participant. Rating
+updates and lifetime statistics commit in the same transaction as game completion.
+Retries of finalized games do nothing. Participants are locked in canonical UUID
+order, and calculations run after all rating rows are locked. Overlapping games
+are applied in database serialization order, not client timestamps.
+
+The leaderboard's first/default metric is `elo` in both API and UI. Existing
+friends/global scopes, UUID tie-breaking, pagination and pinned placement apply.
+Other metrics remain available. The API supplies tier identifiers only for Elo;
+the UI translates them into English or Latvian.
+
+Validation: `go test -race ./...`, `go test -race -tags=integration
+./internal/database/...`, and `go test ./internal/rating -fuzz=FuzzCalculate
+-fuzztime=10s` from `backend`; `vp check` and `vp test` from `frontend`.
+Integration tests use disposable PostgreSQL containers.
+
+### Updating Elo
+
+`internal/rating/rules.go` owns the active calculation version, initial rating,
+K factor, expectation scale, and tier thresholds. `Current()` returns a copy;
+each completed game uses one copy for both calculation and audit persistence.
+The first rating insert and leaderboard fallback both use its initial rating.
+Migration 17 removes the database's duplicate starting-rating default and adds
+`game_rating_changes.rules_version`, backfilling existing entries as `elo-v1`.
+New audit writes must supply the version explicitly.
+
+To tune future games, update `Current()` and bump its version. For a formula
+change, update `Rules.Calculate` as well. Preserve old rules in source history
+and add regression cases for the new version. Deploy the migration before the
+application, with rating writers stopped during the rollout because the old
+writer does not supply the now-required rating and version fields. Existing
+ratings and audit history are retained; changing rules never replays results.
+Any rebase, reset, or historical recalculation must be a separate explicit data
+migration. Games use the rules active when their completion is saved.
+
+To change rank boundaries, edit the ascending `Tiers()` table. Ranks are derived
+when serving the leaderboard, so threshold changes need no data migration or
+frontend threshold edits. New tier IDs should get English and Latvian labels in
+the UI's tier-label map; older clients display unfamiliar IDs without rejecting
+the leaderboard response. Tier changes do not change historical rating deltas.
+
+Leaderboard cursors include a fingerprint of the scoped participant IDs and
+selected scores. The fingerprint and page are read in the same SQL snapshot.
+If either scores or membership change between requests, the API returns the
+new first page with `reset: true`. The UI discards preceding pages and their
+pinned placement, scrolls to the top, and continues with the new cursor. This
+also handles legacy cursors without a fingerprint. Player IDs are deduplicated
+before rendering as an additional safeguard.

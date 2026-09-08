@@ -719,5 +719,13 @@
   "admin_game_phase_game_over": "Spēle beigusies",
   "admin_game_phase_unknown": "Nezināms posms",
   "yes": "Jā",
-  "no": "Nē"
+  "no": "Nē",
+  "elo_rating": "Elo reitings",
+  "elo_bronze": "Bronza",
+  "elo_silver": "Sudrabs",
+  "elo_gold": "Zelts",
+  "elo_platinum": "Platīns",
+  "elo_diamond": "Dimants",
+  "elo_master": "Meistars",
+  "elo_grandmaster": "Lielmeistars"
 }

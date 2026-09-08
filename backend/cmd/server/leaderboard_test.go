@@ -71,7 +71,7 @@ func TestHandleLeaderboard(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d; want %d", response.Code, http.StatusOK)
 	}
-	if store.limit != leaderboardPageSize || store.viewerID != secondID || store.cursor != nil || store.metric != database.LeaderboardMetricWins || store.scope != database.LeaderboardScopeFriends {
+	if store.limit != leaderboardPageSize || store.viewerID != secondID || store.cursor != nil || store.metric != database.LeaderboardMetricElo || store.scope != database.LeaderboardScopeFriends {
 		t.Fatalf("request = limit:%d viewer:%q cursor:%+v metric:%q scope:%q", store.limit, store.viewerID, store.cursor, store.metric, store.scope)
 	}
 	var payload leaderboardResponse
@@ -86,7 +86,7 @@ func TestHandleLeaderboard(t *testing.T) {
 	}
 
 	nextResponse := httptest.NewRecorder()
-	nextURL := "/api/leaderboard?limit=25&metric=wins&cursor=" + url.QueryEscape(*payload.NextCursor)
+	nextURL := "/api/leaderboard?limit=25&metric=elo&cursor=" + url.QueryEscape(*payload.NextCursor)
 	server.routes().ServeHTTP(nextResponse, authenticatedLeaderboardRequest(http.MethodGet, nextURL))
 	if nextResponse.Code != http.StatusOK || store.limit != 25 || store.cursor == nil || store.cursor.Score != 12 || store.cursor.PlayerID != firstID {
 		t.Fatalf("next page status:%d limit:%d cursor:%+v", nextResponse.Code, store.limit, store.cursor)
@@ -240,4 +240,64 @@ func FuzzDecodeLeaderboardCursor(f *testing.F) {
 	f.Fuzz(func(_ *testing.T, raw string) {
 		_, _ = decodeLeaderboardCursor(raw, database.LeaderboardMetricWins, database.LeaderboardScopeFriends)
 	})
+}
+
+func TestLeaderboardEloTiersAndCursorIsolation(t *testing.T) {
+	id := "00000000-0000-0000-0000-000000000001"
+	for _, tc := range []struct {
+		score int64
+		tier  string
+	}{{0, "bronze"}, {1200, "silver"}, {1400, "gold"}, {1600, "platinum"}, {1800, "diamond"}, {2000, "master"}, {2200, "grandmaster"}} {
+		store := &leaderboardTestStore{userStore: noopUserStore{}, page: database.LeaderboardPage{Players: []database.LeaderboardPlayerRecord{{PlayerID: id, Score: tc.score}}, Placement: &database.LeaderboardPlayerRecord{PlayerID: id, Score: tc.score}}}
+		server := newAuthenticatedLeaderboardServer(store, id)
+		response := httptest.NewRecorder()
+		server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard"))
+		var payload leaderboardResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if response.Code != http.StatusOK || payload.Metric != database.LeaderboardMetricElo || payload.Players[0].Tier != tc.tier || payload.Placement.Tier != tc.tier {
+			t.Fatalf("payload %+v", payload)
+		}
+		response = httptest.NewRecorder()
+		server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard?metric=wins"))
+		payload = leaderboardResponse{}
+		if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload.Players[0].Tier != "" {
+			t.Fatal("wins score interpreted as Elo tier")
+		}
+	}
+	cursor := encodeLeaderboardCursor(database.LeaderboardCursor{Score: 1000, PlayerID: id}, database.LeaderboardMetricElo, database.LeaderboardScopeGlobal)
+	if got, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricElo, database.LeaderboardScopeGlobal); err != nil || got.Score != 1000 {
+		t.Fatalf("roundtrip %+v %v", got, err)
+	}
+	if _, err := decodeLeaderboardCursor(cursor, database.LeaderboardMetricWins, database.LeaderboardScopeGlobal); err == nil {
+		t.Fatal("Elo cursor accepted for wins")
+	}
+}
+
+func TestLeaderboardRestartResponseAndRevisionCursor(t *testing.T) {
+	id := "00000000-0000-0000-0000-000000000001"
+	cursor := database.LeaderboardCursor{Score: 1000, PlayerID: id, Revision: "old-ranking"}
+	store := &leaderboardTestStore{userStore: noopUserStore{}, page: database.LeaderboardPage{
+		Reset: true, Players: []database.LeaderboardPlayerRecord{{PlayerID: id, Score: 999}},
+		NextCursor: &database.LeaderboardCursor{Score: 999, PlayerID: id, Revision: "new-ranking"},
+	}}
+	server := newAuthenticatedLeaderboardServer(store, id)
+	response := httptest.NewRecorder()
+	encoded := encodeLeaderboardCursor(cursor, database.LeaderboardMetricElo, database.LeaderboardScopeFriends)
+	server.routes().ServeHTTP(response, authenticatedLeaderboardRequest(http.MethodGet, "/api/leaderboard?cursor="+url.QueryEscape(encoded)))
+	var payload leaderboardResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if response.Code != http.StatusOK || !payload.Reset || payload.NextCursor == nil || store.cursor == nil || store.cursor.Revision != cursor.Revision {
+		t.Fatalf("restart response %+v, cursor %+v", payload, store.cursor)
+	}
+	next, err := decodeLeaderboardCursor(*payload.NextCursor, database.LeaderboardMetricElo, database.LeaderboardScopeFriends)
+	if err != nil || next.Revision != "new-ranking" {
+		t.Fatalf("next cursor %+v %v", next, err)
+	}
 }

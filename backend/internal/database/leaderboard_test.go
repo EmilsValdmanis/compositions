@@ -20,3 +20,28 @@ func TestParseLeaderboardScope(t *testing.T) {
 		}
 	}
 }
+
+func TestParseLeaderboardMetric(t *testing.T) {
+	for _, value := range []string{"", " elo ", "elo", "wins", "games", "playtime", "rounds", "points"} {
+		got, ok := ParseLeaderboardMetric(value)
+		if !ok {
+			t.Fatalf("rejected %q", value)
+		}
+		if value == "" || value == " elo " {
+			if got != LeaderboardMetricElo {
+				t.Fatalf("default = %q", got)
+			}
+		}
+		if _, err := got.scoreExpression(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, value := range []string{"rating", "ELO", "elo; DROP TABLE users"} {
+		if _, ok := ParseLeaderboardMetric(value); ok {
+			t.Fatalf("accepted %q", value)
+		}
+	}
+	if _, err := LeaderboardMetric("invalid").scoreExpression(); err == nil {
+		t.Fatal("accepted invalid SQL metric")
+	}
+}

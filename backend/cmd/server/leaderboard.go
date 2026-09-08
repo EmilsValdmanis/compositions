@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/EmilsValdmanis/compositions/internal/database"
+	"github.com/EmilsValdmanis/compositions/internal/rating"
 	"github.com/google/uuid"
 )
 
@@ -21,6 +22,7 @@ type leaderboardStore interface {
 }
 
 type leaderboardPlayerResponse struct {
+	Tier                 string `json:"tier,omitempty"`
 	Rank                 int64  `json:"rank"`
 	Score                int64  `json:"score"`
 	PlayerID             string `json:"playerId"`
@@ -34,6 +36,7 @@ type leaderboardPlayerResponse struct {
 }
 
 type leaderboardResponse struct {
+	Reset      bool                        `json:"reset"`
 	Metric     database.LeaderboardMetric  `json:"metric"`
 	Scope      database.LeaderboardScope   `json:"scope"`
 	Players    []leaderboardPlayerResponse `json:"players"`
@@ -42,6 +45,7 @@ type leaderboardResponse struct {
 }
 
 type leaderboardCursorPayload struct {
+	Revision string                     `json:"revision,omitempty"`
 	Metric   database.LeaderboardMetric `json:"metric"`
 	Scope    database.LeaderboardScope  `json:"scope"`
 	Score    int64                      `json:"score"`
@@ -108,7 +112,7 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 
 	players := make([]leaderboardPlayerResponse, 0, len(page.Players))
 	for _, player := range page.Players {
-		players = append(players, leaderboardPlayerFromRecord(player))
+		players = append(players, leaderboardPlayerFromRecord(player, metric))
 	}
 	var nextCursor *string
 	if page.NextCursor != nil {
@@ -117,29 +121,33 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	var placement *leaderboardPlayerResponse
 	if page.Placement != nil {
-		value := leaderboardPlayerFromRecord(*page.Placement)
+		value := leaderboardPlayerFromRecord(*page.Placement, metric)
 		placement = &value
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "private, max-age=30, stale-while-revalidate=120")
 	if err := json.NewEncoder(w).Encode(leaderboardResponse{
-		Metric: metric, Scope: scope, Players: players, NextCursor: nextCursor, Placement: placement,
+		Reset: page.Reset, Metric: metric, Scope: scope, Players: players, NextCursor: nextCursor, Placement: placement,
 	}); err != nil {
 		slog.Error("write leaderboard response failed", "error", err)
 	}
 }
 
-func leaderboardPlayerFromRecord(player database.LeaderboardPlayerRecord) leaderboardPlayerResponse {
+func leaderboardPlayerFromRecord(player database.LeaderboardPlayerRecord, metric database.LeaderboardMetric) leaderboardPlayerResponse {
+	tier := ""
+	if metric == database.LeaderboardMetricElo {
+		tier = rating.Tier(int(player.Score))
+	}
 	return leaderboardPlayerResponse{
-		Rank: player.Rank, Score: player.Score, PlayerID: player.PlayerID, Name: player.Name, ImageURL: player.ImageURL,
+		Tier: tier, Rank: player.Rank, Score: player.Score, PlayerID: player.PlayerID, Name: player.Name, ImageURL: player.ImageURL,
 		Wins: player.Wins, GamesPlayed: player.GamesPlayed, RoundsWon: player.RoundsWon,
 		PointsInflicted: player.PointsInflicted, TotalPlaytimeSeconds: player.TotalPlaytimeSeconds,
 	}
 }
 
 func encodeLeaderboardCursor(cursor database.LeaderboardCursor, metric database.LeaderboardMetric, scope database.LeaderboardScope) string {
-	payload, _ := json.Marshal(leaderboardCursorPayload{Metric: metric, Scope: scope, Score: cursor.Score, PlayerID: cursor.PlayerID})
+	payload, _ := json.Marshal(leaderboardCursorPayload{Metric: metric, Scope: scope, Score: cursor.Score, PlayerID: cursor.PlayerID, Revision: cursor.Revision})
 	return base64.RawURLEncoding.EncodeToString(payload)
 }
 
@@ -167,5 +175,5 @@ func decodeLeaderboardCursor(raw string, metric database.LeaderboardMetric, scop
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return nil, errors.New("invalid leaderboard cursor payload")
 	}
-	return &database.LeaderboardCursor{Score: cursor.Score, PlayerID: cursor.PlayerID}, nil
+	return &database.LeaderboardCursor{Score: cursor.Score, PlayerID: cursor.PlayerID, Revision: cursor.Revision}, nil
 }

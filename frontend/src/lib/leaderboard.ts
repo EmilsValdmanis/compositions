@@ -5,15 +5,24 @@ import { z } from "zod";
 import { authURL } from "#/lib/auth-shared";
 
 export const LEADERBOARD_PAGE_SIZE = 50;
-export const DEFAULT_LEADERBOARD_METRIC = "wins" as const;
+export const DEFAULT_LEADERBOARD_METRIC = "elo" as const;
 export const DEFAULT_LEADERBOARD_SCOPE = "friends" as const;
 
-export const leaderboardMetricSchema = z.enum(["wins", "games", "playtime", "rounds", "points"]);
+export const leaderboardMetricSchema = z.enum([
+  "elo",
+  "wins",
+  "games",
+  "playtime",
+  "rounds",
+  "points",
+]);
 export type LeaderboardMetric = z.infer<typeof leaderboardMetricSchema>;
 export const leaderboardScopeSchema = z.enum(["friends", "global"]);
 export type LeaderboardScope = z.infer<typeof leaderboardScopeSchema>;
 
 export const leaderboardPlayerSchema = z.object({
+  // The server owns tier identifiers. New tiers must not break older clients.
+  tier: z.string().min(1).optional(),
   rank: z.number().int().positive(),
   score: z.number().int().nonnegative(),
   playerId: z.uuid(),
@@ -29,6 +38,7 @@ export const leaderboardPlayerSchema = z.object({
 export type LeaderboardPlayer = z.infer<typeof leaderboardPlayerSchema>;
 
 export const leaderboardPageSchema = z.object({
+  reset: z.boolean().default(false),
   metric: leaderboardMetricSchema,
   scope: leaderboardScopeSchema,
   players: z.array(leaderboardPlayerSchema),
