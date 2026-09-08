@@ -1,6 +1,7 @@
+import { adminRequestHeaders } from "#/lib/admin-request-headers";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeaders, setResponseHeader } from "@tanstack/react-start/server";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { authURL } from "#/lib/auth-shared";
 
@@ -77,14 +78,6 @@ export const persistedGameStateSchema = z.looseObject({
   roundWinnerIndex: z.number().int(),
 });
 export type PersistedGameState = z.infer<typeof persistedGameStateSchema>;
-
-function adminRequestHeaders() {
-  const requestHeaders = new Headers(getRequestHeaders());
-  const headers = new Headers({ accept: "application/json" });
-  const cookie = requestHeaders.get("cookie");
-  if (cookie) headers.set("cookie", cookie);
-  return headers;
-}
 
 export const getAdminBugReports = createServerFn({ method: "GET" })
   .validator(

@@ -564,6 +564,55 @@ describe("GameBoardView draft returns", () => {
 });
 
 describe("GameBoardView hand ordering", () => {
+  it("restores hand order when a reordered card is dropped outside the board", async () => {
+    const onDiscardCard = vi.fn();
+    const onPlayTable = vi.fn();
+    render(
+      <GameBoardView
+        game={makeGame([
+          { rank: 1, suit: 0 },
+          { rank: 2, suit: 0 },
+          { rank: 3, suit: 0 },
+        ])}
+        roomCode="OUTSIDE-ROOM"
+        playerId="player-1"
+        players={players}
+        connectedPlayers={1}
+        turnState={{
+          canDrawDeck: false,
+          canDrawDiscard: false,
+          canDiscard: true,
+          isMyTurn: true,
+          turnPlayerName: "Avery",
+        }}
+        topDiscardCard={null}
+        onDiscardCard={onDiscardCard}
+        onPlayTable={onPlayTable}
+        onDrawFromDeck={vi.fn()}
+        onDrawFromDiscard={vi.fn()}
+        onPlayTableAndDiscard={vi.fn()}
+        onSendEmote={vi.fn()}
+        draftSyncMode="disabled"
+      />,
+    );
+    await act(async () => {
+      dragStart("2-0-1", 1);
+    });
+    await act(async () => {
+      dragOver("2-0-1", "1-0-1");
+    });
+    expect(sortableContextItems.at(-1)).toEqual(["2-0-1", "1-0-1", "3-0-1"]);
+    await act(async () => {
+      dndContextProps.onDragEnd?.({
+        active: { id: "2-0-1", data: { current: { cardIndex: 1 } } },
+        over: null,
+      });
+    });
+    expect(sortableContextItems.at(-1)).toEqual(["1-0-1", "2-0-1", "3-0-1"]);
+    expect(onDiscardCard).not.toHaveBeenCalled();
+    expect(onPlayTable).not.toHaveBeenCalled();
+  });
+
   it("reorders a joker while it is dragged across the hand", async () => {
     render(
       <GameBoardView

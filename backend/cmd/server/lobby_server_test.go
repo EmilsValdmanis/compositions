@@ -2002,7 +2002,7 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		}
 	})
 
-	t.Run("applyGameAction afterMutate error and wrapper no-op branches", func(t *testing.T) {
+	t.Run("game action wrappers reject invalid input", func(t *testing.T) {
 		lobby := newLobbyServer()
 		conn, _, cleanup := newSocketPair(t)
 		defer cleanup()
@@ -2018,10 +2018,6 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 		setGameStatePhaseForTest(t, state, game.PhaseInProgress)
 		lobby.rooms["ROOM"] = &room{code: "ROOM", gameState: state, players: []*roomPlayer{{player: player, sessionID: event.SessionID, connected: true, seat: 0}}}
 		lobby.sessions[event.SessionID].roomCode = "ROOM"
-
-		if _, _, _, err := lobby.applyGameAction(event.SessionID, "test", func(*game.GameState) error { return nil }, func(*room, *playerSession) error { return errors.New("after boom") }); err == nil || err.Error() != "after boom" {
-			t.Fatalf("applyGameAction(after error) = %v; want after boom", err)
-		}
 
 		if _, _, _, err := lobby.draw(event.SessionID, "sideways"); err == nil || err.Error() != "unknown draw source" {
 			t.Fatalf("draw(sideways) error = %v; want unknown draw source", err)

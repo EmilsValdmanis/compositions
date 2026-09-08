@@ -976,21 +976,19 @@ func (l *lobbyServer) draw(sessionID, source string) (roomSnapshot, []gameStateR
 		default:
 			return errors.New("unknown draw source")
 		}
-	}, func(room *room, session *playerSession) error {
+	}, func(room *room, session *playerSession) {
 		room.resetTurnTracking(session.playerID)
 		if room.turnActivity != nil {
 			room.turnActivity.DrawSource = source
 		}
-		return nil
 	})
 }
 
 func (l *lobbyServer) play(sessionID string, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "play", func(state *game.GameState) error {
 		return state.PlayTable(comps, additions, reclaims...)
-	}, func(room *room, session *playerSession) error {
+	}, func(room *room, session *playerSession) {
 		room.applySubmittedTurnActivity(session.playerID, comps, additions, reclaims)
-		return nil
 	})
 }
 
@@ -1001,9 +999,8 @@ func (l *lobbyServer) playAndDiscard(sessionID string, cardIndex int, comps []*g
 func (l *lobbyServer) playAndDiscardMatching(sessionID string, cardIndex int, expectedCard *game.Card, comps []*game.Composition, additions []game.CompositionAddition, reclaims []game.JokerReclaim) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "play_and_discard", func(state *game.GameState) error {
 		return state.PlayTableAndDiscardMatching(cardIndex, expectedCard, comps, additions, reclaims...)
-	}, func(room *room, _ *playerSession) error {
+	}, func(room *room, _ *playerSession) {
 		room.clearTurnTracking()
-		return nil
 	})
 }
 
@@ -1014,9 +1011,8 @@ func (l *lobbyServer) discard(sessionID string, cardIndex int) (roomSnapshot, []
 func (l *lobbyServer) discardMatching(sessionID string, cardIndex int, expectedCard *game.Card) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	return l.applyGameAction(sessionID, "discard", func(state *game.GameState) error {
 		return state.DiscardFromHandMatching(cardIndex, expectedCard)
-	}, func(room *room, _ *playerSession) error {
+	}, func(room *room, _ *playerSession) {
 		room.clearTurnTracking()
-		return nil
 	})
 }
 
@@ -1059,7 +1055,7 @@ func (l *lobbyServer) updateDraftActivity(sessionID string, drafts []game.DraftC
 	return roomState, recipients, nil
 }
 
-func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*game.GameState) error, afterMutate func(*room, *playerSession) error) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
+func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*game.GameState) error, afterMutate func(*room, *playerSession)) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -1084,9 +1080,7 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 		return roomSnapshot{}, nil, actionResultEvent{}, err
 	}
 	if afterMutate != nil {
-		if err := afterMutate(room, session); err != nil {
-			return roomSnapshot{}, nil, actionResultEvent{}, err
-		}
+		afterMutate(room, session)
 	}
 	if room.gameStatePhase() == game.PhaseRoundOver || room.gameStatePhase() == game.PhaseGameOver {
 		room.statisticsDirty = true

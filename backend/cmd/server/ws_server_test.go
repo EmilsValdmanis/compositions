@@ -2163,3 +2163,36 @@ func roundRobinDeckForServerTest(firstPlayerHand, dealerHand []game.Card, discar
 	deck = append(deck, drawCards...)
 	return deck
 }
+
+func TestPlayHandlersPreserveValidationOrder(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	mustConnectSession(t, conn, "")
+	for _, action := range []string{"play", "play_and_discard"} {
+		t.Run(action, func(t *testing.T) {
+			request := playAndDiscardRequest{playRequest: playRequest{
+				Compositions: []compositionRequest{{Cards: []cardRequest{{Rank: 99, Suit: 0}}}},
+				Additions:    []compositionAdditionRequest{{Cards: []cardRequest{{Rank: 1, Suit: 99}}}},
+				Reclaims:     []reclaimRequest{{ReplacementCard: cardRequest{Rank: 99, Suit: 0}}},
+			}}
+			mustSendEnvelope(t, conn, action, request)
+			mustReadError(t, conn, "invalid card rank")
+			request.Compositions = nil
+			mustSendEnvelope(t, conn, action, request)
+			mustReadError(t, conn, "invalid card suit")
+			request.Additions = nil
+			mustSendEnvelope(t, conn, action, request)
+			mustReadError(t, conn, "invalid card rank")
+			request.Reclaims = nil
+			mustSendEnvelope(t, conn, action, request)
+			if action == "play_and_discard" {
+				mustReadError(t, conn, "discard card is required")
+			} else {
+				mustReadError(t, conn, "join a room first")
+			}
+		})
+	}
+}

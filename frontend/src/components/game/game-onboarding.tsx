@@ -1,3 +1,4 @@
+import { cardsEqual } from "#/components/game/card-equality";
 import {
   createContext,
   useContext,
@@ -178,18 +179,10 @@ function createTutorialGame(): GameSnapshot {
   };
 }
 
-function cardsMatch(left: CardSnapshot, right: CardSnapshot) {
-  return (
-    Boolean(left.isJoker) === Boolean(right.isJoker) &&
-    left.rank === right.rank &&
-    left.suit === right.suit
-  );
-}
-
 function removeCards(hand: CardSnapshot[], cards: CardSnapshot[]) {
   const nextHand = [...hand];
   for (const card of cards) {
-    const index = nextHand.findIndex((candidate) => cardsMatch(candidate, card));
+    const index = nextHand.findIndex((candidate) => cardsEqual(candidate, card));
     if (index >= 0) nextHand.splice(index, 1);
   }
   return nextHand;
@@ -803,7 +796,7 @@ function TutorialGame({
       play.additions.length === 0 &&
       play.reclaims.length === 0 &&
       isTutorialRun(play.compositions[0]?.cards ?? []) &&
-      cardsMatch(discardedCard, { rank: 12, suit: 0 });
+      cardsEqual(discardedCard, { rank: 12, suit: 0 });
 
     if (!hasExpectedPlay) {
       return { action: "play_and_discard", playerId: TUTORIAL_PLAYER_ID, ok: false };

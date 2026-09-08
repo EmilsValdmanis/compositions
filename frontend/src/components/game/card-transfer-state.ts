@@ -1,3 +1,4 @@
+import { cardsEqual } from "#/components/game/card-equality";
 import { type CardSnapshot, type GameSnapshot } from "#/components/game-websocket-provider";
 import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
 
@@ -15,14 +16,6 @@ export type CompletedCompositionCollection = {
   discardCard: CardSnapshot;
   previousTopDiscard: CardSnapshot | null;
 };
-
-function cardsEqual(left: CardSnapshot, right: CardSnapshot) {
-  return (
-    Boolean(left.isJoker) === Boolean(right.isJoker) &&
-    left.rank === right.rank &&
-    left.suit === right.suit
-  );
-}
 
 function cardListsEqual(left: CardSnapshot[], right: CardSnapshot[]) {
   return (

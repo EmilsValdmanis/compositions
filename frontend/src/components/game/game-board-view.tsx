@@ -1,3 +1,4 @@
+import { cardsEqual } from "#/components/game/card-equality";
 import {
   useEffect,
   useEffectEvent,
@@ -240,10 +241,6 @@ function buildDraftedCompositionViews(
   })) as DraftedCompositionView[];
 }
 
-function cardEquals(a: GameSnapshot["hand"][number], b: GameSnapshot["hand"][number]) {
-  return Boolean(a.isJoker) === Boolean(b.isJoker) && a.rank === b.rank && a.suit === b.suit;
-}
-
 function buildSubmittedCompositionActivityMap(
   baselineCompositions: GameSnapshot["activeCompositions"],
   currentCompositions: GameSnapshot["activeCompositions"],
@@ -307,7 +304,7 @@ function buildSubmittedCompositionActivityMap(
 
       if (
         activityDetails &&
-        (activityDetails.kind === "joker_reclaim" || !cardEquals(currentCard, baselineCard))
+        (activityDetails.kind === "joker_reclaim" || !cardsEqual(currentCard, baselineCard))
       ) {
         activity.cardActivities[cardIndex] = {
           kind: activityDetails.kind === "joker_reclaim" ? "joker_reclaim" : "addition",
@@ -907,7 +904,6 @@ function useGameBoardController({
     lastDragOverTargetRef.current = null;
     const currentDrag = activeDrag;
     const draggedHandKey = typeof event.active.id === "string" ? event.active.id : null;
-    const overHandKey = typeof event.over?.id === "string" ? event.over.id : null;
     const overId = typeof event.over?.id === "string" ? event.over.id : null;
 
     setActiveDrag(null);
@@ -915,7 +911,7 @@ function useGameBoardController({
     if (currentDrag?.type === "draw") {
       guidance?.onDrawDragStateChange(false);
       guidance?.onDrawSettled();
-      if (activeDrawEntry?.key && overHandKey && overHandKey !== "discard-pile") {
+      if (activeDrawEntry?.key && overId && overId !== "discard-pile") {
         return;
       }
 
@@ -939,12 +935,10 @@ function useGameBoardController({
     }
 
     const draggedEntry = allEntryByKey.get(draggedHandKey) ?? null;
-    const droppedOnDraftCard =
-      overId === null
-        ? null
-        : draftCompositions.find((composition) => composition.handKeys.includes(overId));
-    const droppedOnHandCard =
-      overId !== null && availableHandEntries.some((entry) => entry.key === overId);
+    const droppedOnDraftCard = draftCompositions.find((composition) =>
+      composition.handKeys.includes(overId),
+    );
+    const droppedOnHandCard = availableHandEntries.some((entry) => entry.key === overId);
     const startedInDraft = currentDrag.baselineDraftCompositions.some((composition) =>
       composition.handKeys.includes(draggedHandKey),
     );

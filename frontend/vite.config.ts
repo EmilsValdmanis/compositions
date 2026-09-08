@@ -14,49 +14,52 @@ const config = defineConfig({
   },
   lint: { options: { typeAware: true, typeCheck: true } },
   resolve: { tsconfigPaths: true },
-  plugins: [
-    paraglideVitePlugin({
-      project: "./project.inlang",
-      outdir: "./src/paraglide",
-      outputStructure: "message-modules",
-      emitTsDeclarations: true,
-      cookieName: "PARAGLIDE_LOCALE",
-      strategy: ["url", "cookie", "preferredLanguage", "baseLocale"],
-      urlPatterns: [
-        {
-          pattern: "/",
-          localized: [
-            ["en", "/en"],
-            ["lv", "/lv"],
+  // Unit tests exercise handlers directly, without Start RPC transforms or a Nitro server.
+  plugins: process.env.VITEST
+    ? []
+    : [
+        paraglideVitePlugin({
+          project: "./project.inlang",
+          outdir: "./src/paraglide",
+          outputStructure: "message-modules",
+          emitTsDeclarations: true,
+          cookieName: "PARAGLIDE_LOCALE",
+          strategy: ["url", "cookie", "preferredLanguage", "baseLocale"],
+          urlPatterns: [
+            {
+              pattern: "/",
+              localized: [
+                ["en", "/en"],
+                ["lv", "/lv"],
+              ],
+            },
+            {
+              pattern: "/:path(.*)?",
+              localized: [
+                ["en", "/en/:path(.*)?"],
+                ["lv", "/lv/:path(.*)?"],
+              ],
+            },
           ],
-        },
-        {
-          pattern: "/:path(.*)?",
-          localized: [
-            ["en", "/en/:path(.*)?"],
-            ["lv", "/lv/:path(.*)?"],
-          ],
-        },
+        }),
+        devtools(),
+        nitro(),
+        tailwindcss(),
+        tanstackStart(),
+        babelPlugin({
+          presets: [reactCompilerPreset()],
+        }),
+        viteReact(),
+        sentryTanstackStart({
+          org: "emils-valdmanis",
+          project: "frontend",
+          sourcemaps: {
+            disable: !process.env.SENTRY_AUTH_TOKEN,
+          },
+          telemetry: false,
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+        }),
       ],
-    }),
-    devtools(),
-    nitro(),
-    tailwindcss(),
-    tanstackStart(),
-    babelPlugin({
-      presets: [reactCompilerPreset()],
-    }),
-    viteReact(),
-    sentryTanstackStart({
-      org: "emils-valdmanis",
-      project: "frontend",
-      sourcemaps: {
-        disable: !process.env.SENTRY_AUTH_TOKEN,
-      },
-      telemetry: false,
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-    }),
-  ],
 });
 
 export default config;
