@@ -1,3 +1,4 @@
+import { cardsEqual } from "#/components/game/card-equality";
 import { useEffect, useRef, useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
@@ -210,21 +211,13 @@ function drawFromDiscard(game: GameSnapshot) {
   };
 }
 
-function cardsMatch(left: CardSnapshot, right: CardSnapshot) {
-  return (
-    Boolean(left.isJoker) === Boolean(right.isJoker) &&
-    left.rank === right.rank &&
-    left.suit === right.suit
-  );
-}
-
 function discardFromHand(game: GameSnapshot, cardIndex: number, expectedCard: CardSnapshot) {
   if (!game.turn.hasDrawn) {
     return game;
   }
 
-  if (!game.hand[cardIndex] || !cardsMatch(game.hand[cardIndex], expectedCard)) {
-    cardIndex = game.hand.findIndex((card) => cardsMatch(card, expectedCard));
+  if (!game.hand[cardIndex] || !cardsEqual(game.hand[cardIndex], expectedCard)) {
+    cardIndex = game.hand.findIndex((card) => cardsEqual(card, expectedCard));
   }
   if (cardIndex < 0) {
     return game;
@@ -266,12 +259,7 @@ function applyTablePlay(game: GameSnapshot, play: TablePlayRequest) {
   const nextHand = [...game.hand];
 
   function removeCard(card: CardSnapshot) {
-    const index = nextHand.findIndex(
-      (item) =>
-        Boolean(item.isJoker) === Boolean(card.isJoker) &&
-        item.rank === card.rank &&
-        item.suit === card.suit,
-    );
+    const index = nextHand.findIndex((item) => cardsEqual(item, card));
 
     if (index >= 0) {
       nextHand.splice(index, 1);

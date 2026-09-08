@@ -175,6 +175,58 @@ describe("GameWebSocketProvider", () => {
     cleanup();
   });
 
+  it("matches pending actions by action name and preserves FIFO for repeated actions", async () => {
+    let controller: ReturnType<typeof useGameWebSocket>;
+    function Capture() {
+      controller = useGameWebSocket();
+      return null;
+    }
+    render(
+      <GameWebSocketProvider>
+        <Capture />
+      </GameWebSocketProvider>,
+    );
+    await act(async () => {
+      await controller!.connect();
+    });
+    await act(async () => {
+      sockets[0]!.open();
+    });
+    const settled: string[] = [];
+    let first: Promise<unknown>, second: Promise<unknown>, other: Promise<unknown>;
+    await act(async () => {
+      first = controller!.discardCard(0, { rank: 7, suit: 0 }).then(() => settled.push("first"));
+      second = controller!
+        .discardCard(1, { rank: 8, suit: 0 })
+        .catch((error: Error) => settled.push(error.message));
+      other = controller!.removeFriend("friend").then(() => settled.push("other"));
+    });
+    await act(async () => {
+      sockets[0]!.message({ type: "action_result", data: { action: "remove_friend", ok: true } });
+      await other!;
+    });
+    expect(settled).toEqual(["other"]);
+    await act(async () => {
+      sockets[0]!.message({ type: "action_result", data: { action: "discard", ok: true } });
+      await first!;
+    });
+    expect(settled).toEqual(["other", "first"]);
+    await act(async () => {
+      sockets[0]!.message({
+        type: "error",
+        data: { action: "discard", message: "card unavailable" },
+      });
+      await second!;
+    });
+    expect(settled).toEqual(["other", "first", "card unavailable"]);
+    let disconnected: Promise<unknown>;
+    await act(async () => {
+      disconnected = controller!.removeFriend("another").catch((error: Error) => error.message);
+      controller!.disconnect();
+      expect(await disconnected!).toBe("connection_lost");
+    });
+  });
+
   it("restores the server session id when reconnecting", async () => {
     render(
       <GameWebSocketProvider>

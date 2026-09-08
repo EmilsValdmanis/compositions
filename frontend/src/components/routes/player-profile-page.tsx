@@ -1,3 +1,4 @@
+import { formatPlaytime } from "#/lib/format-playtime";
 import {
   GameController03Icon,
   Grid2X2Icon,
@@ -84,15 +85,6 @@ function formatPercent(value: number | null) {
 
 function formatDecimal(value: number | null) {
   return value === null ? "—" : DECIMAL_FORMATTERS[getLocale()].format(value);
-}
-
-function formatPlaytime(totalSeconds: number) {
-  const totalMinutes = Math.floor(totalSeconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  if (hours > 0) return m.playtime_hours_minutes({ hours, minutes });
-  return m.playtime_minutes({ minutes: totalMinutes });
 }
 
 function StatCard({ label, value, note }: { label: string; value: string; note: string }) {

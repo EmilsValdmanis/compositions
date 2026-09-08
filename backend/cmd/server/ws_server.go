@@ -823,19 +823,7 @@ func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope w
 		return
 	}
 
-	comps, err := compositionsFromRequest(req.Compositions)
-	if err != nil {
-		s.writeError(conn, err)
-		return
-	}
-
-	additions, err := additionsFromRequest(req.Additions)
-	if err != nil {
-		s.writeError(conn, err)
-		return
-	}
-
-	reclaims, err := reclaimsFromRequest(req.Reclaims)
+	comps, additions, reclaims, err := tablePlayFromRequest(req)
 	if err != nil {
 		s.writeError(conn, err)
 		return
@@ -856,17 +844,7 @@ func (s *wsServer) handlePlayAndDiscard(conn *websocket.Conn, sessionID string, 
 		return
 	}
 
-	comps, err := compositionsFromRequest(req.Compositions)
-	if err != nil {
-		s.writeError(conn, err)
-		return
-	}
-	additions, err := additionsFromRequest(req.Additions)
-	if err != nil {
-		s.writeError(conn, err)
-		return
-	}
-	reclaims, err := reclaimsFromRequest(req.Reclaims)
+	comps, additions, reclaims, err := tablePlayFromRequest(req.playRequest)
 	if err != nil {
 		s.writeError(conn, err)
 		return
@@ -1096,6 +1074,22 @@ func otherConnections(conns []*websocket.Conn, exclude *websocket.Conn) []*webso
 		filtered = append(filtered, conn)
 	}
 	return filtered
+}
+
+func tablePlayFromRequest(req playRequest) ([]*game.Composition, []game.CompositionAddition, []game.JokerReclaim, error) {
+	comps, err := compositionsFromRequest(req.Compositions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	additions, err := additionsFromRequest(req.Additions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	reclaims, err := reclaimsFromRequest(req.Reclaims)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return comps, additions, reclaims, nil
 }
 
 func compositionsFromRequest(requests []compositionRequest) ([]*game.Composition, error) {

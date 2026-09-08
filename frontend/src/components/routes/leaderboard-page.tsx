@@ -1,3 +1,4 @@
+import { formatPlaytime } from "#/lib/format-playtime";
 import {
   Alert02Icon,
   ChampionIcon,
@@ -64,15 +65,6 @@ const LEADERBOARD_METRICS: LeaderboardMetric[] = ["wins", "games", "playtime", "
 
 function formatNumber(value: number) {
   return NUMBER_FORMATTERS[getLocale()].format(value);
-}
-
-function formatPlaytime(totalSeconds: number) {
-  const totalMinutes = Math.floor(totalSeconds / 60);
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return hours > 0
-    ? m.playtime_hours_minutes({ hours, minutes })
-    : m.playtime_minutes({ minutes: totalMinutes });
 }
 
 function getMetricLabel(metric: LeaderboardMetric) {

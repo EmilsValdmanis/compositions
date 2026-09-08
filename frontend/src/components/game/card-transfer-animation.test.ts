@@ -190,6 +190,21 @@ describe("completed composition collection", () => {
     });
   });
 
+  it.each([
+    { before: { rank: 7, suit: 0 }, after: { rank: 7, suit: 0, isJoker: false }, matches: true },
+    { before: { isJoker: true }, after: { isJoker: true }, matches: true },
+    { before: { rank: 7, suit: 0 }, after: { rank: 7, suit: 1 }, matches: false },
+    { before: { rank: 7, suit: 0 }, after: { rank: 8, suit: 0 }, matches: false },
+    { before: {}, after: { isJoker: true }, matches: false },
+  ])(
+    "only animates collections when the previous discard is preserved ($before / $after)",
+    ({ before, after, matches }) => {
+      const previous = game({ discardPile: [before] });
+      const current = game({ discardPile: [{ rank: 12, suit: 3 }, { rank: 1, suit: 0 }, after] });
+      expect(inferCompletedCompositionCollection(previous, current) !== null).toBe(matches);
+    },
+  );
+
   it("ignores an ordinary one-card discard", () => {
     const previous = game();
     const current = game({

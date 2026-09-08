@@ -214,7 +214,6 @@ export type SocialState = {
 
 type PendingAction = {
   expectedAction: string;
-  id: number;
   resolve: (result: ActionResult) => void;
   reject: (error: Error) => void;
 };
@@ -517,7 +516,6 @@ function useGameWebSocketController(): GameWebSocketContextValue {
   const connectInFlightRef = useRef(false);
   const reconnectTimerRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef(0);
-  const nextPendingActionIdRef = useRef(0);
   const pendingActionsRef = useRef<PendingAction[]>([]);
   const state = useSelector(gameWebSocketStore);
 
@@ -642,12 +640,8 @@ function useGameWebSocketController(): GameWebSocketContextValue {
 
     const pendingAction = options?.awaitResult
       ? new Promise<ActionResult>((resolve, reject) => {
-          const pendingActionId = nextPendingActionIdRef.current;
-          nextPendingActionIdRef.current += 1;
-
           pendingActionsRef.current.push({
             expectedAction: type,
-            id: pendingActionId,
             resolve,
             reject,
           });
