@@ -705,5 +705,13 @@
   "admin_game_phase_game_over": "Game over",
   "admin_game_phase_unknown": "Unknown phase",
   "yes": "Yes",
-  "no": "No"
+  "no": "No",
+  "elo_rating": "Elo rating",
+  "elo_bronze": "Bronze",
+  "elo_silver": "Silver",
+  "elo_gold": "Gold",
+  "elo_platinum": "Platinum",
+  "elo_diamond": "Diamond",
+  "elo_master": "Master",
+  "elo_grandmaster": "Grand Master"
 }

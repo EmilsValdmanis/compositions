@@ -1,12 +1,15 @@
 package database
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -193,7 +196,20 @@ func (s *UserStore) SaveCompletedGame(ctx context.Context, completed CompletedGa
 	if tag.RowsAffected() == 0 {
 		return tx.Commit(ctx)
 	}
-	for _, player := range completed.Players {
+	// Copy and canonicalize identifiers so every completion locks shared rows in
+	// the same order, including games that do not award Elo.
+	players := slices.Clone(completed.Players)
+	for i := range players {
+		players[i].UserID = uuid.MustParse(strings.TrimSpace(players[i].UserID)).String()
+	}
+	slices.SortFunc(players, func(a, b CompletedGamePlayerRecord) int { return cmp.Compare(a.UserID, b.UserID) })
+	// Incomplete participant records cannot fairly rate a game (e.g. guests).
+	if gameMode == "full" && ranked && len(players) == completed.PlayerCount {
+		if err := saveRatings(ctx, tx, gameID, players); err != nil {
+			return err
+		}
+	}
+	for _, player := range players {
 		if err := saveGamePlayer(ctx, tx, gameID, player, true); err != nil {
 			return err
 		}
@@ -231,10 +247,11 @@ func validateCheckpoint(checkpoint GameCheckpointRecord) (pgtype.UUID, error) {
 		if err := parsed.Scan(userID); err != nil {
 			return pgtype.UUID{}, fmt.Errorf("invalid statistics user id: %w", err)
 		}
-		if seenUsers[userID] {
+		canonicalID := uuid.UUID(parsed.Bytes).String()
+		if seenUsers[canonicalID] {
 			return pgtype.UUID{}, errors.New("duplicate statistics user id")
 		}
-		seenUsers[userID] = true
+		seenUsers[canonicalID] = true
 		if err := validatePlayerStatistics(player); err != nil {
 			return pgtype.UUID{}, err
 		}

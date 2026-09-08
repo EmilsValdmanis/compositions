@@ -215,3 +215,19 @@ CREATE TABLE player_statistics (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	PRIMARY KEY (user_id, game_mode, ranked)
 );
+
+-- Elo starts fresh at launch; historical statistics are not replayed.
+CREATE TABLE player_ratings (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 0),
+    games_played BIGINT NOT NULL DEFAULT 0 CHECK (games_played >= 0)
+);
+
+CREATE TABLE game_rating_changes (
+    rules_version TEXT NOT NULL CHECK (rules_version <> ''),
+    game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating_before INTEGER NOT NULL CHECK (rating_before >= 0),
+    rating_after INTEGER NOT NULL CHECK (rating_after >= 0),
+    PRIMARY KEY (game_id, user_id)
+);

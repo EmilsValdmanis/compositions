@@ -1,3 +1,4 @@
+import { visibleLeaderboard } from "#/lib/leaderboard-pages";
 import { formatPlaytime } from "#/lib/format-playtime";
 import {
   Alert02Icon,
@@ -61,7 +62,14 @@ const NUMBER_FORMATTERS: Record<Locale, Intl.NumberFormat> = {
   lv: new Intl.NumberFormat("lv"),
 };
 
-const LEADERBOARD_METRICS: LeaderboardMetric[] = ["wins", "games", "playtime", "rounds", "points"];
+const LEADERBOARD_METRICS: LeaderboardMetric[] = [
+  "elo",
+  "wins",
+  "games",
+  "playtime",
+  "rounds",
+  "points",
+];
 
 function formatNumber(value: number) {
   return NUMBER_FORMATTERS[getLocale()].format(value);
@@ -69,6 +77,8 @@ function formatNumber(value: number) {
 
 function getMetricLabel(metric: LeaderboardMetric) {
   switch (metric) {
+    case "elo":
+      return m.elo_rating();
     case "wins":
       return m.wins();
     case "games":
@@ -84,6 +94,8 @@ function getMetricLabel(metric: LeaderboardMetric) {
 
 function getMetricIcon(metric: LeaderboardMetric) {
   switch (metric) {
+    case "elo":
+      return RankingIcon;
     case "wins":
       return ChampionIcon;
     case "games":
@@ -99,6 +111,27 @@ function getMetricIcon(metric: LeaderboardMetric) {
 
 function formatScore(metric: LeaderboardMetric, score: number) {
   return metric === "playtime" ? formatPlaytime(score) : formatNumber(score);
+}
+
+function RatingScore({ player, metric }: { player: LeaderboardPlayer; metric: LeaderboardMetric }) {
+  if (metric !== "elo") return formatScore(metric, player.score);
+  const tierLabels = new Map<string, () => string>([
+    ["bronze", m.elo_bronze],
+    ["silver", m.elo_silver],
+    ["gold", m.elo_gold],
+    ["platinum", m.elo_platinum],
+    ["diamond", m.elo_diamond],
+    ["master", m.elo_master],
+    ["grandmaster", m.elo_grandmaster],
+  ]);
+  return (
+    <span className="inline-flex flex-col-reverse items-end justify-end gap-1 sm:flex-row sm:items-center sm:gap-3">
+      {player.tier ? (
+        <Badge variant="outline">{tierLabels.get(player.tier)?.() ?? player.tier}</Badge>
+      ) : null}
+      <span>{formatScore(metric, player.score)}</span>
+    </span>
+  );
 }
 
 function RankBadge({ rank }: { rank: number }) {
@@ -172,7 +205,7 @@ function LeaderboardTableRow({
         <PlayerIdentity player={player} />
       </TableCell>
       <TableCell className="text-right font-semibold tabular-nums">
-        {formatScore(metric, player.score)}
+        <RatingScore player={player} metric={metric} />
       </TableCell>
     </TableRow>
   );
@@ -195,7 +228,7 @@ function PlacementFooter({
           <PlayerIdentity player={player} />
         </TableCell>
         <TableCell className="text-right font-semibold tabular-nums">
-          {formatScore(metric, player.score)}
+          <RatingScore player={player} metric={metric} />
         </TableCell>
       </TableRow>
     </TableFooter>
@@ -221,8 +254,14 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
   } = useInfiniteQuery(queryOptions);
   // The virtualizer consumes this array identity through getItemKey.
   // react-doctor-disable-next-line react-hooks-js/react-compiler-no-manual-memoization, react-doctor/react-compiler-no-manual-memoization
-  const players = useMemo(() => data?.pages.flatMap((page) => page.players) ?? [], [data]);
-  const placement = data?.pages[0]?.placement ?? null;
+  const { players, placement, resetIndex } = useMemo(
+    () => visibleLeaderboard(data?.pages ?? []),
+    [data],
+  );
+
+  useEffect(() => {
+    if (resetIndex >= 0) scrollRef.current?.scrollTo({ top: 0 });
+  }, [resetIndex]);
 
   // TanStack Virtual returns intentionally mutable functions.
   // react-doctor-disable-next-line react-hooks-js/incompatible-library
@@ -362,14 +401,14 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
             <>
               <Table
                 containerRef={scrollRef}
-                className="min-w-lg"
+                className="table-fixed sm:table-auto"
                 containerClassName="max-h-[min(62dvh,42rem)] touch-auto overflow-auto overscroll-contain"
                 aria-label={`${m.leaderboard()}: ${scope === "friends" ? m.friends() : m.global()}, ${getMetricLabel(metric)}`}
               >
                 <colgroup>
-                  <col className="w-20" />
+                  <col className="w-14 sm:w-20" />
                   <col />
-                  <col />
+                  <col className="w-36 sm:w-auto" />
                 </colgroup>
                 <LeaderboardHeader metric={metric} />
                 <TableBody>
