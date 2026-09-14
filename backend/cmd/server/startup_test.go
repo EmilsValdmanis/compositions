@@ -46,7 +46,14 @@ func TestSuperviseHTTPServerShutdownBranches(t *testing.T) {
 	t.Run("graceful shutdown", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		if err := superviseHTTPServer(ctx, func() error { return http.ErrServerClosed }, func(context.Context) error { return nil }); err != nil {
+		shutdownStarted := make(chan struct{})
+		if err := superviseHTTPServer(ctx, func() error {
+			<-shutdownStarted
+			return http.ErrServerClosed
+		}, func(context.Context) error {
+			close(shutdownStarted)
+			return nil
+		}); err != nil {
 			t.Fatalf("superviseHTTPServer() error = %v", err)
 		}
 	})
@@ -54,7 +61,14 @@ func TestSuperviseHTTPServerShutdownBranches(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		want := errors.New("shutdown failed")
-		if err := superviseHTTPServer(ctx, func() error { return http.ErrServerClosed }, func(context.Context) error { return want }); !errors.Is(err, want) {
+		shutdownStarted := make(chan struct{})
+		if err := superviseHTTPServer(ctx, func() error {
+			<-shutdownStarted
+			return http.ErrServerClosed
+		}, func(context.Context) error {
+			close(shutdownStarted)
+			return want
+		}); !errors.Is(err, want) {
 			t.Fatalf("superviseHTTPServer() error = %v", err)
 		}
 	})
@@ -62,7 +76,14 @@ func TestSuperviseHTTPServerShutdownBranches(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		want := errors.New("late serve failure")
-		if err := superviseHTTPServer(ctx, func() error { return want }, func(context.Context) error { return nil }); !errors.Is(err, want) {
+		shutdownStarted := make(chan struct{})
+		if err := superviseHTTPServer(ctx, func() error {
+			<-shutdownStarted
+			return want
+		}, func(context.Context) error {
+			close(shutdownStarted)
+			return nil
+		}); !errors.Is(err, want) {
 			t.Fatalf("superviseHTTPServer() error = %v", err)
 		}
 	})
