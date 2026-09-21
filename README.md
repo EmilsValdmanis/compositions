@@ -79,7 +79,7 @@ GitHub Actions uses [Vercel Remote Cache](https://github.com/vercel/setup-turbor
 
 One-time account setup:
 
-1. In your Vercel team's **Settings → Build and Deployment → OIDC Policies for CLI Access**, add a **Turborepo CLI Policy** for GitHub repository `EmilsValdmanis/compositions`. Restrict it to workflow `.github/workflows/pr-validation.yml`. Allow the PR refs you intend to validate, as well as any branches used for manual workflow runs.
+1. In your Vercel team's **Settings → Build and Deployment → OIDC Policies for CLI Access**, add a **Turborepo CLI Policy** for GitHub repository `EmilsValdmanis/compositions`. Set **Workflow** to `PR Validation`, matching the workflow's `name:` and GitHub's OIDC `workflow` claim. This field takes the display name, not the filename `.github/workflows/pr-validation.yml`. Allow the PR refs you intend to validate, as well as any branches used for manual workflow runs.
 2. Set the GitHub Actions repository **variable** `TURBO_TEAM` to that team's slug or ID:
 
    ```bash
