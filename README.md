@@ -86,6 +86,8 @@ One-time account setup:
    gh variable set TURBO_TEAM --repo EmilsValdmanis/compositions --body YOUR_TEAM_SLUG
    ```
 
+If the policy uses a custom audience, set repository variable `TURBO_OIDC_AUDIENCE` to that exact value. Set `TURBO_OIDC_POLICY` to the policy ID to select the intended policy explicitly (required when multiple policies match). Both values are passed to the cache action in each job.
+
 The cache setup runs for same-repository PRs and manual workflow runs. Fork PRs, Dependabot runs, and repositories without `TURBO_TEAM` continue with local task caching. Once `TURBO_TEAM` is configured, authentication failures fail the job so a broken connection is visible.
 
 For local access, run from the repository root and select the same team:
