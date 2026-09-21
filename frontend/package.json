@@ -12,7 +12,9 @@
     "build": "vp build",
     "preview": "vp preview",
     "test": "vp test run",
-    "deps:update": "bunx npm-check-updates -u --target latest --format group && bun install"
+    "deps:update": "bunx npm-check-updates -u --target latest --format group && bun install --cwd ..",
+    "check": "vp check",
+    "format": "vp fmt"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -73,15 +75,5 @@
     "typescript": "7.0.2",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
     "vite-plus": "0.3.3"
-  },
-  "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3"
-  },
-  "packageManager": "bun@1.4.2",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "lightningcss"
-    ]
   }
 }

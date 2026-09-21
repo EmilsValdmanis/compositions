@@ -1,4 +1,4 @@
-.PHONY: run build test test-integration bench sqlc migrate-up migrate-down db-up db-down db-logs
+.PHONY: run build check test test-integration bench sqlc migrate-up migrate-down db-up db-down db-logs
 
 ifneq (,$(wildcard .env))
 include .env
@@ -13,6 +13,10 @@ run:
 
 build:
 	go build -o dist/server ./cmd/server
+
+check:
+	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
+	go vet ./...
 
 test:
 	go vet ./... && go test -cover ./...

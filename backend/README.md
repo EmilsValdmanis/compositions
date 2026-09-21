@@ -10,7 +10,7 @@ This directory contains the Go backend for Compositions.
 
 ## Development
 
-Run commands from inside `backend/`.
+Run the Make commands below from inside `backend/`. To orchestrate both apps from the root, use `bun run dev`, `bun run build`, `bun run check`, or `bun run test`. Add `--filter=./backend` to select only this module. Turbo discovers it natively through `go.work`; no JavaScript package manifest is needed here.
 
 Google OAuth is handled entirely by the Go backend. The frontend is just UI and talks to the backend directly.
 
