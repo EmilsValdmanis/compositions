@@ -1,0 +1,22 @@
+{
+  "name": "compositions-workspace",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check": "turbo run check",
+    "test": "turbo run test",
+    "format": "turbo run format",
+    "test-integration": "turbo run test-integration"
+  },
+  "devDependencies": {
+    "turbo": "2.11.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3"
+  }
+}

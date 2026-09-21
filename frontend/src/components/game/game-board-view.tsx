@@ -2,6 +2,7 @@ import { cardsEqual } from "#/components/game/card-equality";
 import {
   useEffect,
   useEffectEvent,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -1212,6 +1213,7 @@ export function GameBoardView({
   onSendFriendRequest,
   guidance,
 }: GameBoardViewProps) {
+  const dndContextId = useId();
   const boardRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -1258,6 +1260,7 @@ export function GameBoardView({
   );
   return (
     <DndContext
+      id={dndContextId}
       sensors={sensors}
       collisionDetection={collisionDetection}
       onDragStart={controller.handleDragStart}

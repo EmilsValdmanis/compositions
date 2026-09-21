@@ -8,44 +8,27 @@ Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.de
 
 ## Review Checklist
 
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to format, lint, type check and test changes.
+- [ ] Run `bun install --frozen-lockfile` from the repository root before getting started.
+- [ ] Run `bun run check`, `bun run test`, and `bun run build` from the root. Turbo runs Vite+ in `frontend/` and native Go tasks in `backend/`.
 - [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
 
 <!--VITE PLUS END-->
+
+## Workspace orchestration
+
+Turborepo 2.11 uses experimental native Go workspace discovery (`go.work`) and task command overrides. Keep the version pinned. The frontend uses Bun and Vite+; the backend needs no `package.json`.
+
+Run `bun install --frozen-lockfile` and `bun run <task>` from the repository root. Use `--filter=frontend` or `--filter=./backend` to select an app. Go must be installed even for filtered frontend Turbo commands, since Turbo discovers the whole workspace. Direct `vp` commands must still run inside `frontend/`.
 
 ## Running the application
 
 Browser verification requires both the backend and frontend.
 
-All commands below must be run from the `/backend` directory, **not the repository root**.
+1. Configure `backend/.env` from `.env.sample` and the frontend environment as needed.
+2. Start Postgres with `make -C backend db-up` and apply migrations with `make -C backend migrate-up`.
+3. Run `bun run dev` from the root to start both applications. Backend dev uses `make run` to load `backend/.env`.
 
-### 1. Start the database
-
-```bash
-cd backend
-make db-up
-```
-
-### 2. Start both applications
-
-Open two separate terminals. In **both terminals**, change to the `/backend` directory first.
-
-Backend:
-
-```bash
-cd backend
-make run
-```
-
-Frontend:
-
-```bash
-cd frontend
-vp dev
-```
-
-Do not run `vp dev` or other `vp` commands from the repository root.
+Database lifecycle and migration commands remain explicit Make targets; Turbo does not run them automatically.
 
 ### Before browser testing
 

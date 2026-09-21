@@ -57,8 +57,8 @@ export function RootDocument({ children }: { children: React.ReactNode }) {
               },
             ]}
           />
-          <Scripts />
         </div>
+        <Scripts />
       </body>
     </html>
   );

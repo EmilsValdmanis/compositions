@@ -1,0 +1,71 @@
+{
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "build": {
+      "command": [
+        "go",
+        "build",
+        "-o",
+        "dist/server",
+        "./cmd/server"
+      ],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!dist/**"
+      ],
+      "outputs": [
+        "dist/server"
+      ],
+      "cache": true
+    },
+    "dev": {
+      "command": [
+        "make",
+        "run"
+      ],
+      "passThroughEnv": [
+        "BASE_URL",
+        "FRONTEND_URL",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "DATABASE_URL",
+        "COOKIE_*",
+        "TRUST_PROXY_HEADERS",
+        "TRUSTED_PROXY_CIDRS",
+        "SENTRY_*"
+      ]
+    },
+    "check": {
+      "command": [
+        "make",
+        "check"
+      ]
+    },
+    "test": {
+      "command": [
+        "go",
+        "test",
+        "-cover",
+        "./..."
+      ],
+      "dependsOn": [
+        "lint"
+      ]
+    },
+    "lint": {},
+    "test-integration": {
+      "command": [
+        "make",
+        "test-integration"
+      ],
+      "passThroughEnv": [
+        "DATABASE_URL",
+        "DOCKER_*",
+        "TESTCONTAINERS_*",
+        "XDG_RUNTIME_DIR"
+      ]
+    }
+  }
+}

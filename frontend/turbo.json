@@ -1,0 +1,28 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "paraglide:compile": {
+      "inputs": ["project.inlang/**", "messages/**", "package.json"],
+      "outputs": ["src/paraglide/**"]
+    },
+    "build": {
+      "dependsOn": ["paraglide:compile"],
+      "outputs": ["dist/**", ".output/**"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "env": ["VITE_*", "NODE_ENV", "NITRO_*", "SENTRY_*"],
+      "cache": false
+    },
+    "check": {
+      "dependsOn": ["paraglide:compile"]
+    },
+    "test": {
+      "dependsOn": ["paraglide:compile"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "env": ["VITE_*", "NODE_ENV"]
+    },
+    "dev": {
+      "dependsOn": ["paraglide:compile"],
+      "passThroughEnv": ["VITE_*", "SENTRY_*", "NITRO_*"]
+    }
+  }
+}
