@@ -580,7 +580,7 @@ export function GameBoardTable({
       data-onboarding-target="table"
       data-over={isOverNewCompositionBoard || undefined}
       className={cn(
-        "h-full min-h-0 min-w-0 max-w-full overflow-hidden transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
+        "h-full min-h-0 max-w-full min-w-0 overflow-hidden transition-colors [--card-spacing:--spacing(2)] xl:flex-1 xl:[--card-spacing:--spacing(6)]",
         canCompose && isDraggingHandCard && isOverNewCompositionBoard
           ? "bg-primary/5 ring-2 ring-primary/70"
           : null,

@@ -8,16 +8,17 @@
     "build": {
       "dependsOn": ["paraglide:compile"],
       "outputs": ["dist/**", ".output/**"],
-      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/vite.config.ts", ".env", ".env.*"],
       "env": ["VITE_*", "NODE_ENV", "NITRO_*", "SENTRY_*"],
       "cache": false
     },
     "check": {
-      "dependsOn": ["paraglide:compile"]
+      "dependsOn": ["paraglide:compile"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/vite.config.ts"]
     },
     "test": {
       "dependsOn": ["paraglide:compile"],
-      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/vite.config.ts", ".env", ".env.*"],
       "env": ["VITE_*", "NODE_ENV"]
     },
     "dev": {

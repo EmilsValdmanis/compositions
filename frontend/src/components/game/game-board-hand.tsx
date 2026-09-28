@@ -76,7 +76,7 @@ export function GameBoardHand({
               className="min-h-0 rounded-3xl border border-transparent"
             >
               {availableHandEntries.length ? (
-                <div className="min-h-0 touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-(--card-spacing) scroll-fade-x pb-1">
+                <div className="min-h-0 scroll-fade-x touch-pan-x overflow-x-auto overflow-y-hidden overscroll-x-contain px-(--card-spacing) pb-1">
                   <div className="flex min-w-full justify-center pb-(--card-spacing)">
                     <div data-onboarding-target="hand-cards" className="flex w-max shrink-0 gap-2">
                       {availableHandEntries.map((entry) => (

@@ -45,12 +45,12 @@ export function ThemeSwitcher({
         <HugeiconsIcon
           icon={Sun03Icon}
           data-slot="theme-light-icon"
-          className="transition-[transform,opacity] dark:-rotate-90 dark:scale-95 dark:opacity-0"
+          className="transition-[transform,opacity] dark:scale-95 dark:-rotate-90 dark:opacity-0"
         />
         <HugeiconsIcon
           icon={Moon02Icon}
           data-slot="theme-dark-icon"
-          className="absolute rotate-90 scale-95 opacity-0 transition-[transform,opacity] dark:rotate-0 dark:scale-100 dark:opacity-100"
+          className="absolute scale-95 rotate-90 opacity-0 transition-[transform,opacity] dark:scale-100 dark:rotate-0 dark:opacity-100"
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-44">

@@ -43,7 +43,7 @@ The base game is implemented and playable. Current focus areas:
 
 ## Working In This Repo
 
-Install Bun 1.4.2, Go 1.26.6 or newer, and Node.js 24 (for frontend tooling). Run from the repository root:
+Install Bun 1.4.2, Go 1.26.6 or newer, and Node.js 24.21.0 (pinned in `.node-version` and shared with CI). Run from the repository root:
 
 ```bash
 bun install --frozen-lockfile
@@ -64,9 +64,9 @@ bun run test --filter=frontend
 bun run build --filter=./backend
 ```
 
-Turborepo 2.11.0 orchestrates the Bun frontend workspace and the native Go module in `go.work`. Its Go workspace and command override features are experimental, so Turbo is pinned. Go must be available even for filtered frontend Turbo commands. The Go package name is `compositions`, derived from its module path; directory filters avoid confusion with the repository name.
+Turborepo 2.11.4 orchestrates the Bun frontend workspace and the native Go module in `go.work`. Its Go workspace and command override features are experimental, so Turbo is pinned. Go must be available even for filtered frontend Turbo commands. The Go package name is `compositions`, derived from its module path; directory filters avoid confusion with the repository name.
 
-Vite+ remains the frontend builder, formatter, linter, type checker, and test runner. Use direct `vp` commands inside `frontend/` only. Bun dependencies and overrides are managed by the root `package.json` and `bun.lock`.
+Vite+ 1.0.0 provides the frontend builder, formatter, linter, type checker, and Vitest 5 test runner. Shared lint and format settings live in the root `vite.config.ts`; app plugins remain in `frontend/vite.config.ts`. Use direct `vp` commands inside `frontend/` only. Bun dependencies, toolchain catalog pins, and overrides are managed by the root `package.json` and `bun.lock`. For future upgrades, follow the [Vite+ migration guide](https://viteplus.dev/guide/migrate) and run the target migrator from the workspace root before changing dependencies, then review the diff and run `bun run check`, `bun run test`, and `bun run build`.
 
 Turbo caches backend binaries (`backend/dist/server`), checks, unit tests, and generated translations. Frontend builds deliberately run every time because the Sentry plugin can upload sourcemaps. Development, formatting, and integration tests are uncached. Backend build hashes include the Go toolchain and target; frontend build/test configuration tracks its `.env` files and build variables.
 

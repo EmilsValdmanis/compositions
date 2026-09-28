@@ -196,7 +196,7 @@ function CardCollection({
   description?: string;
 }) {
   return (
-    <Card size="sm" className="w-full min-w-0 max-w-full">
+    <Card size="sm" className="w-full max-w-full min-w-0">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
@@ -206,7 +206,7 @@ function CardCollection({
       </CardHeader>
       <CardContent className="min-w-0">
         {cards.length > 0 ? (
-          <div className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1">
+          <div className="flex w-full max-w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-1">
             {withOccurrenceKeys(cards, cardIdentity).map(({ item: card, key }) => (
               <GameCard key={key} card={card} size="compact" />
             ))}
@@ -228,7 +228,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
   const topDiscard = state.discardPile[0];
 
   return (
-    <div className="flex w-full min-w-0 max-w-full flex-col gap-4">
+    <div className="flex w-full max-w-full min-w-0 flex-col gap-4">
       <ItemGroup className="grid min-w-0 gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <StateMetric
           label={m.admin_game_phase()}
@@ -300,7 +300,7 @@ function VisualGameState({ state }: { state: PersistedGameState }) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1">
+              <div className="flex w-full max-w-full min-w-0 gap-2 overflow-x-auto overscroll-x-contain pb-1">
                 {withOccurrenceKeys(player.hand, cardIdentity).map(({ item: card, key }) => (
                   <GameCard key={key} card={card} size="compact" />
                 ))}
@@ -365,7 +365,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
   }
 
   return (
-    <Tabs defaultValue="visual" className="min-h-0 min-w-0 max-w-full">
+    <Tabs defaultValue="visual" className="min-h-0 max-w-full min-w-0">
       <TabsList>
         <TabsTrigger value="visual">
           <HugeiconsIcon icon={EyeIcon} data-icon="inline-start" />
@@ -400,7 +400,7 @@ function GameStateViewer({ report }: { report: AdminBugReportDetail }) {
             </CardAction>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-96 min-w-0 max-w-full rounded-2xl bg-muted/50">
+            <ScrollArea className="h-96 max-w-full min-w-0 rounded-2xl bg-muted/50">
               <pre className="min-w-max p-4 font-mono text-xs/5">{json}</pre>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
@@ -497,9 +497,9 @@ function ReportDetailSheet({
               </Alert>
             </div>
           ) : (
-            <div className="flex w-full min-w-0 max-w-full flex-col gap-6 overflow-x-hidden p-4 sm:p-6">
+            <div className="flex w-full max-w-full min-w-0 flex-col gap-6 overflow-x-hidden p-4 sm:p-6">
               <section className="flex min-w-0 flex-col gap-3">
-                <Caption className="uppercase tracking-[0.16em]">{m.admin_report()}</Caption>
+                <Caption className="tracking-[0.16em] uppercase">{m.admin_report()}</Caption>
                 <P size="lg" className="text-pretty">
                   {data.description}
                 </P>
@@ -583,7 +583,7 @@ export function AdminBugReportsPage({ initialPage }: { initialPage: AdminBugRepo
   const reports = data ?? initialPage;
 
   return (
-    <section className="mx-auto flex w-full min-w-0 max-w-7xl flex-col gap-6">
+    <section className="mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-6">
       <AdminAnalyticsDashboard />
       <Card className="min-h-96 min-w-0">
         <CardHeader>

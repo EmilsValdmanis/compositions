@@ -155,7 +155,7 @@ function PlayerIdentity({ player }: { player: LeaderboardPlayer }) {
       <Link
         to="/players/$playerId"
         params={{ playerId: player.playerId }}
-        className="min-w-0 truncate font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="min-w-0 truncate font-medium underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       >
         {player.name}
       </Link>
@@ -343,7 +343,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
 
       <Card className="gap-0 overflow-hidden py-0">
         <Tabs value={metric} onValueChange={handleMetricChange} className="gap-0">
-          <div className="overflow-x-auto scroll-fade-r border-b p-3">
+          <div className="scroll-fade-r overflow-x-auto border-b p-3">
             <TabsList aria-label={m.leaderboard_statistic()}>
               {LEADERBOARD_METRICS.map((item) => (
                 <TabsTrigger key={item} value={item}>

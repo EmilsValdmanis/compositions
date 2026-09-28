@@ -40,7 +40,7 @@ function CardDeckGallery() {
             ))}
           </div>
         ))}
-        <div className="flex w-max gap-2 ">
+        <div className="flex w-max gap-2">
           <GameCard card={{ isJoker: true }} />
           <GameCard card={{ isJoker: true }} />
         </div>

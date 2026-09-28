@@ -38,7 +38,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar />
       <SidebarInset className="min-h-0 overflow-hidden">
         <AppHeader />
-        <div className="flex min-h-0 w-full flex-1 flex-col p-2 gap-2 md:gap-4 [@media(max-height:600px)]:gap-2 overflow-y-auto">
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-y-auto p-2 md:gap-4 [@media(max-height:600px)]:gap-2">
           {children}
         </div>
       </SidebarInset>
@@ -51,9 +51,9 @@ function AppHeader() {
   const { session } = rootRouteApi.useRouteContext();
 
   return (
-    <header className="flex shrink-0 items-center border-b md:border-none gap-2 h-12 md:h-16 px-2">
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 md:h-16 md:border-none">
       <SidebarTrigger />
-      <div className="ml-auto flex shrink-0 items-center  gap-1">
+      <div className="ml-auto flex shrink-0 items-center gap-1">
         <GameControlsMenu />
         {session ? <NotificationsDropdown /> : null}
         <ThemeSwitcher />

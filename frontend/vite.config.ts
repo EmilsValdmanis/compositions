@@ -9,10 +9,7 @@ import { sentryTanstackStart } from "@sentry/tanstackstart-react/vite";
 import { paraglideVitePlugin } from "@inlang/paraglide-js";
 
 const config = defineConfig({
-  fmt: {
-    ignorePatterns: ["/src/routeTree.gen.ts"],
-  },
-  lint: { options: { typeAware: true, typeCheck: true } },
+  test: { fsModuleCache: true },
   resolve: { tsconfigPaths: true },
   // Unit tests exercise handlers directly, without Start RPC transforms or a Nitro server.
   plugins: process.env.VITEST

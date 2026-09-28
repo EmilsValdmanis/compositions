@@ -707,6 +707,7 @@ func TestServerCloseClosesActiveWebSockets(t *testing.T) {
 	defer httpServer.Close()
 	conn := mustDialWS(t, httpServer.URL)
 	defer conn.Close()
+	mustConnectSession(t, conn, "")
 
 	if err := server.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
@@ -716,6 +717,25 @@ func TestServerCloseClosesActiveWebSockets(t *testing.T) {
 		t.Fatal("ReadMessage() after server close error = nil; want closed connection")
 	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		t.Fatal("ReadMessage() timed out; server did not close the connection")
+	}
+}
+
+func TestServerCloseClosesLateWebSocketConnections(t *testing.T) {
+	server := newWSServer()
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+
+	// Force shutdown to collect sockets before this connection is registered.
+	if err := server.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	conn := mustDialWS(t, httpServer.URL)
+	defer conn.Close()
+	_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("ReadMessage() after server close error = nil; want closed connection")
+	} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		t.Fatal("ReadMessage() timed out; server accepted a connection after closing")
 	}
 }
 

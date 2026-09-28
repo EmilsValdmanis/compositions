@@ -152,11 +152,11 @@ export function PlayerStrip({
     <ItemGroup
       data-presentation={presentation}
       className={cn(
-        "grid min-w-0 max-w-full gap-2 has-data-[size=sm]:gap-2",
+        "grid max-w-full min-w-0 gap-2 has-data-[size=sm]:gap-2",
         isMenu
           ? "gap-0.5 overflow-visible p-0"
           : mobileHorizontal
-            ? "grid-flow-col auto-cols-[minmax(9rem,1fr)] overflow-x-auto overscroll-x-contain pb-1 xl:grid-flow-row xl:auto-cols-auto xl:overflow-visible xl:pb-0"
+            ? "auto-cols-[minmax(9rem,1fr)] grid-flow-col overflow-x-auto overscroll-x-contain pb-1 xl:auto-cols-auto xl:grid-flow-row xl:overflow-visible xl:pb-0"
             : "min-h-0 flex-1 content-start overflow-y-auto overscroll-y-contain pr-1",
       )}
     >
@@ -173,7 +173,7 @@ export function PlayerStrip({
             variant={isMenu ? "default" : "outline"}
             size="xs"
             className={cn(
-              "player-turn-surface relative min-w-0 max-w-full flex-nowrap",
+              "player-turn-surface relative max-w-full min-w-0 flex-nowrap",
               showActiveTurn && "player-turn-surface-active",
               isMenu
                 ? "gap-2 rounded-xl in-data-[slot=dropdown-menu-content]:px-1.5 in-data-[slot=dropdown-menu-content]:py-1"
