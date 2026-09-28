@@ -142,7 +142,7 @@ export function SidebarFriendsList({
     <SidebarGroup className="min-h-0 flex-1 overflow-hidden pt-0">
       <SidebarGroupLabel>{m.friends()}</SidebarGroupLabel>
       <SidebarGroupContent
-        className="no-scrollbar min-h-0 flex-1 overflow-y-auto pr-1 group-data-[collapsible=icon]:pr-0 scroll-fade-y"
+        className="no-scrollbar min-h-0 flex-1 scroll-fade-y overflow-y-auto pr-1 group-data-[collapsible=icon]:pr-0"
         aria-busy={isLoading}
       >
         {isLoading ? (
@@ -203,7 +203,7 @@ export function SidebarFriendsList({
                         <span className="min-w-0 truncate">{friend.name}</span>
                         {friend.activeGame ? (
                           <span
-                            className="flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-muted-foreground tabular-nums"
+                            className="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-muted-foreground tabular-nums"
                             aria-label={m.friend_in_game_duration({
                               duration: formatGameDuration(friend.activeGame.startedAt, now),
                             })}

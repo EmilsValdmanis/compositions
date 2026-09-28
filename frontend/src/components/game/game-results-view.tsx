@@ -386,7 +386,7 @@ function LeftoverHandTooltip({
         </P>
         <HugeiconsIcon icon={Cards01Icon} data-icon="inline-end" />
       </TooltipTrigger>
-      <TooltipContent className="flex flex-wrap justify-center gap-1 py-2.5 max-w-53">
+      <TooltipContent className="flex max-w-53 flex-wrap justify-center gap-1 py-2.5">
         {keyedCards(hand).map(({ card, key }) => (
           <GameCard key={key} card={card} size="compact" />
         ))}
@@ -766,7 +766,7 @@ export function GameResultsView({
               <Badge variant={isGameOver ? "default" : "secondary"}>{resultBadge}</Badge>
             </div>
           </CardHeader>
-          <CardContent className="grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto scroll-fade-x overscroll-y-contain">
+          <CardContent className="grid min-h-0 flex-1 scroll-fade-x auto-rows-max content-start gap-4 overflow-y-auto overscroll-y-contain">
             <ResultsScoreTable
               rows={visibleRows}
               revealState={revealState}

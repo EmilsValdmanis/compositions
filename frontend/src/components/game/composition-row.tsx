@@ -236,7 +236,7 @@ function CompositionEdgeDropTarget({
         <span
           className={cn(
             "edge-drop-pill absolute flex size-5 items-center justify-center rounded-full shadow-sm backdrop-blur-sm transition-[border-color,color,background-color,opacity] duration-150",
-            "left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2",
+            "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
             visible ? "opacity-100" : "opacity-0",
             active
               ? "border border-primary/80 bg-primary text-primary-foreground opacity-100"

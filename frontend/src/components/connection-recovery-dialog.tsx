@@ -24,9 +24,9 @@ export function ConnectionRecoveryDialog({
         className="max-w-xs justify-items-center gap-5 p-5 text-center sm:max-w-sm sm:p-6"
       >
         <div className="relative flex size-14 items-center justify-center" aria-hidden="true">
-          <span className="bg-primary/10 ring-primary/20 absolute inset-0 rounded-full ring-1" />
-          <span className="bg-primary/10 flex size-11 items-center justify-center rounded-full">
-            <Spinner className="text-primary size-5" />
+          <span className="absolute inset-0 rounded-full bg-primary/10 ring-1 ring-primary/20" />
+          <span className="flex size-11 items-center justify-center rounded-full bg-primary/10">
+            <Spinner className="size-5 text-primary" />
           </span>
         </div>
         <DialogHeader className="items-center gap-2.5">
