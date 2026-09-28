@@ -266,6 +266,7 @@ type wsServer struct {
 	upgrader       websocket.Upgrader
 	connectionsMu  sync.Mutex
 	connections    map[*websocket.Conn]struct{}
+	closed         bool
 }
 
 func newWSServer() *wsServer {
@@ -308,6 +309,7 @@ func (s *wsServer) Close() error {
 		return nil
 	}
 	s.connectionsMu.Lock()
+	s.closed = true
 	connections := make([]*websocket.Conn, 0, len(s.connections))
 	for conn := range s.connections {
 		connections = append(connections, conn)
@@ -403,6 +405,13 @@ func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 
 	slog.Debug("websocket connection established", "remote", conn.RemoteAddr().String())
 	s.connectionsMu.Lock()
+	// Upgrade can finish after Close has already collected the active sockets.
+	if s.closed {
+		s.connectionsMu.Unlock()
+		_ = conn.Close()
+		releaseConnection()
+		return
+	}
 	s.connections[conn] = struct{}{}
 	s.connectionsMu.Unlock()
 	defer func() {
