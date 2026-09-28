@@ -14,7 +14,7 @@
     "test-integration": "turbo run test-integration"
   },
   "devDependencies": {
-    "turbo": "2.11.0"
+    "turbo": "2.11.4"
   },
   "overrides": {
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3"
