@@ -122,7 +122,10 @@ function Harness({ children }: { children?: ReactNode }) {
       <button type="button" onClick={dismissError}>
         Dismiss error
       </button>
-      <button type="button" onClick={() => void discardCard(4, { rank: 12, suit: 2 })}>
+      <button
+        type="button"
+        onClick={() => void discardCard(4, { rank: 12, suit: 2 }).catch(() => undefined)}
+      >
         Discard test card
       </button>
       <button type="button" onClick={() => updateTurnDrafts({ compositions: [] })}>
@@ -133,7 +136,7 @@ function Harness({ children }: { children?: ReactNode }) {
         onClick={() =>
           void playTableAndDiscard({ compositions: [], additions: [], reclaims: [] }, 1, {
             isJoker: true,
-          })
+          }).catch(() => undefined)
         }
       >
         Play and discard test card
@@ -175,7 +178,7 @@ describe("GameWebSocketProvider", () => {
     cleanup();
   });
 
-  it("matches pending actions by action name and preserves FIFO for repeated actions", async () => {
+  it("correlates replies by request ID and ignores other players and unrelated broadcasts", async () => {
     let controller: ReturnType<typeof useGameWebSocket>;
     function Capture() {
       controller = useGameWebSocket();
@@ -192,6 +195,12 @@ describe("GameWebSocketProvider", () => {
     await act(async () => {
       sockets[0]!.open();
     });
+    await act(async () => {
+      sockets[0]!.message({
+        type: "connected",
+        data: { sessionId: "session-1", playerId: "player-1" },
+      });
+    });
     const settled: string[] = [];
     let first: Promise<unknown>, second: Promise<unknown>, other: Promise<unknown>;
     await act(async () => {
@@ -201,20 +210,55 @@ describe("GameWebSocketProvider", () => {
         .catch((error: Error) => settled.push(error.message));
       other = controller!.removeFriend("friend").then(() => settled.push("other"));
     });
+    const [firstRequest, secondRequest, otherRequest] = sockets[0]!.sent
+      .slice(1)
+      .map((frame) => JSON.parse(frame) as { requestId: string });
+    expect(
+      new Set([firstRequest!.requestId, secondRequest!.requestId, otherRequest!.requestId]).size,
+    ).toBe(3);
     await act(async () => {
-      sockets[0]!.message({ type: "action_result", data: { action: "remove_friend", ok: true } });
+      for (const data of [
+        { action: "discard", playerId: "player-2", ok: true, requestId: firstRequest!.requestId },
+        { action: "draw", playerId: "player-1", ok: true, requestId: firstRequest!.requestId },
+        { action: "discard", playerId: "player-1", ok: true, requestId: "unrelated" },
+        { action: "discard", playerId: "player-1", ok: true },
+      ])
+        sockets[0]!.message({ type: "action_result", data });
+      sockets[0]!.message({
+        type: "error",
+        data: { action: "discard", requestId: "unrelated", message: "unrelated error" },
+      });
+    });
+    expect(settled).toEqual([]);
+    await act(async () => {
+      sockets[0]!.message({
+        type: "action_result",
+        data: { action: "remove_friend", ok: true, requestId: otherRequest!.requestId },
+      });
       await other!;
     });
     expect(settled).toEqual(["other"]);
     await act(async () => {
-      sockets[0]!.message({ type: "action_result", data: { action: "discard", ok: true } });
+      sockets[0]!.message({
+        type: "action_result",
+        data: {
+          action: "discard",
+          playerId: "player-1",
+          ok: true,
+          requestId: firstRequest!.requestId,
+        },
+      });
       await first!;
     });
     expect(settled).toEqual(["other", "first"]);
     await act(async () => {
       sockets[0]!.message({
         type: "error",
-        data: { action: "discard", message: "card unavailable" },
+        data: {
+          action: "discard",
+          message: "card unavailable",
+          requestId: secondRequest!.requestId,
+        },
       });
       await second!;
     });
@@ -227,6 +271,43 @@ describe("GameWebSocketProvider", () => {
     });
   });
 
+  it("times out a missing reply and cleans up pending commands on unmount", async () => {
+    let controller: ReturnType<typeof useGameWebSocket>;
+    function Capture() {
+      controller = useGameWebSocket();
+      return null;
+    }
+    const view = render(
+      <GameWebSocketProvider>
+        <Capture />
+      </GameWebSocketProvider>,
+    );
+    await act(async () => {
+      await controller!.connect();
+      sockets[0]!.open();
+    });
+    vi.useFakeTimers();
+    try {
+      let pending: Promise<unknown>;
+      await act(async () => {
+        pending = controller!.removeFriend("friend").catch((error: Error) => error.message);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(await pending!).toBe("command_timeout");
+      let abandoned: Promise<unknown>;
+      await act(async () => {
+        abandoned = controller!.removeFriend("friend").catch((error: Error) => error.message);
+        view.unmount();
+      });
+      expect(await abandoned!).toBe("connection_lost");
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("restores the server session id when reconnecting", async () => {
     render(
       <GameWebSocketProvider>
@@ -234,6 +315,7 @@ describe("GameWebSocketProvider", () => {
       </GameWebSocketProvider>,
     );
 
+    const initialSessionId = screen.getByTestId("session-id").textContent;
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     });
@@ -244,7 +326,7 @@ describe("GameWebSocketProvider", () => {
     });
     expect(connectEnvelope(sockets[0]!)).toEqual({
       type: "connect",
-      data: { sessionId: "" },
+      data: { sessionId: initialSessionId },
     });
 
     await act(async () => {
@@ -682,10 +764,12 @@ describe("GameWebSocketProvider", () => {
 
     expect(JSON.parse(sockets[0]!.sent.at(-2) ?? "{}")).toEqual({
       type: "discard",
+      requestId: expect.any(String),
       data: { cardIndex: 4, card: { rank: 12, suit: 2 } },
     });
     expect(JSON.parse(sockets[0]!.sent.at(-1) ?? "{}")).toEqual({
       type: "play_and_discard",
+      requestId: expect.any(String),
       data: {
         compositions: [],
         additions: [],

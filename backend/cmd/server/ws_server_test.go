@@ -2216,3 +2216,48 @@ func TestPlayHandlersPreserveValidationOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestCommandRepliesEchoRequestID(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	server := newWSServer()
+	server.lobby = lobby
+	current, _ := lobby.rooms[code].gameState.CurrentPlayer()
+	var sessionID string
+	conn := new(websocket.Conn)
+	for _, event := range events {
+		if event.PlayerID == current.ID {
+			sessionID = event.SessionID
+			lobby.sessions[sessionID].conn = conn
+		}
+	}
+	originalEmitter := emitEvent
+	defer func() { emitEvent = originalEmitter }()
+	var result actionResultEvent
+	var failure errorEvent
+	emitEvent = func(_ *websocket.Conn, kind string, data any) error {
+		if kind == "action_result" {
+			result = data.(actionResultEvent)
+		}
+		if kind == "error" {
+			failure = data.(errorEvent)
+		}
+		return nil
+	}
+	server.handleDraw(conn, sessionID, wsEnvelope{Type: "draw", RequestID: "draw-1", Data: mustMarshalRawMessage(drawRequest{Source: "deck"})})
+	if result.RequestID != "draw-1" || result.PlayerID != current.ID || !result.OK {
+		t.Fatalf("result = %+v", result)
+	}
+	server.handleDraw(conn, sessionID, wsEnvelope{Type: "draw", RequestID: "draw-2", Data: mustMarshalRawMessage(drawRequest{Source: "deck"})})
+	if failure.RequestID != "draw-2" || failure.Action != "draw" {
+		t.Fatalf("game error = %+v", failure)
+	}
+	server.handleDraw(conn, sessionID, wsEnvelope{Type: "draw", RequestID: "draw-3", Data: json.RawMessage(`{`)})
+	if failure.RequestID != "draw-3" {
+		t.Fatalf("decode error = %+v", failure)
+	}
+	server.writeSocialActionSuccess(conn, "remove_friend", "user-1", "social-1")
+	if result.RequestID != "social-1" {
+		t.Fatalf("social result = %+v", result)
+	}
+	t.Log("game success, game error, decode error, and social success echo their exact request IDs")
+}
