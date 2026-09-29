@@ -468,12 +468,14 @@ func (s *wsServer) handleConnectionWithRelease(conn *websocket.Conn, request *ht
 
 	messageLimiter := s.rateLimits.newMessageLimiter()
 	sessionID := ""
+	defer func() {
+		if sessionID != "" {
+			s.lobby.disconnectWithEmitter(sessionID, conn, connectionEmitter)
+		}
+	}()
 	for {
 		var envelope wsEnvelope
 		if err := conn.ReadJSON(&envelope); err != nil {
-			if sessionID != "" {
-				s.lobby.disconnectWithEmitter(sessionID, conn, connectionEmitter)
-			}
 			if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				slog.Debug("websocket read error", "sessionID", sessionID, "error", err)
 			}
@@ -587,6 +589,12 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, request *http.Request, en
 		s.writeRequestError(conn, envelope, err)
 		return "", true
 	}
+	accepted := false
+	defer func() {
+		if !accepted {
+			s.lobby.disconnect(event.SessionID, conn)
+		}
+	}()
 	if err := emitEvent(conn, "connected", event); err != nil {
 		return "", true
 	}
@@ -612,6 +620,7 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, request *http.Request, en
 		s.broadcastRoomState(*roomState, otherConnections(recipients, conn))
 	}
 
+	accepted = true
 	return event.SessionID, false
 }
 

@@ -216,5 +216,25 @@ func TestLogoutDuringSocketRegistrationCannotMissNewConnection(t *testing.T) {
 	close(store.release)
 	<-logoutDone
 	requireAuthSocketClosed(t, conn)
+	deadline := time.Now().Add(time.Second)
+	for {
+		server.authSocketsMu.Lock()
+		registered := len(server.authSockets)
+		server.authSocketsMu.Unlock()
+		if registered == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("socket registration was not cleaned up")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	server.lobby.mu.Lock()
+	for _, session := range server.lobby.sessions {
+		if session.conn != nil {
+			t.Error("closed connection left stale lobby presence")
+		}
+	}
+	server.lobby.mu.Unlock()
 	t.Log("logout raced with a successful auth read; newly registering socket still closed")
 }
