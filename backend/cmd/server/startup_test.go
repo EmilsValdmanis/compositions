@@ -107,6 +107,9 @@ func TestSessionCleanupLifecycle(t *testing.T) {
 	default:
 	}
 	originalInterval := sessionCleanupInterval
+	originalStatisticsInterval := statisticsRetryInterval
+	statisticsRetryInterval = time.Millisecond
+	defer func() { statisticsRetryInterval = originalStatisticsInterval }()
 	sessionCleanupInterval = time.Millisecond
 	defer func() { sessionCleanupInterval = originalInterval }()
 	stop = server.startMaintenance(context.Background())

@@ -114,7 +114,9 @@ func (s *wsServer) startMaintenance(parent context.Context) context.CancelFunc {
 				}
 				cleanupCancel()
 			case <-statisticsTicker.C:
-				s.lobby.retryPendingStatistics()
+				if savesStatistics {
+					s.lobby.retryPendingStatistics()
+				}
 			case <-ctx.Done():
 				return
 			}
