@@ -6,8 +6,9 @@ import (
 )
 
 type lobbyMutationState struct {
-	sessions map[string]*playerSession
-	rooms    map[string]*room
+	sessions          map[string]*playerSession
+	rooms             map[string]*room
+	pendingStatistics map[string]pendingGameStatistics
 }
 
 // Commands are serialized across the singleton persisted lobby. Read-only
@@ -17,6 +18,7 @@ func (l *lobbyServer) lockMutation() func() {
 	l.mu.Lock()
 	before := &lobbyMutationState{
 		sessions: maps.Clone(l.sessions), rooms: maps.Clone(l.rooms),
+		pendingStatistics: maps.Clone(l.pendingStatistics),
 	}
 	for id, session := range before.sessions {
 		if session != nil {

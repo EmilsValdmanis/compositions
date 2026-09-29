@@ -1351,9 +1351,10 @@ func (l *lobbyServer) persistLocked(reason string) error {
 	l.persistenceRevision++
 	revision := l.persistenceRevision
 	snapshot := l.persistenceSnapshotLocked()
-	tentative := lobbyMutationState{sessions: l.sessions, rooms: l.rooms}
+	tentative := lobbyMutationState{sessions: l.sessions, rooms: l.rooms, pendingStatistics: l.pendingStatistics}
 	if l.mutationBefore != nil {
 		l.sessions, l.rooms = l.mutationBefore.sessions, l.mutationBefore.rooms
+		l.pendingStatistics = l.mutationBefore.pendingStatistics
 	}
 	// Persist the authoritative game state with its dirty checkpoint marker
 	// before writing derived statistics. If this write fails, a statistics row
@@ -1363,6 +1364,7 @@ func (l *lobbyServer) persistLocked(reason string) error {
 		return fmt.Errorf("persist lobby state: %w", err)
 	}
 	l.sessions, l.rooms = tentative.sessions, tentative.rooms
+	l.pendingStatistics = tentative.pendingStatistics
 	l.mutationBefore = nil // The authoritative state is committed.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()

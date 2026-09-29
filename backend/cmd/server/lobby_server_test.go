@@ -2953,3 +2953,31 @@ func TestStatisticsMarkerFailureDoesNotFailCommittedCommand(t *testing.T) {
 	}
 	t.Log("statistics marker write failed after commit; command still acknowledged successfully")
 }
+
+func TestFailedForfeitDoesNotQueueUncommittedStatistics(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	store := &statisticsRecordingStore{}
+	lobby.store = store
+	for i, event := range events {
+		lobby.sessions[event.SessionID].authenticated = true
+		lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+	}
+	store.saveErr = errors.New("snapshot unavailable")
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err == nil {
+		t.Fatal("forfeit succeeded during outage")
+	}
+	if len(lobby.pendingStatistics) != 0 || lobby.rooms[code].gameStatePhase() != game.PhaseInProgress {
+		t.Fatal("uncommitted forfeit escaped rollback")
+	}
+	store.saveErr = nil
+	lobby.retryPendingStatistics()
+	if len(store.games) != 0 {
+		t.Fatal("uncommitted game published statistics")
+	}
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.games) != 1 {
+		t.Fatal("retried forfeit did not finalize")
+	}
+}
