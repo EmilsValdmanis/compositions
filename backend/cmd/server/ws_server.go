@@ -35,10 +35,13 @@ func setWSReadDeadline(conn *websocket.Conn) error {
 	return conn.SetReadDeadline(time.Now().Add(defaultWSReadTimeout))
 }
 
-func runHeartbeatPingLoop(conn *websocket.Conn, pingDone <-chan struct{}, ticks <-chan time.Time) {
+func runHeartbeatPingLoop(conn *websocket.Conn, pingDone <-chan struct{}, ticks <-chan time.Time, validators ...func() bool) {
 	for {
 		select {
 		case <-ticks:
+			if len(validators) > 0 && !validators[0]() {
+				return
+			}
 			if err := writeControl(conn, websocket.PingMessage, nil, time.Now().Add(defaultWSWriteTimeout)); err != nil {
 				return
 			}
@@ -267,6 +270,8 @@ type wsServer struct {
 	allowedOrigin  string
 	rateLimits     *wsRateLimiters
 	upgrader       websocket.Upgrader
+	authSocketsMu  sync.Mutex
+	authSockets    map[*websocket.Conn]socketAuthSession
 	connectionsMu  sync.Mutex
 	connections    map[*websocket.Conn]struct{}
 	closed         bool
@@ -297,6 +302,10 @@ func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrig
 		allowedOrigin:  normalizeOrigin(allowedOrigin),
 		rateLimits:     newWSRateLimiters(defaultWSRateLimitConfig()),
 		connections:    make(map[*websocket.Conn]struct{}),
+	}
+	server.authSockets = make(map[*websocket.Conn]socketAuthSession)
+	if auth != nil {
+		auth.onSessionRevoked = server.revokeAuthSockets
 	}
 	server.socialStore, _ = store.(socialStore)
 	server.upgrader = websocket.Upgrader{
@@ -433,6 +442,7 @@ func (s *wsServer) handleConnectionWithRelease(conn *websocket.Conn, request *ht
 	connectionEmitter := emitEvent
 	defer releaseConnection()
 	defer wsDataWriteLocks.Delete(conn)
+	defer s.forgetAuthSocket(conn)
 	defer s.socialDisconnected(conn)
 	defer s.spectatorDisconnected(conn)
 	defer conn.Close()
@@ -453,7 +463,7 @@ func (s *wsServer) handleConnectionWithRelease(conn *websocket.Conn, request *ht
 		defer close(pingExited)
 		ticker := time.NewTicker(pingInterval)
 		defer ticker.Stop()
-		runHeartbeatPingLoop(conn, pingDone, ticker.C)
+		runHeartbeatPingLoop(conn, pingDone, ticker.C, func() bool { return s.revalidateIdleAuthSocket(conn) })
 	}()
 
 	messageLimiter := s.rateLimits.newMessageLimiter()
@@ -557,7 +567,7 @@ func (s *wsServer) handleConnect(conn *websocket.Conn, request *http.Request, en
 
 	user := authenticatedUser{}
 	if s.auth != nil {
-		session, err := s.auth.sessionFromRequest(request)
+		session, err := s.registerAuthSocket(conn, request)
 		if err != nil {
 			slog.Warn("connect: session verification failed", "sessionID", req.SessionID, "error", err)
 			s.writeRequestError(conn, envelope, err)
@@ -1038,6 +1048,10 @@ func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID st
 	}
 	if err := s.lobby.requireActiveSessionConnection(sessionID, conn); err != nil {
 		s.writeRequestError(conn, envelope, err)
+		return req, false
+	}
+	if !s.revalidateAuthSocket(conn) {
+		s.writeActionError(conn, envelope.Type, errAuthenticationRequired)
 		return req, false
 	}
 	if err := decodePayload(envelope.Data, &req); err != nil {

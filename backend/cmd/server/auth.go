@@ -38,9 +38,10 @@ const (
 )
 
 type authSession struct {
-	user  authenticatedUser
-	token string
-	valid bool
+	expiresAt time.Time
+	user      authenticatedUser
+	token     string
+	valid     bool
 }
 
 type sessionReader interface {
@@ -77,10 +78,11 @@ type authConfig struct {
 }
 
 type authHandler struct {
-	config authConfig
-	store  authStore
-	now    func() time.Time
-	state  func() (string, error)
+	onSessionRevoked func(string)
+	config           authConfig
+	store            authStore
+	now              func() time.Time
+	state            func() (string, error)
 }
 
 type googleUserInfo struct {
@@ -457,6 +459,11 @@ func (h *authHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if sessionToken != "" {
 		if err := h.store.DeleteSession(r.Context(), sessionToken); err != nil && !errors.Is(err, database.ErrSessionNotFound) && !errors.Is(err, errAuthenticationRequired) {
 			slog.Warn("delete session failed", "error", err)
+			writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to log out")
+			return
+		}
+		if h.onSessionRevoked != nil {
+			h.onSessionRevoked(sessionToken)
 		}
 	}
 	clearCookie(w, h.cookie(authCookieName, "", time.Unix(0, 0)))
@@ -490,11 +497,11 @@ func (h *authHandler) sessionFromRequest(r *http.Request) (authSession, error) {
 		IsAdmin:           record.IsAdmin,
 		OnboardingVersion: record.OnboardingVersion,
 	}
-	if !user.isAuthenticated() {
+	if !user.isAuthenticated() || (!record.ExpiresAt.IsZero() && !h.now().Before(record.ExpiresAt)) {
 		return authSession{}, errAuthenticationRequired
 	}
 
-	return authSession{user: user, token: sessionToken, valid: true}, nil
+	return authSession{user: user, token: sessionToken, valid: true, expiresAt: record.ExpiresAt}, nil
 }
 
 func (h *authHandler) fetchGoogleUser(ctx context.Context, token *oauth2.Token) (authenticatedUser, error) {
