@@ -2981,3 +2981,35 @@ func TestFailedForfeitDoesNotQueueUncommittedStatistics(t *testing.T) {
 		t.Fatal("retried forfeit did not finalize")
 	}
 }
+
+func TestFailedDealRestoresRoomPlayerData(t *testing.T) {
+	lobby, events, code := newLobbyReadyToStart(t)
+	if _, _, err := lobby.startGame(events[0].SessionID, 0); err != nil {
+		t.Fatal(err)
+	}
+	store := &jsonLobbyStateStore{saveErr: errors.New("snapshot unavailable")}
+	lobby.store = store
+	before := lobby.rooms[code].gameState.PersistenceSnapshot()
+	cut := 0
+	if _, _, err := lobby.chooseDealing(events[1].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut}); err == nil {
+		t.Fatal("deal succeeded during outage")
+	}
+	if !reflect.DeepEqual(before, lobby.rooms[code].gameState.PersistenceSnapshot()) {
+		t.Fatal("failed deal changed game")
+	}
+	// Lobby lifecycle reconstructs a game from these room-player objects.
+	rebuilt := game.NewGameState()
+	for _, player := range lobby.rooms[code].players {
+		if err := rebuilt.AddPlayer(player.player); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !reflect.DeepEqual(before.Players, rebuilt.PersistenceSnapshot().Players) {
+		t.Fatal("failed deal mutated room-player hands or statistics")
+	}
+	store.saveErr = nil
+	if _, _, err := lobby.chooseDealing(events[1].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut}); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("failed dealing restores engine and room-player hands; retry succeeds")
+}

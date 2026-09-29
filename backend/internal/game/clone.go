@@ -14,16 +14,9 @@ func (gs *GameState) Clone() *GameState {
 	next := *gs
 	next.players = slices.Clone(gs.players)
 	for i, player := range next.players {
-		if player != nil {
-			copy := *player
-			if player.hand != nil {
-				hand := *player.hand
-				hand.cards = slices.Clone(player.hand.cards)
-				copy.hand = &hand
-			}
-			next.players[i] = &copy
-		}
+		next.players[i] = player.Clone()
 	}
+
 	next.activeCompositions = slices.Clone(gs.activeCompositions)
 	for i, comp := range next.activeCompositions {
 		if comp != nil {
@@ -43,4 +36,18 @@ func (gs *GameState) Clone() *GameState {
 		next.discardPile = &CardPile{cards: slices.Clone(gs.discardPile.cards)}
 	}
 	return &next
+}
+
+// Clone preserves player data without sharing a mutable hand.
+func (player *Player) Clone() *Player {
+	if player == nil {
+		return nil
+	}
+	copy := *player
+	if player.hand != nil {
+		hand := *player.hand
+		hand.cards = slices.Clone(player.hand.cards)
+		copy.hand = &hand
+	}
+	return &copy
 }

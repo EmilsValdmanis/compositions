@@ -38,6 +38,7 @@ func (l *lobbyServer) lockMutation() func() {
 				continue
 			}
 			playerCopy := *player
+			playerCopy.player = player.player.Clone()
 			copy.players[i] = &playerCopy
 		}
 		copy.turnBaseline = cloneGameSnapshot(room.turnBaseline)
