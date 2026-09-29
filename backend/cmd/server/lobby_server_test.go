@@ -2842,3 +2842,114 @@ func TestRoomGameStateRecipientAndCurrentTurnCoverage(t *testing.T) {
 		t.Fatalf("gameStateRecipients(snapshot failure) error = %v; want game state snapshot failed", err)
 	}
 }
+
+func TestFailedDrawAndRoomCreationCanBeRetried(t *testing.T) {
+	t.Run("draw", func(t *testing.T) {
+		lobby, events, code := newActiveLobbyForExitTests(t, 2)
+		player, _ := lobby.rooms[code].gameState.CurrentPlayer()
+		var sessionID string
+		for _, event := range events {
+			if event.PlayerID == player.ID {
+				sessionID = event.SessionID
+			}
+		}
+		before := lobby.rooms[code].gameState.PersistenceSnapshot()
+		store := &jsonLobbyStateStore{saveErr: errors.New("outage")}
+		lobby.store = store
+		if _, _, _, err := lobby.draw(sessionID, "deck"); err == nil {
+			t.Fatal("draw succeeded during outage")
+		}
+		if !reflect.DeepEqual(before, lobby.rooms[code].gameState.PersistenceSnapshot()) {
+			t.Fatal("failed draw changed live game")
+		}
+		store.saveErr = nil
+		if _, _, _, err := lobby.draw(sessionID, "deck"); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("failed draw: hand unchanged, hasDrawn=false; retry succeeds exactly once")
+	})
+	t.Run("create room", func(t *testing.T) {
+		lobby := newLobbyServer()
+		event, _, _, _ := lobby.connect("", nil)
+		store := &jsonLobbyStateStore{saveErr: errors.New("outage")}
+		lobby.store = store
+		if _, _, err := lobby.createRoom(event.SessionID, "Host"); err == nil {
+			t.Fatal("create succeeded during outage")
+		}
+		if len(lobby.rooms) != 0 || lobby.sessions[event.SessionID].roomCode != "" {
+			t.Fatal("failed create retained room or membership")
+		}
+		store.saveErr = nil
+		if _, _, err := lobby.createRoom(event.SessionID, "Host"); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("failed create: zero rooms, membership empty; retry succeeds")
+	})
+}
+
+type failFirstLobbyStore struct {
+	jsonLobbyStateStore
+	started chan struct{}
+	release chan struct{}
+	calls   int
+}
+
+func (s *failFirstLobbyStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+	s.calls++
+	if s.calls == 1 {
+		close(s.started)
+		<-s.release
+		return errors.New("first write failed")
+	}
+	return s.jsonLobbyStateStore.SaveLobbyState(ctx, state)
+}
+
+func TestFailedCommandDoesNotLeakStateOrOverwriteQueuedCommand(t *testing.T) {
+	lobby := newLobbyServer()
+	event, _, _, _ := lobby.connect("", nil)
+	store := &failFirstLobbyStore{started: make(chan struct{}), release: make(chan struct{})}
+	lobby.store = store
+	first := make(chan error, 1)
+	go func() { _, _, err := lobby.createRoom(event.SessionID, "Host"); first <- err }()
+	<-store.started
+	lobby.mu.Lock()
+	if len(lobby.rooms) != 0 || lobby.sessions[event.SessionID].roomCode != "" {
+		t.Error("readers saw an uncommitted room during persistence")
+	}
+	lobby.mu.Unlock()
+	second := make(chan error, 1)
+	go func() { _, _, err := lobby.createRoom(event.SessionID, "Host"); second <- err }()
+	select {
+	case err := <-second:
+		t.Fatalf("queued command bypassed in-flight write: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+	close(store.release)
+	if err := <-first; err == nil {
+		t.Fatal("first command should fail")
+	}
+	if err := <-second; err != nil {
+		t.Fatal(err)
+	}
+	if len(lobby.rooms) != 1 || lobby.sessions[event.SessionID].roomCode == "" {
+		t.Fatal("queued successful command was lost")
+	}
+	t.Log("in-flight state hidden from readers; failed write rolled back; queued retry committed")
+}
+
+func TestStatisticsMarkerFailureDoesNotFailCommittedCommand(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	store := &statisticsRecordingStore{lobbySaveErrors: map[int]error{2: errors.New("marker unavailable")}}
+	lobby.store = store
+	for i, event := range events {
+		lobby.sessions[event.SessionID].authenticated = true
+		lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+	}
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+		t.Fatalf("committed forfeit reported failure: %v", err)
+	}
+	if lobby.rooms[code].gameStatePhase() != game.PhaseGameOver || len(store.games) != 1 {
+		t.Fatal("committed command lost its state or statistics")
+	}
+	t.Log("statistics marker write failed after commit; command still acknowledged successfully")
+}
