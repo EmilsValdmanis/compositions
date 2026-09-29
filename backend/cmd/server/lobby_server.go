@@ -129,9 +129,10 @@ type dealingChoiceOptions struct {
 const persistedLobbyStateVersion = 1
 
 type persistedLobbyState struct {
-	Version  int                      `json:"version"`
-	Sessions []persistedPlayerSession `json:"sessions"`
-	Rooms    []persistedRoom          `json:"rooms"`
+	Version           int                              `json:"version"`
+	Sessions          []persistedPlayerSession         `json:"sessions"`
+	Rooms             []persistedRoom                  `json:"rooms"`
+	PendingStatistics map[string]pendingGameStatistics `json:"pendingStatistics,omitempty"`
 }
 
 type persistedPlayerSession struct {
@@ -205,6 +206,7 @@ type gameStateRecipient struct {
 
 type lobbyServer struct {
 	mu                   sync.Mutex
+	pendingStatistics    map[string]pendingGameStatistics
 	persistenceMu        sync.Mutex
 	persistenceRevision  uint64
 	persistedRevision    uint64
@@ -1325,6 +1327,7 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 	defer l.mu.Unlock()
 	l.sessions = sessions
 	l.rooms = rooms
+	l.pendingStatistics = state.PendingStatistics
 
 	slog.Info("lobby state restored", "rooms", len(rooms), "sessions", len(sessions))
 	return nil
@@ -1384,6 +1387,15 @@ func (l *lobbyServer) saveLobbySnapshotLocked(snapshot persistedLobbyState, revi
 	return err
 }
 
+// Terminal statistics survive room reset and restart until their idempotent write succeeds.
+type pendingGameStatistics struct {
+	Kind        string                        `json:"kind"`
+	Status      string                        `json:"status,omitempty"`
+	Checkpoint  database.GameCheckpointRecord `json:"checkpoint"`
+	Completed   database.CompletedGameRecord  `json:"completed"`
+	CompletedAt time.Time                     `json:"completedAt"`
+}
+
 type statisticsSaveJob struct {
 	room        *room
 	roomKey     string
@@ -1397,13 +1409,11 @@ type statisticsSaveJob struct {
 	completedAt time.Time
 }
 
-func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
-	store, ok := l.store.(gameStatisticsStore)
-	if !ok {
-		return false
+func (l *lobbyServer) statisticsJobsLocked() ([]statisticsSaveJob, bool) {
+	if _, ok := l.store.(gameStatisticsStore); !ok {
+		return nil, false
 	}
 	changed := false
-	revision := l.persistenceRevision
 	jobs := make([]statisticsSaveJob, 0)
 	for roomKey, room := range l.rooms {
 		if room == nil || room.statisticsSaved || room.statisticsGameID == "" {
@@ -1489,8 +1499,37 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 		default:
 			continue
 		}
-		jobs = append(jobs, job)
+		if phase == game.PhaseGameOver {
+			if l.pendingStatistics == nil {
+				l.pendingStatistics = make(map[string]pendingGameStatistics)
+			}
+			if _, exists := l.pendingStatistics[job.gameID]; !exists {
+				l.pendingStatistics[job.gameID] = pendingGameStatistics{
+					Kind: job.kind, Status: job.status, Checkpoint: job.checkpoint,
+					Completed: job.completed, CompletedAt: job.completedAt,
+				}
+			}
+		} else {
+			jobs = append(jobs, job)
+		}
 	}
+	for gameID, record := range l.pendingStatistics {
+		jobs = append(jobs, statisticsSaveJob{
+			gameID: gameID, roomCode: record.Checkpoint.RoomCode, phase: game.PhaseGameOver,
+			kind: record.Kind, status: record.Status, checkpoint: record.Checkpoint,
+			completed: record.Completed, completedAt: record.CompletedAt,
+		})
+	}
+	return jobs, changed
+}
+
+func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
+	store, ok := l.store.(gameStatisticsStore)
+	if !ok {
+		return false
+	}
+	jobs, changed := l.statisticsJobsLocked()
+	revision := l.persistenceRevision
 
 	for _, job := range jobs {
 		l.mu.Unlock()
@@ -1510,9 +1549,19 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 			slog.Error("persist game statistics failed", "roomCode", job.roomCode, "gameID", job.gameID, "error", err)
 			continue
 		}
+		if job.phase == game.PhaseGameOver {
+			delete(l.pendingStatistics, job.gameID)
+			changed = true
+			// The active room may already be reset or running another game.
+			for roomKey, room := range l.rooms {
+				if room != nil && room.statisticsGameID == job.gameID {
+					job.room, job.roomKey = room, roomKey
+				}
+			}
+		}
 		// A concurrent mutation owns the newer dirty marker and will retry this
 		// idempotent write with a fresh snapshot.
-		if l.persistenceRevision != revision || l.rooms[job.roomKey] != job.room || job.room.statisticsGameID != job.gameID {
+		if job.room == nil || l.persistenceRevision != revision || l.rooms[job.roomKey] != job.room || job.room.statisticsGameID != job.gameID {
 			continue
 		}
 		job.room.statisticsDirty = false
@@ -1526,9 +1575,10 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 
 func (l *lobbyServer) persistenceSnapshotLocked() persistedLobbyState {
 	state := persistedLobbyState{
-		Version:  persistedLobbyStateVersion,
-		Sessions: make([]persistedPlayerSession, 0, len(l.sessions)),
-		Rooms:    make([]persistedRoom, 0, len(l.rooms)),
+		PendingStatistics: maps.Clone(l.pendingStatistics),
+		Version:           persistedLobbyStateVersion,
+		Sessions:          make([]persistedPlayerSession, 0, len(l.sessions)),
+		Rooms:             make([]persistedRoom, 0, len(l.rooms)),
 	}
 
 	for _, session := range l.sessions {
