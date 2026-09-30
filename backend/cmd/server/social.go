@@ -306,7 +306,7 @@ func (s *wsServer) handleSpectateGame(conn *websocket.Conn, sessionID string, en
 	defer cancel()
 	record, err := s.socialStore.ListSocialSnapshot(ctx, userID)
 	if err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	isFriend := false
@@ -317,11 +317,11 @@ func (s *wsServer) handleSpectateGame(conn *websocket.Conn, sessionID string, en
 		}
 	}
 	if !isFriend {
-		s.writeActionError(conn, envelope.Type, database.ErrUsersNotFriends)
+		s.writeRequestError(conn, envelope, database.ErrUsersNotFriends)
 		return
 	}
 	if _, active := s.lobby.activeGameForUser(req.UserID); !active {
-		s.writeActionError(conn, envelope.Type, errors.New("friend is not in an active game"))
+		s.writeRequestError(conn, envelope, errors.New("friend is not in an active game"))
 		return
 	}
 
@@ -330,12 +330,12 @@ func (s *wsServer) handleSpectateGame(conn *websocket.Conn, sessionID string, en
 	}
 	event, roomState, recipients, err := s.lobby.spectateGame(sessionID, req.UserID, conn)
 	if err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	s.broadcastRoomState(roomState, recipients)
 	logEmitFailure(conn, "game_state", event, "write spectator game state failed", "roomCode", roomState.Code, "userID", userID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
 }
 
 func (s *wsServer) handleStopSpectating(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -347,7 +347,7 @@ func (s *wsServer) handleStopSpectating(conn *websocket.Conn, sessionID string, 
 	if roomState != nil {
 		s.broadcastRoomState(*roomState, recipients)
 	}
-	s.writeSocialActionSuccess(conn, envelope.Type, "")
+	s.writeSocialActionSuccess(conn, envelope.Type, "", envelope.RequestID)
 }
 
 func (s *wsServer) spectatorDisconnected(conn *websocket.Conn) {
@@ -407,11 +407,11 @@ func (s *wsServer) handleSendFriendRequest(conn *websocket.Conn, sessionID strin
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 	if _, err := s.socialStore.SendFriendRequest(ctx, userID, req.UserID); err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	s.refreshSocialUsers(userID, req.UserID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
 }
 
 func (s *wsServer) handleRespondFriendRequest(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -423,11 +423,11 @@ func (s *wsServer) handleRespondFriendRequest(conn *websocket.Conn, sessionID st
 	defer cancel()
 	senderID, err := s.socialStore.RespondFriendRequest(ctx, userID, req.RequestID, req.Accept)
 	if err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	s.refreshSocialUsers(userID, senderID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
 }
 
 func (s *wsServer) handleRemoveFriend(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -438,11 +438,11 @@ func (s *wsServer) handleRemoveFriend(conn *websocket.Conn, sessionID string, en
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 	if err := s.socialStore.RemoveFriend(ctx, userID, req.UserID); err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	s.refreshSocialUsers(userID, req.UserID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
 }
 
 func (s *wsServer) handleSendGameInvite(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -451,22 +451,22 @@ func (s *wsServer) handleSendGameInvite(conn *websocket.Conn, sessionID string, 
 		return
 	}
 	if !s.socialPresence.isOnline(req.UserID) {
-		s.writeActionError(conn, envelope.Type, errors.New("friend is not available"))
+		s.writeRequestError(conn, envelope, errors.New("friend is not available"))
 		return
 	}
 	roomCode, err := s.lobby.joinableRoomCode(sessionID)
 	if err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 	if _, err := s.socialStore.SendGameInvite(ctx, userID, req.UserID, roomCode, time.Now().Add(gameInviteTTL)); err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	s.refreshSocialUsers(req.UserID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
 }
 
 func (s *wsServer) handleRespondGameInvite(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -478,13 +478,13 @@ func (s *wsServer) handleRespondGameInvite(conn *websocket.Conn, sessionID strin
 	defer cancel()
 	invite, err := s.socialStore.GetGameInvite(ctx, userID, req.InviteID)
 	if err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	if req.Accept {
 		roomState, recipients, err := s.lobby.joinRoom(sessionID, invite.RoomCode, "")
 		if err != nil {
-			s.writeActionError(conn, envelope.Type, err)
+			s.writeRequestError(conn, envelope, err)
 			return
 		}
 		if _, err := s.socialStore.DeleteGameInvite(ctx, userID, req.InviteID); err != nil {
@@ -492,17 +492,17 @@ func (s *wsServer) handleRespondGameInvite(conn *websocket.Conn, sessionID strin
 		}
 		s.broadcastRoomState(roomState, recipients)
 	} else if _, err := s.socialStore.DeleteGameInvite(ctx, userID, req.InviteID); err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return
 	}
 	s.refreshSocialUsers(userID, invite.User.ID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID)
+	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
 }
 
 func decodeSocialRequest[T any](s *wsServer, conn *websocket.Conn, sessionID string, envelope wsEnvelope) (T, string, bool) {
 	var empty T
 	if s.socialStore == nil {
-		s.writeActionError(conn, envelope.Type, errors.New("social features are unavailable"))
+		s.writeRequestError(conn, envelope, errors.New("social features are unavailable"))
 		return empty, "", false
 	}
 	req, ok := decodeSessionRequest[T](s, conn, sessionID, envelope)
@@ -511,12 +511,16 @@ func decodeSocialRequest[T any](s *wsServer, conn *websocket.Conn, sessionID str
 	}
 	userID, err := s.lobby.authenticatedUserID(sessionID)
 	if err != nil {
-		s.writeActionError(conn, envelope.Type, err)
+		s.writeRequestError(conn, envelope, err)
 		return empty, "", false
 	}
 	return req, userID, true
 }
 
-func (s *wsServer) writeSocialActionSuccess(conn *websocket.Conn, action, userID string) {
-	logEmitFailure(conn, "action_result", actionResultEvent{Action: action, PlayerID: userID, OK: true}, "write social action result failed", "action", action, "userID", userID)
+func (s *wsServer) writeSocialActionSuccess(conn *websocket.Conn, action, userID string, requestIDs ...string) {
+	requestID := ""
+	if len(requestIDs) > 0 {
+		requestID = requestIDs[0]
+	}
+	logEmitFailure(conn, "action_result", actionResultEvent{Action: action, PlayerID: userID, OK: true, RequestID: requestID}, "write social action result failed", "action", action, "userID", userID)
 }

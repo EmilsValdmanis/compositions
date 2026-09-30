@@ -64,6 +64,7 @@ const errorMessages = new Map<string, () => string>(
     connection_unavailable: m.error_connection_unavailable,
     invalid_server_message: m.error_invalid_server_message,
     send_failed: m.error_send_failed,
+    command_timeout: m.error_command_timeout,
   }),
 );
 

@@ -175,6 +175,7 @@ export type RoomSnapshot = {
 };
 
 export type ActionResult = {
+  requestId?: string;
   action: string;
   playerId: string;
   ok: boolean;
@@ -213,6 +214,9 @@ export type SocialState = {
 };
 
 type PendingAction = {
+  requestId: string;
+  playerId?: string;
+  timer: number;
   expectedAction: string;
   resolve: (result: ActionResult) => void;
   reject: (error: Error) => void;
@@ -535,6 +539,7 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       const socket = socketRef.current;
       socketRef.current = null;
       socket?.close();
+      rejectPendingActions("connection_lost");
     }
 
     window.addEventListener("beforeunload", cancelPendingConnect);
@@ -547,54 +552,37 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     };
   }, []);
 
-  function rejectPendingActions(message: string, action?: string) {
-    if (action) {
-      const pendingIndex = pendingActionsRef.current.findIndex(
-        (pendingAction) => pendingAction.expectedAction === action,
+  function rejectPendingActions(message: string, requestId?: string) {
+    const actions = requestId
+      ? pendingActionsRef.current.filter((pending) => pending.requestId === requestId)
+      : pendingActionsRef.current.splice(0);
+    if (requestId) {
+      pendingActionsRef.current = pendingActionsRef.current.filter(
+        (pending) => pending.requestId !== requestId,
       );
-      if (pendingIndex < 0) {
-        return;
-      }
-
-      const [pendingAction] = pendingActionsRef.current.splice(pendingIndex, 1);
-      pendingAction?.reject(new Error(message));
-      return;
     }
-
-    const pendingActions = pendingActionsRef.current.splice(0);
-
-    for (const pendingAction of pendingActions) {
-      pendingAction.reject(new Error(message));
+    for (const pending of actions) {
+      window.clearTimeout(pending.timer);
+      pending.reject(new Error(message));
     }
   }
 
   function resolvePendingAction(data: unknown) {
     const result = data as Partial<ActionResult> | null | undefined;
-    const action = typeof result?.action === "string" ? result.action : null;
-    const pendingIndex = action
-      ? pendingActionsRef.current.findIndex(
-          (pendingAction) => pendingAction.expectedAction === action,
-        )
-      : 0;
-    const [pendingAction] = pendingActionsRef.current.splice(
-      pendingIndex >= 0 ? pendingIndex : 0,
-      1,
+    const index = pendingActionsRef.current.findIndex(
+      (pending) =>
+        result?.requestId === pending.requestId &&
+        result.action === pending.expectedAction &&
+        (!pending.playerId || result.playerId === pending.playerId),
     );
-
-    if (!pendingAction) {
+    if (index < 0) return;
+    const [pending] = pendingActionsRef.current.splice(index, 1);
+    window.clearTimeout(pending!.timer);
+    if (result?.ok !== true) {
+      pending!.reject(new Error("send_failed"));
       return;
     }
-
-    if (result?.ok === false) {
-      pendingAction.reject(new Error("send_failed"));
-      return;
-    }
-
-    pendingAction.resolve({
-      action: action ?? pendingAction.expectedAction,
-      playerId: result?.playerId ?? "",
-      ok: true,
-    });
+    pending!.resolve(result as ActionResult);
   }
 
   function applyIncomingMessage(message: Envelope) {
@@ -603,21 +591,25 @@ function useGameWebSocketController(): GameWebSocketContextValue {
     }
 
     if (message.type === "error") {
-      const action =
-        typeof message.data === "object" &&
-        message.data &&
-        "action" in message.data &&
-        typeof message.data.action === "string"
-          ? message.data.action
-          : undefined;
-      rejectPendingActions(
-        typeof message.data === "object" && message.data && "message" in message.data
-          ? String(message.data.message)
-          : typeof message.data === "object" && message.data && "code" in message.data
-            ? String(message.data.code)
-            : "internal_error",
-        action,
-      );
+      const data = message.data as
+        | { requestId?: unknown; action?: unknown; message?: unknown; code?: unknown }
+        | undefined;
+      if (
+        typeof data?.requestId === "string" &&
+        pendingActionsRef.current.some(
+          (pending) =>
+            pending.requestId === data.requestId && pending.expectedAction === data.action,
+        )
+      ) {
+        rejectPendingActions(
+          typeof data.message === "string"
+            ? data.message
+            : typeof data.code === "string"
+              ? data.code
+              : "internal_error",
+          data.requestId,
+        );
+      }
     }
 
     updateState((current) => reduceIncomingMessage(current, message.type, message.data));
@@ -638,10 +630,27 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       return;
     }
 
+    const requestId = options?.awaitResult ? crypto.randomUUID() : undefined;
     const pendingAction = options?.awaitResult
       ? new Promise<ActionResult>((resolve, reject) => {
           pendingActionsRef.current.push({
             expectedAction: type,
+            requestId: requestId!,
+            playerId: [
+              "play",
+              "play_and_discard",
+              "discard",
+              "forfeit_game",
+              "request_end_game",
+              "vote_end_game",
+              "report_issue",
+            ].includes(type)
+              ? gameWebSocketStore.get().playerId
+              : undefined,
+            timer: window.setTimeout(
+              () => rejectPendingActions("command_timeout", requestId),
+              20_000,
+            ),
             resolve,
             reject,
           });
@@ -649,17 +658,10 @@ function useGameWebSocketController(): GameWebSocketContextValue {
       : undefined;
 
     try {
-      socket.send(JSON.stringify({ type, data }));
+      socket.send(JSON.stringify({ type, data, requestId }));
     } catch (error) {
       if (options?.awaitResult) {
-        const pendingIndex = pendingActionsRef.current.findLastIndex(
-          (candidate) => candidate.expectedAction === type,
-        );
-        const [queuedAction] = pendingActionsRef.current.splice(
-          pendingIndex >= 0 ? pendingIndex : 0,
-          1,
-        );
-        queuedAction?.reject(error instanceof Error ? error : new Error("send_failed"));
+        rejectPendingActions(error instanceof Error ? error.message : "send_failed", requestId);
         return pendingAction;
       }
 
