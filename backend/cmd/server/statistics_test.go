@@ -51,7 +51,8 @@ func (s *blockingStatisticsStore) SaveGameCheckpoint(ctx context.Context, checkp
 func saveStatisticsForTest(lobby *lobbyServer) bool {
 	lobby.mu.Lock()
 	defer lobby.mu.Unlock()
-	return lobby.saveStatisticsLocked(context.Background())
+	jobs, changed := lobby.statisticsJobsLocked()
+	return lobby.saveStatisticsJobsLocked(context.Background(), jobs) || changed
 }
 
 func TestStatisticsPlaytimePausesWhilePlayersAreDisconnected(t *testing.T) {
@@ -616,23 +617,27 @@ func TestLobbyRemainingErrorBranches(t *testing.T) {
 	}
 
 	active, events, roomCode := newActiveLobbyForExitTests(t, 3)
-	room := active.rooms[roomCode]
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "", false); err == nil {
 		t.Fatal("blank report accepted")
 	}
+	room := active.rooms[roomCode]
 	room.endProposal = room.newEndProposal("mutual_end", events[0].PlayerID, "", "")
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "x", true); err == nil {
 		t.Fatal("report alongside proposal accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal = nil
+	room = active.rooms[roomCode]
 	room.endProposalCooldownUntil = time.Now().Add(time.Minute)
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "x", true); err == nil {
 		t.Fatal("report during cooldown accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposalCooldownUntil = time.Time{}
 	if _, _, _, err := active.createEndProposal(events[0].SessionID, "bad", "", ""); err == nil {
 		t.Fatal("unknown proposal accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal = room.newEndProposal("mutual_end", events[0].PlayerID, "", "")
 	if _, _, _, err := active.createEndProposal(events[0].SessionID, "mutual_end", "", ""); err == nil {
 		t.Fatal("duplicate proposal accepted")
@@ -640,12 +645,14 @@ func TestLobbyRemainingErrorBranches(t *testing.T) {
 	if _, _, _, err := active.voteEndGame(events[0].SessionID, "wrong", true); err == nil {
 		t.Fatal("wrong proposal vote accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal.eligiblePlayerIDs = []string{events[1].PlayerID}
 	if _, _, _, err := active.voteEndGame(events[0].SessionID, room.endProposal.id, true); err == nil {
 		t.Fatal("ineligible vote accepted")
 	}
 
 	// Force the unanimous vote's game-ending operation to fail.
+	room = active.rooms[roomCode]
 	room.endProposal = &endGameProposal{id: "forced", eligiblePlayerIDs: []string{events[0].PlayerID}, agreedPlayerIDs: map[string]bool{}, expiresAt: time.Now().Add(time.Minute)}
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseLobby)
 	if _, _, _, err := active.voteEndGame(events[0].SessionID, "forced", true); err == nil {
@@ -724,11 +731,13 @@ func TestLobbyRemainingStateAndRecipientErrors(t *testing.T) {
 		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "x", false); !errors.Is(err, game.ErrGameNotInProgress) {
 			t.Fatalf("phase error = %v", err)
 		}
+		room = lobby.rooms[code]
 		setGameStatePhaseForTest(t, room.gameState, game.PhaseInProgress)
 		room.players[0].forfeited = true
 		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "x", false); err == nil {
 			t.Fatal("inactive reporter accepted")
 		}
+		room = lobby.rooms[code]
 		room.players[0].forfeited = false
 		addRecipientGhost(lobby, room)
 		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "x", false); err == nil {
@@ -743,11 +752,13 @@ func TestLobbyRemainingStateAndRecipientErrors(t *testing.T) {
 		if _, _, _, err := lobby.createEndProposal(events[0].SessionID, "mutual_end", "", ""); !errors.Is(err, game.ErrGameNotInProgress) {
 			t.Fatalf("phase error = %v", err)
 		}
+		room = lobby.rooms[code]
 		setGameStatePhaseForTest(t, room.gameState, game.PhaseInProgress)
 		room.players[0].forfeited = true
 		if _, _, _, err := lobby.createEndProposal(events[0].SessionID, "mutual_end", "", ""); err == nil {
 			t.Fatal("inactive proposer accepted")
 		}
+		room = lobby.rooms[code]
 		room.players[0].forfeited = false
 		addRecipientGhost(lobby, room)
 		if _, _, _, err := lobby.createEndProposal(events[0].SessionID, "mutual_end", "", ""); err == nil {
@@ -851,6 +862,7 @@ func TestWebSocketRemainingActionHandlers(t *testing.T) {
 		request := playAndDiscardRequest{playRequest: playRequest{Compositions: []compositionRequest{{Cards: validRun}}}, CardIndex: 0, Card: &discardCard}
 		server.handlePlayAndDiscard(nil, otherSession, wsEnvelope{Data: mustMarshalRawMessage(request)})
 
+		room = lobby.rooms[code]
 		snapshot := room.gameState.PersistenceSnapshot()
 		index := snapshot.Turn.PlayerIndex
 		snapshot.Turn.HasDrawn = true
@@ -896,4 +908,94 @@ func TestHandleConnectionDispatchesNewActions(t *testing.T) {
 
 	// Keep imports and the HTTP upgrade path explicit in this coverage-focused test.
 	_ = httptest.NewRequest(http.MethodGet, "/ws", nil)
+}
+
+func TestTerminalStatisticsSurviveResetAndRestart(t *testing.T) {
+	for _, kind := range []string{"completed", "unranked"} {
+		t.Run(kind, func(t *testing.T) {
+			lobby, events, code := newActiveLobbyForExitTests(t, 2)
+			store := &statisticsRecordingStore{gameErr: errors.New("statistics unavailable")}
+			lobby.store = store
+			for i, event := range events {
+				lobby.sessions[event.SessionID].authenticated = true
+				lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+			}
+			gameID := lobby.rooms[code].statisticsGameID
+			if kind == "completed" {
+				if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := lobby.rooms[code].gameState.EndWithoutWinner(); err != nil {
+					t.Fatal(err)
+				}
+				if err := persistLobbyForTest(lobby, "game ended"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, _, err := lobby.resetRoomAfterGameOver(code); err != nil {
+				t.Fatal(err)
+			}
+			if lobby.rooms[code].gameStatePhase() != game.PhaseLobby || len(lobby.pendingStatistics) != 1 {
+				t.Fatal("room reset discarded pending terminal statistics")
+			}
+			record := lobby.pendingStatistics[gameID]
+			restored := newLobbyServerWithStore(store)
+			if err := restored.restorePersistedState(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if restored.pendingStatistics[gameID].CompletedAt != record.CompletedAt {
+				t.Fatal("restart changed the original completion timestamp")
+			}
+			// A failed authoritative retry cannot publish statistics ahead of state.
+			store.gameErr = nil
+			store.saveErr = errors.New("snapshot unavailable")
+			restored.retryPendingStatistics()
+			if len(restored.pendingStatistics) != 1 || len(store.games)+len(store.unranked) != 0 {
+				t.Fatal("failed snapshot retry published terminal statistics")
+			}
+			store.saveErr = nil
+			restored.retryPendingStatistics()
+			restored.retryPendingStatistics()
+			if len(restored.pendingStatistics) != 0 || len(store.games)+len(store.unranked) != 1 {
+				t.Fatalf("pending/saved = %d/%d; want 0/1", len(restored.pendingStatistics), len(store.games)+len(store.unranked))
+			}
+			t.Logf("statistics outage → room reset → restart → retry: %s game %s saved, queue empty", kind, gameID)
+		})
+	}
+}
+
+func TestMaintenanceRetriesTerminalStatisticsWithoutSessionCleaner(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	store := &statisticsRecordingStore{}
+	lobby.store = store
+	for i, event := range events {
+		lobby.sessions[event.SessionID].authenticated = true
+		lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+	}
+	store.gameErr = errors.New("offline")
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := lobby.resetRoomAfterGameOver(code); err != nil {
+		t.Fatal(err)
+	}
+	store.gameErr = nil
+	originalInterval := statisticsRetryInterval
+	statisticsRetryInterval = time.Millisecond
+	defer func() { statisticsRetryInterval = originalInterval }()
+	server := &wsServer{lobby: lobby, userStore: store}
+	stop := server.startMaintenance(context.Background())
+	defer stop()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		lobby.mu.Lock()
+		done := len(lobby.pendingStatistics) == 0
+		lobby.mu.Unlock()
+		if done {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("maintenance did not finalize the pending game")
 }

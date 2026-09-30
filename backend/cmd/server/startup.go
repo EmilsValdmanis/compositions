@@ -14,6 +14,7 @@ import (
 )
 
 var sessionCleanupInterval = time.Hour
+var statisticsRetryInterval = 30 * time.Second
 
 var listenAndServe = func(addr string, handler http.Handler) error {
 	server := &http.Server{
@@ -91,13 +92,17 @@ func (s *wsServer) cleanupExpiredSessions(ctx context.Context, before time.Time)
 
 func (s *wsServer) startMaintenance(parent context.Context) context.CancelFunc {
 	ctx, cancel := context.WithCancel(parent)
-	if _, ok := s.userStore.(expiredSessionCleaner); !ok {
+	_, cleansSessions := s.userStore.(expiredSessionCleaner)
+	_, savesStatistics := s.userStore.(gameStatisticsStore)
+	if !cleansSessions && !savesStatistics {
 		return cancel
 	}
 	interval := sessionCleanupInterval
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		statisticsTicker := time.NewTicker(statisticsRetryInterval)
+		defer statisticsTicker.Stop()
 		for {
 			select {
 			case now := <-ticker.C:
@@ -108,6 +113,10 @@ func (s *wsServer) startMaintenance(parent context.Context) context.CancelFunc {
 					slog.Info("expired sessions cleaned", "count", count)
 				}
 				cleanupCancel()
+			case <-statisticsTicker.C:
+				if savesStatistics {
+					s.lobby.retryPendingStatistics()
+				}
 			case <-ctx.Done():
 				return
 			}
@@ -134,4 +143,16 @@ func runServer(addr string) error {
 		handler = sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(handler)
 	}
 	return listenAndServe(addr, handler)
+}
+
+// Retry without player activity, including terminal records restored at startup.
+func (l *lobbyServer) retryPendingStatistics() {
+	l.commandMu.Lock()
+	defer l.commandMu.Unlock()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.pendingStatistics) == 0 {
+		return
+	}
+	_ = l.persistLocked("retry completed statistics")
 }
