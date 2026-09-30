@@ -617,11 +617,10 @@ func TestLobbyRemainingErrorBranches(t *testing.T) {
 	}
 
 	active, events, roomCode := newActiveLobbyForExitTests(t, 3)
-	room := active.rooms[roomCode]
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "", false); err == nil {
 		t.Fatal("blank report accepted")
 	}
-	room = active.rooms[roomCode]
+	room := active.rooms[roomCode]
 	room.endProposal = room.newEndProposal("mutual_end", events[0].PlayerID, "", "")
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "x", true); err == nil {
 		t.Fatal("report alongside proposal accepted")
