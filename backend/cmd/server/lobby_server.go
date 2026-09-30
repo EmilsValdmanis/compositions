@@ -1343,6 +1343,9 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 
 func (l *lobbyServer) persistLocked(reason string) error {
 	if l == nil || l.store == nil {
+		if l != nil {
+			l.mutationBefore = nil // Explicit commit for in-memory-only lobbies.
+		}
 		return nil
 	}
 

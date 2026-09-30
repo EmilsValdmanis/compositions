@@ -1956,6 +1956,7 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 			t.Fatalf("updateDraftActivity(lobby) error = %v; want ErrGameNotInProgress", err)
 		}
 
+		state = lobby.rooms["ROOM"].gameState // Rollback replaces the mutable state.
 		second := newPlayerWithID("other")
 		if err := state.AddPlayer(second); err != nil {
 			t.Fatalf("AddPlayer(second) error = %v", err)
@@ -1969,6 +1970,10 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 			t.Fatalf("updateDraftActivity(not turn) error = %v; want not your turn", err)
 		}
 
+		state = lobby.rooms["ROOM"].gameState
+		turnField = reflect.ValueOf(state).Elem().FieldByName("turn")
+		turn = reflect.NewAt(turnField.Type(), unsafe.Pointer(turnField.UnsafeAddr())).Elem()
+		turnPlayerIndexField = turn.FieldByName("playerIndex")
 		reflect.NewAt(turnPlayerIndexField.Type(), unsafe.Pointer(turnPlayerIndexField.UnsafeAddr())).Elem().SetInt(0)
 		roomState, recipients, err := lobby.updateDraftActivity(event.SessionID, []game.DraftCompositionSnapshot{{Cards: []game.CardSnapshot{{Rank: game.Ace, Suit: game.Hearts}}}})
 		if err != nil {
@@ -2055,8 +2060,8 @@ func TestLobbyLeaveRoomCoverage(t *testing.T) {
 		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "join a room first" {
 			t.Fatalf("leaveRoom(missing room) error = %v; want join a room first", err)
 		}
-		if lobby.sessions[event.SessionID].roomCode != "" {
-			t.Fatalf("session.roomCode = %q; want empty", lobby.sessions[event.SessionID].roomCode)
+		if lobby.sessions[event.SessionID].roomCode != "NOPE" {
+			t.Fatalf("failed leave changed session.roomCode = %q; want NOPE", lobby.sessions[event.SessionID].roomCode)
 		}
 	})
 
@@ -2497,6 +2502,7 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "game state snapshot failed" {
 		t.Fatalf("draw(snapshot failure) error = %v; want game state snapshot failed", err)
 	}
+	activeRoom = lobby.rooms[hostRoom.Code]
 	activeRoom.players[0].player = originalHostPlayer
 	lobby.sessions[hostEvent.SessionID].playerID = hostEvent.PlayerID
 
@@ -2641,6 +2647,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "all players must be connected" {
 		t.Fatalf("startNextRound(disconnected player) error = %v; want all players must be connected", err)
 	}
+	room = lobby.rooms[hostRoom.Code]
 	room.players[1].connected = true
 
 	room.gameState = nil
@@ -2648,6 +2655,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 		t.Fatalf("startNextRound(nil game state) error = %v; want game state not initialized", err)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	room.gameState = game.NewGameState()
 	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
 		t.Fatalf("AddPlayer(host) error = %v", err)
@@ -2688,6 +2696,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 		t.Fatalf("gameRecipients[0].event.Game.Round = %d; want 2", gameRecipients[0].event.Game.Round)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	room.gameState = game.NewGameState()
 	if err := room.gameState.AddPlayer(newPlayerWithID("state-host")); err != nil {
 		t.Fatalf("AddPlayer(state-host) error = %v", err)
@@ -2732,6 +2741,7 @@ func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
 		t.Fatalf("resetRoomAfterGameOver(nil game state) error = %v; want game state not initialized", err)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	room.gameState = game.NewGameState()
 	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
 		t.Fatalf("AddPlayer(host) error = %v", err)
@@ -2740,6 +2750,7 @@ func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
 		t.Fatalf("resetRoomAfterGameOver(not over) error = %v; want game is not over", err)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
 	makeGameState = func() *game.GameState { return nil }
 	if _, _, err := lobby.resetRoomAfterGameOver(hostRoom.Code); err == nil || err.Error() != "game state not initialized" {
@@ -2747,6 +2758,7 @@ func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
 	}
 
 	makeGameState = game.NewGameState
+	room = lobby.rooms[hostRoom.Code]
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
 	snapshot, recipients, err := lobby.resetRoomAfterGameOver(hostRoom.Code)
 	if err != nil {

@@ -621,19 +621,24 @@ func TestLobbyRemainingErrorBranches(t *testing.T) {
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "", false); err == nil {
 		t.Fatal("blank report accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal = room.newEndProposal("mutual_end", events[0].PlayerID, "", "")
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "x", true); err == nil {
 		t.Fatal("report alongside proposal accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal = nil
+	room = active.rooms[roomCode]
 	room.endProposalCooldownUntil = time.Now().Add(time.Minute)
 	if _, _, _, err := active.reportIssue(events[0].SessionID, "x", true); err == nil {
 		t.Fatal("report during cooldown accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposalCooldownUntil = time.Time{}
 	if _, _, _, err := active.createEndProposal(events[0].SessionID, "bad", "", ""); err == nil {
 		t.Fatal("unknown proposal accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal = room.newEndProposal("mutual_end", events[0].PlayerID, "", "")
 	if _, _, _, err := active.createEndProposal(events[0].SessionID, "mutual_end", "", ""); err == nil {
 		t.Fatal("duplicate proposal accepted")
@@ -641,12 +646,14 @@ func TestLobbyRemainingErrorBranches(t *testing.T) {
 	if _, _, _, err := active.voteEndGame(events[0].SessionID, "wrong", true); err == nil {
 		t.Fatal("wrong proposal vote accepted")
 	}
+	room = active.rooms[roomCode]
 	room.endProposal.eligiblePlayerIDs = []string{events[1].PlayerID}
 	if _, _, _, err := active.voteEndGame(events[0].SessionID, room.endProposal.id, true); err == nil {
 		t.Fatal("ineligible vote accepted")
 	}
 
 	// Force the unanimous vote's game-ending operation to fail.
+	room = active.rooms[roomCode]
 	room.endProposal = &endGameProposal{id: "forced", eligiblePlayerIDs: []string{events[0].PlayerID}, agreedPlayerIDs: map[string]bool{}, expiresAt: time.Now().Add(time.Minute)}
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseLobby)
 	if _, _, _, err := active.voteEndGame(events[0].SessionID, "forced", true); err == nil {
@@ -725,11 +732,13 @@ func TestLobbyRemainingStateAndRecipientErrors(t *testing.T) {
 		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "x", false); !errors.Is(err, game.ErrGameNotInProgress) {
 			t.Fatalf("phase error = %v", err)
 		}
+		room = lobby.rooms[code]
 		setGameStatePhaseForTest(t, room.gameState, game.PhaseInProgress)
 		room.players[0].forfeited = true
 		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "x", false); err == nil {
 			t.Fatal("inactive reporter accepted")
 		}
+		room = lobby.rooms[code]
 		room.players[0].forfeited = false
 		addRecipientGhost(lobby, room)
 		if _, _, _, err := lobby.reportIssue(events[0].SessionID, "x", false); err == nil {
@@ -744,11 +753,13 @@ func TestLobbyRemainingStateAndRecipientErrors(t *testing.T) {
 		if _, _, _, err := lobby.createEndProposal(events[0].SessionID, "mutual_end", "", ""); !errors.Is(err, game.ErrGameNotInProgress) {
 			t.Fatalf("phase error = %v", err)
 		}
+		room = lobby.rooms[code]
 		setGameStatePhaseForTest(t, room.gameState, game.PhaseInProgress)
 		room.players[0].forfeited = true
 		if _, _, _, err := lobby.createEndProposal(events[0].SessionID, "mutual_end", "", ""); err == nil {
 			t.Fatal("inactive proposer accepted")
 		}
+		room = lobby.rooms[code]
 		room.players[0].forfeited = false
 		addRecipientGhost(lobby, room)
 		if _, _, _, err := lobby.createEndProposal(events[0].SessionID, "mutual_end", "", ""); err == nil {
@@ -852,6 +863,7 @@ func TestWebSocketRemainingActionHandlers(t *testing.T) {
 		request := playAndDiscardRequest{playRequest: playRequest{Compositions: []compositionRequest{{Cards: validRun}}}, CardIndex: 0, Card: &discardCard}
 		server.handlePlayAndDiscard(nil, otherSession, wsEnvelope{Data: mustMarshalRawMessage(request)})
 
+		room = lobby.rooms[code]
 		snapshot := room.gameState.PersistenceSnapshot()
 		index := snapshot.Turn.PlayerIndex
 		snapshot.Turn.HasDrawn = true

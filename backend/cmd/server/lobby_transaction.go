@@ -54,6 +54,12 @@ func (l *lobbyServer) lockMutation() func() {
 	}
 	l.mutationBefore = before
 	return func() {
+		// Engine validation can fail after changing intermediate state, before
+		// persistLocked is reached. Every uncommitted exit must roll back.
+		if l.mutationBefore != nil {
+			l.sessions, l.rooms = l.mutationBefore.sessions, l.mutationBefore.rooms
+			l.pendingStatistics = l.mutationBefore.pendingStatistics
+		}
 		l.mutationBefore = nil
 		l.mu.Unlock()
 		l.commandMu.Unlock()
