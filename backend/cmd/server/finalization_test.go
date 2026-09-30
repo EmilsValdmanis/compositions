@@ -160,3 +160,40 @@ func TestFinalizationFailureBlocksDependentGamesAcrossRestart(t *testing.T) {
 		t.Fatalf("completed %d games; want exactly four", len(store.games))
 	}
 }
+
+func TestMultipleFinalizationsAllocateReplaySequence(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	store := &statisticsRecordingStore{gameErr: errors.New("offline")}
+	lobby.store = store
+	lobby.pendingStatistics = map[string]pendingGameStatistics{"earlier": {Kind: "completed", Sequence: 41}}
+	for i, event := range events {
+		lobby.sessions[event.SessionID].authenticated = true
+		lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+	}
+	gameID := lobby.rooms[code].statisticsGameID
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+		t.Fatal(err)
+	}
+	var persisted persistedLobbyState
+	if err := json.Unmarshal(store.data, &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if persisted.PendingStatistics[gameID].Sequence != 42 {
+		t.Fatalf("sequence = %d; want 42", persisted.PendingStatistics[gameID].Sequence)
+	}
+}
+
+func TestLegacyFinalizationTimestampTiesHaveStableOrder(t *testing.T) {
+	lobby := newLobbyServer()
+	store := &statisticsRecordingStore{}
+	lobby.store = store
+	completedAt := time.Unix(100, 0).UTC()
+	lobby.pendingStatistics = map[string]pendingGameStatistics{}
+	for _, id := range []string{"c", "b", "a"} {
+		lobby.pendingStatistics[id] = pendingGameStatistics{Kind: "completed", CompletedAt: completedAt, Completed: database.CompletedGameRecord{ID: id}}
+	}
+	saveStatisticsForTest(lobby)
+	if len(store.games) != 3 || store.games[0].ID != "a" || store.games[1].ID != "b" || store.games[2].ID != "c" {
+		t.Fatalf("unstable order: %+v", store.games)
+	}
+}
