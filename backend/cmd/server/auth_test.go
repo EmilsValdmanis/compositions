@@ -192,7 +192,6 @@ func TestSessionTokenForUserReplacesDifferentExistingSession(t *testing.T) {
 			Email:     "old@example.com",
 			ExpiresAt: now.Add(time.Hour),
 		},
-		deleteErr: errors.New("delete boom"),
 	}
 	handler := &authHandler{store: store, now: func() time.Time { return now }}
 	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)

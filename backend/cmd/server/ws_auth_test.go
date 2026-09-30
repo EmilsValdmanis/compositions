@@ -238,3 +238,41 @@ func TestLogoutDuringSocketRegistrationCannotMissNewConnection(t *testing.T) {
 	server.lobby.mu.Unlock()
 	t.Log("logout raced with a successful auth read; newly registering socket still closed")
 }
+
+func TestAccountSwitchClosesOldSessionSocketsImmediately(t *testing.T) {
+	store := &socketSessionStore{records: map[string]database.SessionUserRecord{
+		"old": {ID: "old-user", Name: "Old"}, "other": {ID: "other-user", Name: "Other"},
+	}}
+	auth := &authHandler{store: store, now: time.Now}
+	server := newWSServerWithAuth(auth)
+	httpServer := httptest.NewServer(server.routes())
+	defer httpServer.Close()
+	old := mustDialWSWithCookie(t, httpServer.URL, "old")
+	defer old.Close()
+	mustConnectSession(t, old, "")
+	other := mustDialWSWithCookie(t, httpServer.URL, "other")
+	defer other.Close()
+	mustConnectSession(t, other, "")
+	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
+	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old"})
+	token, err := auth.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, time.Now().Add(time.Hour))
+	if err != nil || token == "" || token == "old" {
+		t.Fatalf("switch returned %q, %v", token, err)
+	}
+	requireAuthSocketClosed(t, old)
+	mustSendEnvelope(t, other, "create_room", createRoomRequest{})
+	mustReadRoomState(t, other)
+}
+
+func TestAccountSwitchFailsWhenOldSessionCannotBeRevoked(t *testing.T) {
+	deleteErr := errors.New("delete unavailable")
+	store := &stubAuthStore{sessionUser: database.SessionUserRecord{ID: "old-user"}, deleteErr: deleteErr}
+	revoked := false
+	auth := &authHandler{store: store, now: time.Now, onSessionRevoked: func(string) { revoked = true }}
+	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
+	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old"})
+	token, err := auth.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, time.Now().Add(time.Hour))
+	if !errors.Is(err, deleteErr) || token != "" || len(store.createdSessions) != 0 || revoked {
+		t.Fatalf("failed revocation created a login or revoked sockets: token=%q, err=%v, sessions=%d, revoked=%v", token, err, len(store.createdSessions), revoked)
+	}
+}
