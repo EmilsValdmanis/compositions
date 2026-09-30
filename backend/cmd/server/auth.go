@@ -38,9 +38,10 @@ const (
 )
 
 type authSession struct {
-	user  authenticatedUser
-	token string
-	valid bool
+	expiresAt time.Time
+	user      authenticatedUser
+	token     string
+	valid     bool
 }
 
 type sessionReader interface {
@@ -77,10 +78,11 @@ type authConfig struct {
 }
 
 type authHandler struct {
-	config authConfig
-	store  authStore
-	now    func() time.Time
-	state  func() (string, error)
+	onSessionRevoked func(string)
+	config           authConfig
+	store            authStore
+	now              func() time.Time
+	state            func() (string, error)
 }
 
 type googleUserInfo struct {
@@ -387,8 +389,9 @@ func (h *authHandler) sessionTokenForUser(r *http.Request, user authenticatedUse
 				ExpiresAt: expiresAt,
 			})
 		}
-		if deleteErr := h.store.DeleteSession(r.Context(), session.token); deleteErr != nil && !errors.Is(deleteErr, database.ErrSessionNotFound) {
+		if deleteErr := h.revokeSession(r.Context(), session.token); deleteErr != nil {
 			slog.Warn("delete previous user session failed", "error", deleteErr)
+			return "", fmt.Errorf("delete previous session: %w", deleteErr)
 		}
 	} else if !errors.Is(err, errAuthenticationRequired) {
 		return "", err
@@ -455,8 +458,10 @@ func (h *authHandler) handleCompleteOnboarding(w http.ResponseWriter, r *http.Re
 func (h *authHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	sessionToken, _ := readAuthCookie(r)
 	if sessionToken != "" {
-		if err := h.store.DeleteSession(r.Context(), sessionToken); err != nil && !errors.Is(err, database.ErrSessionNotFound) && !errors.Is(err, errAuthenticationRequired) {
+		if err := h.revokeSession(r.Context(), sessionToken); err != nil {
 			slog.Warn("delete session failed", "error", err)
+			writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to log out")
+			return
 		}
 	}
 	clearCookie(w, h.cookie(authCookieName, "", time.Unix(0, 0)))
@@ -464,6 +469,18 @@ func (h *authHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	clearCookie(w, h.cookie(oauthPKCECookieName, "", time.Unix(0, 0)))
 	clearCookie(w, h.cookie(oauthReturnToCookieName, "", time.Unix(0, 0)))
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// All explicit session deletion paths also revoke live sockets. A failed
+// deletion must leave the old login intact and report failure to the caller.
+func (h *authHandler) revokeSession(ctx context.Context, token string) error {
+	if err := h.store.DeleteSession(ctx, token); err != nil && !errors.Is(err, database.ErrSessionNotFound) && !errors.Is(err, errAuthenticationRequired) {
+		return err
+	}
+	if h.onSessionRevoked != nil {
+		h.onSessionRevoked(token)
+	}
+	return nil
 }
 
 func (h *authHandler) sessionFromRequest(r *http.Request) (authSession, error) {
@@ -490,11 +507,11 @@ func (h *authHandler) sessionFromRequest(r *http.Request) (authSession, error) {
 		IsAdmin:           record.IsAdmin,
 		OnboardingVersion: record.OnboardingVersion,
 	}
-	if !user.isAuthenticated() {
+	if !user.isAuthenticated() || (!record.ExpiresAt.IsZero() && !h.now().Before(record.ExpiresAt)) {
 		return authSession{}, errAuthenticationRequired
 	}
 
-	return authSession{user: user, token: sessionToken, valid: true}, nil
+	return authSession{user: user, token: sessionToken, valid: true, expiresAt: record.ExpiresAt}, nil
 }
 
 func (h *authHandler) fetchGoogleUser(ctx context.Context, token *oauth2.Token) (authenticatedUser, error) {

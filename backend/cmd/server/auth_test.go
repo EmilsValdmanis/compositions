@@ -192,7 +192,6 @@ func TestSessionTokenForUserReplacesDifferentExistingSession(t *testing.T) {
 			Email:     "old@example.com",
 			ExpiresAt: now.Add(time.Hour),
 		},
-		deleteErr: errors.New("delete boom"),
 	}
 	handler := &authHandler{store: store, now: func() time.Time { return now }}
 	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
@@ -832,8 +831,11 @@ func TestHandleSessionAndLogoutErrors(t *testing.T) {
 	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "token"})
 	response = httptest.NewRecorder()
 	handler.handleLogout(response, request)
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("handleLogout() status = %d; want 204", response.Code)
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("handleLogout() status = %d; want 500", response.Code)
+	}
+	if len(response.Result().Cookies()) != 0 {
+		t.Fatal("failed logout cleared cookies and prevented retry")
 	}
 }
 
