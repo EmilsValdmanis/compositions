@@ -228,6 +228,13 @@ describe("GameWebSocketProvider", () => {
         type: "error",
         data: { action: "discard", requestId: "unrelated", message: "unrelated error" },
       });
+      for (const data of [
+        { action: "draw", requestId: firstRequest!.requestId, message: "wrong action" },
+        { requestId: firstRequest!.requestId, message: "missing action" },
+        { action: "discard", message: "missing request ID" },
+      ]) {
+        sockets[0]!.message({ type: "error", data });
+      }
     });
     expect(settled).toEqual([]);
     await act(async () => {

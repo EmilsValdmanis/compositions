@@ -614,6 +614,7 @@
   "error_connection_unavailable": "Nav savienojuma ar spēles serveri.",
   "error_invalid_server_message": "No spēles servera saņemts nederīgs ziņojums.",
   "error_send_failed": "Neizdevās nosūtīt spēles darbību.",
+  "error_command_timeout": "Darbības apstiprinājums kavējas. Pirms mēģini vēlreiz, pārbaudi, vai darbība ir izpildīta.",
   "admin": "Administrēšana",
   "admin_operations": "Operāciju konsole",
   "admin_bug_reports": "Kļūdu ziņojumi",

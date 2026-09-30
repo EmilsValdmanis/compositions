@@ -592,9 +592,15 @@ function useGameWebSocketController(): GameWebSocketContextValue {
 
     if (message.type === "error") {
       const data = message.data as
-        | { requestId?: unknown; message?: unknown; code?: unknown }
+        | { requestId?: unknown; action?: unknown; message?: unknown; code?: unknown }
         | undefined;
-      if (typeof data?.requestId === "string") {
+      if (
+        typeof data?.requestId === "string" &&
+        pendingActionsRef.current.some(
+          (pending) =>
+            pending.requestId === data.requestId && pending.expectedAction === data.action,
+        )
+      ) {
         rejectPendingActions(
           typeof data.message === "string"
             ? data.message

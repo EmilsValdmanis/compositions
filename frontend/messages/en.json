@@ -600,6 +600,7 @@
   "error_connection_unavailable": "The game server is not connected.",
   "error_invalid_server_message": "Received an invalid message from the game server.",
   "error_send_failed": "Could not send the game action.",
+  "error_command_timeout": "Confirmation is taking longer than expected. Check whether the action completed before trying again.",
   "admin": "Admin",
   "admin_operations": "Operations console",
   "admin_bug_reports": "Bug reports",
