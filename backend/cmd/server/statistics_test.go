@@ -51,7 +51,8 @@ func (s *blockingStatisticsStore) SaveGameCheckpoint(ctx context.Context, checkp
 func saveStatisticsForTest(lobby *lobbyServer) bool {
 	lobby.mu.Lock()
 	defer lobby.mu.Unlock()
-	return lobby.saveStatisticsLocked(context.Background())
+	jobs, changed := lobby.statisticsJobsLocked()
+	return lobby.saveStatisticsJobsLocked(context.Background(), jobs) || changed
 }
 
 func TestStatisticsPlaytimePausesWhilePlayersAreDisconnected(t *testing.T) {

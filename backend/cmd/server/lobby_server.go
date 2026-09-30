@@ -1328,6 +1328,8 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 	l.sessions = sessions
 	l.rooms = rooms
 	l.pendingStatistics = state.PendingStatistics
+	// Older snapshots may have a finished room but no independent retry record.
+	l.statisticsJobsLocked()
 
 	slog.Info("lobby state restored", "rooms", len(rooms), "sessions", len(sessions))
 	return nil
@@ -1342,6 +1344,9 @@ func (l *lobbyServer) persistLocked(reason string) error {
 	for _, room := range l.rooms {
 		room.updateStatisticsPlaytime(now)
 	}
+	// Capture terminal records before the authoritative write, including their
+	// original completion time and replay order. Never derive new jobs after I/O.
+	jobs, changed := l.statisticsJobsLocked()
 	l.persistenceRevision++
 	revision := l.persistenceRevision
 	snapshot := l.persistenceSnapshotLocked()
@@ -1354,7 +1359,7 @@ func (l *lobbyServer) persistLocked(reason string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
-	if !l.saveStatisticsLocked(ctx) {
+	if !l.saveStatisticsJobsLocked(ctx, jobs) && !changed {
 		return nil
 	}
 	// Statistics are idempotent. Saving the cleared dirty/finalized marker in a
@@ -1389,6 +1394,7 @@ func (l *lobbyServer) saveLobbySnapshotLocked(snapshot persistedLobbyState, revi
 
 // Terminal statistics survive room reset and restart until their idempotent write succeeds.
 type pendingGameStatistics struct {
+	Sequence    uint64                        `json:"sequence,omitempty"`
 	Kind        string                        `json:"kind"`
 	Status      string                        `json:"status,omitempty"`
 	Checkpoint  database.GameCheckpointRecord `json:"checkpoint"`
@@ -1397,6 +1403,7 @@ type pendingGameStatistics struct {
 }
 
 type statisticsSaveJob struct {
+	sequence    uint64
 	room        *room
 	roomKey     string
 	roomCode    string
@@ -1504,8 +1511,13 @@ func (l *lobbyServer) statisticsJobsLocked() ([]statisticsSaveJob, bool) {
 				l.pendingStatistics = make(map[string]pendingGameStatistics)
 			}
 			if _, exists := l.pendingStatistics[job.gameID]; !exists {
+				var sequence uint64
+				for _, pending := range l.pendingStatistics {
+					sequence = max(sequence, pending.Sequence)
+				}
 				l.pendingStatistics[job.gameID] = pendingGameStatistics{
-					Kind: job.kind, Status: job.status, Checkpoint: job.checkpoint,
+					Sequence: sequence + 1,
+					Kind:     job.kind, Status: job.status, Checkpoint: job.checkpoint,
 					Completed: job.completed, CompletedAt: job.completedAt,
 				}
 			}
@@ -1513,25 +1525,54 @@ func (l *lobbyServer) statisticsJobsLocked() ([]statisticsSaveJob, bool) {
 			jobs = append(jobs, job)
 		}
 	}
+	terminalJobs := make([]statisticsSaveJob, 0, len(l.pendingStatistics))
 	for gameID, record := range l.pendingStatistics {
-		jobs = append(jobs, statisticsSaveJob{
-			gameID: gameID, roomCode: record.Checkpoint.RoomCode, phase: game.PhaseGameOver,
+		terminalJobs = append(terminalJobs, statisticsSaveJob{
+			sequence: record.Sequence,
+			gameID:   gameID, roomCode: record.Checkpoint.RoomCode, phase: game.PhaseGameOver,
 			kind: record.Kind, status: record.Status, checkpoint: record.Checkpoint,
 			completed: record.Completed, completedAt: record.CompletedAt,
 		})
 	}
-	return jobs, changed
+	// Legacy records have sequence zero; replay them first in completion order.
+	sort.Slice(terminalJobs, func(i, j int) bool {
+		a, b := terminalJobs[i], terminalJobs[j]
+		if a.sequence != b.sequence {
+			return a.sequence < b.sequence
+		}
+		if !a.completedAt.Equal(b.completedAt) {
+			return a.completedAt.Before(b.completedAt)
+		}
+		return a.gameID < b.gameID
+	})
+	return append(jobs, terminalJobs...), changed
 }
 
-func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
+func (l *lobbyServer) saveStatisticsJobsLocked(ctx context.Context, jobs []statisticsSaveJob) bool {
 	store, ok := l.store.(gameStatisticsStore)
 	if !ok {
 		return false
 	}
-	jobs, changed := l.statisticsJobsLocked()
+	changed := false
 	revision := l.persistenceRevision
+	blockedPlayers := make(map[string]bool)
 
 	for _, job := range jobs {
+		players := job.checkpoint.Players
+		if job.kind == "completed" {
+			players = job.completed.Players
+		}
+		blocked := false
+		for _, player := range players {
+			blocked = blocked || blockedPlayers[player.UserID]
+		}
+		if job.phase == game.PhaseGameOver && blocked {
+			// Propagate dependencies: a skipped A/B game also blocks B/C.
+			for _, player := range players {
+				blockedPlayers[player.UserID] = true
+			}
+			continue
+		}
 		l.mu.Unlock()
 		l.persistenceMu.Lock()
 		var err error
@@ -1547,6 +1588,11 @@ func (l *lobbyServer) saveStatisticsLocked(ctx context.Context) bool {
 		l.mu.Lock()
 		if err != nil {
 			slog.Error("persist game statistics failed", "roomCode", job.roomCode, "gameID", job.gameID, "error", err)
+			if job.phase == game.PhaseGameOver {
+				for _, player := range players {
+					blockedPlayers[player.UserID] = true
+				}
+			}
 			continue
 		}
 		if job.phase == game.PhaseGameOver {
