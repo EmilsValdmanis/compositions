@@ -205,6 +205,8 @@ type gameStateRecipient struct {
 }
 
 type lobbyServer struct {
+	commandMu            sync.Mutex
+	mutationBefore       *lobbyMutationState
 	mu                   sync.Mutex
 	pendingStatistics    map[string]pendingGameStatistics
 	persistenceMu        sync.Mutex
@@ -246,8 +248,8 @@ func (l *lobbyServer) connect(existingSessionID string, conn *websocket.Conn) (c
 }
 
 func (l *lobbyServer) connectWithUser(existingSessionID string, user authenticatedUser, conn *websocket.Conn) (connectedEvent, *roomSnapshot, []*websocket.Conn, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	if user.isAuthenticated() {
 		if existingSessionID != "" {
@@ -344,8 +346,8 @@ func (l *lobbyServer) connectExistingSessionWithUser(existingSessionID string, u
 }
 
 func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*websocket.Conn, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -396,8 +398,8 @@ func (l *lobbyServer) createRoom(sessionID, name string) (roomSnapshot, []*webso
 }
 
 func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, []*websocket.Conn, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -450,8 +452,8 @@ func (l *lobbyServer) joinRoom(sessionID, roomCode, name string) (roomSnapshot, 
 }
 
 func (l *lobbyServer) startGame(sessionID string, dealerIndex int, requestedModes ...game.GameMode) (roomSnapshot, []*websocket.Conn, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -495,8 +497,8 @@ func (l *lobbyServer) startGame(sessionID string, dealerIndex int, requestedMode
 }
 
 func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...dealingChoiceOptions) (roomSnapshot, []gameStateRecipient, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -587,8 +589,8 @@ func (l *lobbyServer) chooseDealing(sessionID, dealType string, options ...deali
 }
 
 func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []*websocket.Conn, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -628,8 +630,8 @@ func (l *lobbyServer) startNextRound(sessionID string) (roomSnapshot, []*websock
 }
 
 func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.Conn, string, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -704,8 +706,8 @@ func (l *lobbyServer) leaveRoom(sessionID string) (*roomSnapshot, []*websocket.C
 }
 
 func (l *lobbyServer) forfeitGame(sessionID string) (roomSnapshot, []gameStateRecipient, actionResultEvent, string, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -768,8 +770,8 @@ func (l *lobbyServer) requestEndGame(sessionID, kind string) (roomSnapshot, []ga
 }
 
 func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bool) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -853,8 +855,8 @@ func (l *lobbyServer) reportIssue(sessionID, description string, requestAbort bo
 }
 
 func (l *lobbyServer) createEndProposal(sessionID, kind, description, reportID string) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -894,8 +896,8 @@ func (l *lobbyServer) createEndProposal(sessionID, kind, description, reportID s
 }
 
 func (l *lobbyServer) voteEndGame(sessionID, proposalID string, approve bool) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -943,6 +945,8 @@ func (l *lobbyServer) voteEndGame(sessionID, proposalID string, approve bool) (r
 }
 
 func (l *lobbyServer) sendEmote(sessionID, emoji string) (roomSnapshot, []*websocket.Conn, error) {
+	l.commandMu.Lock()
+	defer l.commandMu.Unlock()
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -1019,8 +1023,8 @@ func (l *lobbyServer) discardMatching(sessionID string, cardIndex int, expectedC
 }
 
 func (l *lobbyServer) updateDraftActivity(sessionID string, drafts []game.DraftCompositionSnapshot) (roomSnapshot, []gameStateRecipient, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -1058,8 +1062,8 @@ func (l *lobbyServer) updateDraftActivity(sessionID string, drafts []game.DraftC
 }
 
 func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*game.GameState) error, afterMutate func(*room, *playerSession)) (roomSnapshot, []gameStateRecipient, actionResultEvent, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	session, err := l.requireSession(sessionID)
 	if err != nil {
@@ -1101,8 +1105,8 @@ func (l *lobbyServer) applyGameAction(sessionID, action string, mutate func(*gam
 }
 
 func (l *lobbyServer) resetRoomAfterGameOver(roomCode string) (*roomSnapshot, []*websocket.Conn, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	unlock := l.lockMutation()
+	defer unlock()
 
 	room := l.rooms[normalizeRoomCode(roomCode)]
 	if room == nil {
@@ -1130,6 +1134,8 @@ func (l *lobbyServer) disconnect(sessionID string, conn *websocket.Conn) {
 }
 
 func (l *lobbyServer) disconnectWithEmitter(sessionID string, conn *websocket.Conn, emitter eventEmitter) {
+	l.commandMu.Lock()
+	defer l.commandMu.Unlock()
 	var roomState roomSnapshot
 	var recipients []*websocket.Conn
 	shouldBroadcast := false
@@ -1337,6 +1343,9 @@ func (l *lobbyServer) restorePersistedState(ctx context.Context) error {
 
 func (l *lobbyServer) persistLocked(reason string) error {
 	if l == nil || l.store == nil {
+		if l != nil {
+			l.mutationBefore = nil // Explicit commit for in-memory-only lobbies.
+		}
 		return nil
 	}
 
@@ -1350,6 +1359,11 @@ func (l *lobbyServer) persistLocked(reason string) error {
 	l.persistenceRevision++
 	revision := l.persistenceRevision
 	snapshot := l.persistenceSnapshotLocked()
+	tentative := lobbyMutationState{sessions: l.sessions, rooms: l.rooms, pendingStatistics: l.pendingStatistics}
+	if l.mutationBefore != nil {
+		l.sessions, l.rooms = l.mutationBefore.sessions, l.mutationBefore.rooms
+		l.pendingStatistics = l.mutationBefore.pendingStatistics
+	}
 	// Persist the authoritative game state with its dirty checkpoint marker
 	// before writing derived statistics. If this write fails, a statistics row
 	// must not get ahead of the state we would restore after a restart.
@@ -1357,6 +1371,9 @@ func (l *lobbyServer) persistLocked(reason string) error {
 		slog.Error("persist lobby state failed", "reason", reason, "error", err)
 		return fmt.Errorf("persist lobby state: %w", err)
 	}
+	l.sessions, l.rooms = tentative.sessions, tentative.rooms
+	l.pendingStatistics = tentative.pendingStatistics
+	l.mutationBefore = nil // The authoritative state is committed.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 	if !l.saveStatisticsJobsLocked(ctx, jobs) && !changed {
@@ -1368,7 +1385,7 @@ func (l *lobbyServer) persistLocked(reason string) error {
 	revision = l.persistenceRevision
 	if err := l.saveLobbySnapshotLocked(l.persistenceSnapshotLocked(), revision); err != nil {
 		slog.Error("persist statistics marker failed", "reason", reason, "error", err)
-		return fmt.Errorf("persist statistics marker: %w", err)
+		return nil // The command is already committed; restart safely retries statistics.
 	}
 	return nil
 }

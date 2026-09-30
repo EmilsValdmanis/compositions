@@ -1956,6 +1956,7 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 			t.Fatalf("updateDraftActivity(lobby) error = %v; want ErrGameNotInProgress", err)
 		}
 
+		state = lobby.rooms["ROOM"].gameState // Rollback replaces the mutable state.
 		second := newPlayerWithID("other")
 		if err := state.AddPlayer(second); err != nil {
 			t.Fatalf("AddPlayer(second) error = %v", err)
@@ -1969,6 +1970,10 @@ func TestTurnTrackingEdgeCasesAndDraftActivityCoverage(t *testing.T) {
 			t.Fatalf("updateDraftActivity(not turn) error = %v; want not your turn", err)
 		}
 
+		state = lobby.rooms["ROOM"].gameState
+		turnField = reflect.ValueOf(state).Elem().FieldByName("turn")
+		turn = reflect.NewAt(turnField.Type(), unsafe.Pointer(turnField.UnsafeAddr())).Elem()
+		turnPlayerIndexField = turn.FieldByName("playerIndex")
 		reflect.NewAt(turnPlayerIndexField.Type(), unsafe.Pointer(turnPlayerIndexField.UnsafeAddr())).Elem().SetInt(0)
 		roomState, recipients, err := lobby.updateDraftActivity(event.SessionID, []game.DraftCompositionSnapshot{{Cards: []game.CardSnapshot{{Rank: game.Ace, Suit: game.Hearts}}}})
 		if err != nil {
@@ -2055,8 +2060,8 @@ func TestLobbyLeaveRoomCoverage(t *testing.T) {
 		if _, _, _, err := lobby.leaveRoom(event.SessionID); err == nil || err.Error() != "join a room first" {
 			t.Fatalf("leaveRoom(missing room) error = %v; want join a room first", err)
 		}
-		if lobby.sessions[event.SessionID].roomCode != "" {
-			t.Fatalf("session.roomCode = %q; want empty", lobby.sessions[event.SessionID].roomCode)
+		if lobby.sessions[event.SessionID].roomCode != "NOPE" {
+			t.Fatalf("failed leave changed session.roomCode = %q; want NOPE", lobby.sessions[event.SessionID].roomCode)
 		}
 	})
 
@@ -2497,6 +2502,7 @@ func TestLobbyGameActionCoverage(t *testing.T) {
 	if _, _, _, err := lobby.draw(hostEvent.SessionID, "deck"); err == nil || err.Error() != "game state snapshot failed" {
 		t.Fatalf("draw(snapshot failure) error = %v; want game state snapshot failed", err)
 	}
+	activeRoom = lobby.rooms[hostRoom.Code]
 	activeRoom.players[0].player = originalHostPlayer
 	lobby.sessions[hostEvent.SessionID].playerID = hostEvent.PlayerID
 
@@ -2641,6 +2647,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 	if _, _, err := lobby.startNextRound(hostEvent.SessionID); err == nil || err.Error() != "all players must be connected" {
 		t.Fatalf("startNextRound(disconnected player) error = %v; want all players must be connected", err)
 	}
+	room = lobby.rooms[hostRoom.Code]
 	room.players[1].connected = true
 
 	room.gameState = nil
@@ -2648,6 +2655,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 		t.Fatalf("startNextRound(nil game state) error = %v; want game state not initialized", err)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	room.gameState = game.NewGameState()
 	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
 		t.Fatalf("AddPlayer(host) error = %v", err)
@@ -2688,6 +2696,7 @@ func TestLobbyStartNextRoundCoverage(t *testing.T) {
 		t.Fatalf("gameRecipients[0].event.Game.Round = %d; want 2", gameRecipients[0].event.Game.Round)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	room.gameState = game.NewGameState()
 	if err := room.gameState.AddPlayer(newPlayerWithID("state-host")); err != nil {
 		t.Fatalf("AddPlayer(state-host) error = %v", err)
@@ -2732,6 +2741,7 @@ func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
 		t.Fatalf("resetRoomAfterGameOver(nil game state) error = %v; want game state not initialized", err)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	room.gameState = game.NewGameState()
 	if err := room.gameState.AddPlayer(newPlayerWithID(hostEvent.PlayerID)); err != nil {
 		t.Fatalf("AddPlayer(host) error = %v", err)
@@ -2740,6 +2750,7 @@ func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
 		t.Fatalf("resetRoomAfterGameOver(not over) error = %v; want game is not over", err)
 	}
 
+	room = lobby.rooms[hostRoom.Code]
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
 	makeGameState = func() *game.GameState { return nil }
 	if _, _, err := lobby.resetRoomAfterGameOver(hostRoom.Code); err == nil || err.Error() != "game state not initialized" {
@@ -2747,6 +2758,7 @@ func TestLobbyResetRoomAfterGameOverCoverage(t *testing.T) {
 	}
 
 	makeGameState = game.NewGameState
+	room = lobby.rooms[hostRoom.Code]
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
 	snapshot, recipients, err := lobby.resetRoomAfterGameOver(hostRoom.Code)
 	if err != nil {
@@ -2841,4 +2853,175 @@ func TestRoomGameStateRecipientAndCurrentTurnCoverage(t *testing.T) {
 	if _, err := roomForRecipients.gameStateRecipients(sessions, roomSnapshot{Code: "ROOM"}); err == nil || err.Error() != "game state snapshot failed" {
 		t.Fatalf("gameStateRecipients(snapshot failure) error = %v; want game state snapshot failed", err)
 	}
+}
+
+func TestFailedDrawAndRoomCreationCanBeRetried(t *testing.T) {
+	t.Run("draw", func(t *testing.T) {
+		lobby, events, code := newActiveLobbyForExitTests(t, 2)
+		player, _ := lobby.rooms[code].gameState.CurrentPlayer()
+		var sessionID string
+		for _, event := range events {
+			if event.PlayerID == player.ID {
+				sessionID = event.SessionID
+			}
+		}
+		before := lobby.rooms[code].gameState.PersistenceSnapshot()
+		store := &jsonLobbyStateStore{saveErr: errors.New("outage")}
+		lobby.store = store
+		if _, _, _, err := lobby.draw(sessionID, "deck"); err == nil {
+			t.Fatal("draw succeeded during outage")
+		}
+		if !reflect.DeepEqual(before, lobby.rooms[code].gameState.PersistenceSnapshot()) {
+			t.Fatal("failed draw changed live game")
+		}
+		store.saveErr = nil
+		if _, _, _, err := lobby.draw(sessionID, "deck"); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("failed draw: hand unchanged, hasDrawn=false; retry succeeds exactly once")
+	})
+	t.Run("create room", func(t *testing.T) {
+		lobby := newLobbyServer()
+		event, _, _, _ := lobby.connect("", nil)
+		store := &jsonLobbyStateStore{saveErr: errors.New("outage")}
+		lobby.store = store
+		if _, _, err := lobby.createRoom(event.SessionID, "Host"); err == nil {
+			t.Fatal("create succeeded during outage")
+		}
+		if len(lobby.rooms) != 0 || lobby.sessions[event.SessionID].roomCode != "" {
+			t.Fatal("failed create retained room or membership")
+		}
+		store.saveErr = nil
+		if _, _, err := lobby.createRoom(event.SessionID, "Host"); err != nil {
+			t.Fatal(err)
+		}
+		t.Log("failed create: zero rooms, membership empty; retry succeeds")
+	})
+}
+
+type failFirstLobbyStore struct {
+	jsonLobbyStateStore
+	started chan struct{}
+	release chan struct{}
+	calls   int
+}
+
+func (s *failFirstLobbyStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+	s.calls++
+	if s.calls == 1 {
+		close(s.started)
+		<-s.release
+		return errors.New("first write failed")
+	}
+	return s.jsonLobbyStateStore.SaveLobbyState(ctx, state)
+}
+
+func TestFailedCommandDoesNotLeakStateOrOverwriteQueuedCommand(t *testing.T) {
+	lobby := newLobbyServer()
+	event, _, _, _ := lobby.connect("", nil)
+	store := &failFirstLobbyStore{started: make(chan struct{}), release: make(chan struct{})}
+	lobby.store = store
+	first := make(chan error, 1)
+	go func() { _, _, err := lobby.createRoom(event.SessionID, "Host"); first <- err }()
+	<-store.started
+	lobby.mu.Lock()
+	if len(lobby.rooms) != 0 || lobby.sessions[event.SessionID].roomCode != "" {
+		t.Error("readers saw an uncommitted room during persistence")
+	}
+	lobby.mu.Unlock()
+	second := make(chan error, 1)
+	go func() { _, _, err := lobby.createRoom(event.SessionID, "Host"); second <- err }()
+	select {
+	case err := <-second:
+		t.Fatalf("queued command bypassed in-flight write: %v", err)
+	case <-time.After(10 * time.Millisecond):
+	}
+	close(store.release)
+	if err := <-first; err == nil {
+		t.Fatal("first command should fail")
+	}
+	if err := <-second; err != nil {
+		t.Fatal(err)
+	}
+	if len(lobby.rooms) != 1 || lobby.sessions[event.SessionID].roomCode == "" {
+		t.Fatal("queued successful command was lost")
+	}
+	t.Log("in-flight state hidden from readers; failed write rolled back; queued retry committed")
+}
+
+func TestStatisticsMarkerFailureDoesNotFailCommittedCommand(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	store := &statisticsRecordingStore{lobbySaveErrors: map[int]error{2: errors.New("marker unavailable")}}
+	lobby.store = store
+	for i, event := range events {
+		lobby.sessions[event.SessionID].authenticated = true
+		lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+	}
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+		t.Fatalf("committed forfeit reported failure: %v", err)
+	}
+	if lobby.rooms[code].gameStatePhase() != game.PhaseGameOver || len(store.games) != 1 {
+		t.Fatal("committed command lost its state or statistics")
+	}
+	t.Log("statistics marker write failed after commit; command still acknowledged successfully")
+}
+
+func TestFailedForfeitDoesNotQueueUncommittedStatistics(t *testing.T) {
+	lobby, events, code := newActiveLobbyForExitTests(t, 2)
+	store := &statisticsRecordingStore{}
+	lobby.store = store
+	for i, event := range events {
+		lobby.sessions[event.SessionID].authenticated = true
+		lobby.sessions[event.SessionID].authUserID = fmt.Sprintf("user-%d", i)
+	}
+	store.saveErr = errors.New("snapshot unavailable")
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err == nil {
+		t.Fatal("forfeit succeeded during outage")
+	}
+	if len(lobby.pendingStatistics) != 0 || lobby.rooms[code].gameStatePhase() != game.PhaseInProgress {
+		t.Fatal("uncommitted forfeit escaped rollback")
+	}
+	store.saveErr = nil
+	lobby.retryPendingStatistics()
+	if len(store.games) != 0 {
+		t.Fatal("uncommitted game published statistics")
+	}
+	if _, _, _, _, err := lobby.forfeitGame(events[0].SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.games) != 1 {
+		t.Fatal("retried forfeit did not finalize")
+	}
+}
+
+func TestFailedDealRestoresRoomPlayerData(t *testing.T) {
+	lobby, events, code := newLobbyReadyToStart(t)
+	if _, _, err := lobby.startGame(events[0].SessionID, 0); err != nil {
+		t.Fatal(err)
+	}
+	store := &jsonLobbyStateStore{saveErr: errors.New("snapshot unavailable")}
+	lobby.store = store
+	before := lobby.rooms[code].gameState.PersistenceSnapshot()
+	cut := 0
+	if _, _, err := lobby.chooseDealing(events[1].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut}); err == nil {
+		t.Fatal("deal succeeded during outage")
+	}
+	if !reflect.DeepEqual(before, lobby.rooms[code].gameState.PersistenceSnapshot()) {
+		t.Fatal("failed deal changed game")
+	}
+	// Lobby lifecycle reconstructs a game from these room-player objects.
+	rebuilt := game.NewGameState()
+	for _, player := range lobby.rooms[code].players {
+		if err := rebuilt.AddPlayer(player.player); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !reflect.DeepEqual(before.Players, rebuilt.PersistenceSnapshot().Players) {
+		t.Fatal("failed deal mutated room-player hands or statistics")
+	}
+	store.saveErr = nil
+	if _, _, err := lobby.chooseDealing(events[1].SessionID, "round_robin", dealingChoiceOptions{cutSize: &cut}); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("failed dealing restores engine and room-player hands; retry succeeds")
 }
