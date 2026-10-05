@@ -13,7 +13,7 @@
     "test-integration": "turbo run test-integration"
   },
   "devDependencies": {
-    "turbo": "2.11.4",
+    "turbo": "2.11.6",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   },
