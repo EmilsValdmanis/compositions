@@ -104,9 +104,17 @@ func TestWriteHTTPErrorIncludesCodeAndMessage(t *testing.T) {
 func TestConfigureLoggerWritesToProvidedOutput(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
+	hub := sentry.CurrentHub()
+	originalClient := hub.Client()
+	defer hub.BindClient(originalClient)
+	hub.BindClient(sentry.NewNoopClient())
 
 	var output bytes.Buffer
 	configureLogger(&output)
+	multi, ok := slog.Default().Handler().(multiHandler)
+	if !ok || len(multi.handlers) != 1 {
+		t.Fatalf("configured logger handler = %#v; want only the text handler for a disabled Sentry client", slog.Default().Handler())
+	}
 
 	slog.Info("logger configured", "stream", "stdout")
 
@@ -125,6 +133,9 @@ func TestConfigureLoggerWritesToProvidedOutput(t *testing.T) {
 func TestConfigureLoggerWithSentryClient(t *testing.T) {
 	originalLogger := slog.Default()
 	defer slog.SetDefault(originalLogger)
+	hub := sentry.CurrentHub()
+	originalClient := hub.Client()
+	defer hub.BindClient(originalClient)
 	originalInit := sentryInit
 	defer func() { sentryInit = originalInit }()
 	t.Setenv("SENTRY_ENVIRONMENT", "production")

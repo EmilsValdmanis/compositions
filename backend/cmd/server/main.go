@@ -75,7 +75,7 @@ func traceSampleRate(ctx sentry.SamplingContext) float64 {
 
 func configureLogger(output io.Writer) {
 	handlers := []slog.Handler{slog.NewTextHandler(output, nil)}
-	if sentry.CurrentHub().Client() != nil {
+	if sentry.CurrentHub().Client().IsEnabled() {
 		handlers = append(handlers, sentryslog.Option{
 			LogLevel:  []slog.Level{slog.LevelWarn, slog.LevelError},
 			AddSource: true,

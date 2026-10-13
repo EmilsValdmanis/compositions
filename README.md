@@ -43,7 +43,7 @@ The base game is implemented and playable. Current focus areas:
 
 ## Working In This Repo
 
-Install Bun 1.4.2, Go 1.26.6 or newer, and Node.js 24.21.0 (pinned in `.node-version` and shared with CI). Run from the repository root:
+Install Bun 1.4.2, Go 1.26.9 or newer, and Node.js 24.21.0 (pinned in `.node-version` and shared with CI). Run from the repository root:
 
 ```bash
 bun install --frozen-lockfile
