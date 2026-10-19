@@ -25,7 +25,7 @@ async function getSessionFromBackend({ headers }: { headers: Headers }) {
 }
 
 const getSession = createServerFn({ method: "GET" })
-  .inputValidator(z.undefined())
+  .validator(z.undefined())
   .handler(async () => {
     const headers = new Headers(getRequestHeaders());
     return loadVerifiedSession(headers, ({ headers: requestHeaders }) =>

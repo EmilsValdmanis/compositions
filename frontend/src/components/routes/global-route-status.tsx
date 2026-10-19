@@ -1,6 +1,6 @@
 import React from "react";
 import * as Sentry from "@sentry/tanstackstart-react";
-import { Link, type ErrorComponentProps, type NotFoundRouteProps } from "@tanstack/react-router";
+import { Link, type ErrorComponentProps } from "@tanstack/react-router";
 import { Button } from "#/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader } from "#/components/ui/card";
 import { Caption, H2 } from "#/components/typography";
@@ -83,7 +83,7 @@ export function GlobalErrorComponent(props: ErrorComponentProps) {
   return <SentryWrappedGlobalRouteErrorBoundary {...props} />;
 }
 
-export function GlobalNotFoundComponent(_: NotFoundRouteProps) {
+export function GlobalNotFoundComponent() {
   return (
     <RouteStatusFrame
       eyebrow="404"
