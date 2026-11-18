@@ -1,5 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { SignInPage } from "#/components/routes/sign-in-page";
+import SignInButton from "#/components/auth/sign-in-button";
 import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
 import * as z from "zod";
@@ -11,18 +11,13 @@ const internalReturnTo = z
     "returnTo must be an internal path",
   );
 
-function safeRedirectOptions(returnTo?: string) {
-  const parsedReturnTo = internalReturnTo.safeParse(returnTo);
-  return { to: parsedReturnTo.success ? parsedReturnTo.data : "/" };
-}
-
 export const Route = createFileRoute("/_auth/sign-in")({
   validateSearch: z.object({
     returnTo: internalReturnTo.optional(),
   }),
   beforeLoad: ({ context, search }) => {
     if (context.session) {
-      throw redirect(safeRedirectOptions(search.returnTo));
+      throw redirect({ to: search.returnTo ?? "/" });
     }
   },
   head: () => ({
@@ -33,5 +28,5 @@ export const Route = createFileRoute("/_auth/sign-in")({
 
 function SignInRoute() {
   const { returnTo } = Route.useSearch();
-  return <SignInPage returnTo={returnTo} />;
+  return <SignInButton returnTo={returnTo} />;
 }

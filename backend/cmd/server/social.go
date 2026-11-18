@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -13,6 +12,8 @@ import (
 )
 
 const gameInviteTTL = 10 * time.Minute
+
+var errFriendNotInGame = clientError{"friend_not_in_game", "friend is not in an active game"}
 
 type socialStore interface {
 	ListSocialSnapshot(ctx context.Context, userID string) (database.SocialSnapshotRecord, error)
@@ -321,7 +322,7 @@ func (s *wsServer) handleSpectateGame(conn *websocket.Conn, sessionID string, en
 		return
 	}
 	if _, active := s.lobby.activeGameForUser(req.UserID); !active {
-		s.writeRequestError(conn, envelope, errors.New("friend is not in an active game"))
+		s.writeRequestError(conn, envelope, errFriendNotInGame)
 		return
 	}
 
@@ -335,7 +336,7 @@ func (s *wsServer) handleSpectateGame(conn *websocket.Conn, sessionID string, en
 	}
 	s.broadcastRoomState(roomState, recipients)
 	logEmitFailure(conn, "game_state", event, "write spectator game state failed", "roomCode", roomState.Code, "userID", userID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: userID, OK: true}, conn)
 }
 
 func (s *wsServer) handleStopSpectating(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -347,7 +348,7 @@ func (s *wsServer) handleStopSpectating(conn *websocket.Conn, sessionID string, 
 	if roomState != nil {
 		s.broadcastRoomState(*roomState, recipients)
 	}
-	s.writeSocialActionSuccess(conn, envelope.Type, "", envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: "", OK: true}, conn)
 }
 
 func (s *wsServer) spectatorDisconnected(conn *websocket.Conn) {
@@ -411,7 +412,7 @@ func (s *wsServer) handleSendFriendRequest(conn *websocket.Conn, sessionID strin
 		return
 	}
 	s.refreshSocialUsers(userID, req.UserID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: userID, OK: true}, conn)
 }
 
 func (s *wsServer) handleRespondFriendRequest(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -427,7 +428,7 @@ func (s *wsServer) handleRespondFriendRequest(conn *websocket.Conn, sessionID st
 		return
 	}
 	s.refreshSocialUsers(userID, senderID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: userID, OK: true}, conn)
 }
 
 func (s *wsServer) handleRemoveFriend(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -442,7 +443,7 @@ func (s *wsServer) handleRemoveFriend(conn *websocket.Conn, sessionID string, en
 		return
 	}
 	s.refreshSocialUsers(userID, req.UserID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: userID, OK: true}, conn)
 }
 
 func (s *wsServer) handleSendGameInvite(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -451,7 +452,7 @@ func (s *wsServer) handleSendGameInvite(conn *websocket.Conn, sessionID string, 
 		return
 	}
 	if !s.socialPresence.isOnline(req.UserID) {
-		s.writeRequestError(conn, envelope, errors.New("friend is not available"))
+		s.writeRequestError(conn, envelope, clientError{"friend_unavailable", "friend is not available"})
 		return
 	}
 	roomCode, err := s.lobby.joinableRoomCode(sessionID)
@@ -466,7 +467,7 @@ func (s *wsServer) handleSendGameInvite(conn *websocket.Conn, sessionID string, 
 		return
 	}
 	s.refreshSocialUsers(req.UserID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: userID, OK: true}, conn)
 }
 
 func (s *wsServer) handleRespondGameInvite(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -496,13 +497,13 @@ func (s *wsServer) handleRespondGameInvite(conn *websocket.Conn, sessionID strin
 		return
 	}
 	s.refreshSocialUsers(userID, invite.User.ID)
-	s.writeSocialActionSuccess(conn, envelope.Type, userID, envelope.RequestID)
+	writeActionResult(envelope, actionResultEvent{Action: envelope.Type, PlayerID: userID, OK: true}, conn)
 }
 
 func decodeSocialRequest[T any](s *wsServer, conn *websocket.Conn, sessionID string, envelope wsEnvelope) (T, string, bool) {
 	var empty T
 	if s.socialStore == nil {
-		s.writeRequestError(conn, envelope, errors.New("social features are unavailable"))
+		s.writeRequestError(conn, envelope, clientError{"social_unavailable", "social features are unavailable"})
 		return empty, "", false
 	}
 	req, ok := decodeSessionRequest[T](s, conn, sessionID, envelope)
@@ -515,12 +516,4 @@ func decodeSocialRequest[T any](s *wsServer, conn *websocket.Conn, sessionID str
 		return empty, "", false
 	}
 	return req, userID, true
-}
-
-func (s *wsServer) writeSocialActionSuccess(conn *websocket.Conn, action, userID string, requestIDs ...string) {
-	requestID := ""
-	if len(requestIDs) > 0 {
-		requestID = requestIDs[0]
-	}
-	logEmitFailure(conn, "action_result", actionResultEvent{Action: action, PlayerID: userID, OK: true, RequestID: requestID}, "write social action result failed", "action", action, "userID", userID)
 }

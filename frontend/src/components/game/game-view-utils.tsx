@@ -1,6 +1,6 @@
 import { Add01Icon, ChevronUpIcon, SparklesIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { type PlayerSnapshot } from "#/components/game-websocket-provider";
+import { type PlayerSnapshot } from "#/lib/game-protocol";
 import { playerById } from "#/components/game/game-view-helpers";
 import { Avatar, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Caption } from "#/components/typography";

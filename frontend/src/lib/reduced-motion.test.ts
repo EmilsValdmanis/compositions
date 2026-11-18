@@ -1,31 +1,13 @@
 // @vitest-environment jsdom
-import { createRequire } from "node:module";
+import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
-  getReducedMotionScript,
+  REDUCED_MOTION_SCRIPT,
   isReducedMotionPreferenceEnabled,
   setReducedMotionPreferenceEnabled,
   shouldReduceMotion,
   subscribeToReducedMotionPreference,
 } from "#/lib/reduced-motion";
-
-if (typeof globalThis.document === "undefined") {
-  const require = createRequire(import.meta.url);
-  const { JSDOM } = require("jsdom") as {
-    JSDOM: new (
-      html?: string,
-      options?: Record<string, unknown>,
-    ) => {
-      window: Window & typeof globalThis;
-    };
-  };
-  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
-    url: "http://localhost/",
-  });
-
-  globalThis.window = dom.window;
-  globalThis.document = dom.window.document;
-}
 
 function mockSystemReducedMotion(matches: boolean) {
   Object.defineProperty(window, "matchMedia", {
@@ -80,9 +62,25 @@ describe("reduced motion preference", () => {
     unsubscribe();
   });
 
-  it("uses a fixed bootstrap script with no interpolated input", () => {
-    expect(getReducedMotionScript()).toBe(
-      "(function(){try{if(localStorage.getItem('compositions.reduce-motion-enabled')==='true'){document.documentElement.setAttribute('data-reduce-motion','')}}catch(e){}})();",
-    );
+  it("restores the stored CSS preference before React renders", () => {
+    window.localStorage.setItem("compositions.reduce-motion-enabled", "true");
+    runInNewContext(REDUCED_MOTION_SCRIPT, { document, localStorage: window.localStorage });
+
+    expect(document.documentElement.hasAttribute("data-reduce-motion")).toBe(true);
+  });
+
+  it("updates the CSS preference after another tab clears storage", () => {
+    setReducedMotionPreferenceEnabled(true);
+    const listener = vi.fn();
+    const unsubscribe = subscribeToReducedMotionPreference(listener);
+    try {
+      window.localStorage.clear();
+      window.dispatchEvent(new StorageEvent("storage", { key: null, storageArea: localStorage }));
+
+      expect(document.documentElement.hasAttribute("data-reduce-motion")).toBe(false);
+      expect(listener).toHaveBeenCalledOnce();
+    } finally {
+      unsubscribe();
+    }
   });
 });

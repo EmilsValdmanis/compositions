@@ -1,24 +1,10 @@
-import { useSyncExternalStore } from "react";
 import { Toaster } from "#/components/ui/sonner";
 import { useTheme } from "#/components/theme-provider";
-
-const MOBILE_TOASTER_QUERY = "(max-width: 47.999rem)";
-
-function subscribeToMobileLayout(onChange: () => void) {
-  if (typeof window === "undefined") return () => {};
-
-  const mediaQuery = window.matchMedia(MOBILE_TOASTER_QUERY);
-  mediaQuery.addEventListener("change", onChange);
-  return () => mediaQuery.removeEventListener("change", onChange);
-}
-
-function isMobileLayout() {
-  return typeof window !== "undefined" && window.matchMedia(MOBILE_TOASTER_QUERY).matches;
-}
+import { useIsMobile } from "#/hooks/use-mobile";
 
 export function ThemeAwareToaster() {
   const { theme } = useTheme();
-  const isMobile = useSyncExternalStore(subscribeToMobileLayout, isMobileLayout, () => false);
+  const isMobile = useIsMobile();
 
   return (
     <Toaster

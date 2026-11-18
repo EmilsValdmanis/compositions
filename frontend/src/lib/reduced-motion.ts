@@ -2,6 +2,17 @@ import { useSyncExternalStore } from "react";
 
 const REDUCED_MOTION_PREFERENCE_KEY = "compositions.reduce-motion-enabled";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+const REDUCED_MOTION_ATTRIBUTE = "data-reduce-motion";
+export const REDUCED_MOTION_SCRIPT = `
+  (() => {
+    try {
+      document.documentElement.toggleAttribute(
+        ${JSON.stringify(REDUCED_MOTION_ATTRIBUTE)},
+        localStorage.getItem(${JSON.stringify(REDUCED_MOTION_PREFERENCE_KEY)}) === "true"
+      );
+    } catch {}
+  })();
+`;
 const preferenceListeners = new Set<() => void>();
 
 export function isReducedMotionPreferenceEnabled() {
@@ -31,7 +42,8 @@ export function subscribeToReducedMotionPreference(listener: () => void) {
 
   const mediaQuery = window.matchMedia?.(REDUCED_MOTION_QUERY);
   const handleStorage = (event: StorageEvent) => {
-    if (event.key === REDUCED_MOTION_PREFERENCE_KEY) {
+    if (event.key === REDUCED_MOTION_PREFERENCE_KEY || event.key === null) {
+      applyReducedMotionPreference();
       listener();
     }
   };
@@ -52,7 +64,7 @@ function applyReducedMotionPreference() {
   }
 
   document.documentElement.toggleAttribute(
-    "data-reduce-motion",
+    REDUCED_MOTION_ATTRIBUTE,
     isReducedMotionPreferenceEnabled(),
   );
 }
@@ -79,8 +91,4 @@ export function useReducedMotionPreference() {
 
 export function useShouldReduceMotion() {
   return useSyncExternalStore(subscribeToReducedMotionPreference, shouldReduceMotion, () => false);
-}
-
-export function getReducedMotionScript() {
-  return "(function(){try{if(localStorage.getItem('compositions.reduce-motion-enabled')==='true'){document.documentElement.setAttribute('data-reduce-motion','')}}catch(e){}})();";
 }

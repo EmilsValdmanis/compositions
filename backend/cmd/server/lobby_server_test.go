@@ -32,7 +32,7 @@ type blockingLobbyStateStore struct {
 	release chan struct{}
 }
 
-func (s *blockingLobbyStateStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+func (s *blockingLobbyStateStore) SaveLobbyState(ctx context.Context, state json.RawMessage) error {
 	select {
 	case <-s.started:
 	default:
@@ -46,11 +46,13 @@ func (s *blockingLobbyStateStore) SaveLobbyState(ctx context.Context, state pers
 	}
 }
 
-func (s *jsonLobbyStateStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+func (s *jsonLobbyStateStore) UpsertUser(_ context.Context, user database.UserRecord) (database.UserRecord, error) {
 	return user, nil
 }
 
-func (s *jsonLobbyStateStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+func (s *jsonLobbyStateStore) CreateSession(context.Context, database.SessionRecord) error {
+	return nil
+}
 
 func (s *jsonLobbyStateStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
 	return database.SessionUserRecord{}, database.ErrSessionNotFound
@@ -64,31 +66,23 @@ func (s *jsonLobbyStateStore) UpdateOnboardingVersion(context.Context, string, i
 	return nil
 }
 
-func (s *jsonLobbyStateStore) SaveLobbyState(_ context.Context, state persistedLobbyState) error {
+func (s *jsonLobbyStateStore) SaveLobbyState(_ context.Context, state json.RawMessage) error {
 	if s.saveErr != nil {
 		return s.saveErr
 	}
-	data, err := json.Marshal(state)
-	if err != nil {
-		return err
-	}
-	s.data = data
+	s.data = append(s.data[:0], state...)
 	s.saves++
 	return nil
 }
 
-func (s *jsonLobbyStateStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
+func (s *jsonLobbyStateStore) LoadLobbyState(context.Context) (json.RawMessage, error) {
 	if s.loadErr != nil {
-		return persistedLobbyState{}, s.loadErr
+		return nil, s.loadErr
 	}
 	if len(s.data) == 0 {
-		return persistedLobbyState{}, nil
+		return nil, database.ErrLobbyStateNotFound
 	}
-	var state persistedLobbyState
-	if err := json.Unmarshal(s.data, &state); err != nil {
-		return persistedLobbyState{}, err
-	}
-	return state, nil
+	return s.data, nil
 }
 
 func (s *jsonLobbyStateStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
@@ -112,6 +106,8 @@ func persistLobbyForTest(lobby *lobbyServer, reason string) error {
 	if lobby == nil {
 		return (*lobbyServer)(nil).persistLocked(reason)
 	}
+	lobby.commandMu.Lock()
+	defer lobby.commandMu.Unlock()
 	lobby.mu.Lock()
 	defer lobby.mu.Unlock()
 	return lobby.persistLocked(reason)
@@ -745,6 +741,17 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 	if _, _, err := restoredPending.chooseDealing(guestEvent.SessionID, "round_robin", dealingChoiceOptions{cutSize: &cutSize}); err != nil {
 		t.Fatalf("chooseDealing(restored pending) error = %v", err)
 	}
+	current, err := pendingRoom.gameState.CurrentPlayer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentSession := hostEvent.SessionID
+	if current.ID == guestEvent.PlayerID {
+		currentSession = guestEvent.SessionID
+	}
+	if _, _, err := restoredPending.updateDraftActivity(currentSession, []game.DraftCompositionSnapshot{{ID: "saved-draft"}}); err != nil {
+		t.Fatalf("persist active player's draft: %v", err)
+	}
 	pendingRoom.statisticsPlaytime = 37 * time.Minute
 	pendingRoom.statisticsActiveSince = time.Now().UTC()
 	_ = persistLobbyForTest(restoredPending, "playtime fixture")
@@ -782,12 +789,28 @@ func TestLobbyServerRestoresPersistedRoomAndReconnectsPlayers(t *testing.T) {
 		t.Fatalf("host game state = %#v; want in-progress private hand", hostGameState)
 	}
 
-	_, guestRoomState, _, err := restoredGame.connectWithUser("", guestUser, nil)
+	guestReconnect, guestRoomState, _, err := restoredGame.connectWithUser("", guestUser, nil)
 	if err != nil {
 		t.Fatalf("guest reconnect error = %v", err)
 	}
 	if guestRoomState == nil || !guestRoomState.Players[0].Connected || !guestRoomState.Players[1].Connected {
 		t.Fatalf("guest reconnect room = %#v; want both players connected", guestRoomState)
+	}
+	guestGameState, err := restoredGame.gameStateForSession(guestReconnect.SessionID, *guestRoomState)
+	if err != nil || guestGameState == nil {
+		t.Fatalf("guest reconnect game state: %v, %v", guestGameState, err)
+	}
+	for playerID, view := range map[string]*gameStateEvent{hostReconnect.PlayerID: hostGameState, guestReconnect.PlayerID: guestGameState} {
+		activity := view.Game.TurnActivity
+		if playerID == current.ID {
+			if activity != nil {
+				t.Fatal("reconnected active player received spectator activity")
+			}
+			continue
+		}
+		if activity == nil || len(activity.DraftCompositions) != 1 || activity.DraftCompositions[0].ID != "saved-draft" {
+			t.Fatal("reconnected observer did not receive saved turn activity")
+		}
 	}
 }
 
@@ -852,19 +875,54 @@ func TestLobbyServerRestorePersistedStateValidation(t *testing.T) {
 	}
 }
 
+func TestLobbySnapshotEncodingFailureRollsBackCommand(t *testing.T) {
+	store := &jsonLobbyStateStore{}
+	lobby := newLobbyServerWithStore(store)
+	event, _, _, err := lobby.connect("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	room, _, err := lobby.createRoom(event.SessionID, "Host")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// JSON cannot represent a time with a year outside 0000 to 9999.
+	lobby.rooms[room.Code].statisticsStartedAt = time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)
+	saves := store.saves
+	if _, _, _, err := lobby.connect("", nil); err == nil {
+		t.Fatal("connect succeeded with an unencodable lobby state")
+	}
+	if store.saves != saves || len(lobby.sessions) != 1 {
+		t.Fatal("failed encoding committed a lobby change")
+	}
+}
+
+func TestRestoreEmptyLegacyOrInvalidLobbyJSON(t *testing.T) {
+	for _, test := range []struct {
+		data    string
+		wantErr bool
+	}{
+		{`{}`, false},
+		{`{`, true},
+	} {
+		lobby := newLobbyServerWithStore(&jsonLobbyStateStore{data: []byte(test.data)})
+		if err := lobby.restorePersistedState(context.Background()); (err != nil) != test.wantErr {
+			t.Fatalf("restoring %q: got error %v, want error = %t", test.data, err, test.wantErr)
+		}
+		if len(lobby.rooms) != 0 || len(lobby.sessions) != 0 {
+			t.Fatalf("restoring %q unexpectedly created a room or session", test.data)
+		}
+	}
+}
+
 func TestLobbyServerPersistenceEdgeBranches(t *testing.T) {
 	if err := (*lobbyServer)(nil).restorePersistedState(context.Background()); err != nil {
 		t.Fatalf("nil restorePersistedState() error = %v", err)
 	}
 	_ = persistLobbyForTest(nil, "nil receiver")
 
-	lobby := newLobbyServerWithStore(nil)
-	if _, ok := lobby.store.(noopUserStore); !ok {
-		t.Fatalf("store type = %T; want noopUserStore", lobby.store)
-	}
-
 	errorStore := &jsonLobbyStateStore{saveErr: errors.New("save boom")}
-	lobby = newLobbyServerWithStore(errorStore)
+	lobby := newLobbyServerWithStore(errorStore)
 	lobby.sessions["nil-session"] = nil
 	lobby.sessions["session-1"] = &playerSession{sessionID: "session-1", playerID: "player-1"}
 	lobby.rooms["nil-room"] = nil
@@ -1690,8 +1748,8 @@ func TestCreateRoomAddPlayerErrorWithFreshSession(t *testing.T) {
 func TestRoomTurnTrackingAndActivitySnapshots(t *testing.T) {
 	room := &room{}
 	room.clearTurnTracking()
-	if baseline, activity := room.turnContextForPlayer("other"); baseline != nil || activity != nil {
-		t.Fatalf("turnContextForPlayer() = %#v %#v; want nil nil without tracking", baseline, activity)
+	if activity := room.turnActivityForPlayer("other"); activity != nil {
+		t.Fatalf("turn activity = %#v; want nil without tracking", activity)
 	}
 
 	state := game.NewGameStateWithDeck([]game.Card{})
@@ -1724,8 +1782,8 @@ func TestRoomTurnTrackingAndActivitySnapshots(t *testing.T) {
 	if room.turnActivity.PlayerID != "current" || room.turnActivity.Round != 3 || room.turnActivity.TurnNumber != 9 {
 		t.Fatalf("turnActivity = %#v; want current player round metadata", room.turnActivity)
 	}
-	if baseline, activity := room.turnContextForPlayer("current"); baseline != nil || activity != nil {
-		t.Fatalf("active player should not receive spectator context, got %#v %#v", baseline, activity)
+	if activity := room.turnActivityForPlayer("current"); activity != nil {
+		t.Fatalf("active player should not receive spectator context, got %#v", activity)
 	}
 
 	newComp := mustSetComposition(t, game.NewCard(game.King, game.Hearts), game.NewCard(game.King, game.Diamonds), game.NewCard(game.King, game.Spades))
@@ -1741,12 +1799,16 @@ func TestRoomTurnTrackingAndActivitySnapshots(t *testing.T) {
 	if room.turnActivity.DraftCompositions[1].TableIndex == nil || *room.turnActivity.DraftCompositions[1].TableIndex != 0 {
 		t.Fatalf("addition draft table index = %#v; want 0", room.turnActivity.DraftCompositions[1].TableIndex)
 	}
-	baseline, activity := room.turnContextForPlayer("other")
-	if baseline == nil || activity == nil {
+	projection, err := room.gameStateForPlayer("other", roomSnapshot{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activity := projection.Game.TurnActivity
+	if activity == nil {
 		t.Fatal("spectator turn context missing")
 	}
-	if len(baseline.ActiveCompositions) != 1 {
-		t.Fatalf("len(baseline.ActiveCompositions) = %d; want 1", len(baseline.ActiveCompositions))
+	if len(activity.BaselineCompositions) != 1 {
+		t.Fatalf("len(activity.BaselineCompositions) = %d; want 1", len(activity.BaselineCompositions))
 	}
 	if len(activity.CompositionActivities) != 1 {
 		t.Fatalf("len(activity.CompositionActivities) = %d; want 1", len(activity.CompositionActivities))
@@ -1762,7 +1824,7 @@ func TestRoomTurnTrackingAndActivitySnapshots(t *testing.T) {
 	}
 	activity.CompositionActivities[0].CardActivities[0] = game.CardActivitySnapshot{Kind: "mutated"}
 	if room.turnActivity.CompositionActivities[0].CardActivities[0].Kind != "addition" {
-		t.Fatal("turnContextForPlayer should clone activity maps")
+		t.Fatal("projecting turn activity must isolate its card activity maps")
 	}
 
 	room.clearTurnTracking()
@@ -2906,7 +2968,7 @@ type failFirstLobbyStore struct {
 	calls   int
 }
 
-func (s *failFirstLobbyStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+func (s *failFirstLobbyStore) SaveLobbyState(ctx context.Context, state json.RawMessage) error {
 	s.calls++
 	if s.calls == 1 {
 		close(s.started)

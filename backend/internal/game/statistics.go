@@ -62,7 +62,6 @@ func (stats *PlayerGameStatistics) recordRoundHand(round, cards, points int) {
 	stats.MostCardsRemaining = max(stats.MostCardsRemaining, cards)
 }
 
-// CompletedPlayerStatistics is the final per-game record consumed by storage.
 type CompletedPlayerStatistics struct {
 	PlayerID    string
 	Placement   int

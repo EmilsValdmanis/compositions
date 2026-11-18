@@ -1,8 +1,12 @@
 package main
 
-import "strings"
+import (
+	"strings"
 
-var errAuthenticationRequired = errorString("authentication required")
+	"github.com/EmilsValdmanis/compositions/internal/database"
+)
+
+var errAuthenticationRequired = clientError{"auth_required", "authentication required"}
 
 type authenticatedUser struct {
 	ID                string
@@ -13,6 +17,13 @@ type authenticatedUser struct {
 	OnboardingVersion int
 	Provider          string
 	ProviderAccountID string
+}
+
+func (u authenticatedUser) record() database.UserRecord {
+	return database.UserRecord{
+		ID: u.ID, Name: u.Name, Email: u.Email, ImageURL: u.Image,
+		Provider: u.Provider, ProviderAccountID: u.ProviderAccountID,
+	}
 }
 
 func (u authenticatedUser) isAuthenticated() bool {
@@ -28,7 +39,3 @@ func (u authenticatedUser) displayName() string {
 	}
 	return strings.TrimSpace(u.ID)
 }
-
-type errorString string
-
-func (e errorString) Error() string { return string(e) }

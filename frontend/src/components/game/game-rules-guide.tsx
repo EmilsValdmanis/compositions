@@ -2,7 +2,7 @@ import { type ComponentProps, type ReactNode } from "react";
 import { ArrowRight01Icon, PaintBoardIcon, Target02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { type CardSnapshot } from "#/lib/game-protocol";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
 import { Card, CardContent, CardHeader } from "#/components/ui/card";

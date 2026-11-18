@@ -62,51 +62,17 @@ const NUMBER_FORMATTERS: Record<Locale, Intl.NumberFormat> = {
   lv: new Intl.NumberFormat("lv"),
 };
 
-const LEADERBOARD_METRICS: LeaderboardMetric[] = [
-  "elo",
-  "wins",
-  "games",
-  "playtime",
-  "rounds",
-  "points",
-];
+const metricPresentation = {
+  elo: { label: m.elo_rating, icon: RankingIcon },
+  wins: { label: m.wins, icon: ChampionIcon },
+  games: { label: m.games_label, icon: GameController03Icon },
+  playtime: { label: m.playtime_label, icon: Clock01Icon },
+  rounds: { label: m.round_wins_label, icon: RepeatIcon },
+  points: { label: m.points_inflicted, icon: Target01Icon },
+} satisfies Record<LeaderboardMetric, { label: () => string; icon: typeof RankingIcon }>;
 
 function formatNumber(value: number) {
   return NUMBER_FORMATTERS[getLocale()].format(value);
-}
-
-function getMetricLabel(metric: LeaderboardMetric) {
-  switch (metric) {
-    case "elo":
-      return m.elo_rating();
-    case "wins":
-      return m.wins();
-    case "games":
-      return m.games_label();
-    case "playtime":
-      return m.playtime_label();
-    case "rounds":
-      return m.round_wins_label();
-    case "points":
-      return m.points_inflicted();
-  }
-}
-
-function getMetricIcon(metric: LeaderboardMetric) {
-  switch (metric) {
-    case "elo":
-      return RankingIcon;
-    case "wins":
-      return ChampionIcon;
-    case "games":
-      return GameController03Icon;
-    case "playtime":
-      return Clock01Icon;
-    case "rounds":
-      return RepeatIcon;
-    case "points":
-      return Target01Icon;
-  }
 }
 
 function formatScore(metric: LeaderboardMetric, score: number) {
@@ -172,7 +138,7 @@ function LeaderboardHeader({ metric }: { metric: LeaderboardMetric }) {
           <span className="sr-only">{m.rank()}</span>
         </TableHead>
         <TableHead>{m.player()}</TableHead>
-        <TableHead className="text-right">{getMetricLabel(metric)}</TableHead>
+        <TableHead className="text-right">{metricPresentation[metric].label()}</TableHead>
       </TableRow>
     </TableHeader>
   );
@@ -239,7 +205,6 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [metric, setMetric] = useState<LeaderboardMetric>(DEFAULT_LEADERBOARD_METRIC);
   const [scope, setScope] = useState<LeaderboardScope>(DEFAULT_LEADERBOARD_SCOPE);
-  // Query refetching is the intended response to changing the selected metric.
   // react-doctor-disable-next-line react-hooks-js/no-event-handler, react-doctor/no-event-handler
   const queryOptions = leaderboardInfiniteOptions(playerId, metric, scope);
   const {
@@ -345,10 +310,10 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
         <Tabs value={metric} onValueChange={handleMetricChange} className="gap-0">
           <div className="scroll-fade-r overflow-x-auto border-b p-3">
             <TabsList aria-label={m.leaderboard_statistic()}>
-              {LEADERBOARD_METRICS.map((item) => (
+              {leaderboardMetricSchema.options.map((item) => (
                 <TabsTrigger key={item} value={item}>
-                  <HugeiconsIcon icon={getMetricIcon(item)} data-icon="inline-start" />
-                  {getMetricLabel(item)}
+                  <HugeiconsIcon icon={metricPresentation[item].icon} data-icon="inline-start" />
+                  {metricPresentation[item].label()}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -403,7 +368,7 @@ export function LeaderboardPage({ playerId }: { playerId: string }) {
                 containerRef={scrollRef}
                 className="table-fixed sm:table-auto"
                 containerClassName="max-h-[min(62dvh,42rem)] touch-auto overflow-auto overscroll-contain"
-                aria-label={`${m.leaderboard()}: ${scope === "friends" ? m.friends() : m.global()}, ${getMetricLabel(metric)}`}
+                aria-label={`${m.leaderboard()}: ${scope === "friends" ? m.friends() : m.global()}, ${metricPresentation[metric].label()}`}
               >
                 <colgroup>
                   <col className="w-14 sm:w-20" />

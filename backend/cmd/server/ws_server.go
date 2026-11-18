@@ -277,23 +277,7 @@ type wsServer struct {
 	closed         bool
 }
 
-func newWSServer() *wsServer {
-	return newWSServerWithAuth(nil)
-}
-
-func newWSServerWithAuth(auth *authHandler) *wsServer {
-	return newWSServerWithAllowedOrigin(auth, "")
-}
-
-func newWSServerWithAllowedOrigin(auth *authHandler, allowedOrigin string) *wsServer {
-	return newWSServerWithDependencies(auth, noopUserStore{}, allowedOrigin)
-}
-
 func newWSServerWithDependencies(auth *authHandler, store userStore, allowedOrigin string) *wsServer {
-	if store == nil {
-		store = noopUserStore{}
-	}
-
 	server := &wsServer{
 		lobby:          newLobbyServerWithStore(store),
 		auth:           auth,
@@ -373,7 +357,7 @@ func (s *wsServer) routes() http.Handler {
 	mux.HandleFunc("/ws", s.handleWS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/health" && r.URL.Path != "/ws" && r.Method != http.MethodOptions && !s.rateLimits.allowHTTPRequest(r) {
-			writeHTTPError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "rate limit exceeded")
+			writeHTTPError(w, http.StatusTooManyRequests, errRateLimitExceeded.code, errRateLimitExceeded.message)
 			return
 		}
 		mux.ServeHTTP(w, r)
@@ -403,7 +387,7 @@ func (s *wsServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *wsServer) handleWS(w http.ResponseWriter, r *http.Request) {
 	releaseConnection, allowed := s.rateLimits.beginConnection(r)
 	if !allowed {
-		writeHTTPError(w, http.StatusTooManyRequests, clientErrorCode(errRateLimitExceeded), errRateLimitExceeded.Error())
+		writeHTTPError(w, http.StatusTooManyRequests, errRateLimitExceeded.code, errRateLimitExceeded.message)
 		slog.Warn("websocket connection rate limited", "remote", r.RemoteAddr)
 		return
 	}
@@ -493,7 +477,7 @@ func (s *wsServer) handleConnectionWithRelease(conn *websocket.Conn, request *ht
 		switch envelope.Type {
 		case "connect":
 			if sessionID != "" {
-				s.writeRequestError(conn, envelope, errors.New("already connected"))
+				s.writeRequestError(conn, envelope, clientError{"already_connected", "already connected"})
 				return
 			}
 			nextSessionID, shouldClose := s.handleConnect(conn, request, envelope)
@@ -554,7 +538,7 @@ func (s *wsServer) handleConnectionWithRelease(conn *websocket.Conn, request *ht
 		case "discard":
 			s.handleDiscard(conn, sessionID, envelope)
 		default:
-			s.writeRequestError(conn, envelope, errors.New("unknown message type"))
+			s.writeRequestError(conn, envelope, clientError{"unknown_message_type", "unknown message type"})
 		}
 	}
 }
@@ -632,7 +616,7 @@ func (s *wsServer) persistAuthenticatedUser(user authenticatedUser) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
 	defer cancel()
 
-	if _, err := s.userStore.UpsertUser(ctx, user); err != nil {
+	if _, err := s.userStore.UpsertUser(ctx, user.record()); err != nil {
 		return fmt.Errorf("save user: %w", err)
 	}
 
@@ -768,9 +752,7 @@ func (s *wsServer) handleForfeitGame(conn *websocket.Conn, sessionID string, env
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	logEmitFailure(conn, "action_result", result, "write forfeit result failed", "sessionID", sessionID)
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 	if roomState.Phase != "game_over" {
 		s.refreshFriendsOfPlayers(roomState.Players)
 	}
@@ -788,8 +770,7 @@ func (s *wsServer) handleRequestEndGame(conn *websocket.Conn, sessionID string, 
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) handleVoteEndGame(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -803,8 +784,7 @@ func (s *wsServer) handleVoteEndGame(conn *websocket.Conn, sessionID string, env
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) handleReportIssue(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -818,8 +798,7 @@ func (s *wsServer) handleReportIssue(conn *websocket.Conn, sessionID string, env
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) handleSendEmote(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -849,8 +828,7 @@ func (s *wsServer) handleDraw(conn *websocket.Conn, sessionID string, envelope w
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -871,8 +849,7 @@ func (s *wsServer) handlePlay(conn *websocket.Conn, sessionID string, envelope w
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) handlePlayAndDiscard(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -905,8 +882,7 @@ func (s *wsServer) handlePlayAndDiscard(conn *websocket.Conn, sessionID string, 
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) handleDraftUpdate(conn *websocket.Conn, sessionID string, envelope wsEnvelope) {
@@ -950,21 +926,13 @@ func (s *wsServer) handleDiscard(conn *websocket.Conn, sessionID string, envelop
 		s.writeRequestError(conn, envelope, err)
 		return
 	}
-	result.RequestID = envelope.RequestID
-	s.broadcastActionSuccess(result, roomState, recipients)
-}
-
-func (s *wsServer) writeError(conn *websocket.Conn, err error) {
-	logEmitFailure(conn, "error", errorEvent{Code: clientErrorCode(err), Message: clientErrorMessage(err)}, "write websocket error event failed")
-}
-
-func (s *wsServer) writeActionError(conn *websocket.Conn, action string, err error) {
-	s.writeRequestError(conn, wsEnvelope{Type: action}, err)
+	s.broadcastActionSuccess(conn, envelope, result, roomState, recipients)
 }
 
 func (s *wsServer) writeRequestError(conn *websocket.Conn, envelope wsEnvelope, err error) {
+	problem := describeClientError(err)
 	logEmitFailure(conn, "error", errorEvent{
-		Code: clientErrorCode(err), Message: clientErrorMessage(err),
+		Code: problem.code, Message: problem.message,
 		Action: envelope.Type, RequestID: envelope.RequestID,
 	}, "write websocket action error event failed", "action", envelope.Type)
 }
@@ -991,15 +959,16 @@ func (s *wsServer) broadcastGameState(recipients []gameStateRecipient) {
 	}
 }
 
-func (s *wsServer) broadcastActionResult(result actionResultEvent, recipients []*websocket.Conn) {
+func writeActionResult(envelope wsEnvelope, result actionResultEvent, recipients ...*websocket.Conn) {
+	result.RequestID = envelope.RequestID
 	for _, conn := range recipients {
-		logEmitFailure(conn, "action_result", result, "broadcast action_result failed", "action", result.Action, "playerID", result.PlayerID)
+		logEmitFailure(conn, "action_result", result, "write action_result failed", "action", result.Action, "playerID", result.PlayerID)
 	}
 }
 
-func (s *wsServer) broadcastActionSuccess(result actionResultEvent, roomState roomSnapshot, recipients []gameStateRecipient) {
+func (s *wsServer) broadcastActionSuccess(conn *websocket.Conn, envelope wsEnvelope, result actionResultEvent, roomState roomSnapshot, recipients []gameStateRecipient) {
 	conns := gameRecipientConns(recipients)
-	s.broadcastActionResult(result, conns)
+	writeActionResult(envelope, result, uniqueConnections(append([]*websocket.Conn{conn}, conns...))...)
 	s.broadcastRoomState(roomState, conns)
 	s.broadcastGameState(recipients)
 
@@ -1059,8 +1028,9 @@ func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID st
 		s.writeRequestError(conn, envelope, err)
 		return req, false
 	}
-	if !s.revalidateAuthSocket(conn) {
-		s.writeActionError(conn, envelope.Type, errAuthenticationRequired)
+	if !s.authSocketValid(conn) {
+		s.writeRequestError(conn, envelope, errAuthenticationRequired)
+		closeUnauthenticatedSocket(conn)
 		return req, false
 	}
 	if err := decodePayload(envelope.Data, &req); err != nil {
@@ -1072,43 +1042,40 @@ func decodeSessionRequest[T any](s *wsServer, conn *websocket.Conn, sessionID st
 
 func requireConnectedSession(sessionID string) error {
 	if sessionID == "" {
-		return errors.New("connect first")
+		return clientError{"connect_first", "connect first"}
 	}
 	return nil
 }
 
 func decodePayload(data json.RawMessage, target any) error {
 	if len(data) == 0 {
-		return errors.New("missing data")
+		return clientError{"missing_data", "missing data"}
 	}
 	if err := json.Unmarshal(data, target); err != nil {
-		return errors.New("invalid data")
+		return clientError{"invalid_data", "invalid data"}
 	}
 	return nil
 }
 
 func writeEvent(conn *websocket.Conn, messageType string, data any) error {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
 	lock, _ := wsDataWriteLocks.LoadOrStore(conn, &sync.Mutex{})
 	mu := lock.(*sync.Mutex)
 	mu.Lock()
 	defer mu.Unlock()
 
 	_ = conn.SetWriteDeadline(time.Now().Add(defaultWSWriteTimeout))
-	if err := conn.WriteJSON(wsEnvelope{Type: messageType, Data: mustMarshalRawMessage(data)}); err != nil {
+	if err := conn.WriteJSON(wsEnvelope{Type: messageType, Data: payload}); err != nil {
 		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) || errors.Is(err, websocket.ErrCloseSent) {
 			return errSocketClosed
 		}
 		return err
 	}
 	return nil
-}
-
-func mustMarshalRawMessage(value any) json.RawMessage {
-	data, err := json.Marshal(value)
-	if err != nil {
-		panic(err)
-	}
-	return data
 }
 
 func otherConnections(conns []*websocket.Conn, exclude *websocket.Conn) []*websocket.Conn {
@@ -1203,15 +1170,15 @@ func draftCompositionsFromRequest(requests []draftCompositionRequest) ([]game.Dr
 			return nil, err
 		}
 		if len(req.CardPlacements) > 0 && len(req.CardPlacements) != len(cards) {
-			return nil, errors.New("draft card placements must match cards")
+			return nil, clientError{"invalid_draft", "draft card placements must match cards"}
 		}
 		cardPlacements := make([]game.DraftCardPlacementSnapshot, 0, len(req.CardPlacements))
 		for _, placement := range req.CardPlacements {
 			if placement.InsertIndex != nil && *placement.InsertIndex < 0 {
-				return nil, errors.New("invalid draft card insert index")
+				return nil, clientError{"invalid_draft", "invalid draft card insert index"}
 			}
 			if placement.ReclaimJokerIndex != nil && *placement.ReclaimJokerIndex < 0 {
-				return nil, errors.New("invalid draft reclaim joker index")
+				return nil, clientError{"invalid_draft", "invalid draft reclaim joker index"}
 			}
 			cardPlacements = append(cardPlacements, game.DraftCardPlacementSnapshot{
 				InsertIndex:       cloneIntPointer(placement.InsertIndex),
@@ -1262,18 +1229,18 @@ func cardFromRequest(req cardRequest) (game.Card, error) {
 	}
 	rank := game.Rank(req.Rank)
 	if rank < game.Ace || rank > game.King {
-		return game.Card{}, errors.New("invalid card rank")
+		return game.Card{}, clientError{"invalid_card", "invalid card rank"}
 	}
 	suit := game.Suit(req.Suit)
 	if suit < game.Hearts || suit > game.Spades {
-		return game.Card{}, errors.New("invalid card suit")
+		return game.Card{}, clientError{"invalid_card", "invalid card suit"}
 	}
 	return game.NewCard(rank, suit), nil
 }
 
 func discardCardFromRequest(req *cardRequest) (*game.Card, error) {
 	if req == nil {
-		return nil, errors.New("discard card is required")
+		return nil, clientError{"invalid_card", "discard card is required"}
 	}
 	card, err := cardFromRequest(*req)
 	if err != nil {

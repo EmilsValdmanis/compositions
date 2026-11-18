@@ -1,10 +1,8 @@
+import { type HandEntry } from "#/components/game/card";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
-import {
-  type ActiveDrag,
-  type HandEntry,
-  HAND_DROP_ID,
-} from "#/components/game/game-board-view-state";
+import { type ActiveDrag } from "#/components/game/game-board-view-state";
+import { HAND_DROP_ID } from "#/components/game/board-drop-targets";
 import { GameCard } from "#/components/game/game-card";
 import { Card, CardContent } from "#/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia } from "#/components/ui/empty";

@@ -1,14 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeaders, setResponseHeader } from "@tanstack/react-start/server";
-import { auth } from "#/lib/auth";
-import { resolveGameConnectionAuth } from "#/lib/game-connection-auth";
-import { loadVerifiedSession } from "#/lib/verified-session";
+import { setResponseHeader } from "@tanstack/react-start/server";
+import { readRequestSession } from "#/lib/auth";
 
-export const getGameConnectionAuth = createServerFn({ method: "POST" }).handler(async () => {
+export const hasGameSession = createServerFn({ method: "POST" }).handler(async () => {
   setResponseHeader("cache-control", "no-store");
 
-  const headers = new Headers(getRequestHeaders());
-  const session = await loadVerifiedSession(headers, auth.api.getSession);
-
-  return resolveGameConnectionAuth(headers, session);
+  return (await readRequestSession()) !== null;
 });

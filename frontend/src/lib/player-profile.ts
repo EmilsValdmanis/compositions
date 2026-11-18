@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { authURL } from "#/lib/auth-shared";
+import { requestBackend } from "./backend-request";
 
 export const playerStatisticsSchema = z.object({
   gamesPlayed: z.number(),
@@ -61,10 +61,7 @@ export type GameHistoryFilter = z.infer<typeof gameHistoryFilterSchema>;
 export const getPlayerProfile = createServerFn({ method: "GET" })
   .validator(z.uuid())
   .handler(async ({ data: playerId }) => {
-    const response = await fetch(
-      authURL(`/api/players/${encodeURIComponent(playerId)}`, process.env.VITE_GAME_SERVER_URL),
-      { headers: { accept: "application/json" } },
-    );
+    const response = await requestBackend(`/api/players/${encodeURIComponent(playerId)}`);
 
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`failed to load player profile: ${response.status}`);
@@ -82,9 +79,7 @@ export const getPlayerGameHistory = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     const path = `/api/players/${encodeURIComponent(data.playerId)}/games?page=${data.page}&pageSize=${data.pageSize}&mode=${data.mode}`;
-    const response = await fetch(authURL(path, process.env.VITE_GAME_SERVER_URL), {
-      headers: { accept: "application/json" },
-    });
+    const response = await requestBackend(path);
 
     if (!response.ok) throw new Error(`failed to load player game history: ${response.status}`);
     return playerGameHistorySchema.parse(await response.json());

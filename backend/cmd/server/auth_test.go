@@ -27,13 +27,13 @@ func TestFrontendConfigIsRequiredInProduction(t *testing.T) {
 }
 
 type stubAuthStore struct {
-	upsertedUsers     []authenticatedUser
-	createdSessions   []authSessionRecord
+	upsertedUsers     []database.UserRecord
+	createdSessions   []database.SessionRecord
 	deletedTokens     []string
 	onboardingUserID  string
 	onboardingVersion int
 	sessionUser       database.SessionUserRecord
-	upsertedUser      authenticatedUser
+	upsertedUser      database.UserRecord
 	sessionErr        error
 	upsertErr         error
 	createErr         error
@@ -41,9 +41,9 @@ type stubAuthStore struct {
 	onboardingErr     error
 }
 
-func (s *stubAuthStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+func (s *stubAuthStore) UpsertUser(_ context.Context, user database.UserRecord) (database.UserRecord, error) {
 	if s.upsertErr != nil {
-		return authenticatedUser{}, s.upsertErr
+		return database.UserRecord{}, s.upsertErr
 	}
 	s.upsertedUsers = append(s.upsertedUsers, user)
 	if s.upsertedUser.ID != "" {
@@ -52,7 +52,7 @@ func (s *stubAuthStore) UpsertUser(_ context.Context, user authenticatedUser) (a
 	return user, nil
 }
 
-func (s *stubAuthStore) CreateSession(_ context.Context, session authSessionRecord) error {
+func (s *stubAuthStore) CreateSession(_ context.Context, session database.SessionRecord) error {
 	if s.createErr != nil {
 		return s.createErr
 	}
@@ -153,7 +153,7 @@ func TestSessionFromRequest(t *testing.T) {
 		if err != nil {
 			t.Fatalf("sessionFromRequest() error = %v", err)
 		}
-		if !session.valid || session.user.ID != "user-123" || !session.user.IsAdmin || session.user.OnboardingVersion != 1 || session.token != "session-token" {
+		if session.user.ID != "user-123" || !session.user.IsAdmin || session.user.OnboardingVersion != 1 || session.token != "session-token" {
 			t.Fatalf("session = %#v; want valid authenticated session", session)
 		}
 	})
@@ -197,7 +197,7 @@ func TestSessionTokenForUserReplacesDifferentExistingSession(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
 	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old-token"})
 
-	token, err := handler.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, now.Add(time.Hour))
+	token, err := handler.sessionTokenForUser(request, "new-user", now.Add(time.Hour))
 	if err != nil {
 		t.Fatalf("sessionTokenForUser() error = %v", err)
 	}
@@ -219,7 +219,7 @@ func TestSessionTokenForUserReturnsUnexpectedSessionError(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
 	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old-token"})
 
-	_, err := handler.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, now.Add(time.Hour))
+	_, err := handler.sessionTokenForUser(request, "new-user", now.Add(time.Hour))
 	if err == nil || err.Error() != "session lookup boom" {
 		t.Fatalf("sessionTokenForUser() error = %v; want session lookup boom", err)
 	}
@@ -1066,7 +1066,7 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 				"player profile":  "/players/player-123?tab=history",
 			} {
 				t.Run(name, func(t *testing.T) {
-					store := &stubAuthStore{upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
+					store := &stubAuthStore{upsertedUser: database.UserRecord{ID: "user-123", Name: "Player One", Email: "player@example.com", ImageURL: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
 					handler := newOAuthCallbackHandler(store, now)
 					client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)
 					request := newOAuthCallbackRequest("state=state-token&code=code", client)
@@ -1101,7 +1101,7 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 
 		t.Run("success reuses existing same user session", func(t *testing.T) {
 			store := &stubAuthStore{
-				upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"},
+				upsertedUser: database.UserRecord{ID: "user-123", Name: "Player One", Email: "player@example.com", ImageURL: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"},
 				sessionUser: database.SessionUserRecord{
 					ID:        "user-123",
 					Name:      "Player One",
@@ -1137,7 +1137,7 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 
 		t.Run("success replaces existing different user session", func(t *testing.T) {
 			store := &stubAuthStore{
-				upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"},
+				upsertedUser: database.UserRecord{ID: "user-123", Name: "Player One", Email: "player@example.com", ImageURL: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"},
 				sessionUser: database.SessionUserRecord{
 					ID:        "other-user",
 					Name:      "Other Player",
@@ -1168,7 +1168,7 @@ func TestHandleGoogleSignInAndCallbackCoverage(t *testing.T) {
 		})
 
 		t.Run("success with shared cookie domain", func(t *testing.T) {
-			store := &stubAuthStore{upsertedUser: authenticatedUser{ID: "user-123", Name: "Player One", Email: "player@example.com", Image: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
+			store := &stubAuthStore{upsertedUser: database.UserRecord{ID: "user-123", Name: "Player One", Email: "player@example.com", ImageURL: "https://cdn.example.com/player.png", Provider: googleProvider, ProviderAccountID: "123"}}
 			handler := newOAuthCallbackHandler(store, now)
 			handler.config.cookieDomain = "kompozicijas.xyz"
 			client := newOAuthHTTPClient(nil, nil, http.StatusOK, `{"access_token":"access-token","token_type":"Bearer"}`, `{"sub":"123","name":"Player One","email":"player@example.com","email_verified":true,"picture":"https://cdn.example.com/player.png"}`)

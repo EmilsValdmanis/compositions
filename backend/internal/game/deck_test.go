@@ -518,6 +518,9 @@ func TestGameStateIntegrationMultiRoundScoringAdjustmentAndGameOver(t *testing.T
 	if state.roundWinnerIndex != 2 {
 		t.Fatalf("round 2 winner = %d; want 2", state.roundWinnerIndex)
 	}
+	if won := players[2].statistics.RoundsWon; won != 1 {
+		t.Fatalf("round 2 winner's RoundsWon = %d; want 1", won)
+	}
 	if players[0].totalPoints != 89 {
 		t.Fatalf("player 0 totalPoints = %d; want 89", players[0].totalPoints)
 	}

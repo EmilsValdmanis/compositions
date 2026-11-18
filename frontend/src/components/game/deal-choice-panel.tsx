@@ -19,8 +19,8 @@ import {
   type DealingChoiceRequest,
   type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
-} from "#/components/game-websocket-provider";
-import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
+} from "#/lib/game-protocol";
+import { FACE_DOWN_CARD } from "#/components/game/card";
 import { GameCard } from "#/components/game/game-card";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
@@ -80,13 +80,20 @@ const restrictTapOrderDrag: Modifier = ({ activeNodeRect, containerNodeRect, tra
   };
 };
 
-type DealChoicePanelProps = {
-  players: PlayerSnapshot[];
-  pendingDealChoice: PendingDealChoiceSnapshot;
+export type DealChoiceState = {
+  pendingDealChoice: PendingDealChoiceSnapshot | null;
   dealChooserName: string | null;
   isDealChooser: boolean;
+};
+
+type DealChoicePanelProps = {
+  players: PlayerSnapshot[];
+  dealChoice: DealChoiceState;
   onChooseDealing: (choice: DealingChoiceRequest | string) => void;
 };
+
+type DealChoiceContentProps = Omit<DealChoicePanelProps, "dealChoice"> &
+  DealChoiceState & { pendingDealChoice: PendingDealChoiceSnapshot };
 
 function defaultTapOrder(players: PlayerSnapshot[], pendingDealChoice: PendingDealChoiceSnapshot) {
   const activeIndexes = players.flatMap((player, index) => (player.forfeited ? [] : [index]));
@@ -400,14 +407,25 @@ function DealModeFieldGroup({
   );
 }
 
-export function DealChoicePanel(props: DealChoicePanelProps) {
-  const dealChoiceKey = [
-    props.pendingDealChoice.dealerIndex,
-    props.pendingDealChoice.chooserIndex,
-    props.players.map((player) => `${player.playerId}:${Boolean(player.forfeited)}`).join(","),
+export function DealChoicePanel({ players, dealChoice, onChooseDealing }: DealChoicePanelProps) {
+  const { pendingDealChoice } = dealChoice;
+  if (!pendingDealChoice) return null;
+
+  const key = [
+    pendingDealChoice.dealerIndex,
+    pendingDealChoice.chooserIndex,
+    players.map((player) => `${player.playerId}:${Boolean(player.forfeited)}`).join(","),
   ].join(":");
 
-  return <DealChoicePanelContent key={dealChoiceKey} {...props} />;
+  return (
+    <DealChoicePanelContent
+      key={key}
+      {...dealChoice}
+      pendingDealChoice={pendingDealChoice}
+      players={players}
+      onChooseDealing={onChooseDealing}
+    />
+  );
 }
 
 function DealChoicePanelContent({
@@ -416,7 +434,7 @@ function DealChoicePanelContent({
   dealChooserName,
   isDealChooser,
   onChooseDealing,
-}: DealChoicePanelProps) {
+}: DealChoiceContentProps) {
   const [dealStep, setDealStep] = useState<DealStep>("cut");
   const [dealMode, setDealMode] = useState<DealMode>("round_robin");
   const [cutSize, setCutSize] = useState("0");

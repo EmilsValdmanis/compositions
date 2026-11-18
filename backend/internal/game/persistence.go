@@ -3,7 +3,6 @@ package game
 import (
 	"errors"
 	"fmt"
-	"slices"
 )
 
 const PersistenceSnapshotVersion = 1
@@ -269,8 +268,4 @@ func restoreCard(snapshot CardSnapshot) (Card, error) {
 		return Card{}, errors.New("invalid card suit")
 	}
 	return NewCard(snapshot.Rank, snapshot.Suit), nil
-}
-
-func cloneCards(cards []Card) []Card {
-	return slices.Clone(cards)
 }

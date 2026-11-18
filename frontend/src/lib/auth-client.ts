@@ -1,47 +1,18 @@
-import { authURL, type AuthSession } from "#/lib/auth-shared";
+import { backendURL } from "./backend-url";
 
-async function readSession() {
-  const response = await fetch(authURL("/auth/session", import.meta.env.VITE_GAME_SERVER_URL), {
-    credentials: "include",
-    headers: {
-      Accept: "application/json",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`failed to load session: ${response.status}`);
-  }
-
-  return (await response.json()) as AuthSession | null;
-}
-
-async function signOut() {
-  const response = await fetch(authURL("/auth/logout", import.meta.env.VITE_GAME_SERVER_URL), {
+async function postAuth(path: string, action: string) {
+  const response = await fetch(backendURL(path, import.meta.env.VITE_GAME_SERVER_URL), {
     method: "POST",
     credentials: "include",
   });
 
   if (!response.ok) {
-    throw new Error(`failed to sign out: ${response.status}`);
-  }
-}
-
-async function completeOnboarding() {
-  const response = await fetch(
-    authURL("/auth/onboarding/complete", import.meta.env.VITE_GAME_SERVER_URL),
-    {
-      method: "POST",
-      credentials: "include",
-    },
-  );
-
-  if (!response.ok) {
-    throw new Error(`failed to complete onboarding: ${response.status}`);
+    throw new Error(`failed to ${action}: ${response.status}`);
   }
 }
 
 function signInWithGoogle(returnTo?: string) {
-  const url = new URL(authURL("/auth/google", import.meta.env.VITE_GAME_SERVER_URL));
+  const url = new URL(backendURL("/auth/google", import.meta.env.VITE_GAME_SERVER_URL));
   if (returnTo) {
     url.searchParams.set("returnTo", returnTo);
   }
@@ -49,16 +20,7 @@ function signInWithGoogle(returnTo?: string) {
 }
 
 export const authClient = {
-  getSession: readSession,
-  completeOnboarding,
-  signOut,
-  signIn: {
-    social: async ({ provider, returnTo }: { provider: string; returnTo?: string }) => {
-      if (provider !== "google") {
-        throw new Error(`unsupported provider: ${provider}`);
-      }
-
-      signInWithGoogle(returnTo);
-    },
-  },
+  completeOnboarding: () => postAuth("/auth/onboarding/complete", "complete onboarding"),
+  signOut: () => postAuth("/auth/logout", "sign out"),
+  signInWithGoogle,
 };

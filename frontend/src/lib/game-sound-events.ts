@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { type LobbyState } from "#/components/game-websocket-provider";
+import { type LobbyState } from "#/lib/game-lobby-state";
 import { type GameSound, playGameSound } from "#/lib/game-sounds";
 
 function playerIds(state: LobbyState) {

@@ -1,4 +1,5 @@
-import { type LobbyState, useGameWebSocket } from "#/components/game-websocket-provider";
+import { type LobbyState } from "#/lib/game-lobby-state";
+import { useGameWebSocket } from "#/components/game-websocket-provider";
 import {
   Dialog,
   DialogContent,

@@ -1,7 +1,7 @@
-import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { type CardSnapshot } from "#/lib/game-protocol";
 import { DiscardDropZone } from "#/components/game/discard-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
+import { FACE_DOWN_CARD } from "#/components/game/card";
 import { AnimatedNumber } from "#/components/ui/animated-number";
 import { Card, CardContent } from "#/components/ui/card";
 import { m } from "#/paraglide/messages.js";

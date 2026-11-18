@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   draftCompositionPointTotal,
-  draftCompositionPreviewPointTotal,
-  isCompleteCompositionPreview,
   isCompleteDraftComposition,
   isValidDraftComposition,
   jokerReclaimPointValue,
@@ -153,57 +151,6 @@ describe("draftCompositionPointTotal", () => {
     expect(draftCompositionPointTotal(setCards, "set")).toBe(18);
     expect(draftCompositionPointTotal(setCards, "run")).toBe(21);
   });
-
-  it("includes additions in an existing composition preview", () => {
-    expect(
-      draftCompositionPreviewPointTotal(
-        {
-          type: "run",
-          cards: [
-            { rank: 5, suit: 0 },
-            { rank: 6, suit: 0 },
-            { rank: 7, suit: 0 },
-          ],
-          points: 18,
-          complete: false,
-        },
-        [{ rank: 8, suit: 0 }],
-      ),
-    ).toBe(26);
-  });
-
-  it("uses a reclaimed joker's replacement when previewing additions", () => {
-    expect(
-      draftCompositionPreviewPointTotal(
-        {
-          type: "run",
-          cards: [{ rank: 5, suit: 2 }, { isJoker: true }, { rank: 7, suit: 2 }],
-          points: 18,
-          complete: false,
-        },
-        [{ rank: 8, suit: 2 }],
-        [{ jokerIndex: 1, replacementCard: { rank: 6, suit: 2 } }],
-      ),
-    ).toBe(26);
-  });
-
-  it("estimates an invalid natural-card addition while it is still being placed", () => {
-    expect(
-      draftCompositionPreviewPointTotal(
-        {
-          type: "run",
-          cards: [
-            { rank: 5, suit: 0 },
-            { rank: 6, suit: 0 },
-            { rank: 7, suit: 0 },
-          ],
-          points: 18,
-          complete: false,
-        },
-        [{ rank: 9, suit: 0 }],
-      ),
-    ).toBe(27);
-  });
 });
 
 describe("isValidDraftComposition", () => {
@@ -244,24 +191,6 @@ describe("completed composition previews", () => {
         "set",
       ),
     ).toBe(false);
-  });
-
-  it("recognizes the final card added to a table composition", () => {
-    expect(
-      isCompleteCompositionPreview(
-        {
-          type: "set",
-          cards: [
-            { rank: 9, suit: 0 },
-            { rank: 9, suit: 1 },
-            { rank: 9, suit: 2 },
-          ],
-          points: 27,
-          complete: false,
-        },
-        [{ rank: 9, suit: 3 }],
-      ),
-    ).toBe(true);
   });
 });
 

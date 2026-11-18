@@ -261,19 +261,12 @@ func TestRestoreGameStateRejectsInvalidFields(t *testing.T) {
 	}
 }
 
-func TestRestoreCardAcceptsJokerAndCloneCardsCopies(t *testing.T) {
+func TestRestoreCardAcceptsJoker(t *testing.T) {
 	card, err := restoreCard(CardSnapshot{IsJoker: true})
 	if err != nil {
 		t.Fatalf("restoreCard(joker) error = %v", err)
 	}
 	if !card.IsJoker() {
 		t.Fatalf("restoreCard(joker) = %#v; want joker", card)
-	}
-
-	source := []Card{NewCard(Ace, Hearts)}
-	cloned := cloneCards(source)
-	cloned[0] = NewCard(Two, Clubs)
-	if cardsEqual(source[0], cloned[0]) {
-		t.Fatal("cloneCards() shared backing array with source")
 	}
 }

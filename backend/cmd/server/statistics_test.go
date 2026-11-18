@@ -49,6 +49,8 @@ func (s *blockingStatisticsStore) SaveGameCheckpoint(ctx context.Context, checkp
 }
 
 func saveStatisticsForTest(lobby *lobbyServer) bool {
+	lobby.commandMu.Lock()
+	defer lobby.commandMu.Unlock()
 	lobby.mu.Lock()
 	defer lobby.mu.Unlock()
 	jobs, changed := lobby.statisticsJobsLocked()
@@ -103,7 +105,7 @@ func TestStatisticsPlaytimeCapsConnectedIdleGaps(t *testing.T) {
 	}
 }
 
-func (s *statisticsRecordingStore) SaveLobbyState(ctx context.Context, state persistedLobbyState) error {
+func (s *statisticsRecordingStore) SaveLobbyState(ctx context.Context, state json.RawMessage) error {
 	s.lobbySaveCalls++
 	if err := s.lobbySaveErrors[s.lobbySaveCalls]; err != nil {
 		return err
@@ -221,6 +223,7 @@ func TestStatisticsIODoesNotHoldLobbyStateLock(t *testing.T) {
 		session.authUserID = fmt.Sprintf("00000000-0000-0000-0000-%012d", index+1)
 	}
 
+	roomState := room.snapshot()
 	done := make(chan error, 1)
 	go func() { done <- persistLobbyForTest(lobby, "statistics lock test") }()
 	select {
@@ -229,24 +232,28 @@ func TestStatisticsIODoesNotHoldLobbyStateLock(t *testing.T) {
 		t.Fatal("statistics persistence did not start")
 	}
 
-	lockAvailable := make(chan struct{})
+	read := make(chan error, 1)
 	go func() {
-		lobby.mu.Lock()
-		lobby.persistenceRevision++ // Simulate state changing during the write.
-		lobby.mu.Unlock()
-		close(lockAvailable)
+		event, err := lobby.gameStateForSession(events[0].SessionID, roomState)
+		if err == nil && event == nil {
+			err = errors.New("no game state returned")
+		}
+		read <- err
 	}()
 	select {
-	case <-lockAvailable:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("lobby state lock remained held during statistics I/O")
+	case err := <-read:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("game state could not be read during statistics persistence")
 	}
 	close(store.release)
 	if err := <-done; err != nil {
 		t.Fatal(err)
 	}
-	if !room.statisticsDirty {
-		t.Fatal("a stale statistics write cleared a newer dirty marker")
+	if room.statisticsDirty {
+		t.Fatal("the successfully saved checkpoint remained dirty")
 	}
 }
 
@@ -449,7 +456,7 @@ func TestRemainingSmallServerBranches(t *testing.T) {
 	if _, err := normalizeIssueDescription("   "); err == nil {
 		t.Fatal("blank issue description accepted")
 	}
-	if _, err := normalizeIssueDescription(strings.Repeat("x", maxIssueLength+1)); err == nil {
+	if _, err := normalizeIssueDescription(strings.Repeat("x", database.GameBugReportDescriptionMaxLength+1)); err == nil {
 		t.Fatal("long issue description accepted")
 	}
 
@@ -478,18 +485,6 @@ func TestRemainingSmallServerBranches(t *testing.T) {
 		t.Fatal("forfeited player required a connection")
 	}
 
-	report := database.GameBugReportRecord{ID: "report"}
-	if got, err := (noopUserStore{}).CreateGameBugReport(context.Background(), report); err != nil || got.ID != report.ID {
-		t.Fatalf("noop CreateGameBugReport() = (%+v, %v)", got, err)
-	}
-	var nilPostgres *postgresUserStore
-	if err := nilPostgres.SaveCompletedGame(context.Background(), database.CompletedGameRecord{}); err == nil {
-		t.Fatal("nil SaveCompletedGame accepted")
-	}
-	configured := &postgresUserStore{store: &database.UserStore{}}
-	if err := configured.SaveCompletedGame(context.Background(), database.CompletedGameRecord{}); err == nil {
-		t.Fatal("empty database store accepted completed game")
-	}
 }
 
 func TestRestorePersistedConclusionAndProposal(t *testing.T) {
@@ -502,7 +497,11 @@ func TestRestorePersistedConclusionAndProposal(t *testing.T) {
 		EligiblePlayerIDs: []string{events[0].PlayerID, events[1].PlayerID},
 		AgreedPlayerIDs:   []string{events[0].PlayerID}, CreatedAt: time.Now(), ExpiresAt: time.Now().Add(time.Minute),
 	}
-	if err := store.SaveLobbyState(context.Background(), state); err != nil {
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveLobbyState(context.Background(), data); err != nil {
 		t.Fatalf("SaveLobbyState() error = %v", err)
 	}
 	restored := newLobbyServerWithStore(store)

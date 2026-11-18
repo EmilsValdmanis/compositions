@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EmilsValdmanis/compositions/internal/game"
 	"github.com/getsentry/sentry-go"
 	"github.com/gorilla/websocket"
 	"golang.org/x/oauth2"
@@ -245,23 +247,22 @@ func TestSameOriginRequestNilIsRejected(t *testing.T) {
 	}
 }
 
-func TestInternalErrorsAreRedactedFromClients(t *testing.T) {
-	secret := errors.New("dial postgres with password super-secret failed")
-	if code := clientErrorCode(secret); code != clientErrorInternal {
-		t.Fatalf("clientErrorCode() = %q; want %q", code, clientErrorInternal)
-	}
-	message := clientErrorMessage(secret)
-	if strings.Contains(message, "super-secret") || message == secret.Error() {
-		t.Fatalf("clientErrorMessage() leaked internal error: %q", message)
-	}
-}
-
-func TestClientErrorRemainingBranches(t *testing.T) {
-	if got := clientErrorCode(nil); got != clientErrorInternal {
-		t.Fatalf("clientErrorCode(nil) = %q", got)
-	}
-	if got := clientErrorCode(errors.New("problem description must be under limit")); got != "problem_too_long" {
-		t.Fatalf("clientErrorCode(problem length) = %q", got)
+func TestDescribeClientError(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		err  error
+		want clientError
+	}{
+		{"internal", errors.New("internal secret"), clientError{"internal_error", "internal server error"}},
+		{"nil", nil, clientError{"internal_error", "internal server error"}},
+		{"wrapped public", fmt.Errorf("private context: %w", errRateLimitExceeded), clientError{"rate_limit_exceeded", "rate limit exceeded"}},
+		{"wrapped game", fmt.Errorf("private context: %w", game.ErrInvalidDealer), clientError{"invalid_dealing_order", "invalid dealer"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := describeClientError(test.err); got != test.want {
+				t.Fatalf("client error = %#v, want %#v", got, test.want)
+			}
+		})
 	}
 }
 
@@ -769,9 +770,8 @@ func mustReadError(t *testing.T, conn *websocket.Conn, want string) {
 	if err := json.Unmarshal(envelope.Data, &event); err != nil {
 		t.Fatalf("json.Unmarshal(error) error = %v", err)
 	}
-	wantCode := clientErrorCode(errors.New(want))
-	if event.Code != wantCode {
-		t.Fatalf("error code = %q; want %q", event.Code, wantCode)
+	if event.Code == "" {
+		t.Fatal("error response omitted its code")
 	}
 	if event.Message != want {
 		t.Fatalf("error message = %q; want %q", event.Message, want)
@@ -792,9 +792,8 @@ func mustReadActionError(t *testing.T, conn *websocket.Conn, action, want string
 	if event.Action != action {
 		t.Fatalf("error action = %q; want %q", event.Action, action)
 	}
-	wantCode := clientErrorCode(errors.New(want))
-	if event.Code != wantCode {
-		t.Fatalf("error code = %q; want %q", event.Code, wantCode)
+	if event.Code == "" {
+		t.Fatal("error response omitted its code")
 	}
 	if event.Message != want {
 		t.Fatalf("error message = %q; want %q", event.Message, want)
@@ -813,4 +812,12 @@ func mustReadLeftRoom(t *testing.T, conn *websocket.Conn) leftRoomEvent {
 		t.Fatalf("json.Unmarshal(left_room) error = %v", err)
 	}
 	return event
+}
+
+func mustMarshalRawMessage(value any) json.RawMessage {
+	data, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffectEvent, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { type CardSnapshot, type GameSnapshot } from "#/components/game-websocket-provider";
+import { type CardSnapshot, type GameSnapshot } from "#/lib/game-protocol";
 import { GameCard } from "#/components/game/game-card";
 import {
   type CompletedCompositionCollection,
@@ -23,12 +23,13 @@ type CollectionSequence = CompletedCompositionCollection & {
   cards: CachedComposition["cards"];
   discardSource: Bounds;
   id: number;
+  game: GameSnapshot;
   stage: "collect" | "discard";
   target: Bounds;
 };
 
-export const COMPLETED_COLLECTION_DURATION_MS = 520;
-export const COMPLETED_DISCARD_DURATION_MS = 360;
+const COMPLETED_COLLECTION_DURATION_MS = 520;
+const COMPLETED_DISCARD_DURATION_MS = 360;
 
 function boundsFor(element: Element): Bounds {
   const bounds = element.getBoundingClientRect();
@@ -146,10 +147,12 @@ export function CompletedCompositionAnimation({
   boardRef,
   game,
   viewerPlayerId,
+  onSettled,
 }: {
   boardRef: RefObject<HTMLDivElement | null>;
   game: GameSnapshot | null;
   viewerPlayerId: string;
+  onSettled?: (game: GameSnapshot) => void;
 }) {
   const previousGameRef = useRef<GameSnapshot | null>(null);
   const completedCompositionsRef = useRef<CachedComposition[]>([]);
@@ -158,43 +161,59 @@ export function CompletedCompositionAnimation({
   const discardCardRef = useRef<HTMLDivElement | null>(null);
   const [sequence, setSequence] = useState<CollectionSequence | null>(null);
 
+  const notifySettled = useEffectEvent((completedGame: GameSnapshot) => onSettled?.(completedGame));
+
   useLayoutEffect(() => {
     const board = boardRef.current;
     const previous = previousGameRef.current;
     previousGameRef.current = game;
+    const cachedCards = completedCompositionsRef.current.flatMap(
+      (composition) => composition.cards,
+    );
+    completedCompositionsRef.current = board ? captureCompletedCompositions(board) : [];
 
-    if (!board) return;
+    if (!previous || !game) return;
 
-    if (previous && game && !sequence) {
-      const collection = inferCompletedCompositionCollection(previous, game);
-      const cachedCards = completedCompositionsRef.current.flatMap(
-        (composition) => composition.cards,
-      );
-      const discardTarget = findDiscardCard(board);
-      const playerAnchor = collection
-        ? findPlayerAnchor(board, collection.actorPlayerId)
-        : undefined;
+    const collection = inferCompletedCompositionCollection(previous, game);
+    if (!collection) return;
 
-      if (collection && discardTarget && cachedCards.length === collection.collectedCards.length) {
-        const target = boundsFor(discardTarget);
-        const discardSource =
-          collection.actorPlayerId === viewerPlayerId || !playerAnchor
-            ? target
-            : cardBoundsAtAnchor(boundsFor(playerAnchor), target);
-        const id = nextSequenceIdRef.current;
-        nextSequenceIdRef.current += 1;
-        setSequence({
-          ...collection,
-          cards: cachedCards,
-          discardSource,
-          id,
-          stage: "collect",
-          target,
-        });
-      }
+    const discardTarget = board && findDiscardCard(board);
+    if (
+      !board ||
+      !discardTarget ||
+      !discardTarget.animate ||
+      cachedCards.length !== collection.collectedCards.length ||
+      sequence
+    ) {
+      notifySettled(game);
+      return;
     }
 
-    completedCompositionsRef.current = captureCompletedCompositions(board);
+    const target = boundsFor(discardTarget);
+    if (
+      !target.width ||
+      !target.height ||
+      cachedCards.some(({ bounds }) => !bounds.width || !bounds.height)
+    ) {
+      notifySettled(game);
+      return;
+    }
+    const playerAnchor = findPlayerAnchor(board, collection.actorPlayerId);
+    const discardSource =
+      collection.actorPlayerId === viewerPlayerId || !playerAnchor
+        ? target
+        : cardBoundsAtAnchor(boundsFor(playerAnchor), target);
+    const id = nextSequenceIdRef.current;
+    nextSequenceIdRef.current += 1;
+    setSequence({
+      ...collection,
+      cards: cachedCards,
+      discardSource,
+      game,
+      id,
+      stage: "collect",
+      target,
+    });
   }, [boardRef, game, sequence, viewerPlayerId]);
 
   useLayoutEffect(() => {
@@ -220,28 +239,36 @@ export function CompletedCompositionAnimation({
             fill: "forwards",
           },
         );
-        return [animation];
+        return [{ element, animation }];
       });
 
-      void Promise.all(animations.map((animation) => animation.finished)).then(
-        () => {
+      let active = true;
+      void Promise.allSettled(animations.map(({ animation }) => animation.finished)).then(() => {
+        if (active) {
           setSequence((current) =>
             current?.id === sequence.id ? { ...current, stage: "discard" } : current,
           );
-        },
-        () => undefined,
-      );
+        }
+      });
       return () => {
-        for (const [index, animation] of animations.entries()) {
+        active = false;
+        for (const { animation, element } of animations) {
           animation.cancel();
-          const element = collectedCardRefs.current[index];
-          if (element) element.style.willChange = "";
+          element.style.willChange = "";
         }
       };
     }
 
+    const finishSequence = () => {
+      setSequence((current) => (current?.id === sequence.id ? null : current));
+      notifySettled(sequence.game);
+    };
+
     const element = discardCardRef.current;
-    if (!element) return;
+    if (!element) {
+      finishSequence();
+      return;
+    }
     element.style.willChange = "transform, opacity";
     const translateX =
       sequence.target.left +
@@ -274,11 +301,12 @@ export function CompletedCompositionAnimation({
         fill: "forwards",
       },
     );
-    animation.onfinish = () => {
-      setSequence((current) => (current?.id === sequence.id ? null : current));
-    };
+    animation.onfinish = finishSequence;
+    animation.oncancel = finishSequence;
     return () => {
       element.style.willChange = "";
+      animation.onfinish = null;
+      animation.oncancel = null;
       animation.cancel();
     };
   }, [sequence, viewerPlayerId]);

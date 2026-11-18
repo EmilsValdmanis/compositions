@@ -42,6 +42,10 @@ func TestUserStoreSocialWorkflow(t *testing.T) {
 		t.Fatalf("UpsertUser(Casey) error = %v", err)
 	}
 
+	if _, err := store.SendFriendRequest(ctx, avery.ID, avery.ID); !errors.Is(err, ErrSocialSelfRequest) {
+		t.Fatalf("SendFriendRequest(self) error = %v; want %v", err, ErrSocialSelfRequest)
+	}
+
 	request, err := store.SendFriendRequest(ctx, avery.ID, blake.ID)
 	if err != nil {
 		t.Fatalf("SendFriendRequest() error = %v", err)

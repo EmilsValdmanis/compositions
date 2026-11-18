@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
-import { type GameSnapshot, type PlayerSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot, type PlayerSnapshot } from "#/lib/game-protocol";
 
 afterEach(cleanup);
 
@@ -13,7 +13,6 @@ describe("GameBoardPlayers", () => {
       <GameBoardPlayers
         players={[]}
         game={null}
-        connectedPlayers={0}
         spectatorCount={0}
         hasDraftedCompositions={false}
         onResetDraftCompositions={() => {}}
@@ -29,7 +28,6 @@ describe("GameBoardPlayers", () => {
       <GameBoardPlayers
         players={[]}
         game={null}
-        connectedPlayers={0}
         spectatorCount={2}
         hasDraftedCompositions={false}
         onResetDraftCompositions={() => {}}
@@ -45,7 +43,6 @@ describe("GameBoardPlayers", () => {
       <GameBoardPlayers
         players={[]}
         game={null}
-        connectedPlayers={0}
         hasDraftedCompositions={false}
         compactOnMobile
         onResetDraftCompositions={() => {}}
@@ -87,7 +84,6 @@ describe("GameBoardPlayers", () => {
       <GameBoardPlayers
         players={players}
         game={game}
-        connectedPlayers={2}
         hasDraftedCompositions={false}
         onResetDraftCompositions={() => {}}
         onSendEmote={() => {}}

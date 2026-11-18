@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -13,7 +12,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-var errRateLimitExceeded = errors.New("rate limit exceeded")
+var errRateLimitExceeded = clientError{"rate_limit_exceeded", "rate limit exceeded"}
 
 const maxUnauthenticatedConnectionsPerIP = 32
 

@@ -6,7 +6,7 @@ import {
   type CardSnapshot,
   type DraftCompositionSnapshot,
   type TablePlayRequest,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
 import { m } from "#/paraglide/messages.js";
 
 const { completeOnboardingMock, fireCelebrationConfettiMock } = vi.hoisted(() => ({

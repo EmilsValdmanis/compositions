@@ -7,7 +7,7 @@ import {
   type GameSnapshot,
   type PlayerSnapshot,
   type TablePlayRequest,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
 
 if (typeof globalThis.document === "undefined") {
   const require = createRequire(import.meta.url);
@@ -203,7 +203,6 @@ describe("GameBoardView drag sensors", () => {
         roomCode="ROOM"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -266,7 +265,6 @@ describe("GameBoardView guided interaction callbacks", () => {
       roomCode: "GUIDED-DRAW",
       playerId: "player-1",
       players,
-      connectedPlayers: 1,
       turnState: {
         canDrawDeck: true,
         canDrawDiscard: false,
@@ -342,7 +340,6 @@ describe("GameBoardView guided interaction callbacks", () => {
       roomCode: "GUIDED-DRAW-CANCEL",
       playerId: "player-1",
       players,
-      connectedPlayers: 1,
       turnState: {
         canDrawDeck: true,
         canDrawDiscard: false,
@@ -405,7 +402,6 @@ describe("GameBoardView guided interaction callbacks", () => {
         roomCode="GUIDED-COMPOSITION"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -510,7 +506,6 @@ describe("GameBoardView draft returns", () => {
         roomCode="RESET-ROOM"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -577,7 +572,6 @@ describe("GameBoardView hand ordering", () => {
         roomCode="OUTSIDE-ROOM"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -620,7 +614,6 @@ describe("GameBoardView hand ordering", () => {
         roomCode="JOKER-ORDER"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -659,7 +652,6 @@ describe("GameBoardView hand ordering", () => {
         roomCode="DRAFT-ENTRY-PREVIEW"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -721,7 +713,6 @@ describe("GameBoardView hand ordering", () => {
         roomCode="STABLE-DRAFT-ORDER"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -779,7 +770,6 @@ describe("GameBoardView discard drops", () => {
       roomCode: "ROOM",
       playerId: "player-1",
       players,
-      connectedPlayers: 1,
       topDiscardCard: { rank: 2, suit: 0 },
       onDiscardCard: vi.fn(),
       onDrawFromDeck: vi.fn(),
@@ -872,7 +862,6 @@ describe("GameBoardView discard drops", () => {
         roomCode="ROOM"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -930,7 +919,6 @@ describe("GameBoardView discard drops", () => {
         roomCode="ROOM"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -1012,7 +1000,6 @@ describe("GameBoardView discard drops", () => {
         roomCode="ROOM"
         playerId="player-1"
         players={players}
-        connectedPlayers={1}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -1123,7 +1110,6 @@ describe("GameBoardView spectator turn drafts", () => {
             canReconnect: false,
           },
         ]}
-        connectedPlayers={2}
         turnState={{
           canDrawDeck: false,
           canDrawDiscard: false,
@@ -1144,5 +1130,46 @@ describe("GameBoardView spectator turn drafts", () => {
 
     expect(view.getByText("Reclaim")).toBeTruthy();
     expect(view.queryByText("Add")).toBeNull();
+  });
+});
+
+describe("GameBoardView collection handoff", () => {
+  it("settles a collection when the board has no measurable animation anchors", () => {
+    const discarded = { rank: 13, suit: 0 };
+    const collected = [0, 1, 2, 3].map((suit) => ({ rank: 9, suit }));
+    const playing = makeGame([discarded], {
+      activeCompositions: [{ type: "set", cards: collected, points: 36, complete: true }],
+    });
+    const roundOver = makeGame([], {
+      discardPile: [discarded, ...collected, ...playing.discardPile],
+      roundWinnerIndex: 0,
+    });
+    const onCollectionSettled = vi.fn();
+    const props: Omit<ComponentProps<typeof GameBoardView>, "game"> = {
+      roomCode: "ROOM",
+      playerId: "player-1",
+      players,
+      turnState: {
+        canDrawDeck: false,
+        canDrawDiscard: false,
+        canDiscard: false,
+        isMyTurn: false,
+        turnPlayerName: "Avery",
+      },
+      topDiscardCard: discarded,
+      onDiscardCard: vi.fn(),
+      onDrawFromDeck: vi.fn(),
+      onDrawFromDiscard: vi.fn(),
+      onPlayTable: vi.fn(),
+      onPlayTableAndDiscard: vi.fn(),
+      onSendEmote: vi.fn(),
+      onCollectionSettled,
+    };
+    const view = render(<GameBoardView game={playing} {...props} />);
+    expect(onCollectionSettled).not.toHaveBeenCalled();
+
+    view.rerender(<GameBoardView game={roundOver} {...props} />);
+
+    expect(onCollectionSettled).toHaveBeenCalledExactlyOnceWith(roundOver);
   });
 });

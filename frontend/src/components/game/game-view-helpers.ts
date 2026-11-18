@@ -1,4 +1,4 @@
-import { type PlayerSnapshot, type RoomSnapshot } from "#/components/game-websocket-provider";
+import { type PlayerSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
 import { m } from "#/paraglide/messages.js";
 
 export function playerName(players: PlayerSnapshot[], playerId?: string) {

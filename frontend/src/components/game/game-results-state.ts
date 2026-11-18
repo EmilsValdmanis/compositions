@@ -1,4 +1,4 @@
-import { type GameSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot } from "#/lib/game-protocol";
 
 export type ResultScorePhase = "previous" | "round" | "adjusted";
 

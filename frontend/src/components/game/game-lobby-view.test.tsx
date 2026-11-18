@@ -2,12 +2,8 @@
 import { createRequire } from "node:module";
 import { type ReactNode } from "react";
 import type * as React from "react";
-import {
-  type CompletedGameSnapshot,
-  type GameSnapshot,
-  type PlayerSnapshot,
-  type RoomSnapshot,
-} from "#/components/game-websocket-provider";
+import { type CompletedGameSnapshot } from "#/lib/game-lobby-state";
+import { type GameSnapshot, type PlayerSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
 
 if (typeof globalThis.document === "undefined") {
   const require = createRequire(import.meta.url);

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { type GameSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot } from "#/lib/game-protocol";
 import { GameCard } from "#/components/game/game-card";
 import {
   type CardTransfer,
@@ -17,7 +17,7 @@ type Flight = CardTransfer & {
   translateY: number;
 };
 
-export const CARD_TRANSFER_DURATION_MS = 420;
+const CARD_TRANSFER_DURATION_MS = 420;
 export const CARD_TRANSFER_PLAYER_SCALE = 0.34;
 
 export function buildCardTransferKeyframes(

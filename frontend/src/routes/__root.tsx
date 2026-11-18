@@ -1,6 +1,6 @@
-import { HeadContent, createRootRouteWithContext } from "@tanstack/react-router";
+import { createRootRouteWithContext } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, getRequestHeaders, getRequestUrl } from "@tanstack/react-start/server";
+import { getCookie, getRequestUrl } from "@tanstack/react-start/server";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
@@ -8,23 +8,18 @@ import {
   GlobalNotFoundComponent,
 } from "#/components/routes/global-route-status";
 import { RootDocument } from "#/components/routes/root-document";
-import { auth } from "#/lib/auth";
+import { readRequestSession } from "#/lib/auth";
+import { isSidebarOpen, SIDEBAR_STATE_COOKIE } from "#/lib/sidebar-settings";
 import { createSocialMeta, defaultSocialDescription } from "#/lib/social-meta";
-import { loadVerifiedSession } from "#/lib/verified-session";
 import appCss from "../styles.css?url";
 import { m } from "#/paraglide/messages.js";
-
-const rootHeadContentMarker = <HeadContent />;
-void rootHeadContentMarker;
 
 const getAppContext = createServerFn({ method: "GET" })
   .validator(z.undefined())
   .handler(async () => {
-    const headers = new Headers(getRequestHeaders());
-
     return {
-      session: await loadVerifiedSession(headers, auth.api.getSession),
-      sidebarOpen: getCookie("sidebar_state"),
+      session: await readRequestSession(),
+      sidebarOpen: isSidebarOpen(getCookie(SIDEBAR_STATE_COOKIE)),
       siteOrigin: getRequestUrl({ xForwardedHost: true }).origin,
     };
   });

@@ -41,30 +41,14 @@ type authSession struct {
 	expiresAt time.Time
 	user      authenticatedUser
 	token     string
-	valid     bool
-}
-
-type sessionReader interface {
-	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
-}
-
-type sessionWriter interface {
-	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
-	CreateSession(ctx context.Context, session authSessionRecord) error
-	DeleteSession(ctx context.Context, sessionToken string) error
-	UpdateOnboardingVersion(ctx context.Context, userID string, version int) error
-}
-
-type authSessionRecord struct {
-	Token     string
-	UserID    string
-	ExpiresAt time.Time
 }
 
 type authStore interface {
-	sessionReader
-	sessionWriter
-	Close() error
+	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
+	UpsertUser(ctx context.Context, user database.UserRecord) (database.UserRecord, error)
+	CreateSession(ctx context.Context, session database.SessionRecord) error
+	DeleteSession(ctx context.Context, sessionToken string) error
+	UpdateOnboardingVersion(ctx context.Context, userID string, version int) error
 }
 
 type authConfig struct {
@@ -351,7 +335,7 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		writeHTTPError(w, http.StatusUnauthorized, "oauth_profile_failed", "failed to read google profile")
 		return
 	}
-	user, err = h.store.UpsertUser(r.Context(), user)
+	storedUser, err := h.store.UpsertUser(r.Context(), user.record())
 	if err != nil {
 		if errors.Is(err, database.ErrUserConflict) {
 			slog.Warn("save oauth user conflict", "provider", user.Provider, "providerAccountID", user.ProviderAccountID, "email", user.Email)
@@ -364,9 +348,9 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	expiresAt := h.now().Add(h.config.sessionTTL).UTC()
-	sessionToken, err := h.sessionTokenForUser(r, user, expiresAt)
+	sessionToken, err := h.sessionTokenForUser(r, storedUser.ID, expiresAt)
 	if err != nil {
-		slog.Error("persist session failed", "userID", user.ID, "error", err)
+		slog.Error("persist session failed", "userID", storedUser.ID, "error", err)
 		writeHTTPError(w, http.StatusInternalServerError, clientErrorInternal, "failed to create session")
 		return
 	}
@@ -379,13 +363,13 @@ func (h *authHandler) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, redirectURL, http.StatusFound)
 }
 
-func (h *authHandler) sessionTokenForUser(r *http.Request, user authenticatedUser, expiresAt time.Time) (string, error) {
+func (h *authHandler) sessionTokenForUser(r *http.Request, userID string, expiresAt time.Time) (string, error) {
 	session, err := h.sessionFromRequest(r)
 	if err == nil {
-		if session.user.ID == user.ID {
-			return session.token, h.store.CreateSession(r.Context(), authSessionRecord{
+		if session.user.ID == userID {
+			return session.token, h.store.CreateSession(r.Context(), database.SessionRecord{
 				Token:     session.token,
-				UserID:    user.ID,
+				UserID:    userID,
 				ExpiresAt: expiresAt,
 			})
 		}
@@ -401,7 +385,7 @@ func (h *authHandler) sessionTokenForUser(r *http.Request, user authenticatedUse
 	if err != nil {
 		return "", err
 	}
-	if err := h.store.CreateSession(r.Context(), authSessionRecord{Token: sessionToken, UserID: user.ID, ExpiresAt: expiresAt}); err != nil {
+	if err := h.store.CreateSession(r.Context(), database.SessionRecord{Token: sessionToken, UserID: userID, ExpiresAt: expiresAt}); err != nil {
 		return "", err
 	}
 	return sessionToken, nil
@@ -511,7 +495,7 @@ func (h *authHandler) sessionFromRequest(r *http.Request) (authSession, error) {
 		return authSession{}, errAuthenticationRequired
 	}
 
-	return authSession{user: user, token: sessionToken, valid: true, expiresAt: record.ExpiresAt}, nil
+	return authSession{user: user, token: sessionToken, expiresAt: record.ExpiresAt}, nil
 }
 
 func (h *authHandler) fetchGoogleUser(ctx context.Context, token *oauth2.Token) (authenticatedUser, error) {

@@ -1,4 +1,4 @@
-import { cardsEqual } from "#/components/game/card-equality";
+import { cardsEqual } from "#/components/game/card";
 import { useEffect, useRef, useState } from "react";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 import { GameBoardView } from "#/components/game/game-board-view";
@@ -19,7 +19,7 @@ import {
   type GameSnapshot,
   type RoomSnapshot,
   type TablePlayRequest,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
 import { m } from "#/paraglide/messages.js";
 
 const scenarios = mockScenarios;
@@ -349,7 +349,6 @@ export function DevGameUi() {
 
   const resolvedPerspectiveId = scenario?.controlledPlayerId ?? "";
 
-  const connectedPlayers = players.filter((player) => player.connected).length;
   const isMyTurn = game?.turn.playerId === resolvedPerspectiveId;
   const canDraw = Boolean(game) && isMyTurn && !game.turn.hasDrawn;
   const topDiscardCard = game?.discardPile[0] ?? null;
@@ -542,13 +541,15 @@ export function DevGameUi() {
           <div className="mx-auto flex w-full max-w-xl flex-1 items-center px-2 py-6">
             <DealChoicePanel
               players={players}
-              pendingDealChoice={{
-                dealerIndex: 3,
-                chooserIndex: 0,
-                chooserPlayerId: players[0]?.playerId ?? "player-avery",
+              dealChoice={{
+                pendingDealChoice: {
+                  dealerIndex: 3,
+                  chooserIndex: 0,
+                  chooserPlayerId: players[0]?.playerId ?? "player-avery",
+                },
+                dealChooserName: players[0]?.name ?? "Avery",
+                isDealChooser: true,
               }}
-              dealChooserName={players[0]?.name ?? "Avery"}
-              isDealChooser
               onChooseDealing={handleChooseDealing}
             />
           </div>
@@ -560,7 +561,6 @@ export function DevGameUi() {
               game={resultsGame}
               players={players}
               playerId={resolvedPerspectiveId}
-              connectedPlayers={connectedPlayers}
               dealChoice={{
                 pendingDealChoice: null,
                 dealChooserName: null,
@@ -579,7 +579,6 @@ export function DevGameUi() {
             roomCode={room.code}
             playerId={resolvedPerspectiveId}
             players={players}
-            connectedPlayers={connectedPlayers}
             turnState={{
               canDrawDeck,
               canDrawDiscard,
