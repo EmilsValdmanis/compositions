@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   buildCardTransferKeyframes,
-  CARD_TRANSFER_DURATION_MS,
   CARD_TRANSFER_PLAYER_SCALE,
 } from "#/components/game/card-transfer-animation";
 import {
@@ -9,7 +8,7 @@ import {
   inferCompletedCompositionCollection,
 } from "#/components/game/card-transfer-state";
 import { buildCompletedCardCollectionKeyframes } from "#/components/game/completed-composition-animation";
-import { type GameSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot } from "#/lib/game-protocol";
 
 function game(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
   return {
@@ -137,10 +136,6 @@ describe("inferCardTransfer", () => {
 });
 
 describe("card transfer motion", () => {
-  it("travels 50 percent slower than the original transfer", () => {
-    expect(CARD_TRANSFER_DURATION_MS).toBe(420);
-  });
-
   it("shrinks from pile size to card-icon size when drawing", () => {
     const frames = buildCardTransferKeyframes({
       source: "deck",

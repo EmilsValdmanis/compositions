@@ -1,4 +1,12 @@
-import { cardsEqual } from "#/components/game/card-equality";
+import {
+  DISCARD_DROP_ID,
+  HAND_DROP_ID,
+  NEW_COMPOSITION_DROP_ID,
+  compositionIdFromDropId,
+  tableCompositionEdgeTargetFromDropId,
+  tableCompositionJokerTargetFromDropId,
+} from "#/components/game/board-drop-targets";
+import { buildHandEntries, cardsEqual, FACE_DOWN_CARD } from "#/components/game/card";
 import {
   useEffect,
   useEffectEvent,
@@ -35,8 +43,8 @@ import {
   type SocialState,
   type TablePlayRequest,
   type TurnActivitySnapshot,
-  useGameWebSocket,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
+import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameBoardHand } from "#/components/game/game-board-hand";
 import { GameBoardPiles } from "#/components/game/game-board-piles";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
@@ -49,32 +57,24 @@ import {
   usePersistedHandOrder,
 } from "#/components/game/game-hand-order-store";
 import {
-  FACE_DOWN_CARD,
-  HAND_DROP_ID,
-  NEW_COMPOSITION_DROP_ID,
   type ActiveDrag,
   type DraftComposition,
   type DraftedCompositionView,
   applyHandEntryOrder,
   buildTablePlayRequest,
   buildTableCompositionViews,
-  buildHandEntries,
   buildDraftCompositionSnapshot,
-  compositionIdFromDropId,
   findNewHandEntry,
   handIndexAfterSubmittedDrafts,
   handEntryOrder,
   insertHandKeyIntoDraft,
-  mapHandKeysToEntries,
   moveHandEntry,
   moveDraftCompositionInsertIndex,
   removeHandKeyFromDrafts,
   resolveDraftViews,
   setDraftCardInsertIndex,
   setDraftCardReclaimTarget,
-  tableCompositionEdgeTargetFromDropId,
   tableCompositionInsertIndexForEdge,
-  tableCompositionJokerTargetFromDropId,
   validateDraftedCompositions,
   validateOpeningTablePlay,
 } from "#/components/game/game-board-view-state";
@@ -136,11 +136,11 @@ function createBoardCollisionDetection(handCardIds: Set<string>): CollisionDetec
     const pointerSpecificCollisions = pointerCollisions.filter(
       (collision) => collision.id !== NEW_COMPOSITION_DROP_ID && collision.id !== HAND_DROP_ID,
     );
-    const jokerSpecificCollisions = pointerSpecificCollisions.filter((collision) =>
-      String(collision.id).startsWith("table-composition-joker-"),
+    const jokerSpecificCollisions = pointerSpecificCollisions.filter(
+      (collision) => tableCompositionJokerTargetFromDropId(String(collision.id)) !== null,
     );
-    const edgeSpecificCollisions = pointerSpecificCollisions.filter((collision) =>
-      String(collision.id).startsWith("table-composition-edge-"),
+    const edgeSpecificCollisions = pointerSpecificCollisions.filter(
+      (collision) => tableCompositionEdgeTargetFromDropId(String(collision.id)) !== null,
     );
 
     if (jokerSpecificCollisions.length > 0) {
@@ -182,7 +182,6 @@ type GameBoardViewProps = {
   roomCode: string | null;
   playerId: string;
   players: PlayerSnapshot[];
-  connectedPlayers: number;
   spectatorCount?: number;
   viewerMode?: "player" | "spectator";
   turnState: GameBoardTurnState;
@@ -191,6 +190,7 @@ type GameBoardViewProps = {
   onDrawFromDeck: () => void;
   onDrawFromDiscard: () => void;
   onPlayTable: (play: TablePlayRequest) => Promise<ActionResult> | void;
+  onCollectionSettled?: (game: GameSnapshot) => void;
   onPlayTableAndDiscard: (
     play: TablePlayRequest,
     cardIndex: number,
@@ -230,16 +230,6 @@ function draftScopeKey(game: GameSnapshot | null, playerId: string, isMyTurn: bo
   }
 
   return `${playerId}:${game.round}:${game.turn.number}`;
-}
-
-function buildDraftedCompositionViews(
-  draftCompositions: DraftComposition[],
-  entryByKey: Map<string, ReturnType<typeof buildHandEntries>[number]>,
-) {
-  return draftCompositions.map((composition) => ({
-    ...composition,
-    entries: mapHandKeysToEntries(composition.handKeys, entryByKey),
-  })) as DraftedCompositionView[];
 }
 
 function buildSubmittedCompositionActivityMap(
@@ -328,7 +318,6 @@ function GameBoardLayout({
   turnState,
   topDiscardCard,
   players,
-  connectedPlayers,
   spectatorCount,
   availableHandEntries,
   sortableIds,
@@ -353,7 +342,6 @@ function GameBoardLayout({
   turnState: GameBoardTurnState;
   topDiscardCard: GameSnapshot["discardPile"][number] | null;
   players: PlayerSnapshot[];
-  connectedPlayers: number;
   spectatorCount: number;
   viewerMode: "player" | "spectator";
   availableHandEntries: ReturnType<typeof buildHandEntries>;
@@ -395,7 +383,6 @@ function GameBoardLayout({
         <GameBoardPlayers
           players={players}
           game={game}
-          connectedPlayers={connectedPlayers}
           spectatorCount={spectatorCount}
           canSendEmote={!isSpectating}
           hasDraftedCompositions={draftedCompositionsCount > 0}
@@ -545,6 +532,16 @@ function useGameBoardController({
       : persistedHandOrder;
   const handEntries = applyHandEntryOrder(rawHandEntries, handOrder);
   const currentDraftScopeKey = draftScopeKey(game, playerId, turnState.isMyTurn);
+  const activeCompositions = game?.activeCompositions ?? [];
+  const canCompose = turnState.canDiscard;
+  const playerHasOpened =
+    game?.players.find((player) => player.playerId === playerId)?.hasOpened ?? false;
+
+  function canSubmitDraft(views: DraftedCompositionView[]) {
+    return (
+      canCompose && views.length > 0 && validateOpeningTablePlay(playerHasOpened, views).canSubmit
+    );
+  }
 
   useLayoutEffect(() => {
     draftCompositionStateRef.current = draftCompositionState;
@@ -588,22 +585,14 @@ function useGameBoardController({
   function reportGuidanceDraftState(nextCompositions: DraftComposition[], isDraggingCard: boolean) {
     if (!guidance) return;
 
-    const nextResolution = resolveDraftViews(
-      game?.activeCompositions ?? [],
+    const { draftedCompositionsView: nextViews } = resolveDraftViews(
+      activeCompositions,
       nextCompositions,
       handEntries,
     );
-    const nextViews = buildDraftedCompositionViews(
-      nextResolution.draftCompositions,
-      nextResolution.allEntryByKey,
-    );
-    const playerHasOpened =
-      game?.players.find((player) => player.playerId === playerId)?.hasOpened ?? false;
-    const nextOpeningValidation = validateOpeningTablePlay(playerHasOpened, nextViews);
     guidance.onDraftStateChange({
       hasDraftedCompositions: nextViews.length > 0,
-      canSubmitTablePlay:
-        turnState.canDiscard && nextViews.length > 0 && nextOpeningValidation.canSubmit,
+      canSubmitTablePlay: canSubmitDraft(nextViews),
       draftCompositions: nextViews.map(buildDraftCompositionSnapshot),
       isDraggingCard,
     });
@@ -656,39 +645,28 @@ function useGameBoardController({
     draftCompositionState.scopeKey === currentDraftScopeKey
       ? draftCompositionState.compositions
       : [];
-  const draftResolution = resolveDraftViews(
-    game?.activeCompositions ?? [],
-    scopedDraftCompositions,
-    handEntries,
-  );
-  const tableCompositions = draftResolution.tableCompositions;
-  const allHandEntries = draftResolution.allHandEntries;
-  const draftCompositions = draftResolution.draftCompositions;
+  const {
+    tableCompositions,
+    allHandEntries,
+    draftCompositions,
+    allEntryByKey,
+    draftedCompositionsView,
+  } = resolveDraftViews(activeCompositions, scopedDraftCompositions, handEntries);
   const activeEntry =
     activeDrag?.type === "hand"
       ? (allHandEntries.find((entry) => entry.key === activeDrag.handKey) ?? null)
       : null;
-  const allEntryByKey = draftResolution.allEntryByKey;
   const stagedHandKeySet = new Set(
     draftCompositions.flatMap((composition) => composition.handKeys),
   );
   const availableHandEntries = allHandEntries.filter((entry) => !stagedHandKeySet.has(entry.key));
   const sortableIds = availableHandEntries.map((entry) => entry.key);
-  const draftedCompositionsView = buildDraftedCompositionViews(draftCompositions, allEntryByKey);
   const newCompositions = draftedCompositionsView.filter(
     (composition) => composition.tableIndex === null,
   );
-  const canCompose = turnState.canDiscard;
-  const currentPlayerHasOpened =
-    game?.players.find((player) => player.playerId === playerId)?.hasOpened ?? false;
-  const openingTablePlayValidation = validateOpeningTablePlay(
-    currentPlayerHasOpened,
-    draftedCompositionsView,
-  );
-  const canSubmitTablePlay =
-    canCompose && draftedCompositionsView.length > 0 && openingTablePlayValidation.canSubmit;
+  const canSubmitTablePlay = canSubmitDraft(draftedCompositionsView);
   const draftValidation = showDraftValidation
-    ? validateDraftedCompositions(game?.activeCompositions ?? [], draftedCompositionsView)
+    ? validateDraftedCompositions(activeCompositions, draftedCompositionsView)
     : { invalidCompositionIds: new Set<string>(), invalidEntryKeys: new Set<string>() };
 
   const serializedDrafts = JSON.stringify(
@@ -738,7 +716,7 @@ function useGameBoardController({
     let result: ActionResult | void;
     try {
       result = await onPlayTable(
-        buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
+        buildTablePlayRequest(activeCompositions, draftedCompositionsView),
       );
     } catch {
       setShowDraftValidation(true);
@@ -819,7 +797,7 @@ function useGameBoardController({
         return;
       }
 
-      if (overHandKey === null || overHandKey === "discard-pile") {
+      if (overHandKey === null || overHandKey === DISCARD_DROP_ID) {
         updateHandOrder(activeDrag.baselineOrder);
         return;
       }
@@ -901,6 +879,22 @@ function useGameBoardController({
     );
   }
 
+  function finishDrawDrag(drag: Extract<ActiveDrag, { type: "draw" }>, keepOrder: boolean) {
+    guidance?.onDrawDragStateChange(false);
+    guidance?.onDrawSettled();
+    if (!keepOrder) updateHandOrder(drag.baselineOrder);
+  }
+
+  function restoreHandDrag(drag: Extract<ActiveDrag, { type: "hand" }>) {
+    updateHandOrder(drag.baselineHandOrder);
+    commitDraftCompositionState({
+      scopeKey: currentDraftScopeKey,
+      compositions: drag.baselineDraftCompositions,
+      baselineHandOrder: draftCompositionStateRef.current.baselineHandOrder,
+    });
+    reportGuidanceDraftState(drag.baselineDraftCompositions, false);
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     lastDragOverTargetRef.current = null;
     const currentDrag = activeDrag;
@@ -910,13 +904,10 @@ function useGameBoardController({
     setActiveDrag(null);
 
     if (currentDrag?.type === "draw") {
-      guidance?.onDrawDragStateChange(false);
-      guidance?.onDrawSettled();
-      if (activeDrawEntry?.key && overId && overId !== "discard-pile") {
-        return;
-      }
-
-      updateHandOrder(currentDrag.baselineOrder);
+      finishDrawDrag(
+        currentDrag,
+        Boolean(activeDrawEntry?.key && overId && overId !== DISCARD_DROP_ID),
+      );
       return;
     }
 
@@ -925,13 +916,7 @@ function useGameBoardController({
     }
 
     if (overId === null) {
-      updateHandOrder(currentDrag.baselineHandOrder);
-      commitDraftCompositionState({
-        scopeKey: currentDraftScopeKey,
-        compositions: currentDrag.baselineDraftCompositions,
-        baselineHandOrder: draftCompositionStateRef.current.baselineHandOrder,
-      });
-      reportGuidanceDraftState(currentDrag.baselineDraftCompositions, false);
+      restoreHandDrag(currentDrag);
       return;
     }
 
@@ -950,7 +935,7 @@ function useGameBoardController({
     const droppedOnTableEdgeTarget = overId ? tableCompositionEdgeTargetFromDropId(overId) : null;
     const droppedOnTableJokerTarget = overId ? tableCompositionJokerTargetFromDropId(overId) : null;
 
-    if (event.over?.id === "discard-pile") {
+    if (event.over?.id === DISCARD_DROP_ID) {
       if (draftCompositions.some((composition) => composition.handKeys.includes(draggedHandKey))) {
         return;
       }
@@ -984,7 +969,7 @@ function useGameBoardController({
           if (draftedCompositionsView.length > 0) {
             try {
               const result = await onPlayTableAndDiscard(
-                buildTablePlayRequest(game?.activeCompositions ?? [], draftedCompositionsView),
+                buildTablePlayRequest(activeCompositions, draftedCompositionsView),
                 discardIndex,
                 discardCard,
               );
@@ -1152,17 +1137,9 @@ function useGameBoardController({
   function handleDragCancel() {
     lastDragOverTargetRef.current = null;
     if (activeDrag?.type === "draw") {
-      guidance?.onDrawDragStateChange(false);
-      guidance?.onDrawSettled();
-      updateHandOrder(activeDrag.baselineOrder);
+      finishDrawDrag(activeDrag, false);
     } else if (activeDrag?.type === "hand") {
-      updateHandOrder(activeDrag.baselineHandOrder);
-      commitDraftCompositionState({
-        scopeKey: currentDraftScopeKey,
-        compositions: activeDrag.baselineDraftCompositions,
-        baselineHandOrder: draftCompositionStateRef.current.baselineHandOrder,
-      });
-      reportGuidanceDraftState(activeDrag.baselineDraftCompositions, false);
+      restoreHandDrag(activeDrag);
     }
 
     setActiveDrag(null);
@@ -1197,7 +1174,6 @@ export function GameBoardView({
   roomCode,
   playerId,
   players,
-  connectedPlayers,
   spectatorCount = 0,
   viewerMode = "player",
   turnState,
@@ -1206,6 +1182,7 @@ export function GameBoardView({
   onDrawFromDeck,
   onDrawFromDiscard,
   onPlayTable,
+  onCollectionSettled,
   onPlayTableAndDiscard,
   onSendEmote,
   draftSyncMode = "enabled",
@@ -1277,7 +1254,6 @@ export function GameBoardView({
         turnState={turnState}
         topDiscardCard={topDiscardCard}
         players={players}
-        connectedPlayers={connectedPlayers}
         spectatorCount={spectatorCount}
         viewerMode={viewerMode}
         availableHandEntries={controller.availableHandEntries}
@@ -1295,7 +1271,12 @@ export function GameBoardView({
         guidanceStage={guidance?.stage}
       />
       <CardTransferAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
-      <CompletedCompositionAnimation boardRef={boardRef} game={game} viewerPlayerId={playerId} />
+      <CompletedCompositionAnimation
+        boardRef={boardRef}
+        game={game}
+        viewerPlayerId={playerId}
+        onSettled={onCollectionSettled}
+      />
       <DragOverlay dropAnimation={null} modifiers={[keepCardOverlayInViewport]}>
         {activeDraw ? (
           <GameCard

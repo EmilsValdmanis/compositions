@@ -1,3 +1,4 @@
+import { DISCARD_DROP_ID } from "#/components/game/board-drop-targets";
 import { type ReactNode } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "#/lib/utils";
@@ -9,7 +10,7 @@ export function DiscardDropZone({
   disabled: boolean;
   children: ReactNode;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "discard-pile", disabled });
+  const { setNodeRef, isOver } = useDroppable({ id: DISCARD_DROP_ID, disabled });
 
   return (
     <div

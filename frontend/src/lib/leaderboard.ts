@@ -1,8 +1,8 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeaders, setResponseHeader } from "@tanstack/react-start/server";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { authURL } from "#/lib/auth-shared";
+import { requestBackend } from "./backend-request";
 
 export const LEADERBOARD_PAGE_SIZE = 50;
 export const DEFAULT_LEADERBOARD_METRIC = "elo" as const;
@@ -58,8 +58,6 @@ export const getLeaderboardPage = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     setResponseHeader("cache-control", "private, no-store");
-    const requestHeaders = new Headers(getRequestHeaders());
-    const cookie = requestHeaders.get("cookie");
     const search = new URLSearchParams({
       limit: String(LEADERBOARD_PAGE_SIZE),
       metric: data.metric,
@@ -67,12 +65,7 @@ export const getLeaderboardPage = createServerFn({ method: "GET" })
     });
     if (data.cursor) search.set("cursor", data.cursor);
 
-    const response = await fetch(
-      authURL(`/api/leaderboard?${search.toString()}`, process.env.VITE_GAME_SERVER_URL),
-      {
-        headers: cookie ? { accept: "application/json", cookie } : { accept: "application/json" },
-      },
-    );
+    const response = await requestBackend(`/api/leaderboard?${search}`, { forwardSession: true });
     if (!response.ok) throw new Error(`failed to load leaderboard: ${response.status}`);
     return leaderboardPageSchema.parse(await response.json());
   });

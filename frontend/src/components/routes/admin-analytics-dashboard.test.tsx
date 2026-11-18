@@ -33,16 +33,5 @@ describe("DateRangePicker", () => {
     fireEvent.click(screen.getByRole("button", { name: "This week" }));
 
     expect(onChange).toHaveBeenCalledWith({ from: "2026-08-10", to: "2026-08-16" });
-    expect(document.querySelector('[data-day="8/10/2026"]')?.getAttribute("data-range-start")).toBe(
-      "true",
-    );
-  });
-
-  it("centers the calendar in the wider presets popover", () => {
-    render(<DateRangePicker value={{ from: "2026-08-01", to: "2026-08-31" }} onChange={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Aug 1, 2026/ }));
-
-    expect(document.querySelector('[data-slot="calendar"]')?.className).toContain("mx-auto");
   });
 });

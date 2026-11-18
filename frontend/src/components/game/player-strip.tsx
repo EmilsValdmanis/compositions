@@ -8,11 +8,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import {
-  type GameSnapshot,
-  type PlayerSnapshot,
-  type SocialState,
-} from "#/components/game-websocket-provider";
+import { type GameSnapshot, type PlayerSnapshot, type SocialState } from "#/lib/game-protocol";
 import { PlayerEmoteBubble } from "#/components/game/player-emotes";
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from "#/components/ui/avatar";
 import { Badge } from "#/components/ui/badge";

@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	ErrSocialSelfRequest        = errors.New("cannot send a request to yourself")
 	ErrSocialUserNotFound       = errors.New("user not found")
 	ErrSocialRelationshipExists = errors.New("friend relationship already exists")
 	ErrFriendRequestNotFound    = errors.New("friend request not found")
@@ -375,7 +376,7 @@ func parseSocialUserPair(firstID, secondID string) (pgtype.UUID, pgtype.UUID, er
 		return pgtype.UUID{}, pgtype.UUID{}, err
 	}
 	if first == second {
-		return pgtype.UUID{}, pgtype.UUID{}, errors.New("cannot send a request to yourself")
+		return pgtype.UUID{}, pgtype.UUID{}, ErrSocialSelfRequest
 	}
 	return first, second, nil
 }

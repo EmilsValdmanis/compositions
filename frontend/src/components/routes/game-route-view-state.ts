@@ -1,4 +1,4 @@
-import { type LobbyState } from "#/components/game-websocket-provider";
+import { type LobbyState } from "#/lib/game-lobby-state";
 
 type GameRouteState = Pick<LobbyState, "connectionStatus" | "room" | "game">;
 

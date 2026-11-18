@@ -29,11 +29,12 @@ if (typeof globalThis.document === "undefined") {
   });
 }
 
-const { act, cleanup, fireEvent, render, screen, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, screen, waitFor, within } =
+  await import("@testing-library/react");
 const { afterEach, beforeEach, describe, expect, it, vi } = await import("vite-plus/test");
 
 vi.mock("#/lib/game-auth", () => ({
-  getGameConnectionAuth: vi.fn(),
+  hasGameSession: vi.fn(),
 }));
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
@@ -41,7 +42,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 const { GameWebSocketProvider, useGameWebSocket } =
   await import("#/components/game-websocket-provider");
-const { getGameConnectionAuth } = await import("#/lib/game-auth");
+const { hasGameSession } = await import("#/lib/game-auth");
 const { NotificationsDropdown } = await import("#/components/social/notifications-dropdown");
 
 const sockets: FakeWebSocket[] = [];
@@ -106,7 +107,6 @@ function Harness({ children }: { children?: ReactNode }) {
       <p data-testid="last-error">{state.lastError}</p>
       <p data-testid="last-error-id">{state.lastErrorId}</p>
       <p data-testid="last-error-code">{state.lastErrorCode}</p>
-      <p data-testid="last-error-message">{state.lastErrorMessage}</p>
       <p data-testid="completed-game-phase">{state.completedGame?.room.phase}</p>
       <p data-testid="is-spectating">{String(state.isSpectating)}</p>
       <p data-testid="social-user-id">{state.social.userId}</p>
@@ -157,16 +157,7 @@ describe("GameWebSocketProvider", () => {
   beforeEach(() => {
     cleanup();
     sockets.splice(0);
-    window.localStorage.clear();
-    vi.mocked(getGameConnectionAuth)
-      .mockReset()
-      .mockResolvedValue({
-        user: {
-          id: "user-1",
-          name: "Player One",
-          email: "player@example.com",
-        },
-      });
+    vi.mocked(hasGameSession).mockReset().mockResolvedValue(true);
     process.env.VITE_GAME_SERVER_URL = "ws://localhost:8080";
     Object.defineProperty(globalThis, "WebSocket", {
       value: FakeWebSocket,
@@ -343,7 +334,6 @@ describe("GameWebSocketProvider", () => {
       });
     });
     await waitFor(() => expect(screen.getByTestId("session-id").textContent).toBe("session-1"));
-    expect(window.localStorage.getItem("compositions.game.sessionId")).toBeNull();
 
     await act(async () => {
       sockets[0]!.close();
@@ -376,6 +366,52 @@ describe("GameWebSocketProvider", () => {
       type: "connect",
       data: { sessionId: "session-1" },
     });
+  });
+
+  it("keeps the session scoped to the provider that connected", async () => {
+    render(
+      <>
+        <div data-testid="first-provider">
+          <GameWebSocketProvider>
+            <Harness />
+          </GameWebSocketProvider>
+        </div>
+        <div data-testid="second-provider">
+          <GameWebSocketProvider>
+            <Harness />
+          </GameWebSocketProvider>
+        </div>
+      </>,
+    );
+    const first = within(screen.getByTestId("first-provider"));
+    const second = within(screen.getByTestId("second-provider"));
+    await act(async () => fireEvent.click(first.getByRole("button", { name: "Connect" })));
+    await act(async () => {
+      const socket = sockets[0]!;
+      socket.open();
+      socket.message({ type: "connected", data: { sessionId: "first", playerId: "player" } });
+    });
+
+    expect(first.getByTestId("session-id").textContent).toBe("first");
+    expect(second.getByTestId("session-id").textContent).toBe("");
+  });
+
+  it("ignores messages from a socket after it has closed", async () => {
+    render(
+      <GameWebSocketProvider>
+        <Harness />
+      </GameWebSocketProvider>,
+    );
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    await act(async () => {
+      const socket = sockets[0]!;
+      socket.open();
+      socket.close();
+      socket.message({ type: "connected", data: { sessionId: "stale", playerId: "player" } });
+    });
+
+    expect(screen.getByTestId("connection-status").textContent).toBe("disconnected");
+    expect(screen.getByTestId("session-id").textContent).toBe("");
   });
 
   it("keeps retrying until the server accepts a connection again", async () => {
@@ -424,22 +460,10 @@ describe("GameWebSocketProvider", () => {
   });
 
   it("keeps retrying when session verification is temporarily unavailable", async () => {
-    vi.mocked(getGameConnectionAuth)
-      .mockResolvedValueOnce({
-        user: {
-          id: "user-1",
-          name: "Player One",
-          email: "player@example.com",
-        },
-      })
+    vi.mocked(hasGameSession)
+      .mockResolvedValueOnce(true)
       .mockRejectedValueOnce(new Error("server unavailable"))
-      .mockResolvedValue({
-        user: {
-          id: "user-1",
-          name: "Player One",
-          email: "player@example.com",
-        },
-      });
+      .mockResolvedValue(true);
 
     render(
       <GameWebSocketProvider>
@@ -465,7 +489,7 @@ describe("GameWebSocketProvider", () => {
     const lastErrorId = screen.getByTestId("last-error-id").textContent;
 
     await act(async () => sockets[0]!.close());
-    await waitFor(() => expect(getGameConnectionAuth).toHaveBeenCalledTimes(2), {
+    await waitFor(() => expect(hasGameSession).toHaveBeenCalledTimes(2), {
       timeout: 1_500,
     });
     await act(async () => Promise.resolve());
@@ -563,7 +587,7 @@ describe("GameWebSocketProvider", () => {
     expect(screen.getByTestId("is-spectating").textContent).toBe("false");
   });
 
-  it("removes an invitation notification when it expires", async () => {
+  it("removes expired invitations, including ones received after their expiry", async () => {
     render(
       <GameWebSocketProvider>
         <Harness>
@@ -579,37 +603,40 @@ describe("GameWebSocketProvider", () => {
     await act(async () => sockets[0]!.open());
 
     const now = Date.now();
+    const sendInvite = (id: string, expiresAt: number) => {
+      sockets[0]!.message({
+        type: "social_state",
+        data: {
+          userId: "user-1",
+          friends: [],
+          incomingFriendRequests: [],
+          outgoingFriendRequestUserIds: [],
+          gameInvites: [
+            {
+              id,
+              user: { id: "friend-1", name: "Avery", online: true },
+              roomCode: "ROOM42",
+              createdAt: new Date(now).toISOString(),
+              expiresAt: new Date(expiresAt).toISOString(),
+            },
+          ],
+        },
+      });
+    };
+    const notifications = screen.getByRole("button", { name: "Notifications" });
     vi.useFakeTimers();
     vi.setSystemTime(now);
     try {
-      await act(async () => {
-        sockets[0]!.message({
-          type: "social_state",
-          data: {
-            userId: "user-1",
-            friends: [],
-            incomingFriendRequests: [],
-            outgoingFriendRequestUserIds: [],
-            gameInvites: [
-              {
-                id: "invite-1",
-                user: { id: "friend-1", name: "Avery", online: true },
-                roomCode: "ROOM42",
-                createdAt: new Date(now).toISOString(),
-                expiresAt: new Date(now + 1_000).toISOString(),
-              },
-            ],
-          },
-        });
-      });
+      await act(async () => sendInvite("invite-1", now + 1_000));
+      expect(notifications.textContent).toContain("1");
 
-      expect(screen.getByRole("button", { name: "Notifications" }).textContent).toContain("1");
+      await act(async () => vi.advanceTimersByTimeAsync(1_001));
+      expect(notifications.textContent).not.toContain("1");
 
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1_001);
-      });
-
-      expect(screen.getByRole("button", { name: "Notifications" }).textContent).not.toContain("1");
+      vi.setSystemTime(now + 3_000);
+      await act(async () => sendInvite("invite-2", now + 2_000));
+      await act(async () => vi.advanceTimersByTimeAsync(1));
+      expect(notifications.textContent).not.toContain("1");
     } finally {
       vi.useRealTimers();
     }
@@ -725,7 +752,6 @@ describe("GameWebSocketProvider", () => {
 
     expect(screen.getByTestId("last-error").textContent).toBe("The room is full.");
     expect(screen.getByTestId("last-error-code").textContent).toBe("room_full");
-    expect(screen.getByTestId("last-error-message").textContent).toBe("room is full");
 
     fireEvent.click(screen.getByRole("button", { name: "Dismiss error" }));
 

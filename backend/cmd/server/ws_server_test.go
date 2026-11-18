@@ -537,7 +537,7 @@ func TestGameBroadcastsIncludeAndEndSpectators(t *testing.T) {
 
 	setGameStatePhaseForTest(t, room.gameState, game.PhaseGameOver)
 	roomState = room.snapshot()
-	server.broadcastActionSuccess(actionResultEvent{Action: "discard", OK: true}, roomState, nil)
+	server.broadcastActionSuccess(nil, wsEnvelope{}, actionResultEvent{Action: "discard", OK: true}, roomState, nil)
 	readSocialResults(t, spectatorPeer, "room_state", "spectating_ended")
 }
 
@@ -1404,7 +1404,7 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 
 	errConn, errPeer, closeErrPair := newSocketPair(t)
 	defer closeErrPair()
-	server.writeError(errConn, errors.New("boom"))
+	server.writeRequestError(errConn, wsEnvelope{}, errors.New("boom"))
 	gotErrorEnvelope := mustReadEnvelopeFromConn(t, errPeer)
 	if gotErrorEnvelope.Type != "error" {
 		t.Fatalf("gotErrorEnvelope.Type = %q; want error", gotErrorEnvelope.Type)
@@ -1419,7 +1419,7 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 	if gotError.Message != "internal server error" {
 		t.Fatalf("gotError.Message = %q; want redacted internal error", gotError.Message)
 	}
-	server.writeActionError(errConn, "draft_update", errors.New("not your turn"))
+	server.writeRequestError(errConn, wsEnvelope{Type: "draft_update"}, clientError{"not_your_turn", "not your turn"})
 	gotActionErrorEnvelope := mustReadEnvelopeFromConn(t, errPeer)
 	var gotActionError errorEvent
 	if err := json.Unmarshal(gotActionErrorEnvelope.Data, &gotActionError); err != nil {
@@ -1443,23 +1443,23 @@ func TestWriteErrorAndBroadcastRoomState(t *testing.T) {
 
 	writeConn, _, closeWritePair := newSocketPair(t)
 	defer closeWritePair()
-	server.writeError(writeConn, errors.New("ignored"))
+	server.writeRequestError(writeConn, wsEnvelope{}, errors.New("ignored"))
 	emitEvent = func(conn *websocket.Conn, messageType string, data any) error {
 		return errors.New("emit boom")
 	}
-	server.writeError(writeConn, errors.New("write error branch"))
+	server.writeRequestError(writeConn, wsEnvelope{}, errors.New("write error branch"))
 	emitEvent = func(conn *websocket.Conn, messageType string, data any) error {
 		return errSocketClosed
 	}
-	server.writeError(writeConn, errors.New("ignored closed"))
+	server.writeRequestError(writeConn, wsEnvelope{}, errors.New("ignored closed"))
 	server.broadcastRoomState(hostRoom, []*websocket.Conn{writeConn})
 	emitEvent = func(conn *websocket.Conn, messageType string, data any) error {
 		return errors.New("emit boom")
 	}
 	server.broadcastRoomState(hostRoom, []*websocket.Conn{writeConn})
 	server.broadcastGameState([]gameStateRecipient{{conn: nil}, {conn: writeConn, event: gameStateEvent{Room: hostRoom}}})
-	server.broadcastActionResult(actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, []*websocket.Conn{nil, writeConn})
-	server.broadcastActionSuccess(actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, hostRoom, []gameStateRecipient{{conn: nil}, {conn: writeConn, event: gameStateEvent{Room: hostRoom}}})
+	writeActionResult(wsEnvelope{}, actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, nil, writeConn)
+	server.broadcastActionSuccess(nil, wsEnvelope{}, actionResultEvent{Action: "draw", PlayerID: "p1", OK: true}, hostRoom, []gameStateRecipient{{conn: nil}, {conn: writeConn, event: gameStateEvent{Room: hostRoom}}})
 }
 
 func TestBroadcastActionSuccessResetsRoomAfterGameOver(t *testing.T) {
@@ -1489,7 +1489,7 @@ func TestBroadcastActionSuccessResetsRoomAfterGameOver(t *testing.T) {
 	if !ok {
 		t.Fatal("SnapshotForPlayer() = false; want true")
 	}
-	server.broadcastActionSuccess(
+	server.broadcastActionSuccess(nil, wsEnvelope{},
 		actionResultEvent{Action: "discard", PlayerID: hostEvent.PlayerID, OK: true},
 		roomSnapshot{Code: hostRoom.Code, Phase: "game_over", HostPlayerID: hostEvent.PlayerID},
 		[]gameStateRecipient{{
@@ -1616,7 +1616,7 @@ func TestBroadcastActionSuccessGameOverResetFailure(t *testing.T) {
 	if !ok {
 		t.Fatal("SnapshotForPlayer() = false; want true")
 	}
-	server.broadcastActionSuccess(
+	server.broadcastActionSuccess(nil, wsEnvelope{},
 		actionResultEvent{Action: "discard", PlayerID: hostEvent.PlayerID, OK: true},
 		roomSnapshot{Code: hostRoom.Code, Phase: "game_over", HostPlayerID: hostEvent.PlayerID},
 		[]gameStateRecipient{{
@@ -1652,19 +1652,12 @@ func TestDecodePayload(t *testing.T) {
 	}
 }
 
-func TestMustMarshalRawMessagePanicsOnMarshalError(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatal("mustMarshalRawMessage() did not panic")
-		}
-	}()
-
-	_ = mustMarshalRawMessage(rawInvalidMessage{})
-}
-
 func TestWriteEvent(t *testing.T) {
 	writeConn, writePeer, closeWritePair := newSocketPair(t)
 	defer closeWritePair()
+	if err := writeEvent(writeConn, "invalid", rawInvalidMessage{}); err == nil {
+		t.Fatal("writeEvent accepted invalid event payload")
+	}
 	if err := writeEvent(writeConn, "connected", connectedEvent{SessionID: "s", PlayerID: "p"}); err != nil {
 		t.Fatalf("writeEvent() error = %v", err)
 	}
@@ -2255,8 +2248,11 @@ func TestCommandRepliesEchoRequestID(t *testing.T) {
 	if failure.RequestID != "draw-3" {
 		t.Fatalf("decode error = %+v", failure)
 	}
-	server.writeSocialActionSuccess(conn, "remove_friend", "user-1", "social-1")
-	if result.RequestID != "social-1" {
+	socialServer, socialConn, _, socialSession := newSocialHandlerFixture(t, &socialStoreStub{})
+	socialServer.handleRemoveFriend(socialConn, socialSession.SessionID, wsEnvelope{
+		Type: "remove_friend", RequestID: "social-1", Data: mustMarshalRawMessage(removeFriendRequest{UserID: "user-2"}),
+	})
+	if result.RequestID != "social-1" || result.Action != "remove_friend" || result.PlayerID != "user-1" || !result.OK {
 		t.Fatalf("social result = %+v", result)
 	}
 	t.Log("game success, game error, decode error, and social success echo their exact request IDs")

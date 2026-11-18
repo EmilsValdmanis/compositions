@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -150,11 +151,11 @@ func TestNewConfiguredWSServerClosesStoreOnCleanupError(t *testing.T) {
 	}
 }
 
-func (s *closingUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+func (s *closingUserStore) UpsertUser(_ context.Context, user database.UserRecord) (database.UserRecord, error) {
 	return user, nil
 }
 
-func (s *closingUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+func (s *closingUserStore) CreateSession(context.Context, database.SessionRecord) error { return nil }
 
 func (s *closingUserStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
 	return database.SessionUserRecord{}, database.ErrSessionNotFound
@@ -164,13 +165,13 @@ func (s *closingUserStore) DeleteSession(context.Context, string) error { return
 
 func (s *closingUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
 
-func (s *closingUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
+func (s *closingUserStore) SaveLobbyState(context.Context, json.RawMessage) error { return nil }
 
-func (s *closingUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
+func (s *closingUserStore) LoadLobbyState(context.Context) (json.RawMessage, error) {
 	if s.loadErr != nil {
-		return persistedLobbyState{}, s.loadErr
+		return nil, s.loadErr
 	}
-	return persistedLobbyState{}, nil
+	return nil, database.ErrLobbyStateNotFound
 }
 
 func (s *closingUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
@@ -182,11 +183,8 @@ func (s *closingUserStore) Close() error {
 	return s.err
 }
 
-func TestNewWSServerWithDependenciesUsesNoopStoreWhenNil(t *testing.T) {
-	server := newWSServerWithDependencies(nil, nil, "http://frontend.test/")
-	if server.userStore == nil {
-		t.Fatal("server.userStore = nil; want noop user store")
-	}
+func TestNewWSServerNormalizesAllowedOrigin(t *testing.T) {
+	server := newWSServerWithDependencies(nil, noopUserStore{}, "http://frontend.test/")
 	if server.allowedOrigin != "http://frontend.test" {
 		t.Fatalf("server.allowedOrigin = %q; want http://frontend.test", server.allowedOrigin)
 	}

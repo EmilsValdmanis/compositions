@@ -38,7 +38,6 @@ func (gs *GameState) Clone() *GameState {
 	return &next
 }
 
-// Clone preserves player data without sharing a mutable hand.
 func (player *Player) Clone() *Player {
 	if player == nil {
 		return nil

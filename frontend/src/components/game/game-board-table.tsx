@@ -1,3 +1,8 @@
+import {
+  draftCompositionDropId,
+  NEW_COMPOSITION_DROP_ID,
+} from "#/components/game/board-drop-targets";
+import { keyedCards } from "#/components/game/card";
 import { Cards01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { AnimatePresence, motion } from "motion/react";
@@ -5,24 +10,21 @@ import { useEffect, useRef, type RefObject } from "react";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import {
-  NEW_COMPOSITION_DROP_ID,
   type DraftedCompositionView,
   type TableCompositionView,
-  draftCompositionDropId,
 } from "#/components/game/game-board-view-state";
-import { draftPreviewForComposition } from "#/components/game/game-board-table-state";
 import {
   type CompositionActivitySnapshot,
   type DraftCompositionSnapshot,
   type PlayerSnapshot,
   type TurnActivitySnapshot,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
 import { CompositionRow } from "#/components/game/composition-row";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
+import { cardsWithTableDraft, draftPreviewForComposition } from "#/components/game/table-draft";
 import {
   draftCompositionPointTotal,
-  draftCompositionPreviewPointTotal,
   isCompleteDraftComposition,
   jokerReclaimPointValue,
 } from "#/components/game/game-card-utils";
@@ -44,59 +46,29 @@ import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
-function draftCardKey(card: DraftCompositionSnapshot["cards"][number]) {
-  return card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
-}
-
-function draftCardInstances(cards: DraftCompositionSnapshot["cards"]) {
-  const duplicateCounts = new Map<string, number>();
-
-  return cards.map((card) => {
-    const baseKey = draftCardKey(card);
-    const duplicateCount = duplicateCounts.get(baseKey) ?? 0;
-
-    duplicateCounts.set(baseKey, duplicateCount + 1);
-
-    return {
-      card,
-      key: `${baseKey}-${duplicateCount}`,
-    };
-  });
-}
-
-type SpectatorDraftPreview = ReturnType<typeof draftPreviewForComposition> & {
-  playerId?: string;
+type VisibleTableComposition = TableCompositionView & {
+  interactive: boolean;
+  draftPlayerId?: string;
 };
 
 function TableComposition({
   composition,
-  spectatorDraft,
   players,
   activity,
   canCompose,
   viewerPlayerId,
   invalidEntryKeys,
 }: {
-  composition: TableCompositionView;
-  spectatorDraft?: SpectatorDraftPreview;
+  composition: VisibleTableComposition;
   players: PlayerSnapshot[];
   activity?: CompositionActivitySnapshot;
   canCompose: boolean;
   viewerPlayerId?: string;
   invalidEntryKeys: Set<string>;
 }) {
-  const hasInteractiveEntries = composition.stagedEntries.length > 0;
-  const stagedEntries = hasInteractiveEntries
-    ? composition.stagedEntries
-    : (spectatorDraft?.stagedEntries ?? []);
-  const reclaims = hasInteractiveEntries ? composition.reclaims : (spectatorDraft?.reclaims ?? []);
-  const insertIndex = hasInteractiveEntries ? composition.insertIndex : spectatorDraft?.insertIndex;
-  const cardInsertIndices = hasInteractiveEntries
-    ? composition.cardInsertIndices
-    : spectatorDraft?.cardInsertIndices;
-  const changePlayerId = spectatorDraft?.playerId ?? activity?.playerId;
+  const changePlayerId = composition.draftPlayerId ?? activity?.playerId;
   const animateRemoteChanges = Boolean(
-    !hasInteractiveEntries && changePlayerId && changePlayerId !== viewerPlayerId,
+    !composition.interactive && changePlayerId && changePlayerId !== viewerPlayerId,
   );
 
   return (
@@ -104,13 +76,10 @@ function TableComposition({
       <CompositionRow
         composition={composition.snapshot}
         index={composition.tableIndex}
-        stagedEntries={stagedEntries}
-        reclaims={reclaims}
-        insertIndex={insertIndex}
-        cardInsertIndices={cardInsertIndices}
+        draft={composition.draft}
         players={players}
-        stagedEntryPlayerId={spectatorDraft?.playerId}
-        stagedEntriesInteractive={hasInteractiveEntries}
+        stagedEntryPlayerId={composition.draftPlayerId}
+        stagedEntriesInteractive={composition.interactive}
         animateStagedEntries={animateRemoteChanges}
         dropTargetsEnabled={canCompose}
         activity={activity}
@@ -122,15 +91,13 @@ function TableComposition({
 
 function TableCompositionsSection({
   tableCompositions,
-  spectatorDraftsByTableIndex,
   activityByIndex,
   players,
   canCompose,
   viewerPlayerId,
   invalidEntryKeys,
 }: {
-  tableCompositions: TableCompositionView[];
-  spectatorDraftsByTableIndex: Map<number, SpectatorDraftPreview>;
+  tableCompositions: VisibleTableComposition[];
   activityByIndex: Map<number, CompositionActivitySnapshot>;
   players: PlayerSnapshot[];
   canCompose: boolean;
@@ -162,7 +129,6 @@ function TableCompositionsSection({
           <TableComposition
             key={composition.key}
             composition={composition}
-            spectatorDraft={spectatorDraftsByTableIndex.get(composition.tableIndex)}
             players={players}
             activity={activityByIndex.get(composition.tableIndex)}
             canCompose={canCompose}
@@ -224,7 +190,7 @@ function SpectatorNewDraft({
       <div className="composition-card-track flex items-start gap-2" data-complete={complete}>
         <AnimatePresence initial={false} mode="popLayout">
           {animateCards
-            ? draftCardInstances(composition.cards).map(({ card, key }, cardIndex) => (
+            ? keyedCards(composition.cards).map(({ card, key }, cardIndex) => (
                 <motion.div
                   key={key}
                   layout="position"
@@ -248,7 +214,7 @@ function SpectatorNewDraft({
             : null}
         </AnimatePresence>
         {!animateCards
-          ? draftCardInstances(composition.cards).map(({ card, key }, cardIndex) => (
+          ? keyedCards(composition.cards).map(({ card, key }, cardIndex) => (
               <motion.div
                 key={key}
                 layout="position"
@@ -466,10 +432,9 @@ export function GameBoardTable({
     ]),
   );
   const stagedDrafts = turnActivity?.draftCompositions ?? [];
-  const tableCompositionsByIndex = new Map(
-    tableCompositions.map((composition) => [composition.tableIndex, composition]),
+  const spectatorDraftsByTableIndex = new Map(
+    stagedDrafts.map((draft) => [draft.tableIndex, draft]),
   );
-  const spectatorDraftsByTableIndex = new Map<number, SpectatorDraftPreview>();
   const stagedNewDrafts = stagedDrafts.filter(
     (composition) => composition.tableIndex === undefined,
   );
@@ -505,50 +470,32 @@ export function GameBoardTable({
     });
   }, [newCompositions.length, shouldReduceMotion]);
 
-  for (const draft of stagedDrafts) {
-    if (draft.tableIndex === undefined) {
-      continue;
-    }
+  const visibleTableCompositions: VisibleTableComposition[] = tableCompositions.map(
+    (composition) => {
+      const remoteDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
+      return {
+        ...composition,
+        interactive: composition.draft !== undefined,
+        draftPlayerId: remoteDraft ? turnActivity?.playerId : undefined,
+        draft:
+          composition.draft ??
+          (remoteDraft ? draftPreviewForComposition(composition.snapshot, remoteDraft) : undefined),
+      };
+    },
+  );
 
-    spectatorDraftsByTableIndex.set(draft.tableIndex, {
-      ...draftPreviewForComposition(
-        tableCompositionsByIndex.get(draft.tableIndex),
-        draft,
-        draft.cards,
-      ),
-      playerId: turnActivity?.playerId,
-    });
-  }
+  const additionPointTotals = visibleTableCompositions.flatMap(({ snapshot, draft }) => {
+    if (!draft || (draft.additions.length === 0 && draft.reclaims.length === 0)) return [];
 
-  const additionPointTotals = tableCompositions.flatMap((composition) => {
-    const spectatorDraft = spectatorDraftsByTableIndex.get(composition.tableIndex);
-    const stagedEntries =
-      composition.stagedEntries.length > 0
-        ? composition.stagedEntries
-        : (spectatorDraft?.stagedEntries ?? []);
-    const reclaims =
-      composition.reclaims.length > 0 ? composition.reclaims : (spectatorDraft?.reclaims ?? []);
-    const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
-    const additions = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
-
-    if (additions.length === 0 && reclaims.length === 0) {
-      return [];
-    }
-
-    const previewPoints = draftCompositionPreviewPointTotal(
-      composition.snapshot,
-      additions.map((entry) => entry.card),
-      reclaims.map((reclaim) => ({
-        jokerIndex: reclaim.jokerIndex,
-        replacementCard: reclaim.replacementEntry.card,
-      })),
+    const previewPoints = draftCompositionPointTotal(
+      cardsWithTableDraft(snapshot, draft),
+      snapshot.type,
     );
-
-    const reclaimPoints = reclaims.reduce<number | null>((total, reclaim) => {
+    const reclaimPoints = draft.reclaims.reduce<number | null>((total, reclaim) => {
       if (total === null) return null;
 
       const points = jokerReclaimPointValue(
-        composition.snapshot,
+        snapshot,
         reclaim.jokerIndex,
         reclaim.replacementEntry.card,
       );
@@ -558,7 +505,7 @@ export function GameBoardTable({
     return [
       previewPoints === null || reclaimPoints === null
         ? null
-        : Math.max(0, previewPoints - composition.snapshot.points) + reclaimPoints,
+        : Math.max(0, previewPoints - snapshot.points) + reclaimPoints,
     ];
   });
   const visibleDraftPointTotals = [
@@ -589,8 +536,7 @@ export function GameBoardTable({
       <CardContent className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-auto overscroll-contain px-2 py-2 xl:px-3 xl:py-3">
         <div className="my-auto flex w-full shrink-0 flex-col gap-3 xl:gap-6">
           <TableCompositionsSection
-            tableCompositions={tableCompositions}
-            spectatorDraftsByTableIndex={spectatorDraftsByTableIndex}
+            tableCompositions={visibleTableCompositions}
             activityByIndex={activityByIndex}
             players={players}
             canCompose={canCompose}

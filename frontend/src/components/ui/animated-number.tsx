@@ -19,7 +19,6 @@ type AnimatedNumberProps = Omit<
   "transformTiming" | "spinTiming" | "opacityTiming" | "respectMotionPreference"
 >;
 
-/** Shared motion treatment for live game values. */
 export function AnimatedNumber({ className, ...props }: AnimatedNumberProps) {
   const shouldReduceMotion = useShouldReduceMotion();
 

@@ -1,9 +1,8 @@
-import { adminRequestHeaders } from "#/lib/admin-request-headers";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { authURL } from "#/lib/auth-shared";
+import { requestBackend } from "./backend-request";
 
 const adminAnalyticsTotalsSchema = z.object({
   games: z.number().int().nonnegative(),
@@ -52,10 +51,9 @@ export const getAdminAnalytics = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     setResponseHeader("cache-control", "private, no-store");
     const search = new URLSearchParams(data);
-    const response = await fetch(
-      authURL(`/api/admin/analytics?${search.toString()}`, process.env.VITE_GAME_SERVER_URL),
-      { headers: adminRequestHeaders() },
-    );
+    const response = await requestBackend(`/api/admin/analytics?${search}`, {
+      forwardSession: true,
+    });
     if (!response.ok) throw new Error(`failed to load admin analytics: ${response.status}`);
     return adminAnalyticsSchema.parse(await response.json());
   });

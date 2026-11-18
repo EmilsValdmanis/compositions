@@ -1,24 +1,17 @@
+import { copyTextToClipboard } from "#/lib/clipboard";
 import { useEffect, useRef, useState } from "react";
 import { ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ClientOnly, getRouteApi } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { GameBoardView } from "#/components/game/game-board-view";
-import {
-  COMPLETED_COLLECTION_DURATION_MS,
-  COMPLETED_DISCARD_DURATION_MS,
-} from "#/components/game/completed-composition-animation";
 import { inferCompletedCompositionCollection } from "#/components/game/card-transfer-state";
 import { EndGameProposalAlert } from "#/components/game/end-game-proposal-alert";
 import { GameLobbyView } from "#/components/game/game-lobby-view";
 import { GameResultsView } from "#/components/game/game-results-view";
 import { playerName, playersForResults } from "#/components/game/game-view-helpers";
-import {
-  type GameMode,
-  type GameSnapshot,
-  type RoomSnapshot,
-  useGameWebSocket,
-} from "#/components/game-websocket-provider";
+import { isFinishedGame, type GameMode, type GameSnapshot } from "#/lib/game-protocol";
+import { useGameWebSocket } from "#/components/game-websocket-provider";
 import { GameRouteLoadingScreen } from "#/components/routes/game-route-loading-screen";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
@@ -26,13 +19,12 @@ import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-vie
 import { useGameSoundEvents } from "#/lib/game-sound-events";
 import { playGameSound } from "#/lib/game-sounds";
 import { pageTitle } from "#/lib/page-title";
-import { shouldReduceMotion } from "#/lib/reduced-motion";
 import { isCompleteRoomCode } from "#/lib/room-code";
 import { m } from "#/paraglide/messages.js";
 
 async function copyText(text: string, successMessage: string) {
   try {
-    await navigator.clipboard.writeText(text);
+    await copyTextToClipboard(text);
     toast.success(successMessage);
   } catch {
     toast.error(m.clipboard_copy_failed());
@@ -51,82 +43,51 @@ function roomShareUrl(code: string) {
   return url.toString();
 }
 
-type RoundResultsSnapshot = {
-  room: RoomSnapshot | null;
-  game: GameSnapshot;
-};
-
 type RoundResultsTransition = {
   currentGame: GameSnapshot | null;
-  resultRoom: RoomSnapshot | null;
-  resultGame: GameSnapshot | null;
-  visibleResults: RoundResultsSnapshot | null;
-  pendingResults: RoundResultsSnapshot | null;
-  transitionId: number;
+  isSpectating: boolean;
+  waitingForCollection: { game: GameSnapshot; isSpectating: boolean } | null;
 };
 
-function useVisibleRoundResults(
-  resultRoom: RoomSnapshot | null,
+function useRoundResultsTransition(
   resultGame: GameSnapshot | null,
   currentGame: GameSnapshot | null,
+  isSpectating: boolean,
 ) {
-  const [storedTransition, setStoredTransition] = useState<RoundResultsTransition>(() => ({
+  const [transition, setTransition] = useState<RoundResultsTransition>({
     currentGame,
-    resultRoom,
-    resultGame,
-    visibleResults: resultGame ? { room: resultRoom, game: resultGame } : null,
-    pendingResults: null,
-    transitionId: 0,
-  }));
-  let transition = storedTransition;
+    isSpectating,
+    waitingForCollection: null,
+  });
 
   if (
     transition.currentGame !== currentGame ||
-    transition.resultRoom !== resultRoom ||
-    transition.resultGame !== resultGame
+    transition.isSpectating !== isSpectating ||
+    (!resultGame && transition.waitingForCollection)
   ) {
-    const nextResults = resultGame ? { room: resultRoom, game: resultGame } : null;
-    const completedCollection =
-      resultGame && transition.currentGame && currentGame
-        ? inferCompletedCompositionCollection(transition.currentGame, currentGame)
-        : null;
-    const shouldDeferResults = completedCollection != null || transition.pendingResults != null;
+    let waitingForCollection = resultGame ? transition.waitingForCollection : null;
+    if (
+      !waitingForCollection &&
+      resultGame === currentGame &&
+      currentGame &&
+      transition.currentGame &&
+      inferCompletedCompositionCollection(transition.currentGame, currentGame)
+    ) {
+      waitingForCollection = { game: currentGame, isSpectating: transition.isSpectating };
+    }
 
-    transition = {
-      currentGame,
-      resultRoom,
-      resultGame,
-      visibleResults: shouldDeferResults ? null : nextResults,
-      pendingResults: shouldDeferResults ? nextResults : null,
-      transitionId: completedCollection ? transition.transitionId + 1 : transition.transitionId,
-    };
-    setStoredTransition(transition);
+    setTransition({ currentGame, isSpectating, waitingForCollection });
   }
 
-  const pendingTransitionId = transition.pendingResults ? transition.transitionId : null;
+  function settleCollection(game: GameSnapshot) {
+    setTransition((current) =>
+      current.waitingForCollection?.game === game
+        ? { ...current, waitingForCollection: null }
+        : current,
+    );
+  }
 
-  useEffect(() => {
-    if (pendingTransitionId == null) return;
-
-    const duration = shouldReduceMotion()
-      ? 280
-      : COMPLETED_COLLECTION_DURATION_MS + COMPLETED_DISCARD_DURATION_MS + 40;
-    const resultRevealTimer = setTimeout(() => {
-      setStoredTransition((currentTransition) =>
-        currentTransition.transitionId === pendingTransitionId && currentTransition.pendingResults
-          ? {
-              ...currentTransition,
-              visibleResults: currentTransition.pendingResults,
-              pendingResults: null,
-            }
-          : currentTransition,
-      );
-    }, duration);
-
-    return () => clearTimeout(resultRevealTimer);
-  }, [pendingTransitionId]);
-
-  return transition.visibleResults;
+  return { collection: transition.waitingForCollection, settleCollection };
 }
 
 function SpectatorNotice({ onStopSpectating }: { onStopSpectating: () => Promise<unknown> }) {
@@ -177,7 +138,6 @@ export function ProtectedHome() {
   const players = state.room?.players ?? [];
   const activePlayers = players.filter((player) => !player.forfeited);
   const currentPlayer = players.find((player) => player.playerId === state.playerId) ?? null;
-  const connectedPlayers = activePlayers.filter((player) => player.connected).length;
   const phase = state.room?.phase ?? "lobby";
   const isLobbyPhase = !state.room || phase === "lobby";
   const isGameInProgress = phase === "in_progress";
@@ -185,7 +145,11 @@ export function ProtectedHome() {
   const pendingDealChoice = state.room?.pendingDealChoice ?? null;
   const dealChooser =
     players.find((player) => player.playerId === pendingDealChoice?.chooserPlayerId) ?? null;
-  const isDealChooser = pendingDealChoice?.chooserPlayerId === state.playerId;
+  const dealChoice = {
+    pendingDealChoice,
+    dealChooserName: dealChooser?.name ?? null,
+    isDealChooser: pendingDealChoice?.chooserPlayerId === state.playerId,
+  };
   const allPlayersConnected =
     activePlayers.length > 0 && activePlayers.every((player) => player.connected);
   const canCreateRoom = state.connectionStatus === "connected" && !state.room;
@@ -208,14 +172,26 @@ export function ProtectedHome() {
   const turnPlayerName = playerName(players, state.game?.turn.playerId);
   const completedGame = state.completedGame;
   const isResultsPhase = phase === "round_over" || phase === "game_over";
-  const resultGame = isResultsPhase ? state.game : (completedGame?.game ?? null);
-  const resultRoom = isResultsPhase && resultGame ? state.room : (completedGame?.room ?? null);
-  const visibleRoundResults = useVisibleRoundResults(resultRoom, resultGame, state.game);
+  const currentResults =
+    isResultsPhase && state.room && state.game && isFinishedGame(state.game)
+      ? { room: state.room, game: state.game }
+      : null;
+  const results =
+    currentResults ?? (completedGame && isFinishedGame(completedGame.game) ? completedGame : null);
+  const boardGame = state.game ?? results?.game ?? null;
+  const { collection, settleCollection } = useRoundResultsTransition(
+    results?.game ?? null,
+    boardGame,
+    state.isSpectating,
+  );
+  const visibleRoundResults = collection ? null : results;
+  const boardRoom = collection ? results?.room : state.room;
+  const boardIsSpectating = collection?.isSpectating ?? state.isSpectating;
   const roundResultPlayers = playersForResults(visibleRoundResults?.room ?? null, state.room);
   const isBootstrappingConnection = isGameRouteSnapshotResolving(state);
   const currentPageTitle = visibleRoundResults
     ? m.results()
-    : isLobbyPhase
+    : isLobbyPhase && !collection
       ? state.room
         ? m.lobby()
         : m.start()
@@ -303,10 +279,6 @@ export function ProtectedHome() {
     return discardCard(cardIndex, card);
   }
 
-  async function handlePlayTable(play: Parameters<typeof playTable>[0]) {
-    return playTable(play);
-  }
-
   if (isBootstrappingConnection) {
     return (
       <>
@@ -329,12 +301,7 @@ export function ProtectedHome() {
               game={visibleRoundResults.game}
               players={roundResultPlayers}
               playerId={state.playerId}
-              connectedPlayers={connectedPlayers}
-              dealChoice={{
-                pendingDealChoice,
-                dealChooserName: dealChooser?.name ?? null,
-                isDealChooser: Boolean(isDealChooser),
-              }}
+              dealChoice={dealChoice}
               onStartNextRound={startNextRound}
               onBackToLobby={dismissCompletedGame}
               onChooseDealing={chooseDealing}
@@ -343,7 +310,7 @@ export function ProtectedHome() {
               onSendFriendRequest={sendFriendRequest}
             />
           </div>
-        ) : isLobbyPhase ? (
+        ) : isLobbyPhase && !collection ? (
           <div key="lobby" className="flex min-h-0 flex-1 overflow-auto">
             <GameLobbyView
               room={state.room}
@@ -358,11 +325,7 @@ export function ProtectedHome() {
                 canStartGame,
                 canSelectGameMode: isHost && pendingDealChoice == null,
               }}
-              dealChoice={{
-                pendingDealChoice,
-                dealChooserName: dealChooser?.name ?? null,
-                isDealChooser: Boolean(isDealChooser),
-              }}
+              dealChoice={dealChoice}
               onRoomCodeChange={handleRoomCodeChange}
               onCreateRoom={createRoom}
               onJoinRoom={joinRoom}
@@ -384,13 +347,12 @@ export function ProtectedHome() {
         ) : (
           <div key="game" className="flex min-h-0 flex-1 flex-col">
             <GameBoardView
-              game={state.game}
-              roomCode={state.room?.code ?? null}
+              game={boardGame}
+              roomCode={boardRoom?.code ?? null}
               playerId={state.playerId}
-              players={players}
-              connectedPlayers={connectedPlayers}
-              spectatorCount={state.room?.spectatorCount ?? 0}
-              viewerMode={state.isSpectating ? "spectator" : "player"}
+              players={boardRoom?.players ?? []}
+              spectatorCount={boardRoom?.spectatorCount ?? 0}
+              viewerMode={boardIsSpectating ? "spectator" : "player"}
               turnState={{
                 canDrawDeck,
                 canDrawDiscard,
@@ -398,11 +360,12 @@ export function ProtectedHome() {
                 isMyTurn,
                 turnPlayerName,
               }}
-              topDiscardCard={topDiscardCard}
+              topDiscardCard={boardGame?.discardPile[0] ?? null}
               onDiscardCard={handleDiscardCard}
               onDrawFromDeck={drawFromDeck}
               onDrawFromDiscard={drawFromDiscard}
-              onPlayTable={handlePlayTable}
+              onPlayTable={playTable}
+              onCollectionSettled={settleCollection}
               onPlayTableAndDiscard={playTableAndDiscard}
               onSendEmote={sendEmote}
               social={state.social}

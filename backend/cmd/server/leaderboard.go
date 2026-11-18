@@ -68,7 +68,7 @@ func (s *wsServer) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 	session, err := s.auth.sessionFromRequest(r)
 	if errors.Is(err, errAuthenticationRequired) {
-		writeHTTPError(w, http.StatusUnauthorized, "auth_required", "authentication required")
+		writeHTTPError(w, http.StatusUnauthorized, errAuthenticationRequired.code, errAuthenticationRequired.message)
 		return
 	}
 	if err != nil {

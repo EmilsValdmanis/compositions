@@ -12,9 +12,11 @@ export default function SignInButton({ returnTo }: { returnTo?: string }) {
 
   const handleGoogleSignIn = () => {
     startTransition(() => {
-      void authClient.signIn.social({ provider: "google", returnTo }).catch(() => {
+      try {
+        authClient.signInWithGoogle(returnTo);
+      } catch {
         toast.error(m.error_sign_in_start());
-      });
+      }
     });
   };
 

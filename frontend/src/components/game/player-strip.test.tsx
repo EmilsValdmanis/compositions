@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createRequire } from "node:module";
-import type { GameSnapshot, PlayerSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot, type PlayerSnapshot } from "#/lib/game-protocol";
 
 if (typeof globalThis.document === "undefined") {
   const require = createRequire(import.meta.url);

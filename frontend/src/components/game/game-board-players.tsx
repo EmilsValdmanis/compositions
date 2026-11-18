@@ -1,10 +1,6 @@
 import { ChevronDownIcon, RankingIcon, UndoIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import {
-  type GameSnapshot,
-  type PlayerSnapshot,
-  type SocialState,
-} from "#/components/game-websocket-provider";
+import { type GameSnapshot, type PlayerSnapshot, type SocialState } from "#/lib/game-protocol";
 import { MobilePlayerEmotes, PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { AnimatedNumber } from "#/components/ui/animated-number";
@@ -152,7 +148,6 @@ export function GameBoardPlayers({
 }: {
   players: PlayerSnapshot[];
   game: GameSnapshot | null;
-  connectedPlayers: number;
   hasDraftedCompositions: boolean;
   showTurnIndicator?: boolean;
   compactOnMobile?: boolean;

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -98,7 +99,14 @@ func TestRevokedSocketCannotRunCommand(t *testing.T) {
 	defer conn.Close()
 	mustConnectSession(t, conn, "")
 	_ = store.DeleteSession(context.Background(), "token")
-	mustSendEnvelope(t, conn, "create_room", createRoomRequest{})
+	if err := conn.WriteJSON(wsEnvelope{Type: "create_room", RequestID: "create-1", Data: json.RawMessage("{}")}); err != nil {
+		t.Fatal(err)
+	}
+	reply := mustReadEnvelopeFromConn(t, conn)
+	var event errorEvent
+	if reply.Type != "error" || json.Unmarshal(reply.Data, &event) != nil || event.Code != "auth_required" || event.Action != "create_room" || event.RequestID != "create-1" {
+		t.Fatalf("revoked command reply = %s %s", reply.Type, reply.Data)
+	}
 	requireAuthSocketClosed(t, conn)
 	server.lobby.mu.Lock()
 	defer server.lobby.mu.Unlock()
@@ -150,7 +158,7 @@ func TestAuthenticationExpiryAndMissingRegistration(t *testing.T) {
 	if !server.revalidateIdleAuthSocket(nil) {
 		t.Fatal("heartbeat rejected an in-progress handshake")
 	}
-	if server.revalidateAuthSocket(nil) {
+	if server.authSocketValid(nil) {
 		t.Fatal("unregistered authenticated socket was accepted")
 	}
 	// Expiry captured at connect also applies if storage later extends the record.
@@ -255,7 +263,7 @@ func TestAccountSwitchClosesOldSessionSocketsImmediately(t *testing.T) {
 	mustConnectSession(t, other, "")
 	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
 	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old"})
-	token, err := auth.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, time.Now().Add(time.Hour))
+	token, err := auth.sessionTokenForUser(request, "new-user", time.Now().Add(time.Hour))
 	if err != nil || token == "" || token == "old" {
 		t.Fatalf("switch returned %q, %v", token, err)
 	}
@@ -271,7 +279,7 @@ func TestAccountSwitchFailsWhenOldSessionCannotBeRevoked(t *testing.T) {
 	auth := &authHandler{store: store, now: time.Now, onSessionRevoked: func(string) { revoked = true }}
 	request := httptest.NewRequest(http.MethodGet, "/auth/google/callback", nil)
 	request.AddCookie(&http.Cookie{Name: authCookieName, Value: "old"})
-	token, err := auth.sessionTokenForUser(request, authenticatedUser{ID: "new-user"}, time.Now().Add(time.Hour))
+	token, err := auth.sessionTokenForUser(request, "new-user", time.Now().Add(time.Hour))
 	if !errors.Is(err, deleteErr) || token != "" || len(store.createdSessions) != 0 || revoked {
 		t.Fatalf("failed revocation created a login or revoked sockets: token=%q, err=%v, sessions=%d, revoked=%v", token, err, len(store.createdSessions), revoked)
 	}

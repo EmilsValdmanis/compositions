@@ -2,14 +2,11 @@
 
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import {
-  COMPLETED_COLLECTION_DURATION_MS,
-  COMPLETED_DISCARD_DURATION_MS,
-} from "#/components/game/completed-composition-animation";
-import { type GameSnapshot, type RoomSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
 
 const testRuntime = vi.hoisted(() => ({
   boardMountCount: 0,
+  settleBoardCollection: vi.fn<(game: GameSnapshot) => void>(),
   navigate: vi.fn(),
   toastError: vi.fn(),
   useGameWebSocket: vi.fn(),
@@ -38,13 +35,29 @@ vi.mock("#/components/game/game-board-view", async () => {
   const { useState } = await import("react");
 
   return {
-    GameBoardView: () => {
+    GameBoardView: ({
+      game,
+      onCollectionSettled,
+      viewerMode,
+    }: {
+      game: GameSnapshot | null;
+      onCollectionSettled: (game: GameSnapshot) => void;
+      viewerMode: "player" | "spectator";
+    }) => {
+      testRuntime.settleBoardCollection.mockImplementation(onCollectionSettled);
       const [instanceId] = useState(() => {
         testRuntime.boardMountCount += 1;
         return testRuntime.boardMountCount;
       });
 
-      return <div data-testid="game-board" data-instance-id={instanceId} />;
+      return (
+        <div
+          data-testid="game-board"
+          data-instance-id={instanceId}
+          data-viewer-mode={viewerMode}
+          data-game-phase={game?.phase}
+        />
+      );
     },
   };
 });
@@ -178,12 +191,9 @@ function lobbyState(currentRoom: RoomSnapshot | null, currentGame: GameSnapshot 
     playerId: "player-1",
     room: currentRoom,
     game: currentGame,
-    lastActionResult: null,
     lastError: null,
     lastErrorCode: null,
-    lastErrorMessage: null,
     lastErrorId: 0,
-    lastEvent: null,
     completedGame: null,
     isSpectating: false,
     social: {
@@ -197,7 +207,7 @@ function lobbyState(currentRoom: RoomSnapshot | null, currentGame: GameSnapshot 
 }
 
 beforeEach(() => {
-  vi.useFakeTimers();
+  testRuntime.settleBoardCollection.mockReset();
   testRuntime.boardMountCount = 0;
   testRuntime.navigate.mockReset();
   testRuntime.toastError.mockReset();
@@ -206,26 +216,39 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  vi.useRealTimers();
 });
 
+function gameWithCollectionFinished(previous: GameSnapshot, phase: number) {
+  return game({
+    phase,
+    hand: [],
+    activeCompositions: [],
+    discardPile: [
+      { rank: 13, suit: 3 },
+      ...previous.activeCompositions.flatMap((composition) => composition.cards),
+      ...previous.discardPile,
+    ],
+    roundWinnerIndex: 0,
+  });
+}
+
 describe("ProtectedHome completed composition handoff", () => {
-  it("keeps the existing board mounted while deferring round results", () => {
+  it("keeps the board until the final round snapshot and its collection settle", () => {
     const boardGame = game();
     testRuntime.useGameWebSocket.mockReturnValue(
       websocketValue(lobbyState(room("in_progress"), boardGame)),
     );
     const view = render(<ProtectedHome />);
 
+    testRuntime.useGameWebSocket.mockReturnValue(
+      websocketValue(lobbyState(room("round_over"), boardGame)),
+    );
+    view.rerender(<ProtectedHome />);
+
+    expect(view.queryByTestId("game-results")).toBeNull();
     expect(view.getByTestId("game-board").getAttribute("data-instance-id")).toBe("1");
 
-    const completedSet = boardGame.activeCompositions[0]?.cards ?? [];
-    const roundOverGame = game({
-      hand: [],
-      activeCompositions: [],
-      discardPile: [{ rank: 13, suit: 3 }, ...completedSet, ...boardGame.discardPile],
-      roundWinnerIndex: 0,
-    });
+    const roundOverGame = gameWithCollectionFinished(boardGame, 2);
     testRuntime.useGameWebSocket.mockReturnValue(
       websocketValue(lobbyState(room("round_over"), roundOverGame)),
     );
@@ -233,14 +256,57 @@ describe("ProtectedHome completed composition handoff", () => {
 
     expect(view.queryByTestId("game-results")).toBeNull();
     expect(view.getByTestId("game-board").getAttribute("data-instance-id")).toBe("1");
-    expect(testRuntime.boardMountCount).toBe(1);
 
     act(() => {
-      vi.advanceTimersByTime(COMPLETED_COLLECTION_DURATION_MS + COMPLETED_DISCARD_DURATION_MS + 40);
+      testRuntime.settleBoardCollection(roundOverGame);
     });
 
     expect(view.getByTestId("game-results")).toBeTruthy();
   });
+
+  it.each(["player", "spectator"] as const)(
+    "retains the terminal board snapshot for a %s after the live game is cleared",
+    (viewerMode) => {
+      const isSpectator = viewerMode === "spectator";
+      const boardGame = game();
+      testRuntime.useGameWebSocket.mockReturnValue(
+        websocketValue({
+          ...lobbyState(room("in_progress"), boardGame),
+          isSpectating: isSpectator,
+        }),
+      );
+      const view = render(<ProtectedHome />);
+      const finalGame = gameWithCollectionFinished(boardGame, 3);
+      const finalRoom = room("game_over");
+
+      if (!isSpectator) {
+        testRuntime.useGameWebSocket.mockReturnValue(
+          websocketValue(lobbyState(finalRoom, finalGame)),
+        );
+        view.rerender(<ProtectedHome />);
+      }
+
+      testRuntime.useGameWebSocket.mockReturnValue(
+        websocketValue({
+          ...lobbyState(isSpectator ? null : room("lobby"), null),
+          completedGame: { room: finalRoom, game: finalGame },
+        }),
+      );
+      view.rerender(<ProtectedHome />);
+
+      const board = view.getByTestId("game-board");
+      expect(board.getAttribute("data-instance-id")).toBe("1");
+      expect(board.getAttribute("data-game-phase")).toBe("3");
+      expect(board.getAttribute("data-viewer-mode")).toBe(viewerMode);
+      expect(view.queryByTestId("game-results")).toBeNull();
+
+      act(() => {
+        testRuntime.settleBoardCollection(finalGame);
+      });
+
+      expect(view.getByTestId("game-results")).toBeTruthy();
+    },
+  );
 });
 
 describe("ProtectedHome errors", () => {

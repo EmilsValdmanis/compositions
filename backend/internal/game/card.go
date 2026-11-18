@@ -56,7 +56,7 @@ func (c Card) IsJoker() bool {
 }
 
 func cardsEqual(a, b Card) bool {
-	return a.rank == b.rank && a.suit == b.suit
+	return a == b
 }
 
 func (c Card) Points() int {

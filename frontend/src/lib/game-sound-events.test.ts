@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
-import {
-  type GameSnapshot,
-  type LobbyState,
-  type RoomSnapshot,
-} from "#/components/game-websocket-provider";
+import { type GameSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
+import { type LobbyState } from "#/lib/game-lobby-state";
 import { gameSoundsForStateChange } from "#/lib/game-sound-events";
 
 function makeGame(overrides: Partial<GameSnapshot> = {}): GameSnapshot {
@@ -54,12 +51,9 @@ function makeState(overrides: Partial<LobbyState> = {}): LobbyState {
     playerId: "player-1",
     room: makeRoom(),
     game: makeGame(),
-    lastActionResult: null,
     lastError: null,
     lastErrorCode: null,
-    lastErrorMessage: null,
     lastErrorId: 0,
-    lastEvent: "game_state",
     completedGame: null,
     isSpectating: false,
     social: {

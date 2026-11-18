@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/EmilsValdmanis/compositions/internal/database"
@@ -10,60 +11,30 @@ import (
 const defaultUserStoreTimeout = 5 * time.Second
 
 var openConfiguredUserStore = newConfiguredUserStore
-var databaseURLFromEnv = database.URLFromEnv
 var newDatabaseUserStore = database.NewUserStore
-var upsertStoredUser = func(ctx context.Context, store *database.UserStore, user database.UserRecord) (database.UserRecord, error) {
-	return store.UpsertUser(ctx, user)
-}
-var closeStoredUserStore = func(store *database.UserStore) {
-	store.Close()
-}
-var saveStoredLobbyState = func(ctx context.Context, store *database.UserStore, data []byte) error {
-	return store.SaveLobbyState(ctx, data)
-}
-var loadStoredLobbyState = func(ctx context.Context, store *database.UserStore) ([]byte, error) {
-	return store.LoadLobbyState(ctx)
-}
-var createStoredGameBugReport = func(ctx context.Context, store *database.UserStore, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
-	return store.CreateGameBugReport(ctx, report)
-}
 
 type userStore interface {
-	UpsertUser(ctx context.Context, user authenticatedUser) (authenticatedUser, error)
-	CreateSession(ctx context.Context, session authSessionRecord) error
-	GetSessionUserByToken(ctx context.Context, sessionToken string, now time.Time) (database.SessionUserRecord, error)
-	DeleteSession(ctx context.Context, sessionToken string) error
-	UpdateOnboardingVersion(ctx context.Context, userID string, version int) error
-	SaveLobbyState(ctx context.Context, state persistedLobbyState) error
-	LoadLobbyState(ctx context.Context) (persistedLobbyState, error)
-	CreateGameBugReport(ctx context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error)
+	authStore
 	Close() error
+	SaveLobbyState(ctx context.Context, state json.RawMessage) error
+	LoadLobbyState(ctx context.Context) (json.RawMessage, error)
+	CreateGameBugReport(ctx context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error)
 }
 
-type noopUserStore struct{}
+var _ leaderboardStore = (*database.UserStore)(nil)
+var _ adminBugReportStore = (*database.UserStore)(nil)
+var _ adminAnalyticsStore = (*database.UserStore)(nil)
 
-func (noopUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
-	return user, nil
+func newConfiguredUserStore() (userStore, error) {
+	databaseURL, err := database.URLFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultUserStoreTimeout)
+	defer cancel()
+	store, err := newDatabaseUserStore(ctx, databaseURL)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }
-
-func (noopUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }
-
-func (noopUserStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
-	return database.SessionUserRecord{}, database.ErrSessionNotFound
-}
-
-func (noopUserStore) DeleteSession(context.Context, string) error { return database.ErrSessionNotFound }
-
-func (noopUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
-
-func (noopUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
-
-func (noopUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
-	return persistedLobbyState{}, nil
-}
-
-func (noopUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
-	return report, nil
-}
-
-func (noopUserStore) Close() error { return nil }

@@ -6,7 +6,7 @@ import { m } from "#/paraglide/messages.js";
 
 export const Route = createFileRoute("/_protected/admin")({
   beforeLoad: ({ context }) => {
-    if (!context.session?.user.isAdmin) {
+    if (!context.session.user.isAdmin) {
       throw redirect({ to: "/" });
     }
   },

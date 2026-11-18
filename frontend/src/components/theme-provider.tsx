@@ -1,7 +1,8 @@
 import { createContext, use, useEffect, useState } from "react";
 import { ScriptOnce } from "@tanstack/react-router";
 
-type Theme = "dark" | "light" | "system";
+const THEMES = ["light", "dark", "system"] as const;
+type Theme = (typeof THEMES)[number];
 
 type ThemeProviderProps = {
   children: React.ReactNode;
@@ -9,21 +10,40 @@ type ThemeProviderProps = {
 
 const DEFAULT_THEME: Theme = "system";
 const THEME_STORAGE_KEY = "theme";
-const THEME_SCRIPT =
-  "(function(){try{var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'&&t!=='system'){t='system'}var d=matchMedia('(prefers-color-scheme: dark)').matches;var r=t==='system'?(d?'dark':'light'):t;var e=document.documentElement;e.classList.add(r);e.style.colorScheme=r}catch(e){}})();";
+const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
+const THEME_SCRIPT = `
+  (() => {
+    let theme = ${JSON.stringify(DEFAULT_THEME)};
+    try {
+      const stored = localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+      if (${JSON.stringify(THEMES)}.includes(stored)) theme = stored;
+    } catch {}
+    const resolved = theme === "system" ? (matchMedia(${JSON.stringify(DARK_MODE_QUERY)}).matches ? "dark" : "light") : theme;
+    const root = document.documentElement;
+    root.classList.add(resolved);
+    root.style.colorScheme = resolved;
+  })();
+`;
 
 type ThemeProviderState = {
   theme: Theme;
   setTheme: (theme: Theme) => void;
 };
 
-function resolveTheme(storageKey: string, fallbackTheme: Theme): Theme {
-  if (typeof window === "undefined") {
-    return fallbackTheme;
-  }
+function isTheme(value: string | null): value is Theme {
+  return THEMES.some((theme) => theme === value);
+}
 
-  const stored = localStorage.getItem(storageKey);
-  return stored === "light" || stored === "dark" || stored === "system" ? stored : fallbackTheme;
+function readTheme(): Theme {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (isTheme(stored)) return stored;
+    } catch {
+      // Some browsers disable storage in restricted contexts.
+    }
+  }
+  return DEFAULT_THEME;
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState | null>(null);
@@ -33,20 +53,14 @@ function applyTheme(theme: Theme) {
   root.classList.remove("light", "dark");
 
   const resolved =
-    theme === "system"
-      ? window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
-      : theme;
+    theme === "system" ? (window.matchMedia(DARK_MODE_QUERY).matches ? "dark" : "light") : theme;
 
   root.classList.add(resolved);
   root.style.colorScheme = resolved;
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(() =>
-    resolveTheme(THEME_STORAGE_KEY, DEFAULT_THEME),
-  );
+  const [theme, setThemeState] = useState(readTheme);
 
   useEffect(() => {
     applyTheme(theme);
@@ -55,14 +69,18 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
       return;
     }
 
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const media = window.matchMedia(DARK_MODE_QUERY);
     const onChange = () => applyTheme("system");
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, [theme]);
 
   const setTheme = (next: Theme) => {
-    localStorage.setItem(THEME_STORAGE_KEY, next);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // The theme can still change for the current page when storage is blocked.
+    }
     setThemeState(next);
   };
 

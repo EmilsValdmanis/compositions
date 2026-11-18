@@ -1,8 +1,4 @@
-import {
-  type GameSnapshot,
-  type PlayerSnapshot,
-  type RoomSnapshot,
-} from "#/components/game-websocket-provider";
+import { type GameSnapshot, type PlayerSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
 import { m } from "#/paraglide/messages.js";
 
 export type MockScenario = {

@@ -9,7 +9,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "#/components/ui/s
 
 const rootRouteApi = getRouteApi("__root__");
 
-export function ProtectedLayout() {
+export function ProtectedLayout({ children = <Outlet /> }: { children?: React.ReactNode }) {
   const { session } = rootRouteApi.useRouteContext();
   const playerID = session?.user.id ?? "unauthenticated";
 
@@ -19,9 +19,7 @@ export function ProtectedLayout() {
       completedVersion={session?.user.onboardingVersion ?? null}
       requiredVersion={session?.user.requiredOnboardingVersion ?? null}
     >
-      <AppShell>
-        <Outlet />
-      </AppShell>
+      <AppShell>{children}</AppShell>
     </GameOnboardingProvider>
   );
 }
@@ -31,7 +29,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider
-      defaultOpen={sidebarOpen === "true"}
+      defaultOpen={sidebarOpen}
       className="h-full min-h-0! flex-1"
       style={{ "--sidebar-width": "18rem" } as React.CSSProperties}
     >

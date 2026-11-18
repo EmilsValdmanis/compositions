@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import { resultScoreState } from "#/components/game/game-results-state";
 import { playersForResults } from "#/components/game/game-view-helpers";
-import { type RoomSnapshot } from "#/components/game-websocket-provider";
+import { type RoomSnapshot } from "#/lib/game-protocol";
 import { mockScenarios } from "#/dev/mock-game-scenarios";
 
 describe("resultScoreState", () => {

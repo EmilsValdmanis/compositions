@@ -1,9 +1,8 @@
-import { adminRequestHeaders } from "#/lib/admin-request-headers";
 import { queryOptions } from "@tanstack/react-query";
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { authURL } from "#/lib/auth-shared";
+import { requestBackend } from "./backend-request";
 
 export const ADMIN_BUG_REPORT_PAGE_SIZE = 20;
 
@@ -92,10 +91,9 @@ export const getAdminBugReports = createServerFn({ method: "GET" })
       page: String(data.page),
       pageSize: String(data.pageSize),
     });
-    const response = await fetch(
-      authURL(`/api/admin/bug-reports?${search.toString()}`, process.env.VITE_GAME_SERVER_URL),
-      { headers: adminRequestHeaders() },
-    );
+    const response = await requestBackend(`/api/admin/bug-reports?${search}`, {
+      forwardSession: true,
+    });
     if (!response.ok) throw new Error(`failed to load admin bug reports: ${response.status}`);
     return adminBugReportPageSchema.parse(await response.json());
   });
@@ -104,12 +102,9 @@ export const getAdminBugReport = createServerFn({ method: "GET" })
   .validator(z.uuid())
   .handler(async ({ data: reportId }) => {
     setResponseHeader("cache-control", "private, no-store");
-    const response = await fetch(
-      authURL(
-        `/api/admin/bug-reports/${encodeURIComponent(reportId)}`,
-        process.env.VITE_GAME_SERVER_URL,
-      ),
-      { headers: adminRequestHeaders() },
+    const response = await requestBackend(
+      `/api/admin/bug-reports/${encodeURIComponent(reportId)}`,
+      { forwardSession: true },
     );
     if (!response.ok) throw new Error(`failed to load admin bug report: ${response.status}`);
     return adminBugReportDetailSchema.parse(await response.json());
@@ -118,12 +113,9 @@ export const getAdminBugReport = createServerFn({ method: "GET" })
 export const completeAdminBugReport = createServerFn({ method: "POST" })
   .validator(z.uuid())
   .handler(async ({ data: reportId }) => {
-    const response = await fetch(
-      authURL(
-        `/api/admin/bug-reports/${encodeURIComponent(reportId)}/complete`,
-        process.env.VITE_GAME_SERVER_URL,
-      ),
-      { method: "POST", headers: adminRequestHeaders() },
+    const response = await requestBackend(
+      `/api/admin/bug-reports/${encodeURIComponent(reportId)}/complete`,
+      { method: "POST", forwardSession: true },
     );
     if (!response.ok) throw new Error(`failed to complete admin bug report: ${response.status}`);
     return reportId;

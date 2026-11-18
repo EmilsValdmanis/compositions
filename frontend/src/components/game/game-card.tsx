@@ -1,3 +1,4 @@
+import { rankLabel } from "#/components/game/card";
 import { type CSSProperties, type ReactNode } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useSortable } from "@dnd-kit/sortable";
@@ -10,28 +11,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
-import { type CardSnapshot } from "#/components/game-websocket-provider";
+import { type CardSnapshot } from "#/lib/game-protocol";
 import { cardName } from "#/components/game/game-card-utils";
 import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn } from "#/lib/utils";
 import { Badge } from "#/components/ui/badge";
 import { m } from "#/paraglide/messages.js";
-
-const rankLabels: Record<number, string> = {
-  1: "A",
-  2: "2",
-  3: "3",
-  4: "4",
-  5: "5",
-  6: "6",
-  7: "7",
-  8: "8",
-  9: "9",
-  10: "10",
-  11: "J",
-  12: "Q",
-  13: "K",
-};
 
 const suitIcons = {
   0: FavouriteIcon,
@@ -45,7 +30,7 @@ function cardRankLabel(card: CardSnapshot) {
     return "J";
   }
 
-  return rankLabels[card.rank ?? 0] ?? "?";
+  return rankLabel(card.rank) ?? "?";
 }
 
 function cardSuitIcon(card: CardSnapshot) {

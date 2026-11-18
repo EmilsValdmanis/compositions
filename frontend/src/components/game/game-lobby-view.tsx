@@ -1,13 +1,12 @@
+import { type CompletedGameSnapshot } from "#/lib/game-lobby-state";
 import {
-  type CompletedGameSnapshot,
   type DealingChoiceRequest,
   type GameSnapshot,
   type GameMode,
-  type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
   type RoomSnapshot,
   type SocialState,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
 import {
   AddCircleIcon,
   ChevronDownIcon,
@@ -21,7 +20,7 @@ import {
   ZapIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { DealChoicePanel } from "#/components/game/deal-choice-panel";
+import { DealChoicePanel, type DealChoiceState } from "#/components/game/deal-choice-panel";
 import { PlayerEmotePicker } from "#/components/game/player-emotes";
 import { PlayerStrip } from "#/components/game/player-strip";
 import { AnimatedNumber } from "#/components/ui/animated-number";
@@ -65,12 +64,6 @@ type RoomActions = {
   canLeaveRoom: boolean;
   canStartGame: boolean;
   canSelectGameMode?: boolean;
-};
-
-type DealChoiceState = {
-  pendingDealChoice: PendingDealChoiceSnapshot | null;
-  dealChooserName: string | null;
-  isDealChooser: boolean;
 };
 
 type GameLobbyViewProps = {
@@ -121,7 +114,6 @@ export function GameLobbyView({
   onSendFriendRequest,
 }: GameLobbyViewProps) {
   const { canCreateRoom, canJoinRoom, canLeaveRoom, canStartGame, canSelectGameMode } = roomActions;
-  const { pendingDealChoice, dealChooserName, isDealChooser } = dealChoice;
   const victorPlayerId = completedGame?.game.players[completedGame.game.roundWinnerIndex]?.playerId;
   const victor = players.find((player) => player.playerId === victorPlayerId) ?? null;
   const connectedCount = players.filter((player) => player.connected).length;
@@ -239,15 +231,11 @@ export function GameLobbyView({
                   {m.leave_room()}
                 </Button>
               </div>
-              {pendingDealChoice ? (
-                <DealChoicePanel
-                  players={players}
-                  pendingDealChoice={pendingDealChoice}
-                  dealChooserName={dealChooserName}
-                  isDealChooser={isDealChooser}
-                  onChooseDealing={onChooseDealing}
-                />
-              ) : null}
+              <DealChoicePanel
+                players={players}
+                dealChoice={dealChoice}
+                onChooseDealing={onChooseDealing}
+              />
               {completedGame ? (
                 <Alert>
                   <HugeiconsIcon icon={RankingIcon} />

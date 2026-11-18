@@ -2,11 +2,7 @@
 
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import {
-  type GameSnapshot,
-  type PlayerSnapshot,
-  type RoomSnapshot,
-} from "#/components/game-websocket-provider";
+import { type GameSnapshot, type PlayerSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
 
 vi.mock("#/components/ui/animated-number", () => ({
   AnimatedNumber: ({
@@ -123,7 +119,6 @@ describe("GameResultsView score reveal", () => {
         game={game}
         players={players}
         playerId="flying"
-        connectedPlayers={2}
         dealChoice={{
           pendingDealChoice: null,
           dealChooserName: null,
@@ -234,7 +229,6 @@ describe("GameResultsView score reveal", () => {
         game={game}
         players={players}
         playerId="winner"
-        connectedPlayers={2}
         dealChoice={{
           pendingDealChoice: null,
           dealChooserName: null,
@@ -277,7 +271,6 @@ describe("GameResultsView score reveal", () => {
         game={game}
         players={players}
         playerId="winner"
-        connectedPlayers={2}
         dealChoice={{
           pendingDealChoice: null,
           dealChooserName: null,
@@ -307,7 +300,6 @@ describe("GameResultsView score reveal", () => {
         game={game}
         players={players}
         playerId="winner"
-        connectedPlayers={2}
         dealChoice={{
           pendingDealChoice: null,
           dealChooserName: null,
@@ -329,7 +321,6 @@ describe("GameResultsView score reveal", () => {
       game,
       players,
       playerId: "flying",
-      connectedPlayers: 2,
       onChooseDealing: vi.fn(),
       onSendEmote: vi.fn(),
     };

@@ -36,41 +36,33 @@ import {
   PopoverTrigger,
 } from "#/components/ui/popover";
 import { ScrollArea } from "#/components/ui/scroll-area";
-import { SidebarMenuButton } from "#/components/ui/sidebar";
-import { cn } from "#/lib/utils";
 import { getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
-export function NotificationsDropdown({
-  presentation = "button",
-}: {
-  presentation?: "button" | "sidebar";
-}) {
+export function NotificationsDropdown() {
   const { state, respondFriendRequest, respondGameInvite } = useGameWebSocket();
   const navigate = useNavigate();
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const friendRequests = state.social.incomingFriendRequests;
-  const gameInvites = state.social.gameInvites.filter(
-    (invite) => new Date(invite.expiresAt).getTime() > currentTime,
+  const gameInvites = state.social.gameInvites
+    .map((invite) => ({ invite, expiresAt: Date.parse(invite.expiresAt) }))
+    .filter(({ expiresAt }) => expiresAt > currentTime);
+  const nextExpiry = gameInvites.reduce(
+    (earliest, { expiresAt }) => Math.min(earliest, expiresAt),
+    Infinity,
   );
   const notificationCount = friendRequests.length + gameInvites.length;
 
   useEffect(() => {
-    const now = Date.now();
-    const nextExpiry = state.social.gameInvites.reduce<number | null>((earliest, invite) => {
-      const expiry = new Date(invite.expiresAt).getTime();
-      if (!Number.isFinite(expiry) || expiry <= now) return earliest;
-      return earliest === null || expiry < earliest ? expiry : earliest;
-    }, null);
-    if (nextExpiry === null) return;
+    if (!Number.isFinite(nextExpiry)) return;
 
     const timeout = window.setTimeout(
       () => setCurrentTime(Date.now()),
-      Math.max(0, nextExpiry - now + 1),
+      Math.max(0, nextExpiry - Date.now() + 1),
     );
     return () => window.clearTimeout(timeout);
-  }, [currentTime, state.social.gameInvites]);
+  }, [currentTime, nextExpiry]);
 
   async function respond(id: string, action: () => Promise<unknown>, successMessage: string) {
     setPendingIds((current) => new Set(current).add(id));
@@ -97,39 +89,20 @@ export function NotificationsDropdown({
     <Popover>
       <PopoverTrigger
         render={
-          presentation === "sidebar" ? (
-            <SidebarMenuButton tooltip={m.notifications()} className="relative" />
-          ) : (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={m.notifications()}
-              className="relative"
-            />
-          )
+          <Button variant="ghost" size="icon" aria-label={m.notifications()} className="relative" />
         }
       >
         <HugeiconsIcon icon={Notification02Icon} />
-        {presentation === "sidebar" ? <span>{m.notifications()}</span> : null}
         {notificationCount > 0 ? (
           <Badge
             variant="destructive"
-            className={cn(
-              "h-4 min-w-4 justify-center px-1 text-[0.65rem]",
-              presentation === "sidebar"
-                ? "ml-auto group-data-[collapsible=icon]:hidden"
-                : "absolute -top-1 -right-1",
-            )}
+            className="absolute -top-1 -right-1 h-4 min-w-4 justify-center px-1 text-[0.65rem]"
           >
             {notificationCount > 9 ? "9+" : notificationCount}
           </Badge>
         ) : null}
       </PopoverTrigger>
-      <PopoverContent
-        align={presentation === "sidebar" ? "start" : "end"}
-        side={presentation === "sidebar" ? "right" : "bottom"}
-        className="w-[min(24rem,calc(100vw-1rem))]"
-      >
+      <PopoverContent align="end" className="w-[min(24rem,calc(100vw-1rem))]">
         <PopoverHeader>
           <PopoverTitle>{m.notifications()}</PopoverTitle>
         </PopoverHeader>
@@ -202,7 +175,7 @@ export function NotificationsDropdown({
                 );
               })}
 
-              {gameInvites.map((invite) => {
+              {gameInvites.map(({ invite }) => {
                 const pending = pendingIds.has(invite.id);
                 return (
                   <Item key={invite.id} variant="muted" size="xs">

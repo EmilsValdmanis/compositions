@@ -1,10 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { DevEloUi } from "#/components/routes/dev-elo-ui";
 import { DevGameUi } from "#/components/routes/dev-game-ui";
+import { ProtectedLayout } from "#/components/routes/protected-layout";
 import { pageTitle } from "#/lib/page-title";
 import { m } from "#/paraglide/messages.js";
 
-export const Route = createFileRoute("/_protected/dev-ui")({
+export const Route = createFileRoute("/dev-ui")({
   validateSearch: (
     search: Record<string, unknown>,
   ): { view?: "elo"; state?: "empty" | "placement" } => ({
@@ -24,5 +25,9 @@ export const Route = createFileRoute("/_protected/dev-ui")({
 
 function DevUiRoute() {
   const { view, state } = Route.useSearch();
-  return view === "elo" ? <DevEloUi key={state} state={state} /> : <DevGameUi />;
+  return (
+    <ProtectedLayout>
+      {view === "elo" ? <DevEloUi key={state} state={state} /> : <DevGameUi />}
+    </ProtectedLayout>
+  );
 }

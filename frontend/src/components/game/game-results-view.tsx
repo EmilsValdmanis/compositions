@@ -1,16 +1,16 @@
+import { keyedCards } from "#/components/game/card";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Cards01Icon, Home01Icon, Sent02Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { type CompletedGameSnapshot } from "#/lib/game-lobby-state";
 import {
-  type CompletedGameSnapshot,
   type DealingChoiceRequest,
   type GameSnapshot,
-  type PendingDealChoiceSnapshot,
   type PlayerSnapshot,
   type SocialState,
-} from "#/components/game-websocket-provider";
-import { DealChoicePanel } from "#/components/game/deal-choice-panel";
+} from "#/lib/game-protocol";
+import { DealChoicePanel, type DealChoiceState } from "#/components/game/deal-choice-panel";
 import { resultScoreState, type ResultScorePhase } from "#/components/game/game-results-state";
 import { GameBoardPlayers } from "#/components/game/game-board-players";
 import { GameCard } from "#/components/game/game-card";
@@ -42,18 +42,11 @@ import { useShouldReduceMotion } from "#/lib/reduced-motion";
 import { cn, getUserInitials } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
-type DealChoiceState = {
-  pendingDealChoice: PendingDealChoiceSnapshot | null;
-  dealChooserName: string | null;
-  isDealChooser: boolean;
-};
-
 type GameResultsViewProps = {
   room: CompletedGameSnapshot["room"] | null;
   game: GameSnapshot;
   players: PlayerSnapshot[];
   playerId: string;
-  connectedPlayers: number;
   dealChoice: DealChoiceState;
   onStartNextRound?: () => void;
   onBackToLobby?: () => void;
@@ -102,18 +95,6 @@ function rankingRows(
 }
 
 function noopResetDraftCompositions() {}
-
-function keyedCards(cards: GameSnapshot["hand"]) {
-  const occurrences = new Map<string, number>();
-
-  return cards.map((card) => {
-    const identity = card.isJoker ? "joker" : `${card.rank ?? "unknown"}-${card.suit ?? "unknown"}`;
-    const occurrence = occurrences.get(identity) ?? 0;
-    occurrences.set(identity, occurrence + 1);
-
-    return { card, key: `${identity}-${occurrence}` };
-  });
-}
 
 function GradualScoreNumber({
   from,
@@ -460,11 +441,8 @@ function useResultScoreReveal({
     phaseByPlayerId: {},
     hasReordered: false,
   }));
-  const scorePlayerIds = new Set<string>();
-
-  for (const { playerId: scorePlayerId } of scoreTimeline(game, players)) {
-    scorePlayerIds.add(scorePlayerId);
-  }
+  const timeline = scoreTimeline(game, players);
+  const scorePlayerIds = new Set(timeline.map(({ playerId }) => playerId));
 
   const revealState: ScoreRevealState = winnerTakeover
     ? { key: scoreTimelineKey, phaseByPlayerId: {}, hasReordered: false }
@@ -483,64 +461,33 @@ function useResultScoreReveal({
     let nextRevealAt = SCORE_REVEAL_DELAY_MS;
     let finalScoreAt = SCORE_REVEAL_DELAY_MS;
 
-    for (const { playerId: scorePlayerId, hasAdjustment } of scoreTimeline(game, players)) {
+    function schedulePhase(playerId: string, phase: ResultScoreTimelinePhase, at: number) {
+      timers.push(
+        window.setTimeout(() => {
+          setScoreReveal((current) => ({
+            key: activeScoreTimelineKey,
+            phaseByPlayerId: {
+              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
+              [playerId]: phase,
+            },
+            hasReordered: false,
+          }));
+        }, at),
+      );
+    }
+
+    for (const { playerId, hasAdjustment } of timeline) {
       const revealAt = nextRevealAt;
       const roundAt = revealAt + SCORE_COUNT_DURATION_MS;
       const adjustingAt = roundAt + SCORE_ADJUSTMENT_HOLD_MS;
       const adjustedAt = hasAdjustment
         ? adjustingAt + SCORE_ADJUSTMENT_COUNT_DURATION_MS
-        : revealAt + SCORE_COUNT_DURATION_MS + SCORE_ADJUSTMENT_HOLD_MS;
+        : adjustingAt;
 
-      timers.push(
-        window.setTimeout(() => {
-          setScoreReveal((current) => ({
-            key: activeScoreTimelineKey,
-            phaseByPlayerId: {
-              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
-              [scorePlayerId]: "counting",
-            },
-            hasReordered: false,
-          }));
-        }, revealAt),
-      );
-      timers.push(
-        window.setTimeout(() => {
-          setScoreReveal((current) => ({
-            key: activeScoreTimelineKey,
-            phaseByPlayerId: {
-              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
-              [scorePlayerId]: "round",
-            },
-            hasReordered: false,
-          }));
-        }, roundAt),
-      );
-      if (hasAdjustment) {
-        timers.push(
-          window.setTimeout(() => {
-            setScoreReveal((current) => ({
-              key: activeScoreTimelineKey,
-              phaseByPlayerId: {
-                ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
-                [scorePlayerId]: "adjusting",
-              },
-              hasReordered: false,
-            }));
-          }, adjustingAt),
-        );
-      }
-      timers.push(
-        window.setTimeout(() => {
-          setScoreReveal((current) => ({
-            key: activeScoreTimelineKey,
-            phaseByPlayerId: {
-              ...(current.key === activeScoreTimelineKey ? current.phaseByPlayerId : {}),
-              [scorePlayerId]: "adjusted",
-            },
-            hasReordered: false,
-          }));
-        }, adjustedAt),
-      );
+      schedulePhase(playerId, "counting", revealAt);
+      schedulePhase(playerId, "round", roundAt);
+      if (hasAdjustment) schedulePhase(playerId, "adjusting", adjustingAt);
+      schedulePhase(playerId, "adjusted", adjustedAt);
 
       finalScoreAt = adjustedAt;
       nextRevealAt = hasAdjustment
@@ -669,7 +616,6 @@ export function GameResultsView({
   game,
   players,
   playerId,
-  connectedPlayers,
   dealChoice,
   onStartNextRound,
   onBackToLobby,
@@ -774,12 +720,10 @@ export function GameResultsView({
               shouldReduceMotion={shouldReduceMotion}
             />
 
-            {!isGameOver && dealChoice.pendingDealChoice ? (
+            {!isGameOver ? (
               <DealChoicePanel
                 players={players}
-                pendingDealChoice={dealChoice.pendingDealChoice}
-                dealChooserName={dealChoice.dealChooserName}
-                isDealChooser={dealChoice.isDealChooser}
+                dealChoice={dealChoice}
                 onChooseDealing={onChooseDealing}
               />
             ) : null}
@@ -808,7 +752,6 @@ export function GameResultsView({
         <GameBoardPlayers
           players={players}
           game={game}
-          connectedPlayers={connectedPlayers}
           hasDraftedCompositions={false}
           showTurnIndicator={false}
           onResetDraftCompositions={noopResetDraftCompositions}

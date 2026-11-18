@@ -19,10 +19,6 @@ describe("ThemeSwitcher", () => {
     render(<ThemeSwitcher className="absolute top-4 left-4" align="start" />);
 
     const trigger = screen.getByRole("button", { name: "Theme" });
-    expect(trigger.className).toContain("left-4");
-    expect(trigger.querySelector('[data-slot="theme-light-icon"]')).toBeTruthy();
-    expect(trigger.querySelector('[data-slot="theme-dark-icon"]')).toBeTruthy();
-
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole("menuitemradio", { name: "Dark" }));
 

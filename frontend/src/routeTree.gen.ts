@@ -11,10 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as ProtectedRouteImport } from './routes/_protected'
+import { Route as DevUiRouteImport } from './routes/dev-ui'
 import { Route as AuthSignInRouteImport } from './routes/_auth/sign-in'
 import { Route as ProtectedIndexRouteImport } from './routes/_protected/index'
 import { Route as ProtectedAdminRouteImport } from './routes/_protected/admin'
-import { Route as ProtectedDevUiRouteImport } from './routes/_protected/dev-ui'
 import { Route as ProtectedLeaderboardRouteImport } from './routes/_protected/leaderboard'
 import { Route as ProtectedPlayersPlayerIdRouteImport } from './routes/_protected/players.$playerId'
 
@@ -24,6 +24,11 @@ const AuthRoute = AuthRouteImport.update({
 } as any)
 const ProtectedRoute = ProtectedRouteImport.update({
   id: '/_protected',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevUiRoute = DevUiRouteImport.update({
+  id: '/dev-ui',
+  path: '/dev-ui',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthSignInRoute = AuthSignInRouteImport.update({
@@ -41,11 +46,6 @@ const ProtectedAdminRoute = ProtectedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => ProtectedRoute,
 } as any)
-const ProtectedDevUiRoute = ProtectedDevUiRouteImport.update({
-  id: '/dev-ui',
-  path: '/dev-ui',
-  getParentRoute: () => ProtectedRoute,
-} as any)
 const ProtectedLeaderboardRoute = ProtectedLeaderboardRouteImport.update({
   id: '/leaderboard',
   path: '/leaderboard',
@@ -60,17 +60,17 @@ const ProtectedPlayersPlayerIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof ProtectedIndexRoute
+  '/dev-ui': typeof DevUiRoute
   '/sign-in': typeof AuthSignInRoute
   '/admin': typeof ProtectedAdminRoute
-  '/dev-ui': typeof ProtectedDevUiRoute
   '/leaderboard': typeof ProtectedLeaderboardRoute
   '/players/$playerId': typeof ProtectedPlayersPlayerIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof ProtectedIndexRoute
+  '/dev-ui': typeof DevUiRoute
   '/sign-in': typeof AuthSignInRoute
   '/admin': typeof ProtectedAdminRoute
-  '/dev-ui': typeof ProtectedDevUiRoute
   '/leaderboard': typeof ProtectedLeaderboardRoute
   '/players/$playerId': typeof ProtectedPlayersPlayerIdRoute
 }
@@ -78,9 +78,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_auth': typeof AuthRouteWithChildren
   '/_protected': typeof ProtectedRouteWithChildren
+  '/dev-ui': typeof DevUiRoute
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_protected/admin': typeof ProtectedAdminRoute
-  '/_protected/dev-ui': typeof ProtectedDevUiRoute
   '/_protected/leaderboard': typeof ProtectedLeaderboardRoute
   '/_protected/': typeof ProtectedIndexRoute
   '/_protected/players/$playerId': typeof ProtectedPlayersPlayerIdRoute
@@ -89,26 +89,26 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/dev-ui'
     | '/sign-in'
     | '/admin'
-    | '/dev-ui'
     | '/leaderboard'
     | '/players/$playerId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/dev-ui'
     | '/sign-in'
     | '/admin'
-    | '/dev-ui'
     | '/leaderboard'
     | '/players/$playerId'
   id:
     | '__root__'
     | '/_auth'
     | '/_protected'
+    | '/dev-ui'
     | '/_auth/sign-in'
     | '/_protected/admin'
-    | '/_protected/dev-ui'
     | '/_protected/leaderboard'
     | '/_protected/'
     | '/_protected/players/$playerId'
@@ -117,6 +117,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   ProtectedRoute: typeof ProtectedRouteWithChildren
+  DevUiRoute: typeof DevUiRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -133,6 +134,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof ProtectedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev-ui': {
+      id: '/dev-ui'
+      path: '/dev-ui'
+      fullPath: '/dev-ui'
+      preLoaderRoute: typeof DevUiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_auth/sign-in': {
@@ -154,13 +162,6 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof ProtectedAdminRouteImport
-      parentRoute: typeof ProtectedRoute
-    }
-    '/_protected/dev-ui': {
-      id: '/_protected/dev-ui'
-      path: '/dev-ui'
-      fullPath: '/dev-ui'
-      preLoaderRoute: typeof ProtectedDevUiRouteImport
       parentRoute: typeof ProtectedRoute
     }
     '/_protected/leaderboard': {
@@ -192,7 +193,6 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface ProtectedRouteChildren {
   ProtectedAdminRoute: typeof ProtectedAdminRoute
-  ProtectedDevUiRoute: typeof ProtectedDevUiRoute
   ProtectedLeaderboardRoute: typeof ProtectedLeaderboardRoute
   ProtectedIndexRoute: typeof ProtectedIndexRoute
   ProtectedPlayersPlayerIdRoute: typeof ProtectedPlayersPlayerIdRoute
@@ -200,7 +200,6 @@ interface ProtectedRouteChildren {
 
 const ProtectedRouteChildren: ProtectedRouteChildren = {
   ProtectedAdminRoute: ProtectedAdminRoute,
-  ProtectedDevUiRoute: ProtectedDevUiRoute,
   ProtectedLeaderboardRoute: ProtectedLeaderboardRoute,
   ProtectedIndexRoute: ProtectedIndexRoute,
   ProtectedPlayersPlayerIdRoute: ProtectedPlayersPlayerIdRoute,
@@ -213,6 +212,7 @@ const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   ProtectedRoute: ProtectedRouteWithChildren,
+  DevUiRoute: DevUiRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

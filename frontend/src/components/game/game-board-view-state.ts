@@ -1,18 +1,18 @@
+import { type TableCompositionEdge } from "#/components/game/board-drop-targets";
+import { type HandEntry } from "#/components/game/card";
 import { arrayMove } from "@dnd-kit/sortable";
 import {
   type CardSnapshot,
   type CompositionSnapshot,
   type DraftCompositionSnapshot,
   type TablePlayRequest,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
+import {
+  cardsWithTableDraft,
+  planTableDraft,
+  type TableDraftPlan,
+} from "#/components/game/table-draft";
 import { isValidDraftComposition } from "#/components/game/game-card-utils";
-
-export type HandEntry = {
-  key: string;
-  card: CardSnapshot;
-  sourceIndex: number;
-  isVirtual?: boolean;
-};
 
 export type ActiveDrag =
   | {
@@ -44,27 +44,12 @@ export type DraftedCompositionView = DraftComposition & {
   entries: HandEntry[];
 };
 
-export type PlannedJokerReclaim = {
-  jokerIndex: number;
-  replacementEntry: HandEntry;
-};
-
-type JokerReclaimPlan = {
-  additions: HandEntry[];
-  reclaims: PlannedJokerReclaim[];
-};
-
 export type TableCompositionView = {
   tableIndex: number;
   key: string;
   snapshot: CompositionSnapshot;
-  stagedEntries: HandEntry[];
-  reclaims: PlannedJokerReclaim[];
-  insertIndex: number;
-  cardInsertIndices?: Record<string, number>;
+  draft?: TableDraftPlan;
 };
-
-export type TableCompositionEdge = "start" | "end";
 
 export type VirtualReclaimedJoker = {
   key: string;
@@ -95,39 +80,6 @@ export function buildDraftCompositionSnapshot(
     cardPlacements: hasCardPlacements ? cardPlacements : undefined,
     cards: composition.entries.map((entry) => entry.card),
   };
-}
-
-export const FACE_DOWN_CARD: CardSnapshot = {};
-export const HAND_DROP_ID = "hand-drop-zone";
-export const NEW_COMPOSITION_DROP_ID = "new-composition-drop-zone";
-
-const DRAFT_COMPOSITION_DROP_ID_PREFIX = "draft-composition-";
-const TABLE_COMPOSITION_DROP_ID_PREFIX = "table-composition-";
-const TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX = "table-composition-edge-";
-const TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX = "table-composition-joker-";
-
-function handCardKey(card: CardSnapshot) {
-  if (card.isJoker) {
-    return "joker";
-  }
-
-  return `${card.rank ?? "?"}-${card.suit ?? "?"}`;
-}
-
-export function buildHandEntries(hand: CardSnapshot[]) {
-  const counts = new Map<string, number>();
-
-  return hand.map((card, sourceIndex) => {
-    const baseKey = handCardKey(card);
-    const occurrence = (counts.get(baseKey) ?? 0) + 1;
-    counts.set(baseKey, occurrence);
-
-    return {
-      key: `${baseKey}-${occurrence}`,
-      card,
-      sourceIndex,
-    } satisfies HandEntry;
-  });
 }
 
 export function applyHandEntryOrder(entries: HandEntry[], orderedKeys: string[]) {
@@ -214,86 +166,6 @@ export function moveHandEntry(current: HandEntry[], handKey: string, overHandKey
   return arrayMove(current, oldIndex, newIndex);
 }
 
-export function draftCompositionDropId(compositionId: string) {
-  return `${DRAFT_COMPOSITION_DROP_ID_PREFIX}${compositionId}`;
-}
-
-export function compositionIdFromDropId(dropId: string) {
-  if (!dropId.startsWith(DRAFT_COMPOSITION_DROP_ID_PREFIX)) {
-    return null;
-  }
-
-  return dropId.slice(DRAFT_COMPOSITION_DROP_ID_PREFIX.length);
-}
-
-export function tableCompositionDropId(compositionIndex: number) {
-  return `${TABLE_COMPOSITION_DROP_ID_PREFIX}${compositionIndex}`;
-}
-
-export function tableCompositionEdgeDropId(compositionIndex: number, edge: TableCompositionEdge) {
-  return `${TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX}${compositionIndex}-${edge}`;
-}
-
-export function tableCompositionJokerDropId(compositionIndex: number, jokerIndex: number) {
-  return `${TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX}${compositionIndex}-${jokerIndex}`;
-}
-
-export function tableCompositionEdgeTargetFromDropId(dropId: string) {
-  if (!dropId.startsWith(TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX)) {
-    return null;
-  }
-
-  const target = dropId.slice(TABLE_COMPOSITION_EDGE_DROP_ID_PREFIX.length);
-  const separatorIndex = target.indexOf("-");
-  if (separatorIndex < 0) {
-    return null;
-  }
-
-  const compositionIndex = Number(target.slice(0, separatorIndex));
-  const edge = target.slice(separatorIndex + 1);
-
-  if (!Number.isInteger(compositionIndex) || compositionIndex < 0) {
-    return null;
-  }
-
-  if (edge !== "start" && edge !== "end") {
-    return null;
-  }
-
-  return {
-    compositionIndex,
-    edge,
-  } as const;
-}
-
-export function tableCompositionJokerTargetFromDropId(dropId: string) {
-  if (!dropId.startsWith(TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX)) {
-    return null;
-  }
-
-  const target = dropId.slice(TABLE_COMPOSITION_JOKER_DROP_ID_PREFIX.length);
-  const separatorIndex = target.indexOf("-");
-  if (separatorIndex < 0) {
-    return null;
-  }
-
-  const compositionIndex = Number(target.slice(0, separatorIndex));
-  const jokerIndex = Number(target.slice(separatorIndex + 1));
-
-  if (!Number.isInteger(compositionIndex) || compositionIndex < 0) {
-    return null;
-  }
-
-  if (!Number.isInteger(jokerIndex) || jokerIndex < 0) {
-    return null;
-  }
-
-  return {
-    compositionIndex,
-    jokerIndex,
-  } as const;
-}
-
 export function removeHandKeyFromDrafts(compositions: DraftComposition[], handKey: string) {
   if (!compositions.some((composition) => composition.handKeys.includes(handKey))) {
     return compositions;
@@ -341,7 +213,7 @@ export function handEntryOrder(entries: HandEntry[]) {
   return order;
 }
 
-export function mapHandKeysToEntries(handKeys: string[], entryByKey: Map<string, HandEntry>) {
+function mapHandKeysToEntries(handKeys: string[], entryByKey: Map<string, HandEntry>) {
   const entries: HandEntry[] = [];
 
   for (const handKey of handKeys) {
@@ -500,52 +372,6 @@ export function setDraftCardReclaimTarget(
   });
 }
 
-function cardsEqual(a: CardSnapshot, b: CardSnapshot) {
-  return (
-    Boolean(a.isJoker) === Boolean(b.isJoker) &&
-    (a.rank ?? null) === (b.rank ?? null) &&
-    (a.suit ?? null) === (b.suit ?? null)
-  );
-}
-
-function jokerReclaimOptions(composition: CompositionSnapshot) {
-  const options: Array<{ jokerIndex: number; replacementCard: CardSnapshot }> = [];
-
-  for (const [indexKey, cards] of Object.entries(composition.jokerRepresentations ?? {})) {
-    const jokerIndex = Number(indexKey);
-    const replacementCard = cards[0];
-
-    if (
-      Number.isInteger(jokerIndex) &&
-      jokerIndex >= 0 &&
-      composition.cards[jokerIndex]?.isJoker &&
-      cards.length === 1 &&
-      replacementCard
-    ) {
-      options.push({ jokerIndex, replacementCard });
-    }
-  }
-
-  return options;
-}
-
-export function canReclaimJokerWithCard(
-  composition: CompositionSnapshot,
-  jokerIndex: number,
-  card: CardSnapshot,
-) {
-  const option = jokerReclaimOptions(composition).find((entry) => entry.jokerIndex === jokerIndex);
-  return option ? cardsEqual(option.replacementCard, card) : false;
-}
-
-function isAmbiguousRunInsertion(composition: CompositionSnapshot, insertIndex: number) {
-  if (composition.type !== "run") {
-    return false;
-  }
-
-  return insertIndex > 0 && insertIndex < composition.cards.length;
-}
-
 export function tableCompositionInsertIndexForEdge(
   composition: CompositionSnapshot,
   edge: TableCompositionEdge,
@@ -553,267 +379,10 @@ export function tableCompositionInsertIndexForEdge(
   return edge === "start" ? 0 : composition.cards.length;
 }
 
-function inferSetPlannedJokerReclaims(
-  composition: CompositionSnapshot,
-  stagedEntries: HandEntry[],
-): JokerReclaimPlan {
-  const nonJokerCards = composition.cards.filter((card) => !card.isJoker);
-  const setRank = nonJokerCards[0]?.rank ?? null;
-
-  if (setRank === null) {
-    return {
-      additions: stagedEntries,
-      reclaims: [],
-    };
-  }
-
-  const presentSuits = new Set<number>();
-  for (const card of nonJokerCards) {
-    if (typeof card.suit === "number") {
-      presentSuits.add(card.suit);
-    }
-  }
-  const jokerIndices = composition.cards.flatMap((card, index) => (card.isJoker ? [index] : []));
-  const remainingEntries: HandEntry[] = [];
-  const additions: HandEntry[] = [];
-  let additionsRemaining = Math.max(0, 4 - composition.cards.length);
-
-  for (const entry of stagedEntries) {
-    const suit = entry.card.suit;
-    if (
-      entry.card.isJoker ||
-      entry.card.rank !== setRank ||
-      typeof suit !== "number" ||
-      presentSuits.has(suit)
-    ) {
-      remainingEntries.push(entry);
-      continue;
-    }
-
-    if (additionsRemaining > 0) {
-      additions.push(entry);
-      presentSuits.add(suit);
-      additionsRemaining -= 1;
-      continue;
-    }
-
-    remainingEntries.push(entry);
-  }
-
-  const availableOptions = jokerReclaimOptions(composition);
-  if (availableOptions.length === 0 && jokerIndices.length === 1) {
-    const missingSuits = [0, 1, 2, 3].filter((suit) => !presentSuits.has(suit));
-    if (missingSuits.length === 1) {
-      availableOptions.push({
-        jokerIndex: jokerIndices[0],
-        replacementCard: { rank: setRank, suit: missingSuits[0] },
-      });
-    }
-  }
-
-  const reclaims: PlannedJokerReclaim[] = [];
-  const optionIndexByCardKey = new Map(
-    availableOptions.map((option) => [
-      `${option.replacementCard.rank ?? "?"}-${option.replacementCard.suit ?? "?"}-${Boolean(option.replacementCard.isJoker)}`,
-      option,
-    ]),
-  );
-
-  for (const entry of remainingEntries) {
-    const matchedOption = optionIndexByCardKey.get(
-      `${entry.card.rank ?? "?"}-${entry.card.suit ?? "?"}-${Boolean(entry.card.isJoker)}`,
-    );
-
-    if (!matchedOption || !cardsEqual(matchedOption.replacementCard, entry.card)) {
-      additions.push(entry);
-      continue;
-    }
-
-    optionIndexByCardKey.delete(
-      `${matchedOption.replacementCard.rank ?? "?"}-${matchedOption.replacementCard.suit ?? "?"}-${Boolean(matchedOption.replacementCard.isJoker)}`,
-    );
-
-    reclaims.push({
-      jokerIndex: matchedOption.jokerIndex,
-      replacementEntry: entry,
-    });
-  }
-
-  return {
-    additions,
-    reclaims,
-  };
-}
-
-function inferPlannedJokerReclaimsForInsertIndex(
-  composition: CompositionSnapshot,
-  stagedEntries: HandEntry[],
-  insertIndex: number,
-): JokerReclaimPlan {
-  if (composition.type === "set") {
-    return inferSetPlannedJokerReclaims(composition, stagedEntries);
-  }
-
-  const availableOptions = jokerReclaimOptions(composition);
-
-  if (availableOptions.length === 0 || isAmbiguousRunInsertion(composition, insertIndex)) {
-    return {
-      additions: stagedEntries,
-      reclaims: [],
-    };
-  }
-
-  const reclaims: PlannedJokerReclaim[] = [];
-  const additions: HandEntry[] = [];
-  const optionIndexByCardKey = new Map(
-    availableOptions.map((option, optionIndex) => [
-      `${option.replacementCard.rank ?? "?"}-${option.replacementCard.suit ?? "?"}-${Boolean(option.replacementCard.isJoker)}`,
-      optionIndex,
-    ]),
-  );
-
-  for (const entry of stagedEntries) {
-    const cardKey = `${entry.card.rank ?? "?"}-${entry.card.suit ?? "?"}-${Boolean(entry.card.isJoker)}`;
-    const matchedOptionIndex = optionIndexByCardKey.get(cardKey) ?? -1;
-
-    if (matchedOptionIndex < 0) {
-      additions.push(entry);
-      continue;
-    }
-
-    const [matchedOption] = availableOptions.splice(matchedOptionIndex, 1);
-    if (!matchedOption) {
-      additions.push(entry);
-      continue;
-    }
-
-    optionIndexByCardKey.delete(cardKey);
-
-    reclaims.push({
-      jokerIndex: matchedOption.jokerIndex,
-      replacementEntry: entry,
-    });
-  }
-
-  return {
-    additions,
-    reclaims,
-  };
-}
-
-export function inferPlannedJokerReclaims(
-  composition: CompositionSnapshot,
-  stagedEntries: HandEntry[],
-  insertIndex = composition.cards.length,
-) {
-  return inferPlannedJokerReclaimsForInsertIndex(composition, stagedEntries, insertIndex);
-}
-
-function buildExplicitReclaims(
-  composition: CompositionSnapshot,
-  stagedEntries: HandEntry[],
-  reclaimTargets?: Record<string, number>,
-) {
-  const reclaims: PlannedJokerReclaim[] = [];
-  const reclaimedEntryKeys = new Set<string>();
-  const usedJokerIndices = new Set<number>();
-
-  for (const entry of stagedEntries) {
-    const jokerIndex = reclaimTargets?.[entry.key];
-    if (
-      typeof jokerIndex !== "number" ||
-      usedJokerIndices.has(jokerIndex) ||
-      !canReclaimJokerWithCard(composition, jokerIndex, entry.card)
-    ) {
-      continue;
-    }
-
-    usedJokerIndices.add(jokerIndex);
-    reclaimedEntryKeys.add(entry.key);
-    reclaims.push({
-      jokerIndex,
-      replacementEntry: entry,
-    });
-  }
-
-  return {
-    reclaims,
-    reclaimedEntryKeys,
-  };
-}
-
-export function planTableJokerReclaims(
-  composition: CompositionSnapshot,
-  stagedEntries: HandEntry[],
-  insertIndex: number,
-  reclaimTargets?: Record<string, number>,
-) {
-  const explicit = buildExplicitReclaims(composition, stagedEntries, reclaimTargets);
-  if (explicit.reclaims.length > 0 || composition.type !== "set") {
-    return explicit;
-  }
-
-  const targetedEntryKeys = new Set(Object.keys(reclaimTargets ?? {}));
-  const entriesInPlayOrder = [
-    ...stagedEntries.filter((entry) => !targetedEntryKeys.has(entry.key)),
-    ...stagedEntries.filter((entry) => targetedEntryKeys.has(entry.key)),
-  ];
-  const inferred = inferPlannedJokerReclaimsForInsertIndex(
-    composition,
-    entriesInPlayOrder,
-    insertIndex,
-  );
-
-  return {
-    reclaims: inferred.reclaims,
-    reclaimedEntryKeys: new Set(inferred.reclaims.map((reclaim) => reclaim.replacementEntry.key)),
-  };
-}
-
 export type DraftValidationResult = {
   invalidCompositionIds: Set<string>;
   invalidEntryKeys: Set<string>;
 };
-
-function cardsAfterTableDraft(
-  composition: CompositionSnapshot,
-  draft: DraftedCompositionView,
-  excludedEntryKey?: string,
-) {
-  const entries = draft.entries.filter((entry) => entry.key !== excludedEntryKey);
-  const defaultInsertIndex = draft.insertIndex ?? composition.cards.length;
-  const plannedReclaims = planTableJokerReclaims(
-    composition,
-    entries,
-    defaultInsertIndex,
-    draft.reclaimTargets,
-  );
-  const replacementByJokerIndex = new Map(
-    plannedReclaims.reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim.replacementEntry.card]),
-  );
-  const cards = composition.cards.map((card, index) => replacementByJokerIndex.get(index) ?? card);
-  const additionsByInsertIndex = new Map<number, HandEntry[]>();
-
-  for (const entry of entries) {
-    if (plannedReclaims.reclaimedEntryKeys.has(entry.key)) {
-      continue;
-    }
-
-    const insertIndex = draft.cardInsertIndices?.[entry.key] ?? defaultInsertIndex;
-    const additions = additionsByInsertIndex.get(insertIndex) ?? [];
-    additions.push(entry);
-    additionsByInsertIndex.set(insertIndex, additions);
-  }
-
-  for (const [insertIndex, additions] of [...additionsByInsertIndex].sort(
-    ([left], [right]) => right - left,
-  )) {
-    const orderedAdditions = insertIndex === 0 ? [...additions].reverse() : additions;
-    cards.splice(insertIndex, 0, ...orderedAdditions.map((entry) => entry.card));
-  }
-
-  return cards;
-}
 
 export function validateDraftedCompositions(
   activeCompositions: CompositionSnapshot[],
@@ -836,14 +405,20 @@ export function validateDraftedCompositions(
       continue;
     }
 
-    const finalCards = cardsAfterTableDraft(composition, draft);
+    const finalCards = cardsWithTableDraft(composition, planTableDraft(composition, draft));
     if (isValidDraftComposition(finalCards, composition.type)) {
       continue;
     }
 
     const individuallyResponsibleEntries = draft.entries.filter((entry) =>
       isValidDraftComposition(
-        cardsAfterTableDraft(composition, draft, entry.key),
+        cardsWithTableDraft(
+          composition,
+          planTableDraft(composition, {
+            ...draft,
+            entries: draft.entries.filter((candidate) => candidate.key !== entry.key),
+          }),
+        ),
         composition.type,
       ),
     );
@@ -853,28 +428,6 @@ export function validateDraftedCompositions(
   }
 
   return { invalidCompositionIds, invalidEntryKeys };
-}
-
-function orderAdditionEntries(
-  stagedEntries: HandEntry[],
-  defaultInsertIndex: number,
-  cardInsertIndices?: Record<string, number>,
-) {
-  const entriesByInsertIndex = new Map<number, HandEntry[]>();
-
-  for (const entry of stagedEntries) {
-    const idx = cardInsertIndices?.[entry.key] ?? defaultInsertIndex;
-    const groupedEntries = entriesByInsertIndex.get(idx) ?? [];
-    groupedEntries.push(entry);
-    entriesByInsertIndex.set(idx, groupedEntries);
-  }
-
-  const orderedEntries: HandEntry[] = [];
-  for (const [groupInsertIndex, entries] of entriesByInsertIndex) {
-    orderedEntries.push(...(groupInsertIndex === 0 ? [...entries].reverse() : entries));
-  }
-
-  return orderedEntries;
 }
 
 export function buildTablePlayRequest(
@@ -893,47 +446,16 @@ export function buildTablePlayRequest(
       continue;
     }
 
-    const activeComposition = activeCompositions[composition.tableIndex];
-    const cardInsertIndices = composition.cardInsertIndices;
-    const reclaimTargets = composition.reclaimTargets;
-    const defaultInsertIndex = composition.insertIndex ?? activeComposition?.cards.length ?? 0;
-    const plannedReclaims = activeComposition
-      ? planTableJokerReclaims(
-          activeComposition,
-          composition.entries,
-          defaultInsertIndex,
-          reclaimTargets,
-        )
-      : { reclaims: [], reclaimedEntryKeys: new Set<string>() };
-
-    const entriesByInsertIndex = new Map<number, HandEntry[]>();
-    for (const entry of composition.entries) {
-      if (plannedReclaims.reclaimedEntryKeys.has(entry.key)) {
-        continue;
-      }
-
-      const idx = cardInsertIndices?.[entry.key] ?? defaultInsertIndex;
-      const group = entriesByInsertIndex.get(idx);
-      if (group) {
-        group.push(entry);
-      } else {
-        entriesByInsertIndex.set(idx, [entry]);
-      }
+    const plan = planTableDraft(activeCompositions[composition.tableIndex], composition);
+    for (const addition of plan.additions) {
+      additions.push({
+        compositionIndex: composition.tableIndex,
+        insertIndex: addition.insertIndex,
+        cards: addition.entries.map((entry) => entry.card),
+      });
     }
 
-    for (const [insertIndex, entries] of entriesByInsertIndex) {
-      const orderedEntries = insertIndex === 0 ? [...entries].reverse() : entries;
-
-      if (orderedEntries.length > 0) {
-        additions.push({
-          compositionIndex: composition.tableIndex,
-          insertIndex,
-          cards: orderedEntries.map((entry) => entry.card),
-        });
-      }
-    }
-
-    for (const reclaim of plannedReclaims.reclaims) {
+    for (const reclaim of plan.reclaims) {
       reclaims.push({
         compositionIndex: composition.tableIndex,
         jokerIndex: reclaim.jokerIndex,
@@ -978,9 +500,6 @@ export function buildTableCompositionViews(
     tableIndex: index,
     key: `table-${index}`,
     snapshot: composition,
-    stagedEntries: [],
-    reclaims: [],
-    insertIndex: composition.cards.length,
   }));
 
   for (const composition of draftCompositions) {
@@ -990,25 +509,10 @@ export function buildTableCompositionViews(
 
     const existing = views[composition.tableIndex];
     if (existing) {
-      existing.stagedEntries = mapHandKeysToEntries(composition.handKeys, entryByKey);
-      const insertIndex = composition.insertIndex ?? existing.snapshot.cards.length;
-      existing.insertIndex = insertIndex;
-      existing.cardInsertIndices = composition.cardInsertIndices;
-      const plannedReclaims = planTableJokerReclaims(
-        existing.snapshot,
-        existing.stagedEntries,
-        insertIndex,
-        composition.reclaimTargets,
-      );
-      const additionEntries = existing.stagedEntries.filter(
-        (entry) => !plannedReclaims.reclaimedEntryKeys.has(entry.key),
-      );
-
-      existing.stagedEntries = [
-        ...orderAdditionEntries(additionEntries, insertIndex, composition.cardInsertIndices),
-        ...plannedReclaims.reclaims.map((reclaim) => reclaim.replacementEntry),
-      ];
-      existing.reclaims = plannedReclaims.reclaims;
+      const entries = mapHandKeysToEntries(composition.handKeys, entryByKey);
+      if (entries.length > 0) {
+        existing.draft = planTableDraft(existing.snapshot, { ...composition, entries });
+      }
     }
   }
 
@@ -1033,8 +537,15 @@ export function resolveDraftViews(
   const allValidHandKeys = new Set(allHandEntries.map((entry) => entry.key));
   const draftCompositions = pruneDraftCompositions(scopedDraftCompositions, allValidHandKeys);
   const allEntryByKey = new Map(allHandEntries.map((entry) => [entry.key, entry]));
+  const draftedCompositionsView: DraftedCompositionView[] = draftCompositions.map(
+    (composition) => ({
+      ...composition,
+      entries: mapHandKeysToEntries(composition.handKeys, allEntryByKey),
+    }),
+  );
 
   return {
+    draftedCompositionsView,
     tableCompositions: buildTableCompositionViews(
       activeCompositions,
       draftCompositions,
@@ -1051,7 +562,7 @@ export function buildVirtualReclaimedJokers(tableCompositions: TableCompositionV
   const virtualJokers: VirtualReclaimedJoker[] = [];
 
   for (const composition of tableCompositions) {
-    for (const reclaim of composition.reclaims) {
+    for (const reclaim of composition.draft?.reclaims ?? []) {
       virtualJokers.push({
         key: `reclaimed-joker-${composition.tableIndex}-${reclaim.jokerIndex}`,
         jokerIndex: reclaim.jokerIndex,

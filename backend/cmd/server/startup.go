@@ -144,15 +144,3 @@ func runServer(addr string) error {
 	}
 	return listenAndServe(addr, handler)
 }
-
-// Retry without player activity, including terminal records restored at startup.
-func (l *lobbyServer) retryPendingStatistics() {
-	l.commandMu.Lock()
-	defer l.commandMu.Unlock()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if len(l.pendingStatistics) == 0 {
-		return
-	}
-	_ = l.persistLocked("retry completed statistics")
-}

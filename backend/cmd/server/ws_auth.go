@@ -43,12 +43,16 @@ func (s *wsServer) revalidateIdleAuthSocket(conn *websocket.Conn) bool {
 	s.authSocketsMu.Lock()
 	_, registered := s.authSockets[conn]
 	s.authSocketsMu.Unlock()
-	return !registered || s.revalidateAuthSocket(conn)
+	if registered && !s.authSocketValid(conn) {
+		closeUnauthenticatedSocket(conn)
+		return false
+	}
+	return true
 }
 
 // Check every command and heartbeat, including an idle connection. Store
 // errors fail closed; a socket never keeps authenticated access during an outage.
-func (s *wsServer) revalidateAuthSocket(conn *websocket.Conn) bool {
+func (s *wsServer) authSocketValid(conn *websocket.Conn) bool {
 	s.authSocketsMu.Lock()
 	session, registered := s.authSockets[conn]
 	s.authSocketsMu.Unlock()
@@ -59,13 +63,9 @@ func (s *wsServer) revalidateAuthSocket(conn *websocket.Conn) bool {
 	defer cancel()
 	now := session.auth.now()
 	record, err := session.auth.store.GetSessionUserByToken(ctx, session.token, now)
-	if err == nil && record.ID == session.userID &&
+	return err == nil && record.ID == session.userID &&
 		(session.expiresAt.IsZero() || now.Before(session.expiresAt)) &&
-		(record.ExpiresAt.IsZero() || now.Before(record.ExpiresAt)) {
-		return true
-	}
-	closeUnauthenticatedSocket(conn)
-	return false
+		(record.ExpiresAt.IsZero() || now.Before(record.ExpiresAt))
 }
 
 func (s *wsServer) revokeAuthSockets(token string) {

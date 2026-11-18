@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { type GameSnapshot, type RoomSnapshot } from "#/components/game-websocket-provider";
+import { type GameSnapshot, type RoomSnapshot } from "#/lib/game-protocol";
 import { isGameRouteSnapshotResolving } from "#/components/routes/game-route-view-state";
 
 const room = (phase: string): RoomSnapshot => ({

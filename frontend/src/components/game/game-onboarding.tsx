@@ -1,4 +1,5 @@
-import { cardsEqual } from "#/components/game/card-equality";
+import { draftCompositionPointTotal } from "#/components/game/game-card-utils";
+import { cardsEqual } from "#/components/game/card";
 import {
   createContext,
   useContext,
@@ -28,7 +29,7 @@ import {
   type GameSnapshot,
   type PlayerSnapshot,
   type TablePlayRequest,
-} from "#/components/game-websocket-provider";
+} from "#/lib/game-protocol";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import {
@@ -46,16 +47,15 @@ import { cn } from "#/lib/utils";
 import { m } from "#/paraglide/messages.js";
 
 const TUTORIAL_PLAYER_ID = "tutorial-player";
-const TUTORIAL_DRAW_CARD: CardSnapshot = { rank: 7, suit: 3 };
+const TUTORIAL_DRAW_CARD = { rank: 7, suit: 3 };
+const TUTORIAL_RUN = [{ rank: 5, suit: 3 }, { rank: 6, suit: 3 }, TUTORIAL_DRAW_CARD];
+const TUTORIAL_DISCARD_CARD = { rank: 12, suit: 0 };
 const TUTORIAL_STAGES = ["intro", "orientation", "draw", "compose", "discard", "complete"] as const;
 const ORIENTATION_HAND_CARDS_SELECTOR =
   '[data-onboarding-target="hand"] [data-onboarding-target="hand-cards"]';
 const ORIENTATION_PILES_SELECTOR =
   '[data-card-motion-source="deck"],[data-card-motion-source="discard"]';
 const ORIENTATION_COMPOSITION_SELECTOR = '[data-onboarding-target="table"]';
-const COMPOSE_HAND_CARD_SELECTORS = [5, 6, 7].map(
-  (rank) => `[data-onboarding-target="hand"] [data-card-rank="${rank}"][data-card-suit="3"]`,
-);
 const COMPACT_TUTORIAL_QUERY = "(max-width: 47.999rem), (max-height: 42.5rem)";
 
 type TutorialStage = (typeof TUTORIAL_STAGES)[number];
@@ -154,11 +154,7 @@ function createTutorialGame(): GameSnapshot {
         hasOpened: true,
       },
     ],
-    hand: [
-      { rank: 5, suit: 3 },
-      { rank: 6, suit: 3 },
-      { rank: 12, suit: 0 },
-    ],
+    hand: [...TUTORIAL_RUN.slice(0, -1), TUTORIAL_DISCARD_CARD],
     drawPileCount: 18,
     discardPile: [
       { rank: 4, suit: 1 },
@@ -188,17 +184,10 @@ function removeCards(hand: CardSnapshot[], cards: CardSnapshot[]) {
   return nextHand;
 }
 
-function compositionPoints(cards: CardSnapshot[]) {
-  return cards.reduce(
-    (total, card) => total + (card.isJoker ? 20 : Math.min(card.rank ?? 0, 10)),
-    0,
-  );
-}
-
 function isTutorialRun(cards: CardSnapshot[]) {
-  if (cards.length !== 3) return false;
-  return [5, 6, 7].every((rank) =>
-    cards.some((card) => !card.isJoker && card.rank === rank && card.suit === 3),
+  return (
+    cards.length === TUTORIAL_RUN.length &&
+    TUTORIAL_RUN.every((target) => cards.some((card) => cardsEqual(card, target)))
   );
 }
 
@@ -213,15 +202,16 @@ function tutorialDraftProgress(drafts: DraftCompositionSnapshot[]) {
   for (const draft of drafts) {
     if (draft.tableIndex !== undefined) continue;
 
-    const ranks = new Set<number>();
-    for (const card of draft.cards) {
-      if (!card.isJoker && card.suit === 3 && card.rank && [5, 6, 7].includes(card.rank)) {
-        ranks.add(card.rank);
-      }
-    }
-    maxProgress = Math.max(maxProgress, ranks.size);
+    const progress = TUTORIAL_RUN.filter((target) =>
+      draft.cards.some((card) => cardsEqual(card, target)),
+    );
+    maxProgress = Math.max(maxProgress, progress.length);
   }
   return maxProgress;
+}
+
+function handCardSelector({ rank, suit }: (typeof TUTORIAL_RUN)[number]) {
+  return `[data-onboarding-target="hand"] [data-card-rank="${rank}"][data-card-suit="${suit}"]`;
 }
 
 function selectorsForStage(stage: TutorialStage, isDrawingCard: boolean) {
@@ -237,12 +227,9 @@ function selectorsForStage(stage: TutorialStage, isDrawingCard: boolean) {
         ? ['[data-card-motion-source="deck"]', '[data-onboarding-target="hand"]']
         : ['[data-card-motion-source="deck"]'];
     case "compose":
-      return [...COMPOSE_HAND_CARD_SELECTORS, '[data-onboarding-target="new-composition"]'];
+      return [...TUTORIAL_RUN.map(handCardSelector), '[data-onboarding-target="new-composition"]'];
     case "discard":
-      return [
-        '[data-onboarding-target="hand"] [data-card-rank="12"][data-card-suit="0"]',
-        '[data-card-motion-source="discard"]',
-      ];
+      return [handCardSelector(TUTORIAL_DISCARD_CARD), '[data-card-motion-source="discard"]'];
     default:
       return [];
   }
@@ -796,7 +783,7 @@ function TutorialGame({
       play.additions.length === 0 &&
       play.reclaims.length === 0 &&
       isTutorialRun(play.compositions[0]?.cards ?? []) &&
-      cardsEqual(discardedCard, { rank: 12, suit: 0 });
+      cardsEqual(discardedCard, TUTORIAL_DISCARD_CARD);
 
     if (!hasExpectedPlay) {
       return { action: "play_and_discard", playerId: TUTORIAL_PLAYER_ID, ok: false };
@@ -814,7 +801,7 @@ function TutorialGame({
           ...play.compositions.map((composition) => ({
             type: "run",
             cards: composition.cards,
-            points: compositionPoints(composition.cards),
+            points: draftCompositionPointTotal(composition.cards, "run") ?? 0,
             complete: false,
           })),
         ],
@@ -871,7 +858,6 @@ function TutorialGame({
           roomCode="TUTORIAL"
           playerId={TUTORIAL_PLAYER_ID}
           players={tutorialPlayers}
-          connectedPlayers={tutorialPlayers.length}
           turnState={{
             canDrawDeck: stage === "draw" && !game.turn.hasDrawn,
             canDrawDiscard: false,

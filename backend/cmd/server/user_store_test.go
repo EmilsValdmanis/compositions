@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -12,13 +13,13 @@ import (
 )
 
 type recordingUserStore struct {
-	users []authenticatedUser
+	users []database.UserRecord
 	err   error
 }
 
-func (s *recordingUserStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+func (s *recordingUserStore) UpsertUser(_ context.Context, user database.UserRecord) (database.UserRecord, error) {
 	if s.err != nil {
-		return authenticatedUser{}, s.err
+		return database.UserRecord{}, s.err
 	}
 	s.users = append(s.users, user)
 	return user, nil
@@ -26,7 +27,7 @@ func (s *recordingUserStore) UpsertUser(_ context.Context, user authenticatedUse
 
 func (s *recordingUserStore) Close() error { return nil }
 
-func (s *recordingUserStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+func (s *recordingUserStore) CreateSession(context.Context, database.SessionRecord) error { return nil }
 
 func (s *recordingUserStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
 	return database.SessionUserRecord{}, database.ErrSessionNotFound
@@ -36,10 +37,10 @@ func (s *recordingUserStore) DeleteSession(context.Context, string) error { retu
 
 func (s *recordingUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
 
-func (s *recordingUserStore) SaveLobbyState(context.Context, persistedLobbyState) error { return nil }
+func (s *recordingUserStore) SaveLobbyState(context.Context, json.RawMessage) error { return nil }
 
-func (s *recordingUserStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
-	return persistedLobbyState{}, nil
+func (s *recordingUserStore) LoadLobbyState(context.Context) (json.RawMessage, error) {
+	return nil, database.ErrLobbyStateNotFound
 }
 
 func (s *recordingUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
@@ -50,11 +51,13 @@ type recordingSessionStore struct {
 	user authenticatedUser
 }
 
-func (s *recordingSessionStore) UpsertUser(_ context.Context, user authenticatedUser) (authenticatedUser, error) {
+func (s *recordingSessionStore) UpsertUser(_ context.Context, user database.UserRecord) (database.UserRecord, error) {
 	return user, nil
 }
 
-func (s *recordingSessionStore) CreateSession(context.Context, authSessionRecord) error { return nil }
+func (s *recordingSessionStore) CreateSession(context.Context, database.SessionRecord) error {
+	return nil
+}
 
 func (s *recordingSessionStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
 	return database.SessionUserRecord{
@@ -71,12 +74,12 @@ func (s *recordingSessionStore) UpdateOnboardingVersion(context.Context, string,
 	return nil
 }
 
-func (s *recordingSessionStore) SaveLobbyState(context.Context, persistedLobbyState) error {
+func (s *recordingSessionStore) SaveLobbyState(context.Context, json.RawMessage) error {
 	return nil
 }
 
-func (s *recordingSessionStore) LoadLobbyState(context.Context) (persistedLobbyState, error) {
-	return persistedLobbyState{}, nil
+func (s *recordingSessionStore) LoadLobbyState(context.Context) (json.RawMessage, error) {
+	return nil, database.ErrLobbyStateNotFound
 }
 
 func (s *recordingSessionStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
@@ -143,44 +146,46 @@ func TestHandleConnectClosesWhenUserPersistenceFails(t *testing.T) {
 	mustReadError(t, clientConn, "internal server error")
 }
 
-func TestUserStoreSessionHelpers(t *testing.T) {
-	t.Run("noop user store methods", func(t *testing.T) {
-		store := noopUserStore{}
-		if err := store.UpdateOnboardingVersion(context.Background(), "user", 1); err != nil {
-			t.Fatalf("UpdateOnboardingVersion() error = %v", err)
-		}
-		if err := store.CreateSession(context.Background(), authSessionRecord{}); err != nil {
-			t.Fatalf("noop CreateSession() error = %v", err)
-		}
-		if _, err := store.GetSessionUserByToken(context.Background(), "token", time.Now()); !errors.Is(err, database.ErrSessionNotFound) {
-			t.Fatalf("noop GetSessionUserByToken() error = %v; want ErrSessionNotFound", err)
-		}
-		if err := store.DeleteSession(context.Background(), "token"); !errors.Is(err, database.ErrSessionNotFound) {
-			t.Fatalf("noop DeleteSession() error = %v; want ErrSessionNotFound", err)
-		}
-	})
-
-	t.Run("postgres session wrappers", func(t *testing.T) {
-		var nilStore *postgresUserStore
-		if err := nilStore.CreateSession(context.Background(), authSessionRecord{}); err == nil || err.Error() != "user store is not configured" {
-			t.Fatalf("CreateSession(nil) error = %v; want user store is not configured", err)
-		}
-		if _, err := nilStore.GetSessionUserByToken(context.Background(), "token", time.Now()); err == nil || err.Error() != "user store is not configured" {
-			t.Fatalf("GetSessionUserByToken(nil) error = %v; want user store is not configured", err)
-		}
-		if err := nilStore.DeleteSession(context.Background(), "token"); err == nil || err.Error() != "user store is not configured" {
-			t.Fatalf("DeleteSession(nil) error = %v; want user store is not configured", err)
-		}
-
-		store := &postgresUserStore{store: &database.UserStore{}}
-		if err := store.CreateSession(context.Background(), authSessionRecord{Token: " token ", UserID: " user-1 ", ExpiresAt: time.Now()}); err == nil || err.Error() != "user store is not configured" {
-			t.Fatalf("CreateSession(store) error = %v; want user store is not configured", err)
-		}
-		if _, err := store.GetSessionUserByToken(context.Background(), " token ", time.Now()); err == nil || err.Error() != "user store is not configured" {
-			t.Fatalf("GetSessionUserByToken(store) error = %v; want user store is not configured", err)
-		}
-		if err := store.DeleteSession(context.Background(), " token "); err == nil || err.Error() != "user store is not configured" {
-			t.Fatalf("DeleteSession(store) error = %v; want user store is not configured", err)
-		}
-	})
+func newWSServer() *wsServer {
+	return newWSServerWithAuth(nil)
 }
+
+func newWSServerWithAuth(auth *authHandler) *wsServer {
+	return newWSServerWithAllowedOrigin(auth, "")
+}
+
+func newWSServerWithAllowedOrigin(auth *authHandler, allowedOrigin string) *wsServer {
+	return newWSServerWithDependencies(auth, noopUserStore{}, allowedOrigin)
+}
+
+func newLobbyServer() *lobbyServer {
+	return newLobbyServerWithStore(noopUserStore{})
+}
+
+type noopUserStore struct{}
+
+func (noopUserStore) UpsertUser(_ context.Context, user database.UserRecord) (database.UserRecord, error) {
+	return user, nil
+}
+
+func (noopUserStore) CreateSession(context.Context, database.SessionRecord) error { return nil }
+
+func (noopUserStore) GetSessionUserByToken(context.Context, string, time.Time) (database.SessionUserRecord, error) {
+	return database.SessionUserRecord{}, database.ErrSessionNotFound
+}
+
+func (noopUserStore) DeleteSession(context.Context, string) error { return database.ErrSessionNotFound }
+
+func (noopUserStore) UpdateOnboardingVersion(context.Context, string, int) error { return nil }
+
+func (noopUserStore) SaveLobbyState(context.Context, json.RawMessage) error { return nil }
+
+func (noopUserStore) LoadLobbyState(context.Context) (json.RawMessage, error) {
+	return nil, database.ErrLobbyStateNotFound
+}
+
+func (noopUserStore) CreateGameBugReport(_ context.Context, report database.GameBugReportRecord) (database.GameBugReportRecord, error) {
+	return report, nil
+}
+
+func (noopUserStore) Close() error { return nil }

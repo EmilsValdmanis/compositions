@@ -1,21 +1,6 @@
-import { type CardSnapshot, type CompositionSnapshot } from "#/components/game-websocket-provider";
+import { rankLabel } from "#/components/game/card";
+import { type CardSnapshot, type CompositionSnapshot } from "#/lib/game-protocol";
 import { m } from "#/paraglide/messages.js";
-
-const rankLabels: Record<number, string> = {
-  1: "A",
-  2: "2",
-  3: "3",
-  4: "4",
-  5: "5",
-  6: "6",
-  7: "7",
-  8: "8",
-  9: "9",
-  10: "10",
-  11: "J",
-  12: "Q",
-  13: "K",
-};
 
 const suitNames: Record<number, () => string> = {
   0: m.card_hearts,
@@ -29,7 +14,7 @@ export function cardName(card: CardSnapshot) {
     return m.joker();
   }
 
-  const rank = rankLabels[card.rank ?? 0] ?? m.unknown();
+  const rank = rankLabel(card.rank) ?? m.unknown();
   const suit = suitNames[card.suit ?? -1]?.() ?? m.unknown();
   return m.card_name({ rank, suit });
 }
@@ -161,8 +146,6 @@ export function draftCompositionPointTotal(
   cards: CardSnapshot[],
   type?: CompositionSnapshot["type"],
 ) {
-  // A joker is worth 20 only while it remains in a player's hand. Drafts need
-  // a valid composition and at least one natural card to establish table value.
   if (cards.every((card) => card.isJoker)) {
     return null;
   }
@@ -180,9 +163,6 @@ export function draftCompositionPointTotal(
     return resolvedPoints;
   }
 
-  // Natural cards already have an unambiguous face value while a draft is
-  // being assembled. Jokers stay unresolved until a valid composition tells
-  // us which card value they represent.
   if (cards.some((card) => card.isJoker) || cards.some((card) => !hasValidNaturalIdentity(card))) {
     return null;
   }
@@ -215,38 +195,4 @@ export function isCompleteDraftComposition(
   }
 
   return cards.length === 14 && draftRunPointTotal(cards) !== null;
-}
-
-export function isCompleteCompositionPreview(
-  composition: CompositionSnapshot,
-  additions: CardSnapshot[],
-  replacements: Array<{ jokerIndex: number; replacementCard: CardSnapshot }> = [],
-) {
-  if (composition.complete && additions.length === 0 && replacements.length === 0) {
-    return true;
-  }
-
-  const replacementByJokerIndex = new Map(
-    replacements.map((replacement) => [replacement.jokerIndex, replacement.replacementCard]),
-  );
-  const previewCards = composition.cards.map(
-    (card, index) => replacementByJokerIndex.get(index) ?? card,
-  );
-
-  return isCompleteDraftComposition([...previewCards, ...additions], composition.type);
-}
-
-export function draftCompositionPreviewPointTotal(
-  composition: CompositionSnapshot,
-  additions: CardSnapshot[],
-  replacements: Array<{ jokerIndex: number; replacementCard: CardSnapshot }> = [],
-) {
-  const replacementByJokerIndex = new Map(
-    replacements.map((replacement) => [replacement.jokerIndex, replacement.replacementCard]),
-  );
-  const previewCards = composition.cards.map(
-    (card, index) => replacementByJokerIndex.get(index) ?? card,
-  );
-
-  return draftCompositionPointTotal([...previewCards, ...additions], composition.type);
 }

@@ -1,21 +1,22 @@
+import { keyedCards, type HandEntry } from "#/components/game/card";
 import { useDndContext, useDroppable } from "@dnd-kit/core";
 import { SortableContext, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  canReclaimJokerWithCard,
-  type HandEntry,
-  type PlannedJokerReclaim,
   tableCompositionDropId,
   tableCompositionEdgeDropId,
   tableCompositionJokerDropId,
-} from "#/components/game/game-board-view-state";
-import {
-  type CompositionSnapshot,
-  type PlayerSnapshot,
-} from "#/components/game-websocket-provider";
+  tableCompositionJokerTargetFromDropId,
+} from "#/components/game/board-drop-targets";
+import { type CompositionSnapshot, type PlayerSnapshot } from "#/lib/game-protocol";
 import { GameBoardDraftDropZone } from "#/components/game/game-board-draft-drop-zone";
 import { GameCard } from "#/components/game/game-card";
-import { isCompleteCompositionPreview } from "#/components/game/game-card-utils";
+import { isCompleteDraftComposition } from "#/components/game/game-card-utils";
+import {
+  canReclaimJokerWithCard,
+  cardsWithTableDraft,
+  type TableDraftPlan,
+} from "#/components/game/table-draft";
 import {
   AddActivityLabel,
   NewActivityLabel,
@@ -29,31 +30,6 @@ import {
   spectatorCardVisible,
 } from "#/components/game/spectator-card-motion";
 import { cn } from "#/lib/utils";
-
-const EMPTY_STAGED_ENTRIES: HandEntry[] = [];
-const EMPTY_RECLAIMS: PlannedJokerReclaim[] = [];
-
-function compositionCardKey(card: CompositionSnapshot["cards"][number]) {
-  if (card.isJoker) {
-    return "joker";
-  }
-
-  return `${card.rank ?? "?"}-${card.suit ?? "?"}`;
-}
-
-function buildCompositionCardViews(cards: CompositionSnapshot["cards"]) {
-  const counts = new Map<string, number>();
-  const cardViews: Array<{ card: (typeof cards)[number]; index: number; key: string }> = [];
-
-  for (const [index, card] of cards.entries()) {
-    const baseKey = compositionCardKey(card);
-    const occurrence = (counts.get(baseKey) ?? 0) + 1;
-    counts.set(baseKey, occurrence);
-    cardViews.push({ card, index, key: `${baseKey}-${occurrence}` });
-  }
-
-  return cardViews;
-}
 
 function CompositionEdgeDraftZone({
   entries,
@@ -288,10 +264,7 @@ function JokerReclaimDropTarget({
 export function CompositionRow({
   composition,
   index,
-  stagedEntries = EMPTY_STAGED_ENTRIES,
-  reclaims = EMPTY_RECLAIMS,
-  insertIndex,
-  cardInsertIndices,
+  draft,
   players,
   stagedEntryPlayerId,
   stagedEntriesInteractive = true,
@@ -302,10 +275,7 @@ export function CompositionRow({
 }: {
   composition: CompositionSnapshot;
   index: number;
-  stagedEntries?: HandEntry[];
-  reclaims?: PlannedJokerReclaim[];
-  insertIndex?: number;
-  cardInsertIndices?: Record<string, number>;
+  draft?: TableDraftPlan;
   players: PlayerSnapshot[];
   stagedEntryPlayerId?: string;
   stagedEntriesInteractive?: boolean;
@@ -323,28 +293,25 @@ export function CompositionRow({
   const { setNodeRef: setCompositionHoverRef, isOver: isOverComposition } = useDroppable({
     id: `${compositionDropId}-hover`,
   });
-  const compositionCards = buildCompositionCardViews(composition.cards);
-  const reclaimByJokerIndex = new Map(reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim]));
-  const reclaimedEntryKeys = new Set(reclaims.map((reclaim) => reclaim.replacementEntry.key));
-  const additionEntries = stagedEntries.filter((entry) => !reclaimedEntryKeys.has(entry.key));
+  const compositionCards = keyedCards(composition.cards);
+  const reclaimByJokerIndex = new Map(
+    draft?.reclaims.map((reclaim) => [reclaim.jokerIndex, reclaim]),
+  );
   const cardActivities = activity?.cardActivities ?? {};
   const isNewComposition = activity?.kind === "new_composition";
   const isHighlightedComposition = isNewComposition;
 
-  function entryInsertIndex(entry: HandEntry): number {
-    return cardInsertIndices?.[entry.key] ?? insertIndex ?? composition.cards.length;
-  }
-
-  const additionsAtStart = additionEntries.filter((entry) => entryInsertIndex(entry) === 0);
-  const additionsAtEnd = additionEntries.filter((entry) => entryInsertIndex(entry) !== 0);
-  const complete = isCompleteCompositionPreview(
-    composition,
-    additionEntries.map((entry) => entry.card),
-    reclaims.map((reclaim) => ({
-      jokerIndex: reclaim.jokerIndex,
-      replacementCard: reclaim.replacementEntry.card,
-    })),
-  );
+  const additionsAtStart =
+    draft?.additions.find((addition) => addition.insertIndex === 0)?.entries ?? [];
+  const additionsAtEnd =
+    draft?.additions.flatMap((addition) => (addition.insertIndex === 0 ? [] : addition.entries)) ??
+    [];
+  const complete =
+    (!draft && composition.complete) ||
+    isCompleteDraftComposition(
+      draft ? cardsWithTableDraft(composition, draft) : composition.cards,
+      composition.type,
+    );
   const startEdgeDropId = tableCompositionEdgeDropId(index, "start");
   const endEdgeDropId = tableCompositionEdgeDropId(index, "end");
   const overId = over ? String(over.id) : null;
@@ -352,7 +319,7 @@ export function CompositionRow({
     active !== null &&
     active.data.current?.drawSource === undefined &&
     typeof active.id === "string";
-  const jokerDropIdPrefix = `${tableCompositionJokerDropId(index, 0).slice(0, -1)}`;
+  const jokerDropTarget = overId ? tableCompositionJokerTargetFromDropId(overId) : null;
   const highlightStartEdgeDropTarget = isDraggingCompositionCard && overId === startEdgeDropId;
   const highlightEndEdgeDropTarget = isDraggingCompositionCard && overId === endEdgeDropId;
   const isHoveringAnyCompositionTarget =
@@ -361,7 +328,7 @@ export function CompositionRow({
       overId === compositionDropId ||
       overId === startEdgeDropId ||
       overId === endEdgeDropId ||
-      overId?.startsWith(jokerDropIdPrefix) === true);
+      jokerDropTarget?.compositionIndex === index);
   return (
     <GameBoardDraftDropZone
       id={compositionDropId}

@@ -32,16 +32,10 @@ func TestParseLeaderboardMetric(t *testing.T) {
 				t.Fatalf("default = %q", got)
 			}
 		}
-		if _, err := got.scoreExpression(); err != nil {
-			t.Fatal(err)
-		}
 	}
 	for _, value := range []string{"rating", "ELO", "elo; DROP TABLE users"} {
 		if _, ok := ParseLeaderboardMetric(value); ok {
 			t.Fatalf("accepted %q", value)
 		}
-	}
-	if _, err := LeaderboardMetric("invalid").scoreExpression(); err == nil {
-		t.Fatal("accepted invalid SQL metric")
 	}
 }

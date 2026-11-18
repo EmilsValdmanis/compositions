@@ -49,14 +49,15 @@ describe("CompositionRow placement motion", () => {
             complete: false,
           }}
           index={0}
-          stagedEntries={[
-            {
-              key: "3-1-1",
-              card: { rank: 3, suit: 1 },
-              sourceIndex: 0,
-            },
-          ]}
-          cardInsertIndices={{ "3-1-1": 2 }}
+          draft={{
+            additions: [
+              {
+                insertIndex: 2,
+                entries: [{ key: "3-1-1", card: { rank: 3, suit: 1 }, sourceIndex: 0 }],
+              },
+            ],
+            reclaims: [],
+          }}
           players={[]}
         />
       </DndContext>,
@@ -83,14 +84,15 @@ describe("CompositionRow placement motion", () => {
             complete: false,
           }}
           index={0}
-          stagedEntries={[
-            {
-              key: "3-1-1",
-              card: { rank: 3, suit: 1 },
-              sourceIndex: 0,
-            },
-          ]}
-          cardInsertIndices={{ "3-1-1": 2 }}
+          draft={{
+            additions: [
+              {
+                insertIndex: 2,
+                entries: [{ key: "3-1-1", card: { rank: 3, suit: 1 }, sourceIndex: 0 }],
+              },
+            ],
+            reclaims: [],
+          }}
           players={[]}
         />
       </DndContext>,
@@ -117,14 +119,15 @@ describe("CompositionRow placement motion", () => {
             complete: false,
           }}
           index={0}
-          stagedEntries={[
-            {
-              key: "3-1-1",
-              card: { rank: 3, suit: 1 },
-              sourceIndex: 0,
-            },
-          ]}
-          cardInsertIndices={{ "3-1-1": 2 }}
+          draft={{
+            additions: [
+              {
+                insertIndex: 2,
+                entries: [{ key: "3-1-1", card: { rank: 3, suit: 1 }, sourceIndex: 0 }],
+              },
+            ],
+            reclaims: [],
+          }}
           players={[]}
           stagedEntriesInteractive={false}
           animateStagedEntries

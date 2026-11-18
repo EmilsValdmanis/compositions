@@ -29,18 +29,24 @@ const (
 	LeaderboardScopeGlobal  LeaderboardScope = "global"
 )
 
+var leaderboardScoreExpressions = map[LeaderboardMetric]string{
+	LeaderboardMetricElo:      fmt.Sprintf("COALESCE(pr.rating, %d)", rating.Current().Initial),
+	LeaderboardMetricWins:     "ps.games_won",
+	LeaderboardMetricGames:    "ps.games_played",
+	LeaderboardMetricPlaytime: "COALESCE(playtimes.total_playtime_seconds, 0)",
+	LeaderboardMetricRounds:   "ps.rounds_won",
+	LeaderboardMetricPoints:   "ps.points_inflicted",
+}
+
 func ParseLeaderboardMetric(value string) (LeaderboardMetric, bool) {
 	metric := LeaderboardMetric(strings.TrimSpace(value))
 	if metric == "" {
-		return LeaderboardMetricElo, true
+		metric = LeaderboardMetricElo
 	}
-	switch metric {
-	case LeaderboardMetricElo, LeaderboardMetricWins, LeaderboardMetricGames, LeaderboardMetricPlaytime,
-		LeaderboardMetricRounds, LeaderboardMetricPoints:
-		return metric, true
-	default:
+	if _, ok := leaderboardScoreExpressions[metric]; !ok {
 		return "", false
 	}
+	return metric, true
 }
 
 func ParseLeaderboardScope(value string) (LeaderboardScope, bool) {
@@ -53,25 +59,6 @@ func ParseLeaderboardScope(value string) (LeaderboardScope, bool) {
 		return scope, true
 	default:
 		return "", false
-	}
-}
-
-func (m LeaderboardMetric) scoreExpression() (string, error) {
-	switch m {
-	case LeaderboardMetricElo:
-		return fmt.Sprintf("COALESCE(pr.rating, %d)", rating.Current().Initial), nil
-	case LeaderboardMetricWins:
-		return "ps.games_won", nil
-	case LeaderboardMetricGames:
-		return "ps.games_played", nil
-	case LeaderboardMetricPlaytime:
-		return "COALESCE(playtimes.total_playtime_seconds, 0)", nil
-	case LeaderboardMetricRounds:
-		return "ps.rounds_won", nil
-	case LeaderboardMetricPoints:
-		return "ps.points_inflicted", nil
-	default:
-		return "", errors.New("invalid leaderboard metric")
 	}
 }
 
@@ -102,9 +89,9 @@ type LeaderboardPage struct {
 }
 
 func leaderboardRankedPlayers(metric LeaderboardMetric) (string, error) {
-	score, err := metric.scoreExpression()
-	if err != nil {
-		return "", err
+	score, ok := leaderboardScoreExpressions[metric]
+	if !ok {
+		return "", errors.New("invalid leaderboard metric")
 	}
 	return fmt.Sprintf(`
 	WITH playtimes AS (

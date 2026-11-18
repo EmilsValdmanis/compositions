@@ -112,7 +112,7 @@ func (s *wsServer) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	}
 	session, err := s.auth.sessionFromRequest(r)
 	if errors.Is(err, errAuthenticationRequired) {
-		writeHTTPError(w, http.StatusUnauthorized, "auth_required", "authentication required")
+		writeHTTPError(w, http.StatusUnauthorized, errAuthenticationRequired.code, errAuthenticationRequired.message)
 		return false
 	}
 	if err != nil {

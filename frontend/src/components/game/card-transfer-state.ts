@@ -1,6 +1,5 @@
-import { cardsEqual } from "#/components/game/card-equality";
-import { type CardSnapshot, type GameSnapshot } from "#/components/game-websocket-provider";
-import { FACE_DOWN_CARD } from "#/components/game/game-board-view-state";
+import { cardsEqual, FACE_DOWN_CARD } from "#/components/game/card";
+import { type CardSnapshot, type GameSnapshot } from "#/lib/game-protocol";
 
 export type CardTransfer = {
   actorPlayerId: string;
